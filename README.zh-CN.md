@@ -90,4 +90,23 @@ npm start
 
 ```sh
 # 1. Build container
-docker build -t cr
+docker build -t cr-bot .
+
+# 2. Start container
+docker run -e APP_ID=<app-id> -e PRIVATE_KEY=<pem-value> cr-bot
+```
+
+## 贡献
+
+如果您对如何改进 cr-bot 有建议，或者想报告错误，请打开一个问题！我们会喜欢所有的贡献。
+
+有关更多信息，请查看[投稿指南](CONTRIBUTING.md).
+
+## 灵感
+
+这个项目的灵感来自[代码审查.gpt](https://github.com/sturdy-dev/codereview.gpt)
+
+## License
+
+[ISC](LICENSE)© 2023 anc95
+
