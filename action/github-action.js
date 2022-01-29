@@ -6167,3 +6167,2197 @@ function prettifierMetaWrapper (pretty, dest, opts) {
       }, this.chindings())));
     },
     chindings () {
+      const lastLogger = this.lastLogger;
+      let chindings = null;
+
+      // protection against flushSync being called before logging
+      // anything
+      if (!lastLogger) {
+        return null
+      }
+
+      if (lastLogger.hasOwnProperty(parsedChindingsSym$2)) {
+        chindings = lastLogger[parsedChindingsSym$2];
+      } else {
+        chindings = JSON.parse('{' + lastLogger[chindingsSym$6].substr(1) + '}');
+        lastLogger[parsedChindingsSym$2] = chindings;
+      }
+
+      return chindings
+    },
+    write (chunk) {
+      const lastLogger = this.lastLogger;
+      const chindings = this.chindings();
+
+      let time = this.lastTime;
+
+      if (time.match(/^\d+/)) {
+        time = parseInt(time);
+      } else {
+        time = time.slice(1, -1);
+      }
+
+      const lastObj = this.lastObj;
+      const lastMsg = this.lastMsg;
+      const errorProps = null;
+
+      const formatters = lastLogger[formattersSym$8];
+      const formattedObj = formatters.log ? formatters.log(lastObj) : lastObj;
+
+      const messageKey = lastLogger[messageKeySym$4];
+      if (lastMsg && formattedObj && !formattedObj.hasOwnProperty(messageKey)) {
+        formattedObj[messageKey] = lastMsg;
+      }
+
+      const obj = Object.assign({
+        level: this.lastLevel,
+        time
+      }, formattedObj, errorProps);
+
+      const serializers = lastLogger[serializersSym$6];
+      const keys = Object.keys(serializers);
+
+      for (var i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        if (obj[key] !== undefined) {
+          obj[key] = serializers[key](obj[key]);
+        }
+      }
+
+      for (const key in chindings) {
+        if (!obj.hasOwnProperty(key)) {
+          obj[key] = chindings[key];
+        }
+      }
+
+      const stringifiers = lastLogger[stringifiersSym$6];
+      const redact = stringifiers[redactFmtSym$6];
+
+      const formatted = pretty(typeof redact === 'function' ? redact(obj) : obj);
+      if (formatted === undefined) return
+
+      setMetadataProps(dest, this);
+      dest.write(formatted);
+    }
+  }
+}
+
+function hasBeenTampered$1 (stream) {
+  return stream.write !== stream.constructor.prototype.write
+}
+
+function buildSafeSonicBoom$3 (opts) {
+  const stream = new SonicBoom$3(opts);
+  stream.on('error', filterBrokenPipe);
+  return stream
+
+  function filterBrokenPipe (err) {
+    // TODO verify on Windows
+    if (err.code === 'EPIPE') {
+      // If we get EPIPE, we should stop logging here
+      // however we have no control to the consumer of
+      // SonicBoom, so we just overwrite the write method
+      stream.write = noop$a;
+      stream.end = noop$a;
+      stream.flushSync = noop$a;
+      stream.destroy = noop$a;
+      return
+    }
+    stream.removeListener('error', filterBrokenPipe);
+    stream.emit('error', err);
+  }
+}
+
+function createArgsNormalizer$3 (defaultOptions) {
+  return function normalizeArgs (instance, opts = {}, stream) {
+    // support stream as a string
+    if (typeof opts === 'string') {
+      stream = buildSafeSonicBoom$3({ dest: opts, sync: true });
+      opts = {};
+    } else if (typeof stream === 'string') {
+      stream = buildSafeSonicBoom$3({ dest: stream, sync: true });
+    } else if (opts instanceof SonicBoom$3 || opts.writable || opts._writableState) {
+      stream = opts;
+      opts = null;
+    }
+    opts = Object.assign({}, defaultOptions, opts);
+    if ('extreme' in opts) {
+      throw Error('The extreme option has been removed, use pino.destination({ sync: false }) instead')
+    }
+    if ('onTerminated' in opts) {
+      throw Error('The onTerminated option has been removed, use pino.final instead')
+    }
+    if ('changeLevelName' in opts) {
+      process.emitWarning(
+        'The changeLevelName option is deprecated and will be removed in v7. Use levelKey instead.',
+        { code: 'changeLevelName_deprecation' }
+      );
+      opts.levelKey = opts.changeLevelName;
+      delete opts.changeLevelName;
+    }
+    const { enabled, prettyPrint, prettifier, messageKey } = opts;
+    if (enabled === false) opts.level = 'silent';
+    stream = stream || process.stdout;
+    if (stream === process.stdout && stream.fd >= 0 && !hasBeenTampered$1(stream)) {
+      stream = buildSafeSonicBoom$3({ fd: stream.fd, sync: true });
+    }
+    if (prettyPrint) {
+      const prettyOpts = Object.assign({ messageKey }, prettyPrint);
+      stream = getPrettyStream(prettyOpts, prettifier, stream, instance);
+    }
+    return { opts, stream }
+  }
+}
+
+function final$1 (logger, handler) {
+  if (typeof logger === 'undefined' || typeof logger.child !== 'function') {
+    throw Error('expected a pino logger instance')
+  }
+  const hasHandler = (typeof handler !== 'undefined');
+  if (hasHandler && typeof handler !== 'function') {
+    throw Error('if supplied, the handler parameter should be a function')
+  }
+  const stream = logger[streamSym$7];
+  if (typeof stream.flushSync !== 'function') {
+    throw Error('final requires a stream that has a flushSync method, such as pino.destination')
+  }
+
+  const finalLogger = new Proxy(logger, {
+    get: (logger, key) => {
+      if (key in logger.levels.values) {
+        return (...args) => {
+          logger[key](...args);
+          stream.flushSync();
+        }
+      }
+      return logger[key]
+    }
+  });
+
+  if (!hasHandler) {
+    return finalLogger
+  }
+
+  return (err = null, ...args) => {
+    try {
+      stream.flushSync();
+    } catch (e) {
+      // it's too late to wait for the stream to be ready
+      // because this is a final tick scenario.
+      // in practice there shouldn't be a situation where it isn't
+      // however, swallow the error just in case (and for easier testing)
+    }
+    return handler(err, finalLogger, ...args)
+  }
+}
+
+function stringify$a (obj) {
+  try {
+    return JSON.stringify(obj)
+  } catch (_) {
+    return stringifySafe(obj)
+  }
+}
+
+function buildFormatters$5 (level, bindings, log) {
+  return {
+    level,
+    bindings,
+    log
+  }
+}
+
+function setMetadataProps (dest, that) {
+  if (dest[needsMetadataGsym$3] === true) {
+    dest.lastLevel = that.lastLevel;
+    dest.lastMsg = that.lastMsg;
+    dest.lastObj = that.lastObj;
+    dest.lastTime = that.lastTime;
+    dest.lastLogger = that.lastLogger;
+  }
+}
+
+var tools$1 = {
+  noop: noop$a,
+  buildSafeSonicBoom: buildSafeSonicBoom$3,
+  getPrettyStream,
+  asChindings: asChindings$5,
+  asJson: asJson$3,
+  genLog: genLog$3,
+  createArgsNormalizer: createArgsNormalizer$3,
+  final: final$1,
+  stringify: stringify$a,
+  buildFormatters: buildFormatters$5
+};
+
+/* eslint no-prototype-builtins: 0 */
+const flatstr$1 = flatstr_1;
+const {
+  lsCacheSym: lsCacheSym$5,
+  levelValSym: levelValSym$4,
+  useOnlyCustomLevelsSym: useOnlyCustomLevelsSym$6,
+  streamSym: streamSym$6,
+  formattersSym: formattersSym$7,
+  hooksSym: hooksSym$4
+} = symbols$3;
+const { noop: noop$9, genLog: genLog$2 } = tools$1;
+
+const levels$2 = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60
+};
+const levelMethods$1 = {
+  fatal: (hook) => {
+    const logFatal = genLog$2(levels$2.fatal, hook);
+    return function (...args) {
+      const stream = this[streamSym$6];
+      logFatal.call(this, ...args);
+      if (typeof stream.flushSync === 'function') {
+        try {
+          stream.flushSync();
+        } catch (e) {
+          // https://github.com/pinojs/pino/pull/740#discussion_r346788313
+        }
+      }
+    }
+  },
+  error: (hook) => genLog$2(levels$2.error, hook),
+  warn: (hook) => genLog$2(levels$2.warn, hook),
+  info: (hook) => genLog$2(levels$2.info, hook),
+  debug: (hook) => genLog$2(levels$2.debug, hook),
+  trace: (hook) => genLog$2(levels$2.trace, hook)
+};
+
+const nums$1 = Object.keys(levels$2).reduce((o, k) => {
+  o[levels$2[k]] = k;
+  return o
+}, {});
+
+const initialLsCache$3 = Object.keys(nums$1).reduce((o, k) => {
+  o[k] = flatstr$1('{"level":' + Number(k));
+  return o
+}, {});
+
+function genLsCache$5 (instance) {
+  const formatter = instance[formattersSym$7].level;
+  const { labels } = instance.levels;
+  const cache = {};
+  for (const label in labels) {
+    const level = formatter(labels[label], Number(label));
+    cache[label] = JSON.stringify(level).slice(0, -1);
+  }
+  instance[lsCacheSym$5] = cache;
+  return instance
+}
+
+function isStandardLevel$1 (level, useOnlyCustomLevels) {
+  if (useOnlyCustomLevels) {
+    return false
+  }
+
+  switch (level) {
+    case 'fatal':
+    case 'error':
+    case 'warn':
+    case 'info':
+    case 'debug':
+    case 'trace':
+      return true
+    default:
+      return false
+  }
+}
+
+function setLevel$3 (level) {
+  const { labels, values } = this.levels;
+  if (typeof level === 'number') {
+    if (labels[level] === undefined) throw Error('unknown level value' + level)
+    level = labels[level];
+  }
+  if (values[level] === undefined) throw Error('unknown level ' + level)
+  const preLevelVal = this[levelValSym$4];
+  const levelVal = this[levelValSym$4] = values[level];
+  const useOnlyCustomLevelsVal = this[useOnlyCustomLevelsSym$6];
+  const hook = this[hooksSym$4].logMethod;
+
+  for (const key in values) {
+    if (levelVal > values[key]) {
+      this[key] = noop$9;
+      continue
+    }
+    this[key] = isStandardLevel$1(key, useOnlyCustomLevelsVal) ? levelMethods$1[key](hook) : genLog$2(values[key], hook);
+  }
+
+  this.emit(
+    'level-change',
+    level,
+    levelVal,
+    labels[preLevelVal],
+    preLevelVal
+  );
+}
+
+function getLevel$3 (level) {
+  const { levels, levelVal } = this;
+  // protection against potential loss of Pino scope from serializers (edge case with circular refs - https://github.com/pinojs/pino/issues/833)
+  return (levels && levels.labels) ? levels.labels[levelVal] : ''
+}
+
+function isLevelEnabled$3 (logLevel) {
+  const { values } = this.levels;
+  const logLevelVal = values[logLevel];
+  return logLevelVal !== undefined && (logLevelVal >= this[levelValSym$4])
+}
+
+function mappings$5 (customLevels = null, useOnlyCustomLevels = false) {
+  const customNums = customLevels
+    /* eslint-disable */
+    ? Object.keys(customLevels).reduce((o, k) => {
+        o[customLevels[k]] = k;
+        return o
+      }, {})
+    : null;
+    /* eslint-enable */
+
+  const labels = Object.assign(
+    Object.create(Object.prototype, { Infinity: { value: 'silent' } }),
+    useOnlyCustomLevels ? null : nums$1,
+    customNums
+  );
+  const values = Object.assign(
+    Object.create(Object.prototype, { silent: { value: Infinity } }),
+    useOnlyCustomLevels ? null : levels$2,
+    customLevels
+  );
+  return { labels, values }
+}
+
+function assertDefaultLevelFound$3 (defaultLevel, customLevels, useOnlyCustomLevels) {
+  if (typeof defaultLevel === 'number') {
+    const values = [].concat(
+      Object.keys(customLevels || {}).map(key => customLevels[key]),
+      useOnlyCustomLevels ? [] : Object.keys(nums$1).map(level => +level),
+      Infinity
+    );
+    if (!values.includes(defaultLevel)) {
+      throw Error(`default level:${defaultLevel} must be included in custom levels`)
+    }
+    return
+  }
+
+  const labels = Object.assign(
+    Object.create(Object.prototype, { silent: { value: Infinity } }),
+    useOnlyCustomLevels ? null : levels$2,
+    customLevels
+  );
+  if (!(defaultLevel in labels)) {
+    throw Error(`default level:${defaultLevel} must be included in custom levels`)
+  }
+}
+
+function assertNoLevelCollisions$3 (levels, customLevels) {
+  const { labels, values } = levels;
+  for (const k in customLevels) {
+    if (k in values) {
+      throw Error('levels cannot be overridden')
+    }
+    if (customLevels[k] in labels) {
+      throw Error('pre-existing level values cannot be used for new levels')
+    }
+  }
+}
+
+var levels_1$1 = {
+  initialLsCache: initialLsCache$3,
+  genLsCache: genLsCache$5,
+  levelMethods: levelMethods$1,
+  getLevel: getLevel$3,
+  setLevel: setLevel$3,
+  isLevelEnabled: isLevelEnabled$3,
+  mappings: mappings$5,
+  assertNoLevelCollisions: assertNoLevelCollisions$3,
+  assertDefaultLevelFound: assertDefaultLevelFound$3
+};
+
+var name$2 = "pino";
+var version$e = "6.14.0";
+var description$2 = "super fast, all natural json logger";
+var main$4 = "pino.js";
+var browser$5 = "./browser.js";
+var files = [
+	"pino.js",
+	"bin.js",
+	"browser.js",
+	"pretty.js",
+	"usage.txt",
+	"test",
+	"docs",
+	"example.js",
+	"lib"
+];
+var scripts$2 = {
+	docs: "docsify serve",
+	"browser-test": "airtap --local 8080 test/browser*test.js",
+	lint: "eslint .",
+	test: "npm run lint && tap --100 test/*test.js test/*/*test.js",
+	"test-ci": "npm run lint && tap test/*test.js test/*/*test.js --coverage-report=lcovonly",
+	"cov-ui": "tap --coverage-report=html test/*test.js test/*/*test.js",
+	bench: "node benchmarks/utils/runbench all",
+	"bench-basic": "node benchmarks/utils/runbench basic",
+	"bench-object": "node benchmarks/utils/runbench object",
+	"bench-deep-object": "node benchmarks/utils/runbench deep-object",
+	"bench-multi-arg": "node benchmarks/utils/runbench multi-arg",
+	"bench-longs-tring": "node benchmarks/utils/runbench long-string",
+	"bench-child": "node benchmarks/utils/runbench child",
+	"bench-child-child": "node benchmarks/utils/runbench child-child",
+	"bench-child-creation": "node benchmarks/utils/runbench child-creation",
+	"bench-formatters": "node benchmarks/utils/runbench formatters",
+	"update-bench-doc": "node benchmarks/utils/generate-benchmark-doc > docs/benchmarks.md"
+};
+var bin = {
+	pino: "./bin.js"
+};
+var precommit = "test";
+var repository$2 = {
+	type: "git",
+	url: "git+https://github.com/pinojs/pino.git"
+};
+var keywords$2 = [
+	"fast",
+	"logger",
+	"stream",
+	"json"
+];
+var author$1 = "Matteo Collina <hello@matteocollina.com>";
+var contributors = [
+	"David Mark Clements <huperekchuno@googlemail.com>",
+	"James Sumners <james.sumners@gmail.com>",
+	"Thomas Watson Steen <w@tson.dk> (https://twitter.com/wa7son)"
+];
+var license$2 = "MIT";
+var bugs$1 = {
+	url: "https://github.com/pinojs/pino/issues"
+};
+var homepage$1 = "http://getpino.io";
+var devDependencies$2 = {
+	airtap: "4.0.3",
+	benchmark: "^2.1.4",
+	bole: "^4.0.0",
+	bunyan: "^1.8.14",
+	"docsify-cli": "^4.4.1",
+	eslint: "^7.17.0",
+	"eslint-config-standard": "^16.0.2",
+	"eslint-plugin-import": "^2.22.1",
+	"eslint-plugin-node": "^11.1.0",
+	"eslint-plugin-promise": "^5.1.0",
+	execa: "^5.0.0",
+	fastbench: "^1.0.1",
+	"flush-write-stream": "^2.0.0",
+	"import-fresh": "^3.2.1",
+	log: "^6.0.0",
+	loglevel: "^1.6.7",
+	"pino-pretty": "^5.0.0",
+	"pre-commit": "^1.2.2",
+	proxyquire: "^2.1.3",
+	pump: "^3.0.0",
+	semver: "^7.0.0",
+	split2: "^3.1.1",
+	steed: "^1.1.3",
+	"strip-ansi": "^6.0.0",
+	tap: "^15.0.1",
+	tape: "^5.0.0",
+	through2: "^4.0.0",
+	winston: "^3.3.3"
+};
+var dependencies$1 = {
+	"fast-redact": "^3.0.0",
+	"fast-safe-stringify": "^2.0.8",
+	"process-warning": "^1.0.0",
+	flatstr: "^1.0.12",
+	"pino-std-serializers": "^3.1.0",
+	"quick-format-unescaped": "^4.0.3",
+	"sonic-boom": "^1.0.2"
+};
+var require$$0$b = {
+	name: name$2,
+	version: version$e,
+	description: description$2,
+	main: main$4,
+	browser: browser$5,
+	files: files,
+	scripts: scripts$2,
+	bin: bin,
+	precommit: precommit,
+	repository: repository$2,
+	keywords: keywords$2,
+	author: author$1,
+	contributors: contributors,
+	license: license$2,
+	bugs: bugs$1,
+	homepage: homepage$1,
+	devDependencies: devDependencies$2,
+	dependencies: dependencies$1
+};
+
+const { version: version$d } = require$$0$b;
+
+var meta$1 = { version: version$d };
+
+/* eslint no-prototype-builtins: 0 */
+
+const { EventEmitter: EventEmitter$4 } = require$$0$f;
+const SonicBoom$2 = sonicBoom$1;
+const flatstr = flatstr_1;
+const warning = deprecations;
+const {
+  lsCacheSym: lsCacheSym$4,
+  levelValSym: levelValSym$3,
+  setLevelSym: setLevelSym$4,
+  getLevelSym: getLevelSym$2,
+  chindingsSym: chindingsSym$5,
+  parsedChindingsSym: parsedChindingsSym$1,
+  mixinSym: mixinSym$4,
+  asJsonSym: asJsonSym$2,
+  writeSym: writeSym$3,
+  mixinMergeStrategySym: mixinMergeStrategySym$4,
+  timeSym: timeSym$4,
+  timeSliceIndexSym: timeSliceIndexSym$4,
+  streamSym: streamSym$5,
+  serializersSym: serializersSym$5,
+  formattersSym: formattersSym$6,
+  useOnlyCustomLevelsSym: useOnlyCustomLevelsSym$5,
+  needsMetadataGsym: needsMetadataGsym$2,
+  redactFmtSym: redactFmtSym$5,
+  stringifySym: stringifySym$5,
+  formatOptsSym: formatOptsSym$5,
+  stringifiersSym: stringifiersSym$5
+} = symbols$3;
+const {
+  getLevel: getLevel$2,
+  setLevel: setLevel$2,
+  isLevelEnabled: isLevelEnabled$2,
+  mappings: mappings$4,
+  initialLsCache: initialLsCache$2,
+  genLsCache: genLsCache$4,
+  assertNoLevelCollisions: assertNoLevelCollisions$2
+} = levels_1$1;
+const {
+  asChindings: asChindings$4,
+  asJson: asJson$2,
+  buildFormatters: buildFormatters$4,
+  stringify: stringify$9
+} = tools$1;
+const {
+  version: version$c
+} = meta$1;
+const redaction$4 = redaction_1$1;
+
+// note: use of class is satirical
+// https://github.com/pinojs/pino/pull/433#pullrequestreview-127703127
+const constructor$1 = class Pino {};
+const prototype$1 = {
+  constructor: constructor$1,
+  child: child$1,
+  bindings: bindings$1,
+  setBindings: setBindings$1,
+  flush: flush$3,
+  isLevelEnabled: isLevelEnabled$2,
+  version: version$c,
+  get level () { return this[getLevelSym$2]() },
+  set level (lvl) { this[setLevelSym$4](lvl); },
+  get levelVal () { return this[levelValSym$3] },
+  set levelVal (n) { throw Error('levelVal is read-only') },
+  [lsCacheSym$4]: initialLsCache$2,
+  [writeSym$3]: write$2,
+  [asJsonSym$2]: asJson$2,
+  [getLevelSym$2]: getLevel$2,
+  [setLevelSym$4]: setLevel$2
+};
+
+Object.setPrototypeOf(prototype$1, EventEmitter$4.prototype);
+
+// exporting and consuming the prototype object using factory pattern fixes scoping issues with getters when serializing
+var proto$4 = function () {
+  return Object.create(prototype$1)
+};
+
+const resetChildingsFormatter$1 = bindings => bindings;
+function child$1 (bindings, options) {
+  if (!bindings) {
+    throw Error('missing bindings for child Pino')
+  }
+  options = options || {}; // default options to empty object
+  const serializers = this[serializersSym$5];
+  const formatters = this[formattersSym$6];
+  const instance = Object.create(this);
+
+  if (bindings.hasOwnProperty('serializers') === true) {
+    warning.emit('PINODEP004');
+    options.serializers = bindings.serializers;
+  }
+  if (bindings.hasOwnProperty('formatters') === true) {
+    warning.emit('PINODEP005');
+    options.formatters = bindings.formatters;
+  }
+  if (bindings.hasOwnProperty('customLevels') === true) {
+    warning.emit('PINODEP006');
+    options.customLevels = bindings.customLevels;
+  }
+  if (bindings.hasOwnProperty('level') === true) {
+    warning.emit('PINODEP007');
+    options.level = bindings.level;
+  }
+  if (options.hasOwnProperty('serializers') === true) {
+    instance[serializersSym$5] = Object.create(null);
+
+    for (const k in serializers) {
+      instance[serializersSym$5][k] = serializers[k];
+    }
+    const parentSymbols = Object.getOwnPropertySymbols(serializers);
+    /* eslint no-var: off */
+    for (var i = 0; i < parentSymbols.length; i++) {
+      const ks = parentSymbols[i];
+      instance[serializersSym$5][ks] = serializers[ks];
+    }
+
+    for (const bk in options.serializers) {
+      instance[serializersSym$5][bk] = options.serializers[bk];
+    }
+    const bindingsSymbols = Object.getOwnPropertySymbols(options.serializers);
+    for (var bi = 0; bi < bindingsSymbols.length; bi++) {
+      const bks = bindingsSymbols[bi];
+      instance[serializersSym$5][bks] = options.serializers[bks];
+    }
+  } else instance[serializersSym$5] = serializers;
+  if (options.hasOwnProperty('formatters')) {
+    const { level, bindings: chindings, log } = options.formatters;
+    instance[formattersSym$6] = buildFormatters$4(
+      level || formatters.level,
+      chindings || resetChildingsFormatter$1,
+      log || formatters.log
+    );
+  } else {
+    instance[formattersSym$6] = buildFormatters$4(
+      formatters.level,
+      resetChildingsFormatter$1,
+      formatters.log
+    );
+  }
+  if (options.hasOwnProperty('customLevels') === true) {
+    assertNoLevelCollisions$2(this.levels, options.customLevels);
+    instance.levels = mappings$4(options.customLevels, instance[useOnlyCustomLevelsSym$5]);
+    genLsCache$4(instance);
+  }
+
+  // redact must place before asChindings and only replace if exist
+  if ((typeof options.redact === 'object' && options.redact !== null) || Array.isArray(options.redact)) {
+    instance.redact = options.redact; // replace redact directly
+    const stringifiers = redaction$4(instance.redact, stringify$9);
+    const formatOpts = { stringify: stringifiers[redactFmtSym$5] };
+    instance[stringifySym$5] = stringify$9;
+    instance[stringifiersSym$5] = stringifiers;
+    instance[formatOptsSym$5] = formatOpts;
+  }
+
+  instance[chindingsSym$5] = asChindings$4(instance, bindings);
+  const childLevel = options.level || this.level;
+  instance[setLevelSym$4](childLevel);
+
+  return instance
+}
+
+function bindings$1 () {
+  const chindings = this[chindingsSym$5];
+  const chindingsJson = `{${chindings.substr(1)}}`; // at least contains ,"pid":7068,"hostname":"myMac"
+  const bindingsFromJson = JSON.parse(chindingsJson);
+  delete bindingsFromJson.pid;
+  delete bindingsFromJson.hostname;
+  return bindingsFromJson
+}
+
+function setBindings$1 (newBindings) {
+  const chindings = asChindings$4(this, newBindings);
+  this[chindingsSym$5] = chindings;
+  delete this[parsedChindingsSym$1];
+}
+
+/**
+ * Default strategy for creating `mergeObject` from arguments and the result from `mixin()`.
+ * Fields from `mergeObject` have higher priority in this strategy.
+ *
+ * @param {Object} mergeObject The object a user has supplied to the logging function.
+ * @param {Object} mixinObject The result of the `mixin` method.
+ * @return {Object}
+ */
+function defaultMixinMergeStrategy$1 (mergeObject, mixinObject) {
+  return Object.assign(mixinObject, mergeObject)
+}
+
+function write$2 (_obj, msg, num) {
+  const t = this[timeSym$4]();
+  const mixin = this[mixinSym$4];
+  const mixinMergeStrategy = this[mixinMergeStrategySym$4] || defaultMixinMergeStrategy$1;
+  const objError = _obj instanceof Error;
+  let obj;
+
+  if (_obj === undefined || _obj === null) {
+    obj = mixin ? mixin({}) : {};
+  } else {
+    obj = mixinMergeStrategy(_obj, mixin ? mixin(_obj) : {});
+    if (!msg && objError) {
+      msg = _obj.message;
+    }
+
+    if (objError) {
+      obj.stack = _obj.stack;
+      if (!obj.type) {
+        obj.type = 'Error';
+      }
+    }
+  }
+
+  const s = this[asJsonSym$2](obj, msg, num, t);
+
+  const stream = this[streamSym$5];
+  if (stream[needsMetadataGsym$2] === true) {
+    stream.lastLevel = num;
+    stream.lastObj = obj;
+    stream.lastMsg = msg;
+    stream.lastTime = t.slice(this[timeSliceIndexSym$4]);
+    stream.lastLogger = this; // for child loggers
+  }
+  if (stream instanceof SonicBoom$2) stream.write(s);
+  else stream.write(flatstr(s));
+}
+
+function flush$3 () {
+  const stream = this[streamSym$5];
+  if ('flush' in stream) stream.flush();
+}
+
+/* eslint no-prototype-builtins: 0 */
+const os$8 = require$$0$h;
+const stdSerializers$1 = pinoStdSerializers$2;
+const redaction$3 = redaction_1$1;
+const time$3 = time$4;
+const proto$3 = proto$4;
+const symbols$2 = symbols$3;
+const { assertDefaultLevelFound: assertDefaultLevelFound$2, mappings: mappings$3, genLsCache: genLsCache$3 } = levels_1$1;
+const {
+  createArgsNormalizer: createArgsNormalizer$2,
+  asChindings: asChindings$3,
+  final,
+  stringify: stringify$8,
+  buildSafeSonicBoom: buildSafeSonicBoom$2,
+  buildFormatters: buildFormatters$3,
+  noop: noop$8
+} = tools$1;
+const { version: version$b } = meta$1;
+const { mixinMergeStrategySym: mixinMergeStrategySym$3 } = symbols$3;
+const {
+  chindingsSym: chindingsSym$4,
+  redactFmtSym: redactFmtSym$4,
+  serializersSym: serializersSym$4,
+  timeSym: timeSym$3,
+  timeSliceIndexSym: timeSliceIndexSym$3,
+  streamSym: streamSym$4,
+  stringifySym: stringifySym$4,
+  stringifiersSym: stringifiersSym$4,
+  setLevelSym: setLevelSym$3,
+  endSym: endSym$3,
+  formatOptsSym: formatOptsSym$4,
+  messageKeySym: messageKeySym$3,
+  nestedKeySym: nestedKeySym$3,
+  mixinSym: mixinSym$3,
+  useOnlyCustomLevelsSym: useOnlyCustomLevelsSym$4,
+  formattersSym: formattersSym$5,
+  hooksSym: hooksSym$3
+} = symbols$2;
+const { epochTime: epochTime$2, nullTime: nullTime$2 } = time$3;
+const { pid: pid$1 } = process;
+const hostname$1 = os$8.hostname();
+const defaultErrorSerializer$1 = stdSerializers$1.err;
+const defaultOptions$3 = {
+  level: 'info',
+  messageKey: 'msg',
+  nestedKey: null,
+  enabled: true,
+  prettyPrint: false,
+  base: { pid: pid$1, hostname: hostname$1 },
+  serializers: Object.assign(Object.create(null), {
+    err: defaultErrorSerializer$1
+  }),
+  formatters: Object.assign(Object.create(null), {
+    bindings (bindings) {
+      return bindings
+    },
+    level (label, number) {
+      return { level: number }
+    }
+  }),
+  hooks: {
+    logMethod: undefined
+  },
+  timestamp: epochTime$2,
+  name: undefined,
+  redact: null,
+  customLevels: null,
+  levelKey: undefined,
+  useOnlyCustomLevels: false
+};
+
+const normalize$5 = createArgsNormalizer$2(defaultOptions$3);
+
+const serializers$2 = Object.assign(Object.create(null), stdSerializers$1);
+
+function pino$6 (...args) {
+  const instance = {};
+  const { opts, stream } = normalize$5(instance, ...args);
+  const {
+    redact,
+    crlf,
+    serializers,
+    timestamp,
+    messageKey,
+    nestedKey,
+    base,
+    name,
+    level,
+    customLevels,
+    useLevelLabels,
+    changeLevelName,
+    levelKey,
+    mixin,
+    mixinMergeStrategy,
+    useOnlyCustomLevels,
+    formatters,
+    hooks
+  } = opts;
+
+  const allFormatters = buildFormatters$3(
+    formatters.level,
+    formatters.bindings,
+    formatters.log
+  );
+
+  if (useLevelLabels && !(changeLevelName || levelKey)) {
+    process.emitWarning('useLevelLabels is deprecated, use the formatters.level option instead', 'Warning', 'PINODEP001');
+    allFormatters.level = labelsFormatter;
+  } else if ((changeLevelName || levelKey) && !useLevelLabels) {
+    process.emitWarning('changeLevelName and levelKey are deprecated, use the formatters.level option instead', 'Warning', 'PINODEP002');
+    allFormatters.level = levelNameFormatter(changeLevelName || levelKey);
+  } else if ((changeLevelName || levelKey) && useLevelLabels) {
+    process.emitWarning('useLevelLabels is deprecated, use the formatters.level option instead', 'Warning', 'PINODEP001');
+    process.emitWarning('changeLevelName and levelKey are deprecated, use the formatters.level option instead', 'Warning', 'PINODEP002');
+    allFormatters.level = levelNameLabelFormatter(changeLevelName || levelKey);
+  }
+
+  if (serializers[Symbol.for('pino.*')]) {
+    process.emitWarning('The pino.* serializer is deprecated, use the formatters.log options instead', 'Warning', 'PINODEP003');
+    allFormatters.log = serializers[Symbol.for('pino.*')];
+  }
+
+  if (!allFormatters.bindings) {
+    allFormatters.bindings = defaultOptions$3.formatters.bindings;
+  }
+  if (!allFormatters.level) {
+    allFormatters.level = defaultOptions$3.formatters.level;
+  }
+
+  const stringifiers = redact ? redaction$3(redact, stringify$8) : {};
+  const formatOpts = redact
+    ? { stringify: stringifiers[redactFmtSym$4] }
+    : { stringify: stringify$8 };
+  const end = '}' + (crlf ? '\r\n' : '\n');
+  const coreChindings = asChindings$3.bind(null, {
+    [chindingsSym$4]: '',
+    [serializersSym$4]: serializers,
+    [stringifiersSym$4]: stringifiers,
+    [stringifySym$4]: stringify$8,
+    [formattersSym$5]: allFormatters
+  });
+
+  let chindings = '';
+  if (base !== null) {
+    if (name === undefined) {
+      chindings = coreChindings(base);
+    } else {
+      chindings = coreChindings(Object.assign({}, base, { name }));
+    }
+  }
+
+  const time = (timestamp instanceof Function)
+    ? timestamp
+    : (timestamp ? epochTime$2 : nullTime$2);
+  const timeSliceIndex = time().indexOf(':') + 1;
+
+  if (useOnlyCustomLevels && !customLevels) throw Error('customLevels is required if useOnlyCustomLevels is set true')
+  if (mixin && typeof mixin !== 'function') throw Error(`Unknown mixin type "${typeof mixin}" - expected "function"`)
+
+  assertDefaultLevelFound$2(level, customLevels, useOnlyCustomLevels);
+  const levels = mappings$3(customLevels, useOnlyCustomLevels);
+
+  Object.assign(instance, {
+    levels,
+    [useOnlyCustomLevelsSym$4]: useOnlyCustomLevels,
+    [streamSym$4]: stream,
+    [timeSym$3]: time,
+    [timeSliceIndexSym$3]: timeSliceIndex,
+    [stringifySym$4]: stringify$8,
+    [stringifiersSym$4]: stringifiers,
+    [endSym$3]: end,
+    [formatOptsSym$4]: formatOpts,
+    [messageKeySym$3]: messageKey,
+    [nestedKeySym$3]: nestedKey,
+    [serializersSym$4]: serializers,
+    [mixinSym$3]: mixin,
+    [mixinMergeStrategySym$3]: mixinMergeStrategy,
+    [chindingsSym$4]: chindings,
+    [formattersSym$5]: allFormatters,
+    [hooksSym$3]: hooks,
+    silent: noop$8
+  });
+
+  Object.setPrototypeOf(instance, proto$3());
+
+  genLsCache$3(instance);
+
+  instance[setLevelSym$3](level);
+
+  return instance
+}
+
+function labelsFormatter (label, number) {
+  return { level: label }
+}
+
+function levelNameFormatter (name) {
+  return function (label, number) {
+    return { [name]: number }
+  }
+}
+
+function levelNameLabelFormatter (name) {
+  return function (label, number) {
+    return { [name]: label }
+  }
+}
+
+pino$7.exports = pino$6;
+
+pinoExports$1.extreme = (dest = process.stdout.fd) => {
+  process.emitWarning(
+    'The pino.extreme() option is deprecated and will be removed in v7. Use pino.destination({ sync: false }) instead.',
+    { code: 'extreme_deprecation' }
+  );
+  return buildSafeSonicBoom$2({ dest, minLength: 4096, sync: false })
+};
+
+pinoExports$1.destination = (dest = process.stdout.fd) => {
+  if (typeof dest === 'object') {
+    dest.dest = dest.dest || process.stdout.fd;
+    return buildSafeSonicBoom$2(dest)
+  } else {
+    return buildSafeSonicBoom$2({ dest, minLength: 0, sync: true })
+  }
+};
+
+pinoExports$1.final = final;
+pinoExports$1.levels = mappings$3();
+pinoExports$1.stdSerializers = serializers$2;
+pinoExports$1.stdTimeFunctions = Object.assign({}, time$3);
+pinoExports$1.symbols = symbols$2;
+pinoExports$1.version = version$b;
+
+// Enables default and name export with TypeScript and Babel
+pinoExports$1.default = pino$6;
+pinoExports$1.pino = pino$6;
+
+var readableExports = {};
+var readable = {
+  get exports(){ return readableExports; },
+  set exports(v){ readableExports = v; },
+};
+
+var streamExports = {};
+var stream$2 = {
+  get exports(){ return streamExports; },
+  set exports(v){ streamExports = v; },
+};
+
+var hasRequiredStream;
+
+function requireStream () {
+	if (hasRequiredStream) return streamExports;
+	hasRequiredStream = 1;
+	(function (module) {
+		module.exports = Stream$2;
+} (stream$2));
+	return streamExports;
+}
+
+var buffer_list;
+var hasRequiredBuffer_list;
+
+function requireBuffer_list () {
+	if (hasRequiredBuffer_list) return buffer_list;
+	hasRequiredBuffer_list = 1;
+
+	function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); if (enumerableOnly) symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; }); keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i] != null ? arguments[i] : {}; if (i % 2) { ownKeys(Object(source), true).forEach(function (key) { _defineProperty(target, key, source[key]); }); } else if (Object.getOwnPropertyDescriptors) { Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)); } else { ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } } return target; }
+
+	function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+	function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+	var _require = require$$0$i,
+	    Buffer = _require.Buffer;
+
+	var _require2 = require$$1$7,
+	    inspect = _require2.inspect;
+
+	var custom = inspect && inspect.custom || 'inspect';
+
+	function copyBuffer(src, target, offset) {
+	  Buffer.prototype.copy.call(src, target, offset);
+	}
+
+	buffer_list =
+	/*#__PURE__*/
+	function () {
+	  function BufferList() {
+	    _classCallCheck(this, BufferList);
+
+	    this.head = null;
+	    this.tail = null;
+	    this.length = 0;
+	  }
+
+	  _createClass(BufferList, [{
+	    key: "push",
+	    value: function push(v) {
+	      var entry = {
+	        data: v,
+	        next: null
+	      };
+	      if (this.length > 0) this.tail.next = entry;else this.head = entry;
+	      this.tail = entry;
+	      ++this.length;
+	    }
+	  }, {
+	    key: "unshift",
+	    value: function unshift(v) {
+	      var entry = {
+	        data: v,
+	        next: this.head
+	      };
+	      if (this.length === 0) this.tail = entry;
+	      this.head = entry;
+	      ++this.length;
+	    }
+	  }, {
+	    key: "shift",
+	    value: function shift() {
+	      if (this.length === 0) return;
+	      var ret = this.head.data;
+	      if (this.length === 1) this.head = this.tail = null;else this.head = this.head.next;
+	      --this.length;
+	      return ret;
+	    }
+	  }, {
+	    key: "clear",
+	    value: function clear() {
+	      this.head = this.tail = null;
+	      this.length = 0;
+	    }
+	  }, {
+	    key: "join",
+	    value: function join(s) {
+	      if (this.length === 0) return '';
+	      var p = this.head;
+	      var ret = '' + p.data;
+
+	      while (p = p.next) {
+	        ret += s + p.data;
+	      }
+
+	      return ret;
+	    }
+	  }, {
+	    key: "concat",
+	    value: function concat(n) {
+	      if (this.length === 0) return Buffer.alloc(0);
+	      var ret = Buffer.allocUnsafe(n >>> 0);
+	      var p = this.head;
+	      var i = 0;
+
+	      while (p) {
+	        copyBuffer(p.data, ret, i);
+	        i += p.data.length;
+	        p = p.next;
+	      }
+
+	      return ret;
+	    } // Consumes a specified amount of bytes or characters from the buffered data.
+
+	  }, {
+	    key: "consume",
+	    value: function consume(n, hasStrings) {
+	      var ret;
+
+	      if (n < this.head.data.length) {
+	        // `slice` is the same for buffers and strings.
+	        ret = this.head.data.slice(0, n);
+	        this.head.data = this.head.data.slice(n);
+	      } else if (n === this.head.data.length) {
+	        // First chunk is a perfect match.
+	        ret = this.shift();
+	      } else {
+	        // Result spans more than one buffer.
+	        ret = hasStrings ? this._getString(n) : this._getBuffer(n);
+	      }
+
+	      return ret;
+	    }
+	  }, {
+	    key: "first",
+	    value: function first() {
+	      return this.head.data;
+	    } // Consumes a specified amount of characters from the buffered data.
+
+	  }, {
+	    key: "_getString",
+	    value: function _getString(n) {
+	      var p = this.head;
+	      var c = 1;
+	      var ret = p.data;
+	      n -= ret.length;
+
+	      while (p = p.next) {
+	        var str = p.data;
+	        var nb = n > str.length ? str.length : n;
+	        if (nb === str.length) ret += str;else ret += str.slice(0, n);
+	        n -= nb;
+
+	        if (n === 0) {
+	          if (nb === str.length) {
+	            ++c;
+	            if (p.next) this.head = p.next;else this.head = this.tail = null;
+	          } else {
+	            this.head = p;
+	            p.data = str.slice(nb);
+	          }
+
+	          break;
+	        }
+
+	        ++c;
+	      }
+
+	      this.length -= c;
+	      return ret;
+	    } // Consumes a specified amount of bytes from the buffered data.
+
+	  }, {
+	    key: "_getBuffer",
+	    value: function _getBuffer(n) {
+	      var ret = Buffer.allocUnsafe(n);
+	      var p = this.head;
+	      var c = 1;
+	      p.data.copy(ret);
+	      n -= p.data.length;
+
+	      while (p = p.next) {
+	        var buf = p.data;
+	        var nb = n > buf.length ? buf.length : n;
+	        buf.copy(ret, ret.length - n, 0, nb);
+	        n -= nb;
+
+	        if (n === 0) {
+	          if (nb === buf.length) {
+	            ++c;
+	            if (p.next) this.head = p.next;else this.head = this.tail = null;
+	          } else {
+	            this.head = p;
+	            p.data = buf.slice(nb);
+	          }
+
+	          break;
+	        }
+
+	        ++c;
+	      }
+
+	      this.length -= c;
+	      return ret;
+	    } // Make sure the linked list only shows the minimal necessary information.
+
+	  }, {
+	    key: custom,
+	    value: function value(_, options) {
+	      return inspect(this, _objectSpread({}, options, {
+	        // Only inspect one level.
+	        depth: 0,
+	        // It should not recurse.
+	        customInspect: false
+	      }));
+	    }
+	  }]);
+
+	  return BufferList;
+	}();
+	return buffer_list;
+}
+
+var destroy_1$1;
+var hasRequiredDestroy$1;
+
+function requireDestroy$1 () {
+	if (hasRequiredDestroy$1) return destroy_1$1;
+	hasRequiredDestroy$1 = 1;
+
+	function destroy(err, cb) {
+	  var _this = this;
+
+	  var readableDestroyed = this._readableState && this._readableState.destroyed;
+	  var writableDestroyed = this._writableState && this._writableState.destroyed;
+
+	  if (readableDestroyed || writableDestroyed) {
+	    if (cb) {
+	      cb(err);
+	    } else if (err) {
+	      if (!this._writableState) {
+	        process.nextTick(emitErrorNT, this, err);
+	      } else if (!this._writableState.errorEmitted) {
+	        this._writableState.errorEmitted = true;
+	        process.nextTick(emitErrorNT, this, err);
+	      }
+	    }
+
+	    return this;
+	  } // we set destroyed to true before firing error callbacks in order
+	  // to make it re-entrance safe in case destroy() is called within callbacks
+
+
+	  if (this._readableState) {
+	    this._readableState.destroyed = true;
+	  } // if this is a duplex stream mark the writable part as destroyed as well
+
+
+	  if (this._writableState) {
+	    this._writableState.destroyed = true;
+	  }
+
+	  this._destroy(err || null, function (err) {
+	    if (!cb && err) {
+	      if (!_this._writableState) {
+	        process.nextTick(emitErrorAndCloseNT, _this, err);
+	      } else if (!_this._writableState.errorEmitted) {
+	        _this._writableState.errorEmitted = true;
+	        process.nextTick(emitErrorAndCloseNT, _this, err);
+	      } else {
+	        process.nextTick(emitCloseNT, _this);
+	      }
+	    } else if (cb) {
+	      process.nextTick(emitCloseNT, _this);
+	      cb(err);
+	    } else {
+	      process.nextTick(emitCloseNT, _this);
+	    }
+	  });
+
+	  return this;
+	}
+
+	function emitErrorAndCloseNT(self, err) {
+	  emitErrorNT(self, err);
+	  emitCloseNT(self);
+	}
+
+	function emitCloseNT(self) {
+	  if (self._writableState && !self._writableState.emitClose) return;
+	  if (self._readableState && !self._readableState.emitClose) return;
+	  self.emit('close');
+	}
+
+	function undestroy() {
+	  if (this._readableState) {
+	    this._readableState.destroyed = false;
+	    this._readableState.reading = false;
+	    this._readableState.ended = false;
+	    this._readableState.endEmitted = false;
+	  }
+
+	  if (this._writableState) {
+	    this._writableState.destroyed = false;
+	    this._writableState.ended = false;
+	    this._writableState.ending = false;
+	    this._writableState.finalCalled = false;
+	    this._writableState.prefinished = false;
+	    this._writableState.finished = false;
+	    this._writableState.errorEmitted = false;
+	  }
+	}
+
+	function emitErrorNT(self, err) {
+	  self.emit('error', err);
+	}
+
+	function errorOrDestroy(stream, err) {
+	  // We have tests that rely on errors being emitted
+	  // in the same tick, so changing this is semver major.
+	  // For now when you opt-in to autoDestroy we allow
+	  // the error to be emitted nextTick. In a future
+	  // semver major update we should change the default to this.
+	  var rState = stream._readableState;
+	  var wState = stream._writableState;
+	  if (rState && rState.autoDestroy || wState && wState.autoDestroy) stream.destroy(err);else stream.emit('error', err);
+	}
+
+	destroy_1$1 = {
+	  destroy: destroy,
+	  undestroy: undestroy,
+	  errorOrDestroy: errorOrDestroy
+	};
+	return destroy_1$1;
+}
+
+var errors$2 = {};
+
+var hasRequiredErrors;
+
+function requireErrors () {
+	if (hasRequiredErrors) return errors$2;
+	hasRequiredErrors = 1;
+
+	const codes = {};
+
+	function createErrorType(code, message, Base) {
+	  if (!Base) {
+	    Base = Error;
+	  }
+
+	  function getMessage (arg1, arg2, arg3) {
+	    if (typeof message === 'string') {
+	      return message
+	    } else {
+	      return message(arg1, arg2, arg3)
+	    }
+	  }
+
+	  class NodeError extends Base {
+	    constructor (arg1, arg2, arg3) {
+	      super(getMessage(arg1, arg2, arg3));
+	    }
+	  }
+
+	  NodeError.prototype.name = Base.name;
+	  NodeError.prototype.code = code;
+
+	  codes[code] = NodeError;
+	}
+
+	// https://github.com/nodejs/node/blob/v10.8.0/lib/internal/errors.js
+	function oneOf(expected, thing) {
+	  if (Array.isArray(expected)) {
+	    const len = expected.length;
+	    expected = expected.map((i) => String(i));
+	    if (len > 2) {
+	      return `one of ${thing} ${expected.slice(0, len - 1).join(', ')}, or ` +
+	             expected[len - 1];
+	    } else if (len === 2) {
+	      return `one of ${thing} ${expected[0]} or ${expected[1]}`;
+	    } else {
+	      return `of ${thing} ${expected[0]}`;
+	    }
+	  } else {
+	    return `of ${thing} ${String(expected)}`;
+	  }
+	}
+
+	// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/startsWith
+	function startsWith(str, search, pos) {
+		return str.substr(!pos || pos < 0 ? 0 : +pos, search.length) === search;
+	}
+
+	// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/endsWith
+	function endsWith(str, search, this_len) {
+		if (this_len === undefined || this_len > str.length) {
+			this_len = str.length;
+		}
+		return str.substring(this_len - search.length, this_len) === search;
+	}
+
+	// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/includes
+	function includes(str, search, start) {
+	  if (typeof start !== 'number') {
+	    start = 0;
+	  }
+
+	  if (start + search.length > str.length) {
+	    return false;
+	  } else {
+	    return str.indexOf(search, start) !== -1;
+	  }
+	}
+
+	createErrorType('ERR_INVALID_OPT_VALUE', function (name, value) {
+	  return 'The value "' + value + '" is invalid for option "' + name + '"'
+	}, TypeError);
+	createErrorType('ERR_INVALID_ARG_TYPE', function (name, expected, actual) {
+	  // determiner: 'must be' or 'must not be'
+	  let determiner;
+	  if (typeof expected === 'string' && startsWith(expected, 'not ')) {
+	    determiner = 'must not be';
+	    expected = expected.replace(/^not /, '');
+	  } else {
+	    determiner = 'must be';
+	  }
+
+	  let msg;
+	  if (endsWith(name, ' argument')) {
+	    // For cases like 'first argument'
+	    msg = `The ${name} ${determiner} ${oneOf(expected, 'type')}`;
+	  } else {
+	    const type = includes(name, '.') ? 'property' : 'argument';
+	    msg = `The "${name}" ${type} ${determiner} ${oneOf(expected, 'type')}`;
+	  }
+
+	  msg += `. Received type ${typeof actual}`;
+	  return msg;
+	}, TypeError);
+	createErrorType('ERR_STREAM_PUSH_AFTER_EOF', 'stream.push() after EOF');
+	createErrorType('ERR_METHOD_NOT_IMPLEMENTED', function (name) {
+	  return 'The ' + name + ' method is not implemented'
+	});
+	createErrorType('ERR_STREAM_PREMATURE_CLOSE', 'Premature close');
+	createErrorType('ERR_STREAM_DESTROYED', function (name) {
+	  return 'Cannot call ' + name + ' after a stream was destroyed';
+	});
+	createErrorType('ERR_MULTIPLE_CALLBACK', 'Callback called multiple times');
+	createErrorType('ERR_STREAM_CANNOT_PIPE', 'Cannot pipe, not readable');
+	createErrorType('ERR_STREAM_WRITE_AFTER_END', 'write after end');
+	createErrorType('ERR_STREAM_NULL_VALUES', 'May not write null values to stream', TypeError);
+	createErrorType('ERR_UNKNOWN_ENCODING', function (arg) {
+	  return 'Unknown encoding: ' + arg
+	}, TypeError);
+	createErrorType('ERR_STREAM_UNSHIFT_AFTER_END_EVENT', 'stream.unshift() after end event');
+
+	errors$2.codes = codes;
+	return errors$2;
+}
+
+var state;
+var hasRequiredState$1;
+
+function requireState$1 () {
+	if (hasRequiredState$1) return state;
+	hasRequiredState$1 = 1;
+
+	var ERR_INVALID_OPT_VALUE = requireErrors().codes.ERR_INVALID_OPT_VALUE;
+
+	function highWaterMarkFrom(options, isDuplex, duplexKey) {
+	  return options.highWaterMark != null ? options.highWaterMark : isDuplex ? options[duplexKey] : null;
+	}
+
+	function getHighWaterMark(state, options, duplexKey, isDuplex) {
+	  var hwm = highWaterMarkFrom(options, isDuplex, duplexKey);
+
+	  if (hwm != null) {
+	    if (!(isFinite(hwm) && Math.floor(hwm) === hwm) || hwm < 0) {
+	      var name = isDuplex ? duplexKey : 'highWaterMark';
+	      throw new ERR_INVALID_OPT_VALUE(name, hwm);
+	    }
+
+	    return Math.floor(hwm);
+	  } // Default value
+
+
+	  return state.objectMode ? 16 : 16 * 1024;
+	}
+
+	state = {
+	  getHighWaterMark: getHighWaterMark
+	};
+	return state;
+}
+
+var inheritsExports = {};
+var inherits$2 = {
+  get exports(){ return inheritsExports; },
+  set exports(v){ inheritsExports = v; },
+};
+
+var inherits_browserExports = {};
+var inherits_browser = {
+  get exports(){ return inherits_browserExports; },
+  set exports(v){ inherits_browserExports = v; },
+};
+
+var hasRequiredInherits_browser;
+
+function requireInherits_browser () {
+	if (hasRequiredInherits_browser) return inherits_browserExports;
+	hasRequiredInherits_browser = 1;
+	if (typeof Object.create === 'function') {
+	  // implementation from standard node.js 'util' module
+	  inherits_browser.exports = function inherits(ctor, superCtor) {
+	    if (superCtor) {
+	      ctor.super_ = superCtor;
+	      ctor.prototype = Object.create(superCtor.prototype, {
+	        constructor: {
+	          value: ctor,
+	          enumerable: false,
+	          writable: true,
+	          configurable: true
+	        }
+	      });
+	    }
+	  };
+	} else {
+	  // old school shim for old browsers
+	  inherits_browser.exports = function inherits(ctor, superCtor) {
+	    if (superCtor) {
+	      ctor.super_ = superCtor;
+	      var TempCtor = function () {};
+	      TempCtor.prototype = superCtor.prototype;
+	      ctor.prototype = new TempCtor();
+	      ctor.prototype.constructor = ctor;
+	    }
+	  };
+	}
+	return inherits_browserExports;
+}
+
+var hasRequiredInherits;
+
+function requireInherits () {
+	if (hasRequiredInherits) return inheritsExports;
+	hasRequiredInherits = 1;
+	(function (module) {
+		try {
+		  var util = require('util');
+		  /* istanbul ignore next */
+		  if (typeof util.inherits !== 'function') throw '';
+		  module.exports = util.inherits;
+		} catch (e) {
+		  /* istanbul ignore next */
+		  module.exports = requireInherits_browser();
+		}
+} (inherits$2));
+	return inheritsExports;
+}
+
+var node$7;
+var hasRequiredNode$6;
+
+function requireNode$6 () {
+	if (hasRequiredNode$6) return node$7;
+	hasRequiredNode$6 = 1;
+	/**
+	 * For Node.js, simply re-export the core `util.deprecate` function.
+	 */
+
+	node$7 = require$$1$7.deprecate;
+	return node$7;
+}
+
+var _stream_writable$2;
+var hasRequired_stream_writable;
+
+function require_stream_writable () {
+	if (hasRequired_stream_writable) return _stream_writable$2;
+	hasRequired_stream_writable = 1;
+
+	_stream_writable$2 = Writable;
+	// there will be only 2 of these for each stream
+
+
+	function CorkedRequest(state) {
+	  var _this = this;
+
+	  this.next = null;
+	  this.entry = null;
+
+	  this.finish = function () {
+	    onCorkedFinish(_this, state);
+	  };
+	}
+	/* </replacement> */
+
+	/*<replacement>*/
+
+
+	var Duplex;
+	/*</replacement>*/
+
+	Writable.WritableState = WritableState;
+	/*<replacement>*/
+
+	var internalUtil = {
+	  deprecate: requireNode$6()
+	};
+	/*</replacement>*/
+
+	/*<replacement>*/
+
+	var Stream = requireStream();
+	/*</replacement>*/
+
+
+	var Buffer = require$$0$i.Buffer;
+
+	var OurUint8Array = commonjsGlobal.Uint8Array || function () {};
+
+	function _uint8ArrayToBuffer(chunk) {
+	  return Buffer.from(chunk);
+	}
+
+	function _isUint8Array(obj) {
+	  return Buffer.isBuffer(obj) || obj instanceof OurUint8Array;
+	}
+
+	var destroyImpl = requireDestroy$1();
+
+	var _require = requireState$1(),
+	    getHighWaterMark = _require.getHighWaterMark;
+
+	var _require$codes = requireErrors().codes,
+	    ERR_INVALID_ARG_TYPE = _require$codes.ERR_INVALID_ARG_TYPE,
+	    ERR_METHOD_NOT_IMPLEMENTED = _require$codes.ERR_METHOD_NOT_IMPLEMENTED,
+	    ERR_MULTIPLE_CALLBACK = _require$codes.ERR_MULTIPLE_CALLBACK,
+	    ERR_STREAM_CANNOT_PIPE = _require$codes.ERR_STREAM_CANNOT_PIPE,
+	    ERR_STREAM_DESTROYED = _require$codes.ERR_STREAM_DESTROYED,
+	    ERR_STREAM_NULL_VALUES = _require$codes.ERR_STREAM_NULL_VALUES,
+	    ERR_STREAM_WRITE_AFTER_END = _require$codes.ERR_STREAM_WRITE_AFTER_END,
+	    ERR_UNKNOWN_ENCODING = _require$codes.ERR_UNKNOWN_ENCODING;
+
+	var errorOrDestroy = destroyImpl.errorOrDestroy;
+
+	requireInherits()(Writable, Stream);
+
+	function nop() {}
+
+	function WritableState(options, stream, isDuplex) {
+	  Duplex = Duplex || require_stream_duplex();
+	  options = options || {}; // Duplex streams are both readable and writable, but share
+	  // the same options object.
+	  // However, some cases require setting options to different
+	  // values for the readable and the writable sides of the duplex stream,
+	  // e.g. options.readableObjectMode vs. options.writableObjectMode, etc.
+
+	  if (typeof isDuplex !== 'boolean') isDuplex = stream instanceof Duplex; // object stream flag to indicate whether or not this stream
+	  // contains buffers or objects.
+
+	  this.objectMode = !!options.objectMode;
+	  if (isDuplex) this.objectMode = this.objectMode || !!options.writableObjectMode; // the point at which write() starts returning false
+	  // Note: 0 is a valid value, means that we always return false if
+	  // the entire buffer is not flushed immediately on write()
+
+	  this.highWaterMark = getHighWaterMark(this, options, 'writableHighWaterMark', isDuplex); // if _final has been called
+
+	  this.finalCalled = false; // drain event flag.
+
+	  this.needDrain = false; // at the start of calling end()
+
+	  this.ending = false; // when end() has been called, and returned
+
+	  this.ended = false; // when 'finish' is emitted
+
+	  this.finished = false; // has it been destroyed
+
+	  this.destroyed = false; // should we decode strings into buffers before passing to _write?
+	  // this is here so that some node-core streams can optimize string
+	  // handling at a lower level.
+
+	  var noDecode = options.decodeStrings === false;
+	  this.decodeStrings = !noDecode; // Crypto is kind of old and crusty.  Historically, its default string
+	  // encoding is 'binary' so we have to make this configurable.
+	  // Everything else in the universe uses 'utf8', though.
+
+	  this.defaultEncoding = options.defaultEncoding || 'utf8'; // not an actual buffer we keep track of, but a measurement
+	  // of how much we're waiting to get pushed to some underlying
+	  // socket or file.
+
+	  this.length = 0; // a flag to see when we're in the middle of a write.
+
+	  this.writing = false; // when true all writes will be buffered until .uncork() call
+
+	  this.corked = 0; // a flag to be able to tell if the onwrite cb is called immediately,
+	  // or on a later tick.  We set this to true at first, because any
+	  // actions that shouldn't happen until "later" should generally also
+	  // not happen before the first write call.
+
+	  this.sync = true; // a flag to know if we're processing previously buffered items, which
+	  // may call the _write() callback in the same tick, so that we don't
+	  // end up in an overlapped onwrite situation.
+
+	  this.bufferProcessing = false; // the callback that's passed to _write(chunk,cb)
+
+	  this.onwrite = function (er) {
+	    onwrite(stream, er);
+	  }; // the callback that the user supplies to write(chunk,encoding,cb)
+
+
+	  this.writecb = null; // the amount that is being written when _write is called.
+
+	  this.writelen = 0;
+	  this.bufferedRequest = null;
+	  this.lastBufferedRequest = null; // number of pending user-supplied write callbacks
+	  // this must be 0 before 'finish' can be emitted
+
+	  this.pendingcb = 0; // emit prefinish if the only thing we're waiting for is _write cbs
+	  // This is relevant for synchronous Transform streams
+
+	  this.prefinished = false; // True if the error was already emitted and should not be thrown again
+
+	  this.errorEmitted = false; // Should close be emitted on destroy. Defaults to true.
+
+	  this.emitClose = options.emitClose !== false; // Should .destroy() be called after 'finish' (and potentially 'end')
+
+	  this.autoDestroy = !!options.autoDestroy; // count buffered requests
+
+	  this.bufferedRequestCount = 0; // allocate the first CorkedRequest, there is always
+	  // one allocated and free to use, and we maintain at most two
+
+	  this.corkedRequestsFree = new CorkedRequest(this);
+	}
+
+	WritableState.prototype.getBuffer = function getBuffer() {
+	  var current = this.bufferedRequest;
+	  var out = [];
+
+	  while (current) {
+	    out.push(current);
+	    current = current.next;
+	  }
+
+	  return out;
+	};
+
+	(function () {
+	  try {
+	    Object.defineProperty(WritableState.prototype, 'buffer', {
+	      get: internalUtil.deprecate(function writableStateBufferGetter() {
+	        return this.getBuffer();
+	      }, '_writableState.buffer is deprecated. Use _writableState.getBuffer ' + 'instead.', 'DEP0003')
+	    });
+	  } catch (_) {}
+	})(); // Test _writableState for inheritance to account for Duplex streams,
+	// whose prototype chain only points to Readable.
+
+
+	var realHasInstance;
+
+	if (typeof Symbol === 'function' && Symbol.hasInstance && typeof Function.prototype[Symbol.hasInstance] === 'function') {
+	  realHasInstance = Function.prototype[Symbol.hasInstance];
+	  Object.defineProperty(Writable, Symbol.hasInstance, {
+	    value: function value(object) {
+	      if (realHasInstance.call(this, object)) return true;
+	      if (this !== Writable) return false;
+	      return object && object._writableState instanceof WritableState;
+	    }
+	  });
+	} else {
+	  realHasInstance = function realHasInstance(object) {
+	    return object instanceof this;
+	  };
+	}
+
+	function Writable(options) {
+	  Duplex = Duplex || require_stream_duplex(); // Writable ctor is applied to Duplexes, too.
+	  // `realHasInstance` is necessary because using plain `instanceof`
+	  // would return false, as no `_writableState` property is attached.
+	  // Trying to use the custom `instanceof` for Writable here will also break the
+	  // Node.js LazyTransform implementation, which has a non-trivial getter for
+	  // `_writableState` that would lead to infinite recursion.
+	  // Checking for a Stream.Duplex instance is faster here instead of inside
+	  // the WritableState constructor, at least with V8 6.5
+
+	  var isDuplex = this instanceof Duplex;
+	  if (!isDuplex && !realHasInstance.call(Writable, this)) return new Writable(options);
+	  this._writableState = new WritableState(options, this, isDuplex); // legacy.
+
+	  this.writable = true;
+
+	  if (options) {
+	    if (typeof options.write === 'function') this._write = options.write;
+	    if (typeof options.writev === 'function') this._writev = options.writev;
+	    if (typeof options.destroy === 'function') this._destroy = options.destroy;
+	    if (typeof options.final === 'function') this._final = options.final;
+	  }
+
+	  Stream.call(this);
+	} // Otherwise people can pipe Writable streams, which is just wrong.
+
+
+	Writable.prototype.pipe = function () {
+	  errorOrDestroy(this, new ERR_STREAM_CANNOT_PIPE());
+	};
+
+	function writeAfterEnd(stream, cb) {
+	  var er = new ERR_STREAM_WRITE_AFTER_END(); // TODO: defer error events consistently everywhere, not just the cb
+
+	  errorOrDestroy(stream, er);
+	  process.nextTick(cb, er);
+	} // Checks that a user-supplied chunk is valid, especially for the particular
+	// mode the stream is in. Currently this means that `null` is never accepted
+	// and undefined/non-string values are only allowed in object mode.
+
+
+	function validChunk(stream, state, chunk, cb) {
+	  var er;
+
+	  if (chunk === null) {
+	    er = new ERR_STREAM_NULL_VALUES();
+	  } else if (typeof chunk !== 'string' && !state.objectMode) {
+	    er = new ERR_INVALID_ARG_TYPE('chunk', ['string', 'Buffer'], chunk);
+	  }
+
+	  if (er) {
+	    errorOrDestroy(stream, er);
+	    process.nextTick(cb, er);
+	    return false;
+	  }
+
+	  return true;
+	}
+
+	Writable.prototype.write = function (chunk, encoding, cb) {
+	  var state = this._writableState;
+	  var ret = false;
+
+	  var isBuf = !state.objectMode && _isUint8Array(chunk);
+
+	  if (isBuf && !Buffer.isBuffer(chunk)) {
+	    chunk = _uint8ArrayToBuffer(chunk);
+	  }
+
+	  if (typeof encoding === 'function') {
+	    cb = encoding;
+	    encoding = null;
+	  }
+
+	  if (isBuf) encoding = 'buffer';else if (!encoding) encoding = state.defaultEncoding;
+	  if (typeof cb !== 'function') cb = nop;
+	  if (state.ending) writeAfterEnd(this, cb);else if (isBuf || validChunk(this, state, chunk, cb)) {
+	    state.pendingcb++;
+	    ret = writeOrBuffer(this, state, isBuf, chunk, encoding, cb);
+	  }
+	  return ret;
+	};
+
+	Writable.prototype.cork = function () {
+	  this._writableState.corked++;
+	};
+
+	Writable.prototype.uncork = function () {
+	  var state = this._writableState;
+
+	  if (state.corked) {
+	    state.corked--;
+	    if (!state.writing && !state.corked && !state.bufferProcessing && state.bufferedRequest) clearBuffer(this, state);
+	  }
+	};
+
+	Writable.prototype.setDefaultEncoding = function setDefaultEncoding(encoding) {
+	  // node::ParseEncoding() requires lower case.
+	  if (typeof encoding === 'string') encoding = encoding.toLowerCase();
+	  if (!(['hex', 'utf8', 'utf-8', 'ascii', 'binary', 'base64', 'ucs2', 'ucs-2', 'utf16le', 'utf-16le', 'raw'].indexOf((encoding + '').toLowerCase()) > -1)) throw new ERR_UNKNOWN_ENCODING(encoding);
+	  this._writableState.defaultEncoding = encoding;
+	  return this;
+	};
+
+	Object.defineProperty(Writable.prototype, 'writableBuffer', {
+	  // making it explicit this property is not enumerable
+	  // because otherwise some prototype manipulation in
+	  // userland will fail
+	  enumerable: false,
+	  get: function get() {
+	    return this._writableState && this._writableState.getBuffer();
+	  }
+	});
+
+	function decodeChunk(state, chunk, encoding) {
+	  if (!state.objectMode && state.decodeStrings !== false && typeof chunk === 'string') {
+	    chunk = Buffer.from(chunk, encoding);
+	  }
+
+	  return chunk;
+	}
+
+	Object.defineProperty(Writable.prototype, 'writableHighWaterMark', {
+	  // making it explicit this property is not enumerable
+	  // because otherwise some prototype manipulation in
+	  // userland will fail
+	  enumerable: false,
+	  get: function get() {
+	    return this._writableState.highWaterMark;
+	  }
+	}); // if we're already writing something, then just put this
+	// in the queue, and wait our turn.  Otherwise, call _write
+	// If we return false, then we need a drain event, so set that flag.
+
+	function writeOrBuffer(stream, state, isBuf, chunk, encoding, cb) {
+	  if (!isBuf) {
+	    var newChunk = decodeChunk(state, chunk, encoding);
+
+	    if (chunk !== newChunk) {
+	      isBuf = true;
+	      encoding = 'buffer';
+	      chunk = newChunk;
+	    }
+	  }
+
+	  var len = state.objectMode ? 1 : chunk.length;
+	  state.length += len;
+	  var ret = state.length < state.highWaterMark; // we must ensure that previous needDrain will not be reset to false.
+
+	  if (!ret) state.needDrain = true;
+
+	  if (state.writing || state.corked) {
+	    var last = state.lastBufferedRequest;
+	    state.lastBufferedRequest = {
+	      chunk: chunk,
+	      encoding: encoding,
+	      isBuf: isBuf,
+	      callback: cb,
+	      next: null
+	    };
+
+	    if (last) {
+	      last.next = state.lastBufferedRequest;
+	    } else {
+	      state.bufferedRequest = state.lastBufferedRequest;
+	    }
+
+	    state.bufferedRequestCount += 1;
+	  } else {
+	    doWrite(stream, state, false, len, chunk, encoding, cb);
+	  }
+
+	  return ret;
+	}
+
+	function doWrite(stream, state, writev, len, chunk, encoding, cb) {
+	  state.writelen = len;
+	  state.writecb = cb;
+	  state.writing = true;
+	  state.sync = true;
+	  if (state.destroyed) state.onwrite(new ERR_STREAM_DESTROYED('write'));else if (writev) stream._writev(chunk, state.onwrite);else stream._write(chunk, encoding, state.onwrite);
+	  state.sync = false;
+	}
+
+	function onwriteError(stream, state, sync, er, cb) {
+	  --state.pendingcb;
+
+	  if (sync) {
+	    // defer the callback if we are being called synchronously
+	    // to avoid piling up things on the stack
+	    process.nextTick(cb, er); // this can emit finish, and it will always happen
+	    // after error
+
+	    process.nextTick(finishMaybe, stream, state);
+	    stream._writableState.errorEmitted = true;
+	    errorOrDestroy(stream, er);
+	  } else {
+	    // the caller expect this to happen before if
+	    // it is async
+	    cb(er);
+	    stream._writableState.errorEmitted = true;
+	    errorOrDestroy(stream, er); // this can emit finish, but finish must
+	    // always follow error
+
+	    finishMaybe(stream, state);
+	  }
+	}
+
+	function onwriteStateUpdate(state) {
+	  state.writing = false;
+	  state.writecb = null;
+	  state.length -= state.writelen;
+	  state.writelen = 0;
+	}
+
+	function onwrite(stream, er) {
+	  var state = stream._writableState;
+	  var sync = state.sync;
+	  var cb = state.writecb;
+	  if (typeof cb !== 'function') throw new ERR_MULTIPLE_CALLBACK();
+	  onwriteStateUpdate(state);
+	  if (er) onwriteError(stream, state, sync, er, cb);else {
+	    // Check if we're actually ready to finish, but don't emit yet
+	    var finished = needFinish(state) || stream.destroyed;
+
+	    if (!finished && !state.corked && !state.bufferProcessing && state.bufferedRequest) {
+	      clearBuffer(stream, state);
+	    }
+
+	    if (sync) {
+	      process.nextTick(afterWrite, stream, state, finished, cb);
+	    } else {
+	      afterWrite(stream, state, finished, cb);
+	    }
+	  }
+	}
+
+	function afterWrite(stream, state, finished, cb) {
+	  if (!finished) onwriteDrain(stream, state);
+	  state.pendingcb--;
+	  cb();
+	  finishMaybe(stream, state);
+	} // Must force callback to be called on nextTick, so that we don't
+	// emit 'drain' before the write() consumer gets the 'false' return
+	// value, and has a chance to attach a 'drain' listener.
+
+
+	function onwriteDrain(stream, state) {
+	  if (state.length === 0 && state.needDrain) {
+	    state.needDrain = false;
+	    stream.emit('drain');
+	  }
+	} // if there's something in the buffer waiting, then process it
+
+
+	function clearBuffer(stream, state) {
+	  state.bufferProcessing = true;
+	  var entry = state.bufferedRequest;
+
+	  if (stream._writev && entry && entry.next) {
+	    // Fast case, write everything using _writev()
+	    var l = state.bufferedRequestCount;
+	    var buffer = new Array(l);
+	    var holder = state.corkedRequestsFree;
+	    holder.entry = entry;
+	    var count = 0;
+	    var allBuffers = true;
+
+	    while (entry) {
+	      buffer[count] = entry;
+	      if (!entry.isBuf) allBuffers = false;
+	      entry = entry.next;
+	      count += 1;
+	    }
+
+	    buffer.allBuffers = allBuffers;
+	    doWrite(stream, state, true, state.length, buffer, '', holder.finish); // doWrite is almost always async, defer these to save a bit of time
+	    // as the hot path ends with doWrite
+
+	    state.pendingcb++;
+	    state.lastBufferedRequest = null;
+
+	    if (holder.next) {
+	      state.corkedRequestsFree = holder.next;
+	      holder.next = null;
+	    } else {
+	      state.corkedRequestsFree = new CorkedRequest(state);
+	    }
+
+	    state.bufferedRequestCount = 0;
+	  } else {
+	    // Slow case, write chunks one-by-one
+	    while (entry) {
+	      var chunk = entry.chunk;
+	      var encoding = entry.encoding;
+	      var cb = entry.callback;
+	      var len = state.objectMode ? 1 : chunk.length;
+	      doWrite(stream, state, false, len, chunk, encoding, cb);
+	      entry = entry.next;
+	      state.bufferedRequestCount--; // if we didn't call the onwrite immediately, then
+	      // it means that we need to wait until it does.
+	      // also, that means that the chunk and cb are currently
+	      // being processed, so move the buffer counter past them.
+
+	      if (state.writing) {
+	        break;
+	      }
+	    }
+
+	    if (entry === null) state.lastBufferedRequest = null;
+	  }
+
+	  state.bufferedRequest = entry;
+	  state.bufferProcessing = false;
+	}
+
+	Writable.prototype._write = function (chunk, encoding, cb) {
+	  cb(new ERR_METHOD_NOT_IMPLEMENTED('_write()'));
+	};
+
+	Writable.prototype._writev = null;
+
+	Writable.prototype.end = function (chunk, encoding, cb) {
+	  var state = this._writableState;
+
+	  if (typeof chunk === 'function') {
+	    cb = chunk;
+	    chunk = null;
+	    encoding = null;
+	  } else if (typeof encoding === 'function') {
+	    cb = encoding;
+	    encoding = null;
+	  }
+
+	  if (chunk !== null && chunk !== undefined) this.write(chunk, encoding); // .end() fully uncorks
+
+	  if (state.corked) {
+	    state.corked = 1;
+	    this.uncork();
+	  } // ignore unnecessary end() calls.
+
+
+	  if (!state.ending) endWritable(this, state, cb);
+	  return this;
+	};
+
+	Object.defineProperty(Writable.prototype, 'writableLength', {
+	  // making it explicit this property is not enumerable
+	  // because otherwise some prototype manipulation in
+	  // userland will fail
+	  enumerable: false,
+	  get: function get() {
+	    return this._writableState.length;
+	  }
+	});
+
+	function needFinish(state) {
+	  return state.ending && state.length === 0 && state.bufferedRequest === null && !state.finished && !state.writing;
+	}
+
+	function callFinal(stream, state) {
+	  stream._final(function (err) {
+	    state.pendingcb--;
+
+	    if (err) {
+	      errorOrDestroy(stream, err);
+	    }
+
+	    state.prefinished = true;
+	    stream.emit('prefinish');
+	    finishMaybe(stream, state);
+	  });
+	}
+
+	function prefinish(stream, state) {
+	  if (!state.prefinished && !state.finalCalled) {
+	    if (typeof stream._final === 'function' && !state.destroyed) {
+	      state.pendingcb++;
+	      state.finalCalled = true;
+	      process.nextTick(callFinal, stream, state);
+	    } else {
+	      state.prefinished = true;
+	      stream.emit('prefinish');
+	    }
+	  }
+	}
+
+	function finishMaybe(stream, state) {
