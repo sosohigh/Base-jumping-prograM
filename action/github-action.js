@@ -10636,3 +10636,2279 @@ function requirePipeline () {
 	function isRequest(stream) {
 	  return stream.setHeader && typeof stream.abort === 'function';
 	}
+
+	function destroyer(stream, reading, writing, callback) {
+	  callback = once(callback);
+	  var closed = false;
+	  stream.on('close', function () {
+	    closed = true;
+	  });
+	  if (eos === undefined) eos = requireEndOfStream();
+	  eos(stream, {
+	    readable: reading,
+	    writable: writing
+	  }, function (err) {
+	    if (err) return callback(err);
+	    closed = true;
+	    callback();
+	  });
+	  var destroyed = false;
+	  return function (err) {
+	    if (closed) return;
+	    if (destroyed) return;
+	    destroyed = true; // request.destroy just do .end - .abort is what we want
+
+	    if (isRequest(stream)) return stream.abort();
+	    if (typeof stream.destroy === 'function') return stream.destroy();
+	    callback(err || new ERR_STREAM_DESTROYED('pipe'));
+	  };
+	}
+
+	function call(fn) {
+	  fn();
+	}
+
+	function pipe(from, to) {
+	  return from.pipe(to);
+	}
+
+	function popCallback(streams) {
+	  if (!streams.length) return noop;
+	  if (typeof streams[streams.length - 1] !== 'function') return noop;
+	  return streams.pop();
+	}
+
+	function pipeline() {
+	  for (var _len = arguments.length, streams = new Array(_len), _key = 0; _key < _len; _key++) {
+	    streams[_key] = arguments[_key];
+	  }
+
+	  var callback = popCallback(streams);
+	  if (Array.isArray(streams[0])) streams = streams[0];
+
+	  if (streams.length < 2) {
+	    throw new ERR_MISSING_ARGS('streams');
+	  }
+
+	  var error;
+	  var destroys = streams.map(function (stream, i) {
+	    var reading = i < streams.length - 1;
+	    var writing = i > 0;
+	    return destroyer(stream, reading, writing, function (err) {
+	      if (!error) error = err;
+	      if (err) destroys.forEach(call);
+	      if (reading) return;
+	      destroys.forEach(call);
+	      callback(error);
+	    });
+	  });
+	  return streams.reduce(pipe);
+	}
+
+	pipeline_1$1 = pipeline;
+	return pipeline_1$1;
+}
+
+(function (module, exports) {
+	var Stream = Stream$2;
+	if (process.env.READABLE_STREAM === 'disable' && Stream) {
+	  module.exports = Stream.Readable;
+	  Object.assign(module.exports, Stream);
+	  module.exports.Stream = Stream;
+	} else {
+	  exports = module.exports = require_stream_readable();
+	  exports.Stream = Stream || exports;
+	  exports.Readable = exports;
+	  exports.Writable = require_stream_writable();
+	  exports.Duplex = require_stream_duplex();
+	  exports.Transform = require_stream_transform();
+	  exports.PassThrough = require_stream_passthrough();
+	  exports.finished = requireEndOfStream();
+	  exports.pipeline = requirePipeline();
+	}
+} (readable, readableExports));
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+/* global Reflect, Promise */
+
+var extendStatics$1 = function(d, b) {
+    extendStatics$1 = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return extendStatics$1(d, b);
+};
+
+function __extends$1(d, b) {
+    extendStatics$1(d, b);
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+}
+
+var __assign$5 = function() {
+    __assign$5 = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign$5.apply(this, arguments);
+};
+
+function __awaiter$3(thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+}
+
+function __generator$1(thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (_) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+}
+
+function __values$2(o) {
+    var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+    if (m) return m.call(o);
+    if (o && typeof o.length === "number") return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+}
+
+function __read$4(o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+}
+
+function __spread$4() {
+    for (var ar = [], i = 0; i < arguments.length; i++)
+        ar = ar.concat(__read$4(arguments[i]));
+    return ar;
+}
+
+/**
+ * TODO(v7): Remove this enum and replace with SeverityLevel
+ */
+var Severity;
+(function (Severity) {
+    /** JSDoc */
+    Severity["Fatal"] = "fatal";
+    /** JSDoc */
+    Severity["Error"] = "error";
+    /** JSDoc */
+    Severity["Warning"] = "warning";
+    /** JSDoc */
+    Severity["Log"] = "log";
+    /** JSDoc */
+    Severity["Info"] = "info";
+    /** JSDoc */
+    Severity["Debug"] = "debug";
+    /** JSDoc */
+    Severity["Critical"] = "critical";
+})(Severity || (Severity = {}));
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+var __assign$4 = function() {
+    __assign$4 = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign$4.apply(this, arguments);
+};
+
+function __read$3(o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+}
+
+function __spread$3() {
+    for (var ar = [], i = 0; i < arguments.length; i++)
+        ar = ar.concat(__read$3(arguments[i]));
+    return ar;
+}
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+var __assign$3 = function() {
+    __assign$3 = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign$3.apply(this, arguments);
+};
+
+function __read$2(o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+}
+
+function __spread$2() {
+    for (var ar = [], i = 0; i < arguments.length; i++)
+        ar = ar.concat(__read$2(arguments[i]));
+    return ar;
+}
+
+/**
+ * Consumes the promise and logs the error when it rejects.
+ * @param promise A promise to forget.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function forget(promise) {
+    void promise.then(null, function (e) {
+        // TODO: Use a better logging mechanism
+        // eslint-disable-next-line no-console
+        console.error(e);
+    });
+}
+
+/*
+ * This module exists for optimizations in the build process through rollup and terser.  We define some global
+ * constants, which can be overridden during build. By guarding certain pieces of code with functions that return these
+ * constants, we can control whether or not they appear in the final bundle. (Any code guarded by a false condition will
+ * never run, and will hence be dropped during treeshaking.) The two primary uses for this are stripping out calls to
+ * `logger` and preventing node-related code from appearing in browser bundles.
+ *
+ * Attention:
+ * This file should not be used to define constants/flags that are intended to be used for tree-shaking conducted by
+ * users. These fags should live in their respective packages, as we identified user tooling (specifically webpack)
+ * having issues tree-shaking these constants across package boundaries.
+ * An example for this is the __SENTRY_DEBUG__ constant. It is declared in each package individually because we want
+ * users to be able to shake away expressions that it guards.
+ */
+/**
+ * Figures out if we're building a browser bundle.
+ *
+ * @returns true if this is a browser bundle build.
+ */
+function isBrowserBundle() {
+    return typeof __SENTRY_BROWSER_BUNDLE__ !== 'undefined' && !!__SENTRY_BROWSER_BUNDLE__;
+}
+
+/**
+ * NOTE: In order to avoid circular dependencies, if you add a function to this module and it needs to print something,
+ * you must either a) use `console.log` rather than the logger, or b) put your function elsewhere.
+ */
+/**
+ * Checks whether we're in the Node.js or Browser environment
+ *
+ * @returns Answer to given question
+ */
+function isNodeEnv() {
+    // explicitly check for browser bundles as those can be optimized statically
+    // by terser/rollup.
+    return (!isBrowserBundle() &&
+        Object.prototype.toString.call(typeof process !== 'undefined' ? process : 0) === '[object process]');
+}
+/**
+ * Requires a module which is protected against bundler minification.
+ *
+ * @param request The module path to resolve
+ */
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
+function dynamicRequire(mod, request) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return mod.require(request);
+}
+
+/**
+ * NOTE: In order to avoid circular dependencies, if you add a function to this module and it needs to print something,
+ * you must either a) use `console.log` rather than the logger, or b) put your function elsewhere.
+ */
+var fallbackGlobalObject = {};
+/**
+ * Safely get global scope object
+ *
+ * @returns Global scope object
+ */
+function getGlobalObject() {
+    return (isNodeEnv()
+        ? global
+        : typeof window !== 'undefined' // eslint-disable-line no-restricted-globals
+            ? window // eslint-disable-line no-restricted-globals
+            : typeof self !== 'undefined'
+                ? self
+                : fallbackGlobalObject);
+}
+/**
+ * Returns a global singleton contained in the global `__SENTRY__` object.
+ *
+ * If the singleton doesn't already exist in `__SENTRY__`, it will be created using the given factory
+ * function and added to the `__SENTRY__` object.
+ *
+ * @param name name of the global singleton on __SENTRY__
+ * @param creator creator Factory function to create the singleton if it doesn't already exist on `__SENTRY__`
+ * @param obj (Optional) The global object on which to look for `__SENTRY__`, if not `getGlobalObject`'s return value
+ * @returns the singleton
+ */
+function getGlobalSingleton(name, creator, obj) {
+    var global = (obj || getGlobalObject());
+    var __SENTRY__ = (global.__SENTRY__ = global.__SENTRY__ || {});
+    var singleton = __SENTRY__[name] || (__SENTRY__[name] = creator());
+    return singleton;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+// eslint-disable-next-line @typescript-eslint/unbound-method
+var objectToString$4 = Object.prototype.toString;
+/**
+ * Checks whether given value's type is one of a few Error or Error-like
+ * {@link isError}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isError$1(wat) {
+    switch (objectToString$4.call(wat)) {
+        case '[object Error]':
+        case '[object Exception]':
+        case '[object DOMException]':
+            return true;
+        default:
+            return isInstanceOf(wat, Error);
+    }
+}
+function isBuiltin(wat, ty) {
+    return objectToString$4.call(wat) === "[object " + ty + "]";
+}
+/**
+ * Checks whether given value's type is a string
+ * {@link isString}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isString$1(wat) {
+    return isBuiltin(wat, 'String');
+}
+/**
+ * Checks whether given value is a primitive (undefined, null, number, boolean, string, bigint, symbol)
+ * {@link isPrimitive}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isPrimitive(wat) {
+    return wat === null || (typeof wat !== 'object' && typeof wat !== 'function');
+}
+/**
+ * Checks whether given value's type is an object literal
+ * {@link isPlainObject}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isPlainObject$1(wat) {
+    return isBuiltin(wat, 'Object');
+}
+/**
+ * Checks whether given value's type is an Event instance
+ * {@link isEvent}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isEvent(wat) {
+    return typeof Event !== 'undefined' && isInstanceOf(wat, Event);
+}
+/**
+ * Checks whether given value's type is an Element instance
+ * {@link isElement}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isElement$1(wat) {
+    return typeof Element !== 'undefined' && isInstanceOf(wat, Element);
+}
+/**
+ * Checks whether given value's type is an regexp
+ * {@link isRegExp}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isRegExp$3(wat) {
+    return isBuiltin(wat, 'RegExp');
+}
+/**
+ * Checks whether given value has a then function.
+ * @param wat A value to be checked.
+ */
+function isThenable(wat) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return Boolean(wat && wat.then && typeof wat.then === 'function');
+}
+/**
+ * Checks whether given value's type is a SyntheticEvent
+ * {@link isSyntheticEvent}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isSyntheticEvent(wat) {
+    return isPlainObject$1(wat) && 'nativeEvent' in wat && 'preventDefault' in wat && 'stopPropagation' in wat;
+}
+/**
+ * Checks whether given value is NaN
+ * {@link isNaN}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isNaN$1(wat) {
+    return typeof wat === 'number' && wat !== wat;
+}
+/**
+ * Checks whether given value's type is an instance of provided constructor.
+ * {@link isInstanceOf}.
+ *
+ * @param wat A value to be checked.
+ * @param base A constructor to be used in a check.
+ * @returns A boolean representing the result.
+ */
+function isInstanceOf(wat, base) {
+    try {
+        return wat instanceof base;
+    }
+    catch (_e) {
+        return false;
+    }
+}
+
+/**
+ * Given a child DOM element, returns a query-selector statement describing that
+ * and its ancestors
+ * e.g. [HTMLElement] => body > div > input#foo.btn[name=baz]
+ * @returns generated DOM path
+ */
+function htmlTreeAsString(elem, keyAttrs) {
+    // try/catch both:
+    // - accessing event.target (see getsentry/raven-js#838, #768)
+    // - `htmlTreeAsString` because it's complex, and just accessing the DOM incorrectly
+    // - can throw an exception in some circumstances.
+    try {
+        var currentElem = elem;
+        var MAX_TRAVERSE_HEIGHT = 5;
+        var MAX_OUTPUT_LEN = 80;
+        var out = [];
+        var height = 0;
+        var len = 0;
+        var separator = ' > ';
+        var sepLength = separator.length;
+        var nextStr = void 0;
+        // eslint-disable-next-line no-plusplus
+        while (currentElem && height++ < MAX_TRAVERSE_HEIGHT) {
+            nextStr = _htmlElementAsString(currentElem, keyAttrs);
+            // bail out if
+            // - nextStr is the 'html' element
+            // - the length of the string that would be created exceeds MAX_OUTPUT_LEN
+            //   (ignore this limit if we are on the first iteration)
+            if (nextStr === 'html' || (height > 1 && len + out.length * sepLength + nextStr.length >= MAX_OUTPUT_LEN)) {
+                break;
+            }
+            out.push(nextStr);
+            len += nextStr.length;
+            currentElem = currentElem.parentNode;
+        }
+        return out.reverse().join(separator);
+    }
+    catch (_oO) {
+        return '<unknown>';
+    }
+}
+/**
+ * Returns a simple, query-selector representation of a DOM element
+ * e.g. [HTMLElement] => input#foo.btn[name=baz]
+ * @returns generated DOM path
+ */
+function _htmlElementAsString(el, keyAttrs) {
+    var elem = el;
+    var out = [];
+    var className;
+    var classes;
+    var key;
+    var attr;
+    var i;
+    if (!elem || !elem.tagName) {
+        return '';
+    }
+    out.push(elem.tagName.toLowerCase());
+    // Pairs of attribute keys defined in `serializeAttribute` and their values on element.
+    var keyAttrPairs = keyAttrs && keyAttrs.length
+        ? keyAttrs.filter(function (keyAttr) { return elem.getAttribute(keyAttr); }).map(function (keyAttr) { return [keyAttr, elem.getAttribute(keyAttr)]; })
+        : null;
+    if (keyAttrPairs && keyAttrPairs.length) {
+        keyAttrPairs.forEach(function (keyAttrPair) {
+            out.push("[" + keyAttrPair[0] + "=\"" + keyAttrPair[1] + "\"]");
+        });
+    }
+    else {
+        if (elem.id) {
+            out.push("#" + elem.id);
+        }
+        // eslint-disable-next-line prefer-const
+        className = elem.className;
+        if (className && isString$1(className)) {
+            classes = className.split(/\s+/);
+            for (i = 0; i < classes.length; i++) {
+                out.push("." + classes[i]);
+            }
+        }
+    }
+    var allowedAttrs = ['type', 'name', 'title', 'alt'];
+    for (i = 0; i < allowedAttrs.length; i++) {
+        key = allowedAttrs[i];
+        attr = elem.getAttribute(key);
+        if (attr) {
+            out.push("[" + key + "=\"" + attr + "\"]");
+        }
+    }
+    return out.join('');
+}
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+/* global Reflect, Promise */
+
+var extendStatics = function(d, b) {
+    extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return extendStatics(d, b);
+};
+
+function __extends(d, b) {
+    extendStatics(d, b);
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+}
+
+var __assign$2 = function() {
+    __assign$2 = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign$2.apply(this, arguments);
+};
+
+function __values$1(o) {
+    var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+    if (m) return m.call(o);
+    if (o && typeof o.length === "number") return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+    throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+}
+
+function __read$1(o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+}
+
+function __spread$1() {
+    for (var ar = [], i = 0; i < arguments.length; i++)
+        ar = ar.concat(__read$1(arguments[i]));
+    return ar;
+}
+
+var setPrototypeOf$2 = Object.setPrototypeOf || ({ __proto__: [] } instanceof Array ? setProtoOf$1 : mixinProperties$1);
+/**
+ * setPrototypeOf polyfill using __proto__
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+function setProtoOf$1(obj, proto) {
+    // @ts-ignore __proto__ does not exist on obj
+    obj.__proto__ = proto;
+    return obj;
+}
+/**
+ * setPrototypeOf polyfill using mixin
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+function mixinProperties$1(obj, proto) {
+    for (var prop in proto) {
+        if (!Object.prototype.hasOwnProperty.call(obj, prop)) {
+            // @ts-ignore typescript complains about indexing so we remove
+            obj[prop] = proto[prop];
+        }
+    }
+    return obj;
+}
+
+/** An error emitted by Sentry SDKs and related utilities. */
+var SentryError = /** @class */ (function (_super) {
+    __extends(SentryError, _super);
+    function SentryError(message) {
+        var _newTarget = this.constructor;
+        var _this = _super.call(this, message) || this;
+        _this.message = message;
+        _this.name = _newTarget.prototype.constructor.name;
+        setPrototypeOf$2(_this, _newTarget.prototype);
+        return _this;
+    }
+    return SentryError;
+}(Error));
+
+/*
+ * This file defines flags and constants that can be modified during compile time in order to facilitate tree shaking
+ * for users.
+ *
+ * Debug flags need to be declared in each package individually and must not be imported across package boundaries,
+ * because some build tools have trouble tree-shaking imported guards.
+ *
+ * As a convention, we define debug flags in a `flags.ts` file in the root of a package's `src` folder.
+ *
+ * Debug flag files will contain "magic strings" like `__SENTRY_DEBUG__` that may get replaced with actual values during
+ * our, or the user's build process. Take care when introducing new flags - they must not throw if they are not
+ * replaced.
+ */
+/** Flag that is true for debug builds, false otherwise. */
+var IS_DEBUG_BUILD$3 = typeof __SENTRY_DEBUG__ === 'undefined' ? true : __SENTRY_DEBUG__;
+
+/** Regular expression used to parse a Dsn. */
+var DSN_REGEX = /^(?:(\w+):)\/\/(?:(\w+)(?::(\w+))?@)([\w.-]+)(?::(\d+))?\/(.+)/;
+function isValidProtocol(protocol) {
+    return protocol === 'http' || protocol === 'https';
+}
+/**
+ * Renders the string representation of this Dsn.
+ *
+ * By default, this will render the public representation without the password
+ * component. To get the deprecated private representation, set `withPassword`
+ * to true.
+ *
+ * @param withPassword When set to true, the password will be included.
+ */
+function dsnToString(dsn, withPassword) {
+    if (withPassword === void 0) { withPassword = false; }
+    var host = dsn.host, path = dsn.path, pass = dsn.pass, port = dsn.port, projectId = dsn.projectId, protocol = dsn.protocol, publicKey = dsn.publicKey;
+    return (protocol + "://" + publicKey + (withPassword && pass ? ":" + pass : '') +
+        ("@" + host + (port ? ":" + port : '') + "/" + (path ? path + "/" : path) + projectId));
+}
+function dsnFromString(str) {
+    var match = DSN_REGEX.exec(str);
+    if (!match) {
+        throw new SentryError("Invalid Sentry Dsn: " + str);
+    }
+    var _a = __read$1(match.slice(1), 6), protocol = _a[0], publicKey = _a[1], _b = _a[2], pass = _b === void 0 ? '' : _b, host = _a[3], _c = _a[4], port = _c === void 0 ? '' : _c, lastPath = _a[5];
+    var path = '';
+    var projectId = lastPath;
+    var split = projectId.split('/');
+    if (split.length > 1) {
+        path = split.slice(0, -1).join('/');
+        projectId = split.pop();
+    }
+    if (projectId) {
+        var projectMatch = projectId.match(/^\d+/);
+        if (projectMatch) {
+            projectId = projectMatch[0];
+        }
+    }
+    return dsnFromComponents({ host: host, pass: pass, path: path, projectId: projectId, port: port, protocol: protocol, publicKey: publicKey });
+}
+function dsnFromComponents(components) {
+    // TODO this is for backwards compatibility, and can be removed in a future version
+    if ('user' in components && !('publicKey' in components)) {
+        components.publicKey = components.user;
+    }
+    return {
+        user: components.publicKey || '',
+        protocol: components.protocol,
+        publicKey: components.publicKey || '',
+        pass: components.pass || '',
+        host: components.host,
+        port: components.port || '',
+        path: components.path || '',
+        projectId: components.projectId,
+    };
+}
+function validateDsn(dsn) {
+    if (!IS_DEBUG_BUILD$3) {
+        return;
+    }
+    var port = dsn.port, projectId = dsn.projectId, protocol = dsn.protocol;
+    var requiredComponents = ['protocol', 'publicKey', 'host', 'projectId'];
+    requiredComponents.forEach(function (component) {
+        if (!dsn[component]) {
+            throw new SentryError("Invalid Sentry Dsn: " + component + " missing");
+        }
+    });
+    if (!projectId.match(/^\d+$/)) {
+        throw new SentryError("Invalid Sentry Dsn: Invalid projectId " + projectId);
+    }
+    if (!isValidProtocol(protocol)) {
+        throw new SentryError("Invalid Sentry Dsn: Invalid protocol " + protocol);
+    }
+    if (port && isNaN(parseInt(port, 10))) {
+        throw new SentryError("Invalid Sentry Dsn: Invalid port " + port);
+    }
+    return true;
+}
+/** The Sentry Dsn, identifying a Sentry instance and project. */
+function makeDsn(from) {
+    var components = typeof from === 'string' ? dsnFromString(from) : dsnFromComponents(from);
+    validateDsn(components);
+    return components;
+}
+
+var SeverityLevels = ['fatal', 'error', 'warning', 'log', 'info', 'debug', 'critical'];
+
+// TODO: Implement different loggers for different environments
+var global$1 = getGlobalObject();
+/** Prefix for logging strings */
+var PREFIX = 'Sentry Logger ';
+var CONSOLE_LEVELS = ['debug', 'info', 'warn', 'error', 'log', 'assert'];
+/**
+ * Temporarily disable sentry console instrumentations.
+ *
+ * @param callback The function to run against the original `console` messages
+ * @returns The results of the callback
+ */
+function consoleSandbox(callback) {
+    var global = getGlobalObject();
+    if (!('console' in global)) {
+        return callback();
+    }
+    var originalConsole = global.console;
+    var wrappedLevels = {};
+    // Restore all wrapped console methods
+    CONSOLE_LEVELS.forEach(function (level) {
+        // TODO(v7): Remove this check as it's only needed for Node 6
+        var originalWrappedFunc = originalConsole[level] && originalConsole[level].__sentry_original__;
+        if (level in global.console && originalWrappedFunc) {
+            wrappedLevels[level] = originalConsole[level];
+            originalConsole[level] = originalWrappedFunc;
+        }
+    });
+    try {
+        return callback();
+    }
+    finally {
+        // Revert restoration to wrapped state
+        Object.keys(wrappedLevels).forEach(function (level) {
+            originalConsole[level] = wrappedLevels[level];
+        });
+    }
+}
+function makeLogger() {
+    var enabled = false;
+    var logger = {
+        enable: function () {
+            enabled = true;
+        },
+        disable: function () {
+            enabled = false;
+        },
+    };
+    if (IS_DEBUG_BUILD$3) {
+        CONSOLE_LEVELS.forEach(function (name) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            logger[name] = function () {
+                var args = [];
+                for (var _i = 0; _i < arguments.length; _i++) {
+                    args[_i] = arguments[_i];
+                }
+                if (enabled) {
+                    consoleSandbox(function () {
+                        var _a;
+                        (_a = global$1.console)[name].apply(_a, __spread$1([PREFIX + "[" + name + "]:"], args));
+                    });
+                }
+            };
+        });
+    }
+    else {
+        CONSOLE_LEVELS.forEach(function (name) {
+            logger[name] = function () { return undefined; };
+        });
+    }
+    return logger;
+}
+// Ensure we only have a single logger instance, even if multiple versions of @sentry/utils are being used
+var logger$3;
+if (IS_DEBUG_BUILD$3) {
+    logger$3 = getGlobalSingleton('logger', makeLogger);
+}
+else {
+    logger$3 = makeLogger();
+}
+
+/**
+ * Truncates given string to the maximum characters count
+ *
+ * @param str An object that contains serializable values
+ * @param max Maximum number of characters in truncated string (0 = unlimited)
+ * @returns string Encoded
+ */
+function truncate(str, max) {
+    if (max === void 0) { max = 0; }
+    if (typeof str !== 'string' || max === 0) {
+        return str;
+    }
+    return str.length <= max ? str : str.substr(0, max) + "...";
+}
+/**
+ * This is basically just `trim_line` from
+ * https://github.com/getsentry/sentry/blob/master/src/sentry/lang/javascript/processor.py#L67
+ *
+ * @param str An object that contains serializable values
+ * @param max Maximum number of characters in truncated string
+ * @returns string Encoded
+ */
+function snipLine(line, colno) {
+    var newLine = line;
+    var lineLength = newLine.length;
+    if (lineLength <= 150) {
+        return newLine;
+    }
+    if (colno > lineLength) {
+        // eslint-disable-next-line no-param-reassign
+        colno = lineLength;
+    }
+    var start = Math.max(colno - 60, 0);
+    if (start < 5) {
+        start = 0;
+    }
+    var end = Math.min(start + 140, lineLength);
+    if (end > lineLength - 5) {
+        end = lineLength;
+    }
+    if (end === lineLength) {
+        start = Math.max(end - 140, 0);
+    }
+    newLine = newLine.slice(start, end);
+    if (start > 0) {
+        newLine = "'{snip} " + newLine;
+    }
+    if (end < lineLength) {
+        newLine += ' {snip}';
+    }
+    return newLine;
+}
+/**
+ * Checks if the value matches a regex or includes the string
+ * @param value The string value to be checked against
+ * @param pattern Either a regex or a string that must be contained in value
+ */
+function isMatchingPattern(value, pattern) {
+    if (!isString$1(value)) {
+        return false;
+    }
+    if (isRegExp$3(pattern)) {
+        return pattern.test(value);
+    }
+    if (typeof pattern === 'string') {
+        return value.indexOf(pattern) !== -1;
+    }
+    return false;
+}
+
+/**
+ * Replace a method in an object with a wrapped version of itself.
+ *
+ * @param source An object that contains a method to be wrapped.
+ * @param name The name of the method to be wrapped.
+ * @param replacementFactory A higher-order function that takes the original version of the given method and returns a
+ * wrapped version. Note: The function returned by `replacementFactory` needs to be a non-arrow function, in order to
+ * preserve the correct value of `this`, and the original method must be called using `origMethod.call(this, <other
+ * args>)` or `origMethod.apply(this, [<other args>])` (rather than being called directly), again to preserve `this`.
+ * @returns void
+ */
+function fill(source, name, replacementFactory) {
+    if (!(name in source)) {
+        return;
+    }
+    var original = source[name];
+    var wrapped = replacementFactory(original);
+    // Make sure it's a function first, as we need to attach an empty prototype for `defineProperties` to work
+    // otherwise it'll throw "TypeError: Object.defineProperties called on non-object"
+    if (typeof wrapped === 'function') {
+        try {
+            markFunctionWrapped(wrapped, original);
+        }
+        catch (_Oo) {
+            // This can throw if multiple fill happens on a global object like XMLHttpRequest
+            // Fixes https://github.com/getsentry/sentry-javascript/issues/2043
+        }
+    }
+    source[name] = wrapped;
+}
+/**
+ * Defines a non-enumerable property on the given object.
+ *
+ * @param obj The object on which to set the property
+ * @param name The name of the property to be set
+ * @param value The value to which to set the property
+ */
+function addNonEnumerableProperty(obj, name, value) {
+    Object.defineProperty(obj, name, {
+        // enumerable: false, // the default, so we can save on bundle size by not explicitly setting it
+        value: value,
+        writable: true,
+        configurable: true,
+    });
+}
+/**
+ * Remembers the original function on the wrapped function and
+ * patches up the prototype.
+ *
+ * @param wrapped the wrapper function
+ * @param original the original function that gets wrapped
+ */
+function markFunctionWrapped(wrapped, original) {
+    var proto = original.prototype || {};
+    wrapped.prototype = original.prototype = proto;
+    addNonEnumerableProperty(wrapped, '__sentry_original__', original);
+}
+/**
+ * This extracts the original function if available.  See
+ * `markFunctionWrapped` for more information.
+ *
+ * @param func the function to unwrap
+ * @returns the unwrapped version of the function if available.
+ */
+function getOriginalFunction(func) {
+    return func.__sentry_original__;
+}
+/**
+ * Encodes given object into url-friendly format
+ *
+ * @param object An object that contains serializable values
+ * @returns string Encoded
+ */
+function urlEncode(object) {
+    return Object.keys(object)
+        .map(function (key) { return encodeURIComponent(key) + "=" + encodeURIComponent(object[key]); })
+        .join('&');
+}
+/**
+ * Transforms any object into an object literal with all its attributes
+ * attached to it.
+ *
+ * @param value Initial source that we have to transform in order for it to be usable by the serializer
+ */
+function convertToPlainObject(value) {
+    var newObj = value;
+    if (isError$1(value)) {
+        newObj = __assign$2({ message: value.message, name: value.name, stack: value.stack }, getOwnProperties(value));
+    }
+    else if (isEvent(value)) {
+        var event_1 = value;
+        newObj = __assign$2({ type: event_1.type, target: serializeEventTarget(event_1.target), currentTarget: serializeEventTarget(event_1.currentTarget) }, getOwnProperties(event_1));
+        if (typeof CustomEvent !== 'undefined' && isInstanceOf(value, CustomEvent)) {
+            newObj.detail = event_1.detail;
+        }
+    }
+    return newObj;
+}
+/** Creates a string representation of the target of an `Event` object */
+function serializeEventTarget(target) {
+    try {
+        return isElement$1(target) ? htmlTreeAsString(target) : Object.prototype.toString.call(target);
+    }
+    catch (_oO) {
+        return '<unknown>';
+    }
+}
+/** Filters out all but an object's own properties */
+function getOwnProperties(obj) {
+    var extractedProps = {};
+    for (var property in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, property)) {
+            extractedProps[property] = obj[property];
+        }
+    }
+    return extractedProps;
+}
+/**
+ * Given any captured exception, extract its keys and create a sorted
+ * and truncated list that will be used inside the event message.
+ * eg. `Non-error exception captured with keys: foo, bar, baz`
+ */
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+function extractExceptionKeysForMessage(exception, maxLength) {
+    if (maxLength === void 0) { maxLength = 40; }
+    var keys = Object.keys(convertToPlainObject(exception));
+    keys.sort();
+    if (!keys.length) {
+        return '[object has no keys]';
+    }
+    if (keys[0].length >= maxLength) {
+        return truncate(keys[0], maxLength);
+    }
+    for (var includedKeys = keys.length; includedKeys > 0; includedKeys--) {
+        var serialized = keys.slice(0, includedKeys).join(', ');
+        if (serialized.length > maxLength) {
+            continue;
+        }
+        if (includedKeys === keys.length) {
+            return serialized;
+        }
+        return truncate(serialized, maxLength);
+    }
+    return '';
+}
+/**
+ * Given any object, return the new object with removed keys that value was `undefined`.
+ * Works recursively on objects and arrays.
+ */
+function dropUndefinedKeys(val) {
+    var e_1, _a;
+    if (isPlainObject$1(val)) {
+        var rv = {};
+        try {
+            for (var _b = __values$1(Object.keys(val)), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var key = _c.value;
+                if (typeof val[key] !== 'undefined') {
+                    rv[key] = dropUndefinedKeys(val[key]);
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return rv;
+    }
+    if (Array.isArray(val)) {
+        return val.map(dropUndefinedKeys);
+    }
+    return val;
+}
+
+var STACKTRACE_LIMIT = 50;
+/**
+ * Creates a stack parser with the supplied line parsers
+ *
+ * StackFrames are returned in the correct order for Sentry Exception
+ * frames and with Sentry SDK internal frames removed from the top and bottom
+ *
+ */
+function createStackParser() {
+    var parsers = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        parsers[_i] = arguments[_i];
+    }
+    var sortedParsers = parsers.sort(function (a, b) { return a[0] - b[0]; }).map(function (p) { return p[1]; });
+    return function (stack, skipFirst) {
+        var e_1, _a, e_2, _b;
+        if (skipFirst === void 0) { skipFirst = 0; }
+        var frames = [];
+        try {
+            for (var _c = __values$1(stack.split('\n').slice(skipFirst)), _d = _c.next(); !_d.done; _d = _c.next()) {
+                var line = _d.value;
+                try {
+                    for (var sortedParsers_1 = (e_2 = void 0, __values$1(sortedParsers)), sortedParsers_1_1 = sortedParsers_1.next(); !sortedParsers_1_1.done; sortedParsers_1_1 = sortedParsers_1.next()) {
+                        var parser = sortedParsers_1_1.value;
+                        var frame = parser(line);
+                        if (frame) {
+                            frames.push(frame);
+                            break;
+                        }
+                    }
+                }
+                catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                finally {
+                    try {
+                        if (sortedParsers_1_1 && !sortedParsers_1_1.done && (_b = sortedParsers_1.return)) _b.call(sortedParsers_1);
+                    }
+                    finally { if (e_2) throw e_2.error; }
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return stripSentryFramesAndReverse(frames);
+    };
+}
+/**
+ * @hidden
+ */
+function stripSentryFramesAndReverse(stack) {
+    if (!stack.length) {
+        return [];
+    }
+    var localStack = stack;
+    var firstFrameFunction = localStack[0].function || '';
+    var lastFrameFunction = localStack[localStack.length - 1].function || '';
+    // If stack starts with one of our API calls, remove it (starts, meaning it's the top of the stack - aka last call)
+    if (firstFrameFunction.indexOf('captureMessage') !== -1 || firstFrameFunction.indexOf('captureException') !== -1) {
+        localStack = localStack.slice(1);
+    }
+    // If stack ends with one of our internal API calls, remove it (ends, meaning it's the bottom of the stack - aka top-most call)
+    if (lastFrameFunction.indexOf('sentryWrapped') !== -1) {
+        localStack = localStack.slice(0, -1);
+    }
+    // The frame where the crash happened, should be the last entry in the array
+    return localStack
+        .slice(0, STACKTRACE_LIMIT)
+        .map(function (frame) { return (__assign$2(__assign$2({}, frame), { filename: frame.filename || localStack[0].filename, function: frame.function || '?' })); })
+        .reverse();
+}
+var defaultFunctionName = '<anonymous>';
+/**
+ * Safely extract function name from itself
+ */
+function getFunctionName(fn) {
+    try {
+        if (!fn || typeof fn !== 'function') {
+            return defaultFunctionName;
+        }
+        return fn.name || defaultFunctionName;
+    }
+    catch (e) {
+        // Just accessing custom props in some Selenium environments
+        // can cause a "Permission denied" exception (see raven-js#495).
+        return defaultFunctionName;
+    }
+}
+
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * Helper to decycle json objects
+ */
+function memoBuilder() {
+    var hasWeakSet = typeof WeakSet === 'function';
+    var inner = hasWeakSet ? new WeakSet() : [];
+    function memoize(obj) {
+        if (hasWeakSet) {
+            if (inner.has(obj)) {
+                return true;
+            }
+            inner.add(obj);
+            return false;
+        }
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
+        for (var i = 0; i < inner.length; i++) {
+            var value = inner[i];
+            if (value === obj) {
+                return true;
+            }
+        }
+        inner.push(obj);
+        return false;
+    }
+    function unmemoize(obj) {
+        if (hasWeakSet) {
+            inner.delete(obj);
+        }
+        else {
+            for (var i = 0; i < inner.length; i++) {
+                if (inner[i] === obj) {
+                    inner.splice(i, 1);
+                    break;
+                }
+            }
+        }
+    }
+    return [memoize, unmemoize];
+}
+
+/**
+ * UUID4 generator
+ *
+ * @returns string Generated UUID4.
+ */
+function uuid4() {
+    var global = getGlobalObject();
+    var crypto = global.crypto || global.msCrypto;
+    if (!(crypto === void 0) && crypto.getRandomValues) {
+        // Use window.crypto API if available
+        var arr = new Uint16Array(8);
+        crypto.getRandomValues(arr);
+        // set 4 in byte 7
+        // eslint-disable-next-line no-bitwise
+        arr[3] = (arr[3] & 0xfff) | 0x4000;
+        // set 2 most significant bits of byte 9 to '10'
+        // eslint-disable-next-line no-bitwise
+        arr[4] = (arr[4] & 0x3fff) | 0x8000;
+        var pad = function (num) {
+            var v = num.toString(16);
+            while (v.length < 4) {
+                v = "0" + v;
+            }
+            return v;
+        };
+        return (pad(arr[0]) + pad(arr[1]) + pad(arr[2]) + pad(arr[3]) + pad(arr[4]) + pad(arr[5]) + pad(arr[6]) + pad(arr[7]));
+    }
+    // http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript/2117523#2117523
+    return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        // eslint-disable-next-line no-bitwise
+        var r = (Math.random() * 16) | 0;
+        // eslint-disable-next-line no-bitwise
+        var v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+function getFirstException(event) {
+    return event.exception && event.exception.values ? event.exception.values[0] : undefined;
+}
+/**
+ * Extracts either message or type+value from an event that can be used for user-facing logs
+ * @returns event's description
+ */
+function getEventDescription(event) {
+    var message = event.message, eventId = event.event_id;
+    if (message) {
+        return message;
+    }
+    var firstException = getFirstException(event);
+    if (firstException) {
+        if (firstException.type && firstException.value) {
+            return firstException.type + ": " + firstException.value;
+        }
+        return firstException.type || firstException.value || eventId || '<unknown>';
+    }
+    return eventId || '<unknown>';
+}
+/**
+ * Adds exception values, type and value to an synthetic Exception.
+ * @param event The event to modify.
+ * @param value Value of the exception.
+ * @param type Type of the exception.
+ * @hidden
+ */
+function addExceptionTypeValue(event, value, type) {
+    var exception = (event.exception = event.exception || {});
+    var values = (exception.values = exception.values || []);
+    var firstException = (values[0] = values[0] || {});
+    if (!firstException.value) {
+        firstException.value = value || '';
+    }
+    if (!firstException.type) {
+        firstException.type = type || 'Error';
+    }
+}
+/**
+ * Adds exception mechanism data to a given event. Uses defaults if the second parameter is not passed.
+ *
+ * @param event The event to modify.
+ * @param newMechanism Mechanism data to add to the event.
+ * @hidden
+ */
+function addExceptionMechanism(event, newMechanism) {
+    var firstException = getFirstException(event);
+    if (!firstException) {
+        return;
+    }
+    var defaultMechanism = { type: 'generic', handled: true };
+    var currentMechanism = firstException.mechanism;
+    firstException.mechanism = __assign$2(__assign$2(__assign$2({}, defaultMechanism), currentMechanism), newMechanism);
+    if (newMechanism && 'data' in newMechanism) {
+        var mergedData = __assign$2(__assign$2({}, (currentMechanism && currentMechanism.data)), newMechanism.data);
+        firstException.mechanism.data = mergedData;
+    }
+}
+// https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+var SEMVER_REGEXP = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+/**
+ * Parses input into a SemVer interface
+ * @param input string representation of a semver version
+ */
+function parseSemver(input) {
+    var match = input.match(SEMVER_REGEXP) || [];
+    var major = parseInt(match[1], 10);
+    var minor = parseInt(match[2], 10);
+    var patch = parseInt(match[3], 10);
+    return {
+        buildmetadata: match[5],
+        major: isNaN(major) ? undefined : major,
+        minor: isNaN(minor) ? undefined : minor,
+        patch: isNaN(patch) ? undefined : patch,
+        prerelease: match[4],
+    };
+}
+/**
+ * This function adds context (pre/post/line) lines to the provided frame
+ *
+ * @param lines string[] containing all lines
+ * @param frame StackFrame that will be mutated
+ * @param linesOfContext number of context lines we want to add pre/post
+ */
+function addContextToFrame(lines, frame, linesOfContext) {
+    if (linesOfContext === void 0) { linesOfContext = 5; }
+    var lineno = frame.lineno || 0;
+    var maxLines = lines.length;
+    var sourceLine = Math.max(Math.min(maxLines, lineno - 1), 0);
+    frame.pre_context = lines
+        .slice(Math.max(0, sourceLine - linesOfContext), sourceLine)
+        .map(function (line) { return snipLine(line, 0); });
+    frame.context_line = snipLine(lines[Math.min(maxLines - 1, sourceLine)], frame.colno || 0);
+    frame.post_context = lines
+        .slice(Math.min(sourceLine + 1, maxLines), sourceLine + 1 + linesOfContext)
+        .map(function (line) { return snipLine(line, 0); });
+}
+/**
+ * Strip the query string and fragment off of a given URL or path (if present)
+ *
+ * @param urlPath Full URL or path, including possible query string and/or fragment
+ * @returns URL or path without query string or fragment
+ */
+function stripUrlQueryAndFragment(urlPath) {
+    // eslint-disable-next-line no-useless-escape
+    return urlPath.split(/[\?#]/, 1)[0];
+}
+/**
+ * Checks whether or not we've already captured the given exception (note: not an identical exception - the very object
+ * in question), and marks it captured if not.
+ *
+ * This is useful because it's possible for an error to get captured by more than one mechanism. After we intercept and
+ * record an error, we rethrow it (assuming we've intercepted it before it's reached the top-level global handlers), so
+ * that we don't interfere with whatever effects the error might have had were the SDK not there. At that point, because
+ * the error has been rethrown, it's possible for it to bubble up to some other code we've instrumented. If it's not
+ * caught after that, it will bubble all the way up to the global handlers (which of course we also instrument). This
+ * function helps us ensure that even if we encounter the same error more than once, we only record it the first time we
+ * see it.
+ *
+ * Note: It will ignore primitives (always return `false` and not mark them as seen), as properties can't be set on
+ * them. {@link: Object.objectify} can be used on exceptions to convert any that are primitives into their equivalent
+ * object wrapper forms so that this check will always work. However, because we need to flag the exact object which
+ * will get rethrown, and because that rethrowing happens outside of the event processing pipeline, the objectification
+ * must be done before the exception captured.
+ *
+ * @param A thrown exception to check or flag as having been seen
+ * @returns `true` if the exception has already been captured, `false` if not (with the side effect of marking it seen)
+ */
+function checkOrSetAlreadyCaught(exception) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (exception && exception.__sentry_captured__) {
+        return true;
+    }
+    try {
+        // set it this way rather than by assignment so that it's not ennumerable and therefore isn't recorded by the
+        // `ExtraErrorData` integration
+        addNonEnumerableProperty(exception, '__sentry_captured__', true);
+    }
+    catch (err) {
+        // `exception` is a primitive, so we can't mark it seen
+    }
+    return false;
+}
+
+/**
+ * Recursively normalizes the given object.
+ *
+ * - Creates a copy to prevent original input mutation
+ * - Skips non-enumerable properties
+ * - When stringifying, calls `toJSON` if implemented
+ * - Removes circular references
+ * - Translates non-serializable values (`undefined`/`NaN`/functions) to serializable format
+ * - Translates known global objects/classes to a string representations
+ * - Takes care of `Error` object serialization
+ * - Optionally limits depth of final output
+ * - Optionally limits number of properties/elements included in any single object/array
+ *
+ * @param input The object to be normalized.
+ * @param depth The max depth to which to normalize the object. (Anything deeper stringified whole.)
+ * @param maxProperties The max number of elements or properties to be included in any single array or
+ * object in the normallized output..
+ * @returns A normalized version of the object, or `"**non-serializable**"` if any errors are thrown during normalization.
+ */
+function normalize$4(input, depth, maxProperties) {
+    if (depth === void 0) { depth = +Infinity; }
+    if (maxProperties === void 0) { maxProperties = +Infinity; }
+    try {
+        // since we're at the outermost level, there is no key
+        return visit('', input, depth, maxProperties);
+    }
+    catch (err) {
+        return { ERROR: "**non-serializable** (" + err + ")" };
+    }
+}
+/** JSDoc */
+function normalizeToSize(object, 
+// Default Node.js REPL depth
+depth, 
+// 100kB, as 200kB is max payload size, so half sounds reasonable
+maxSize) {
+    if (depth === void 0) { depth = 3; }
+    if (maxSize === void 0) { maxSize = 100 * 1024; }
+    var normalized = normalize$4(object, depth);
+    if (jsonSize(normalized) > maxSize) {
+        return normalizeToSize(object, depth - 1, maxSize);
+    }
+    return normalized;
+}
+/**
+ * Visits a node to perform normalization on it
+ *
+ * @param key The key corresponding to the given node
+ * @param value The node to be visited
+ * @param depth Optional number indicating the maximum recursion depth
+ * @param maxProperties Optional maximum number of properties/elements included in any single object/array
+ * @param memo Optional Memo class handling decycling
+ */
+function visit(key, value, depth, maxProperties, memo) {
+    if (depth === void 0) { depth = +Infinity; }
+    if (maxProperties === void 0) { maxProperties = +Infinity; }
+    if (memo === void 0) { memo = memoBuilder(); }
+    var _a = __read$1(memo, 2), memoize = _a[0], unmemoize = _a[1];
+    // If the value has a `toJSON` method, see if we can bail and let it do the work
+    var valueWithToJSON = value;
+    if (valueWithToJSON && typeof valueWithToJSON.toJSON === 'function') {
+        try {
+            return valueWithToJSON.toJSON();
+        }
+        catch (err) {
+            // pass (The built-in `toJSON` failed, but we can still try to do it ourselves)
+        }
+    }
+    // Get the simple cases out of the way first
+    if (value === null || (['number', 'boolean', 'string'].includes(typeof value) && !isNaN$1(value))) {
+        return value;
+    }
+    var stringified = stringifyValue(key, value);
+    // Anything we could potentially dig into more (objects or arrays) will have come back as `"[object XXXX]"`.
+    // Everything else will have already been serialized, so if we don't see that pattern, we're done.
+    if (!stringified.startsWith('[object ')) {
+        return stringified;
+    }
+    // We're also done if we've reached the max depth
+    if (depth === 0) {
+        // At this point we know `serialized` is a string of the form `"[object XXXX]"`. Clean it up so it's just `"[XXXX]"`.
+        return stringified.replace('object ', '');
+    }
+    // If we've already visited this branch, bail out, as it's circular reference. If not, note that we're seeing it now.
+    if (memoize(value)) {
+        return '[Circular ~]';
+    }
+    // At this point we know we either have an object or an array, we haven't seen it before, and we're going to recurse
+    // because we haven't yet reached the max depth. Create an accumulator to hold the results of visiting each
+    // property/entry, and keep track of the number of items we add to it.
+    var normalized = (Array.isArray(value) ? [] : {});
+    var numAdded = 0;
+    // Before we begin, convert`Error` and`Event` instances into plain objects, since some of each of their relevant
+    // properties are non-enumerable and otherwise would get missed.
+    var visitable = (isError$1(value) || isEvent(value) ? convertToPlainObject(value) : value);
+    for (var visitKey in visitable) {
+        // Avoid iterating over fields in the prototype if they've somehow been exposed to enumeration.
+        if (!Object.prototype.hasOwnProperty.call(visitable, visitKey)) {
+            continue;
+        }
+        if (numAdded >= maxProperties) {
+            normalized[visitKey] = '[MaxProperties ~]';
+            break;
+        }
+        // Recursively visit all the child nodes
+        var visitValue = visitable[visitKey];
+        normalized[visitKey] = visit(visitKey, visitValue, depth - 1, maxProperties, memo);
+        numAdded += 1;
+    }
+    // Once we've visited all the branches, remove the parent from memo storage
+    unmemoize(value);
+    // Return accumulated values
+    return normalized;
+}
+/**
+ * Stringify the given value. Handles various known special values and types.
+ *
+ * Not meant to be used on simple primitives which already have a string representation, as it will, for example, turn
+ * the number 1231 into "[Object Number]", nor on `null`, as it will throw.
+ *
+ * @param value The value to stringify
+ * @returns A stringified representation of the given value
+ */
+function stringifyValue(key, 
+// this type is a tiny bit of a cheat, since this function does handle NaN (which is technically a number), but for
+// our internal use, it'll do
+value) {
+    try {
+        if (key === 'domain' && value && typeof value === 'object' && value._events) {
+            return '[Domain]';
+        }
+        if (key === 'domainEmitter') {
+            return '[DomainEmitter]';
+        }
+        // It's safe to use `global`, `window`, and `document` here in this manner, as we are asserting using `typeof` first
+        // which won't throw if they are not present.
+        if (typeof global !== 'undefined' && value === global) {
+            return '[Global]';
+        }
+        // eslint-disable-next-line no-restricted-globals
+        if (typeof window !== 'undefined' && value === window) {
+            return '[Window]';
+        }
+        // eslint-disable-next-line no-restricted-globals
+        if (typeof document !== 'undefined' && value === document) {
+            return '[Document]';
+        }
+        // React's SyntheticEvent thingy
+        if (isSyntheticEvent(value)) {
+            return '[SyntheticEvent]';
+        }
+        if (typeof value === 'number' && value !== value) {
+            return '[NaN]';
+        }
+        // this catches `undefined` (but not `null`, which is a primitive and can be serialized on its own)
+        if (value === void 0) {
+            return '[undefined]';
+        }
+        if (typeof value === 'function') {
+            return "[Function: " + getFunctionName(value) + "]";
+        }
+        if (typeof value === 'symbol') {
+            return "[" + String(value) + "]";
+        }
+        // stringified BigInts are indistinguishable from regular numbers, so we need to label them to avoid confusion
+        if (typeof value === 'bigint') {
+            return "[BigInt: " + String(value) + "]";
+        }
+        // Now that we've knocked out all the special cases and the primitives, all we have left are objects. Simply casting
+        // them to strings means that instances of classes which haven't defined their `toStringTag` will just come out as
+        // `"[object Object]"`. If we instead look at the constructor's name (which is the same as the name of the class),
+        // we can make sure that only plain objects come out that way.
+        return "[object " + Object.getPrototypeOf(value).constructor.name + "]";
+    }
+    catch (err) {
+        return "**non-serializable** (" + err + ")";
+    }
+}
+/** Calculates bytes size of input string */
+function utf8Length(value) {
+    // eslint-disable-next-line no-bitwise
+    return ~-encodeURI(value).split(/%..|./).length;
+}
+/** Calculates bytes size of input object */
+function jsonSize(value) {
+    return utf8Length(JSON.stringify(value));
+}
+
+// Slightly modified (no IE8 support, ES6) and transcribed to TypeScript
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe = /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^/]+?|)(\.[^./]*|))(?:[/]*)$/;
+/** JSDoc */
+function splitPath(filename) {
+    var parts = splitPathRe.exec(filename);
+    return parts ? parts.slice(1) : [];
+}
+/** JSDoc */
+function dirname$1(path) {
+    var result = splitPath(path);
+    var root = result[0];
+    var dir = result[1];
+    if (!root && !dir) {
+        // No dirname whatsoever
+        return '.';
+    }
+    if (dir) {
+        // It has a dirname, strip trailing slash
+        dir = dir.substr(0, dir.length - 1);
+    }
+    return root + dir;
+}
+/** JSDoc */
+function basename$2(path, ext) {
+    var f = splitPath(path)[2];
+    if (ext && f.substr(ext.length * -1) === ext) {
+        f = f.substr(0, f.length - ext.length);
+    }
+    return f;
+}
+
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/**
+ * Creates a resolved sync promise.
+ *
+ * @param value the value to resolve the promise with
+ * @returns the resolved sync promise
+ */
+function resolvedSyncPromise(value) {
+    return new SyncPromise(function (resolve) {
+        resolve(value);
+    });
+}
+/**
+ * Creates a rejected sync promise.
+ *
+ * @param value the value to reject the promise with
+ * @returns the rejected sync promise
+ */
+function rejectedSyncPromise(reason) {
+    return new SyncPromise(function (_, reject) {
+        reject(reason);
+    });
+}
+/**
+ * Thenable class that behaves like a Promise and follows it's interface
+ * but is not async internally
+ */
+var SyncPromise = /** @class */ (function () {
+    function SyncPromise(executor) {
+        var _this = this;
+        this._state = 0 /* PENDING */;
+        this._handlers = [];
+        /** JSDoc */
+        this._resolve = function (value) {
+            _this._setResult(1 /* RESOLVED */, value);
+        };
+        /** JSDoc */
+        this._reject = function (reason) {
+            _this._setResult(2 /* REJECTED */, reason);
+        };
+        /** JSDoc */
+        this._setResult = function (state, value) {
+            if (_this._state !== 0 /* PENDING */) {
+                return;
+            }
+            if (isThenable(value)) {
+                void value.then(_this._resolve, _this._reject);
+                return;
+            }
+            _this._state = state;
+            _this._value = value;
+            _this._executeHandlers();
+        };
+        /** JSDoc */
+        this._executeHandlers = function () {
+            if (_this._state === 0 /* PENDING */) {
+                return;
+            }
+            var cachedHandlers = _this._handlers.slice();
+            _this._handlers = [];
+            cachedHandlers.forEach(function (handler) {
+                if (handler[0]) {
+                    return;
+                }
+                if (_this._state === 1 /* RESOLVED */) {
+                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                    handler[1](_this._value);
+                }
+                if (_this._state === 2 /* REJECTED */) {
+                    handler[2](_this._value);
+                }
+                handler[0] = true;
+            });
+        };
+        try {
+            executor(this._resolve, this._reject);
+        }
+        catch (e) {
+            this._reject(e);
+        }
+    }
+    /** JSDoc */
+    SyncPromise.prototype.then = function (onfulfilled, onrejected) {
+        var _this = this;
+        return new SyncPromise(function (resolve, reject) {
+            _this._handlers.push([
+                false,
+                function (result) {
+                    if (!onfulfilled) {
+                        // TODO: ¯\_(ツ)_/¯
+                        // TODO: FIXME
+                        resolve(result);
+                    }
+                    else {
+                        try {
+                            resolve(onfulfilled(result));
+                        }
+                        catch (e) {
+                            reject(e);
+                        }
+                    }
+                },
+                function (reason) {
+                    if (!onrejected) {
+                        reject(reason);
+                    }
+                    else {
+                        try {
+                            resolve(onrejected(reason));
+                        }
+                        catch (e) {
+                            reject(e);
+                        }
+                    }
+                },
+            ]);
+            _this._executeHandlers();
+        });
+    };
+    /** JSDoc */
+    SyncPromise.prototype.catch = function (onrejected) {
+        return this.then(function (val) { return val; }, onrejected);
+    };
+    /** JSDoc */
+    SyncPromise.prototype.finally = function (onfinally) {
+        var _this = this;
+        return new SyncPromise(function (resolve, reject) {
+            var val;
+            var isRejected;
+            return _this.then(function (value) {
+                isRejected = false;
+                val = value;
+                if (onfinally) {
+                    onfinally();
+                }
+            }, function (reason) {
+                isRejected = true;
+                val = reason;
+                if (onfinally) {
+                    onfinally();
+                }
+            }).then(function () {
+                if (isRejected) {
+                    reject(val);
+                    return;
+                }
+                resolve(val);
+            });
+        });
+    };
+    return SyncPromise;
+}());
+
+/**
+ * Creates an new PromiseBuffer object with the specified limit
+ * @param limit max number of promises that can be stored in the buffer
+ */
+function makePromiseBuffer(limit) {
+    var buffer = [];
+    function isReady() {
+        return limit === undefined || buffer.length < limit;
+    }
+    /**
+     * Remove a promise from the queue.
+     *
+     * @param task Can be any PromiseLike<T>
+     * @returns Removed promise.
+     */
+    function remove(task) {
+        return buffer.splice(buffer.indexOf(task), 1)[0];
+    }
+    /**
+     * Add a promise (representing an in-flight action) to the queue, and set it to remove itself on fulfillment.
+     *
+     * @param taskProducer A function producing any PromiseLike<T>; In previous versions this used to be `task:
+     *        PromiseLike<T>`, but under that model, Promises were instantly created on the call-site and their executor
+     *        functions therefore ran immediately. Thus, even if the buffer was full, the action still happened. By
+     *        requiring the promise to be wrapped in a function, we can defer promise creation until after the buffer
+     *        limit check.
+     * @returns The original promise.
+     */
+    function add(taskProducer) {
+        if (!isReady()) {
+            return rejectedSyncPromise(new SentryError('Not adding Promise due to buffer limit reached.'));
+        }
+        // start the task and add its promise to the queue
+        var task = taskProducer();
+        if (buffer.indexOf(task) === -1) {
+            buffer.push(task);
+        }
+        void task
+            .then(function () { return remove(task); })
+            // Use `then(null, rejectionHandler)` rather than `catch(rejectionHandler)` so that we can use `PromiseLike`
+            // rather than `Promise`. `PromiseLike` doesn't have a `.catch` method, making its polyfill smaller. (ES5 didn't
+            // have promises, so TS has to polyfill when down-compiling.)
+            .then(null, function () {
+            return remove(task).then(null, function () {
+                // We have to add another catch here because `remove()` starts a new promise chain.
+            });
+        });
+        return task;
+    }
+    /**
+     * Wait for all promises in the queue to resolve or for timeout to expire, whichever comes first.
+     *
+     * @param timeout The time, in ms, after which to resolve to `false` if the queue is still non-empty. Passing `0` (or
+     * not passing anything) will make the promise wait as long as it takes for the queue to drain before resolving to
+     * `true`.
+     * @returns A promise which will resolve to `true` if the queue is already empty or drains before the timeout, and
+     * `false` otherwise
+     */
+    function drain(timeout) {
+        return new SyncPromise(function (resolve, reject) {
+            var counter = buffer.length;
+            if (!counter) {
+                return resolve(true);
+            }
+            // wait for `timeout` ms and then resolve to `false` (if not cancelled first)
+            var capturedSetTimeout = setTimeout(function () {
+                if (timeout && timeout > 0) {
+                    resolve(false);
+                }
+            }, timeout);
+            // if all promises resolve in time, cancel the timer and resolve to `true`
+            buffer.forEach(function (item) {
+                void resolvedSyncPromise(item).then(function () {
+                    // eslint-disable-next-line no-plusplus
+                    if (!--counter) {
+                        clearTimeout(capturedSetTimeout);
+                        resolve(true);
+                    }
+                }, reject);
+            });
+        });
+    }
+    return {
+        $: buffer,
+        add: add,
+        drain: drain,
+    };
+}
+
+function isSupportedSeverity(level) {
+    return SeverityLevels.indexOf(level) !== -1;
+}
+/**
+ * Converts a string-based level into a {@link Severity}.
+ *
+ * @param level string representation of Severity
+ * @returns Severity
+ */
+function severityFromString(level) {
+    if (level === 'warn')
+        return Severity.Warning;
+    if (isSupportedSeverity(level)) {
+        return level;
+    }
+    return Severity.Log;
+}
+
+/**
+ * Converts an HTTP status code to sentry status {@link EventStatus}.
+ *
+ * @param code number HTTP status code
+ * @returns EventStatus
+ */
+function eventStatusFromHttpCode(code) {
+    if (code >= 200 && code < 300) {
+        return 'success';
+    }
+    if (code === 429) {
+        return 'rate_limit';
+    }
+    if (code >= 400 && code < 500) {
+        return 'invalid';
+    }
+    if (code >= 500) {
+        return 'failed';
+    }
+    return 'unknown';
+}
+
+/**
+ * A TimestampSource implementation for environments that do not support the Performance Web API natively.
+ *
+ * Note that this TimestampSource does not use a monotonic clock. A call to `nowSeconds` may return a timestamp earlier
+ * than a previously returned value. We do not try to emulate a monotonic behavior in order to facilitate debugging. It
+ * is more obvious to explain "why does my span have negative duration" than "why my spans have zero duration".
+ */
+var dateTimestampSource = {
+    nowSeconds: function () { return Date.now() / 1000; },
+};
+/**
+ * Returns a wrapper around the native Performance API browser implementation, or undefined for browsers that do not
+ * support the API.
+ *
+ * Wrapping the native API works around differences in behavior from different browsers.
+ */
+function getBrowserPerformance() {
+    var performance = getGlobalObject().performance;
+    if (!performance || !performance.now) {
+        return undefined;
+    }
+    // Replace performance.timeOrigin with our own timeOrigin based on Date.now().
+    //
+    // This is a partial workaround for browsers reporting performance.timeOrigin such that performance.timeOrigin +
+    // performance.now() gives a date arbitrarily in the past.
+    //
+    // Additionally, computing timeOrigin in this way fills the gap for browsers where performance.timeOrigin is
+    // undefined.
+    //
+    // The assumption that performance.timeOrigin + performance.now() ~= Date.now() is flawed, but we depend on it to
+    // interact with data coming out of performance entries.
+    //
+    // Note that despite recommendations against it in the spec, browsers implement the Performance API with a clock that
+    // might stop when the computer is asleep (and perhaps under other circumstances). Such behavior causes
+    // performance.timeOrigin + performance.now() to have an arbitrary skew over Date.now(). In laptop computers, we have
+    // observed skews that can be as long as days, weeks or months.
+    //
+    // See https://github.com/getsentry/sentry-javascript/issues/2590.
+    //
+    // BUG: despite our best intentions, this workaround has its limitations. It mostly addresses timings of pageload
+    // transactions, but ignores the skew built up over time that can aversely affect timestamps of navigation
+    // transactions of long-lived web pages.
+    var timeOrigin = Date.now() - performance.now();
+    return {
+        now: function () { return performance.now(); },
+        timeOrigin: timeOrigin,
+    };
+}
+/**
+ * Returns the native Performance API implementation from Node.js. Returns undefined in old Node.js versions that don't
+ * implement the API.
+ */
+function getNodePerformance() {
+    try {
+        var perfHooks = dynamicRequire(module, 'perf_hooks');
+        return perfHooks.performance;
+    }
+    catch (_) {
+        return undefined;
+    }
+}
+/**
+ * The Performance API implementation for the current platform, if available.
+ */
+var platformPerformance = isNodeEnv() ? getNodePerformance() : getBrowserPerformance();
+var timestampSource = platformPerformance === undefined
+    ? dateTimestampSource
+    : {
+        nowSeconds: function () { return (platformPerformance.timeOrigin + platformPerformance.now()) / 1000; },
+    };
+/**
+ * Returns a timestamp in seconds since the UNIX epoch using the Date API.
+ */
+var dateTimestampInSeconds = dateTimestampSource.nowSeconds.bind(dateTimestampSource);
+/**
+ * Returns a timestamp in seconds since the UNIX epoch using either the Performance or Date APIs, depending on the
+ * availability of the Performance API.
+ *
+ * See `usingPerformanceAPI` to test whether the Performance API is used.
+ *
+ * BUG: Note that because of how browsers implement the Performance API, the clock might stop when the computer is
+ * asleep. This creates a skew between `dateTimestampInSeconds` and `timestampInSeconds`. The
+ * skew can grow to arbitrary amounts like days, weeks or months.
+ * See https://github.com/getsentry/sentry-javascript/issues/2590.
+ */
+var timestampInSeconds = timestampSource.nowSeconds.bind(timestampSource);
+/**
+ * The number of milliseconds since the UNIX epoch. This value is only usable in a browser, and only when the
+ * performance API is available.
+ */
+((function () {
+    // Unfortunately browsers may report an inaccurate time origin data, through either performance.timeOrigin or
+    // performance.timing.navigationStart, which results in poor results in performance data. We only treat time origin
+    // data as reliable if they are within a reasonable threshold of the current time.
+    var performance = getGlobalObject().performance;
+    if (!performance || !performance.now) {
+        return undefined;
+    }
+    var threshold = 3600 * 1000;
+    var performanceNow = performance.now();
+    var dateNow = Date.now();
+    // if timeOrigin isn't available set delta to threshold so it isn't used
+    var timeOriginDelta = performance.timeOrigin
+        ? Math.abs(performance.timeOrigin + performanceNow - dateNow)
+        : threshold;
+    var timeOriginIsReliable = timeOriginDelta < threshold;
+    // While performance.timing.navigationStart is deprecated in favor of performance.timeOrigin, performance.timeOrigin
+    // is not as widely supported. Namely, performance.timeOrigin is undefined in Safari as of writing.
+    // Also as of writing, performance.timing is not available in Web Workers in mainstream browsers, so it is not always
+    // a valid fallback. In the absence of an initial time provided by the browser, fallback to the current time from the
+    // Date API.
+    // eslint-disable-next-line deprecation/deprecation
+    var navigationStart = performance.timing && performance.timing.navigationStart;
+    var hasNavigationStart = typeof navigationStart === 'number';
+    // if navigationStart isn't available set delta to threshold so it isn't used
+    var navigationStartDelta = hasNavigationStart ? Math.abs(navigationStart + performanceNow - dateNow) : threshold;
+    var navigationStartIsReliable = navigationStartDelta < threshold;
+    if (timeOriginIsReliable || navigationStartIsReliable) {
+        // Use the more reliable time origin
+        if (timeOriginDelta <= navigationStartDelta) {
+            return performance.timeOrigin;
+        }
+        else {
+            return navigationStart;
+        }
+    }
+    return dateNow;
+}))();
+
+var TRACEPARENT_REGEXP = new RegExp('^[ \\t]*' + // whitespace
+    '([0-9a-f]{32})?' + // trace_id
+    '-?([0-9a-f]{16})?' + // span_id
+    '-?([01])?' + // sampled
+    '[ \\t]*$');
+/**
+ * Extract transaction context data from a `sentry-trace` header.
+ *
+ * @param traceparent Traceparent string
+ *
+ * @returns Object containing data from the header, or undefined if traceparent string is malformed
+ */
+function extractTraceparentData(traceparent) {
+    var matches = traceparent.match(TRACEPARENT_REGEXP);
+    if (matches) {
+        var parentSampled = void 0;
+        if (matches[3] === '1') {
+            parentSampled = true;
+        }
+        else if (matches[3] === '0') {
+            parentSampled = false;
+        }
+        return {
+            traceId: matches[1],
+            parentSampled: parentSampled,
+            parentSpanId: matches[2],
+        };
+    }
+    return undefined;
+}
+
+/**
+ * Creates an envelope.
+ * Make sure to always explicitly provide the generic to this function
+ * so that the envelope types resolve correctly.
+ */
+function createEnvelope(headers, items) {
+    if (items === void 0) { items = []; }
+    return [headers, items];
+}
+/**
+ * Get the type of the envelope. Grabs the type from the first envelope item.
+ */
+function getEnvelopeType(envelope) {
+    var _a = __read$1(envelope, 2), _b = __read$1(_a[1], 1), _c = __read$1(_b[0], 1), firstItemHeader = _c[0];
+    return firstItemHeader.type;
+}
+/**
+ * Serializes an envelope into a string.
+ */
+function serializeEnvelope(envelope) {
+    var _a = __read$1(envelope, 2), headers = _a[0], items = _a[1];
+    var serializedHeaders = JSON.stringify(headers);
+    // Have to cast items to any here since Envelope is a union type
+    // Fixed in Typescript 4.2
+    // TODO: Remove any[] cast when we upgrade to TS 4.2
+    // https://github.com/microsoft/TypeScript/issues/36390
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return items.reduce(function (acc, item) {
+        var _a = __read$1(item, 2), itemHeaders = _a[0], payload = _a[1];
+        // We do not serialize payloads that are primitives
+        var serializedPayload = isPrimitive(payload) ? String(payload) : JSON.stringify(payload);
+        return acc + "\n" + JSON.stringify(itemHeaders) + "\n" + serializedPayload;
+    }, serializedHeaders);
+}
+
+var DEFAULT_RETRY_AFTER = 60 * 1000; // 60 seconds
+/**
+ * Extracts Retry-After value from the request header or returns default value
+ * @param header string representation of 'Retry-After' header
+ * @param now current unix timestamp
+ *
+ */
+function parseRetryAfterHeader(header, now) {
+    if (now === void 0) { now = Date.now(); }
+    var headerDelay = parseInt("" + header, 10);
+    if (!isNaN(headerDelay)) {
+        return headerDelay * 1000;
+    }
+    var headerDate = Date.parse("" + header);
+    if (!isNaN(headerDate)) {
+        return headerDate - now;
+    }
+    return DEFAULT_RETRY_AFTER;
+}
+/**
+ * Gets the time that given category is disabled until for rate limiting
+ */
+function disabledUntil(limits, category) {
+    return limits[category] || limits.all || 0;
+}
+/**
+ * Checks if a category is rate limited
+ */
+function isRateLimited(limits, category, now) {
+    if (now === void 0) { now = Date.now(); }
+    return disabledUntil(limits, category) > now;
+}
+/**
+ * Update ratelimits from incoming headers.
+ * Returns true if headers contains a non-empty rate limiting header.
+ */
+function updateRateLimits(limits, headers, now) {
+    var e_1, _a, e_2, _b;
+    if (now === void 0) { now = Date.now(); }
+    var updatedRateLimits = __assign$2({}, limits);
+    // "The name is case-insensitive."
+    // https://developer.mozilla.org/en-US/docs/Web/API/Headers/get
+    var rateLimitHeader = headers['x-sentry-rate-limits'];
+    var retryAfterHeader = headers['retry-after'];
+    if (rateLimitHeader) {
+        try {
+            /**
+             * rate limit headers are of the form
+             *     <header>,<header>,..
+             * where each <header> is of the form
+             *     <retry_after>: <categories>: <scope>: <reason_code>
+             * where
+             *     <retry_after> is a delay in seconds
+             *     <categories> is the event type(s) (error, transaction, etc) being rate limited and is of the form
+             *         <category>;<category>;...
+             *     <scope> is what's being limited (org, project, or key) - ignored by SDK
+             *     <reason_code> is an arbitrary string like "org_quota" - ignored by SDK
+             */
+            for (var _c = __values$1(rateLimitHeader.trim().split(',')), _d = _c.next(); !_d.done; _d = _c.next()) {
+                var limit = _d.value;
+                var parameters = limit.split(':', 2);
+                var headerDelay = parseInt(parameters[0], 10);
+                var delay = (!isNaN(headerDelay) ? headerDelay : 60) * 1000; // 60sec default
+                if (!parameters[1]) {
+                    updatedRateLimits.all = now + delay;
+                }
+                else {
+                    try {
+                        for (var _e = (e_2 = void 0, __values$1(parameters[1].split(';'))), _f = _e.next(); !_f.done; _f = _e.next()) {
+                            var category = _f.value;
+                            updatedRateLimits[category] = now + delay;
+                        }
+                    }
+                    catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                    finally {
+                        try {
+                            if (_f && !_f.done && (_b = _e.return)) _b.call(_e);
