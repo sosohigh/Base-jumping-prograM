@@ -15127,3 +15127,2176 @@ function eventToSentryRequest(event, api) {
                 message: 'JSON.stringify error after renormalization',
                 // setting `extra: { innerErr }` here for some reason results in an empty object, so unpack manually
                 extra: { message: innerErr.message, stack: innerErr.stack },
+            });
+        }
+    }
+    var req = {
+        // this is the relevant line of code before the hack was added, to make it easy to undo said hack once we've solved
+        // the mystery
+        // body: JSON.stringify(sdkInfo ? enhanceEventWithSdkInfo(event, api.metadata.sdk) : event),
+        body: body,
+        type: eventType,
+        url: useEnvelope
+            ? getEnvelopeEndpointWithUrlEncodedAuth(api.dsn, api.tunnel)
+            : getStoreEndpointWithUrlEncodedAuth(api.dsn),
+    };
+    // https://develop.sentry.dev/sdk/envelopes/
+    // Since we don't need to manipulate envelopes nor store them, there is no
+    // exported concept of an Envelope with operations including serialization and
+    // deserialization. Instead, we only implement a minimal subset of the spec to
+    // serialize events inline here.
+    if (useEnvelope) {
+        var envelopeHeaders = __assign$1(__assign$1({ event_id: event.event_id, sent_at: new Date().toISOString() }, (sdkInfo && { sdk: sdkInfo })), (!!api.tunnel && { dsn: dsnToString(api.dsn) }));
+        var eventItem = [
+            {
+                type: eventType,
+                sample_rates: [{ id: samplingMethod, rate: sampleRate }],
+            },
+            req.body,
+        ];
+        var envelope = createEnvelope(envelopeHeaders, [eventItem]);
+        req.body = serializeEnvelope(envelope);
+    }
+    return req;
+}
+
+/** Noop transport */
+var NoopTransport = /** @class */ (function () {
+    function NoopTransport() {
+    }
+    /**
+     * @inheritDoc
+     */
+    NoopTransport.prototype.sendEvent = function (_) {
+        return resolvedSyncPromise({
+            reason: 'NoopTransport: Event has been skipped because no Dsn is configured.',
+            status: 'skipped',
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    NoopTransport.prototype.close = function (_) {
+        return resolvedSyncPromise(true);
+    };
+    return NoopTransport;
+}());
+
+/**
+ * This is the base implemention of a Backend.
+ * @hidden
+ */
+var BaseBackend = /** @class */ (function () {
+    /** Creates a new backend instance. */
+    function BaseBackend(options) {
+        this._options = options;
+        if (!this._options.dsn) {
+            IS_DEBUG_BUILD$1 && logger$3.warn('No DSN provided, backend will not do anything.');
+        }
+        this._transport = this._setupTransport();
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    BaseBackend.prototype.eventFromException = function (_exception, _hint) {
+        throw new SentryError('Backend has to implement `eventFromException` method');
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.eventFromMessage = function (_message, _level, _hint) {
+        throw new SentryError('Backend has to implement `eventFromMessage` method');
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.sendEvent = function (event) {
+        // TODO(v7): Remove the if-else
+        if (this._newTransport &&
+            this._options.dsn &&
+            this._options._experiments &&
+            this._options._experiments.newTransport) {
+            var api = initAPIDetails(this._options.dsn, this._options._metadata, this._options.tunnel);
+            var env = createEventEnvelope(event, api);
+            void this._newTransport.send(env).then(null, function (reason) {
+                IS_DEBUG_BUILD$1 && logger$3.error('Error while sending event:', reason);
+            });
+        }
+        else {
+            void this._transport.sendEvent(event).then(null, function (reason) {
+                IS_DEBUG_BUILD$1 && logger$3.error('Error while sending event:', reason);
+            });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.sendSession = function (session) {
+        if (!this._transport.sendSession) {
+            IS_DEBUG_BUILD$1 && logger$3.warn("Dropping session because custom transport doesn't implement sendSession");
+            return;
+        }
+        // TODO(v7): Remove the if-else
+        if (this._newTransport &&
+            this._options.dsn &&
+            this._options._experiments &&
+            this._options._experiments.newTransport) {
+            var api = initAPIDetails(this._options.dsn, this._options._metadata, this._options.tunnel);
+            var _a = __read(createSessionEnvelope(session, api), 1), env = _a[0];
+            void this._newTransport.send(env).then(null, function (reason) {
+                IS_DEBUG_BUILD$1 && logger$3.error('Error while sending session:', reason);
+            });
+        }
+        else {
+            void this._transport.sendSession(session).then(null, function (reason) {
+                IS_DEBUG_BUILD$1 && logger$3.error('Error while sending session:', reason);
+            });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.getTransport = function () {
+        return this._transport;
+    };
+    /**
+     * Sets up the transport so it can be used later to send requests.
+     */
+    BaseBackend.prototype._setupTransport = function () {
+        return new NoopTransport();
+    };
+    return BaseBackend;
+}());
+
+/**
+ * Internal function to create a new SDK client instance. The client is
+ * installed and then bound to the current scope.
+ *
+ * @param clientClass The client class to instantiate.
+ * @param options Options to pass to the client.
+ */
+function initAndBind(clientClass, options) {
+    if (options.debug === true) {
+        if (IS_DEBUG_BUILD$1) {
+            logger$3.enable();
+        }
+        else {
+            // use `console.warn` rather than `logger.warn` since by non-debug bundles have all `logger.x` statements stripped
+            // eslint-disable-next-line no-console
+            console.warn('[Sentry] Cannot initialize SDK with `debug` option using a non-debug bundle.');
+        }
+    }
+    var hub = getCurrentHub();
+    var scope = hub.getScope();
+    if (scope) {
+        scope.update(options.initialScope);
+    }
+    var client = new clientClass(options);
+    hub.bindClient(client);
+}
+
+var DEFAULT_TRANSPORT_BUFFER_SIZE = 30;
+/**
+ * Creates a `NewTransport`
+ *
+ * @param options
+ * @param makeRequest
+ */
+function createTransport(options, makeRequest, buffer) {
+    if (buffer === void 0) { buffer = makePromiseBuffer(options.bufferSize || DEFAULT_TRANSPORT_BUFFER_SIZE); }
+    var rateLimits = {};
+    var flush = function (timeout) { return buffer.drain(timeout); };
+    function send(envelope) {
+        var envCategory = getEnvelopeType(envelope);
+        var category = envCategory === 'event' ? 'error' : envCategory;
+        var request = {
+            category: category,
+            body: serializeEnvelope(envelope),
+        };
+        // Don't add to buffer if transport is already rate-limited
+        if (isRateLimited(rateLimits, category)) {
+            return rejectedSyncPromise({
+                status: 'rate_limit',
+                reason: getRateLimitReason(rateLimits, category),
+            });
+        }
+        var requestTask = function () {
+            return makeRequest(request).then(function (_a) {
+                var body = _a.body, headers = _a.headers, reason = _a.reason, statusCode = _a.statusCode;
+                var status = eventStatusFromHttpCode(statusCode);
+                if (headers) {
+                    rateLimits = updateRateLimits(rateLimits, headers);
+                }
+                if (status === 'success') {
+                    return resolvedSyncPromise({ status: status, reason: reason });
+                }
+                return rejectedSyncPromise({
+                    status: status,
+                    reason: reason ||
+                        body ||
+                        (status === 'rate_limit' ? getRateLimitReason(rateLimits, category) : 'Unknown transport error'),
+                });
+            });
+        };
+        return buffer.add(requestTask);
+    }
+    return {
+        send: send,
+        flush: flush,
+    };
+}
+function getRateLimitReason(rateLimits, category) {
+    return "Too many " + category + " requests, backing off until: " + new Date(disabledUntil(rateLimits, category)).toISOString();
+}
+
+var SDK_VERSION = '6.19.7';
+
+var originalFunctionToString;
+/** Patch toString calls to return proper name for wrapped functions */
+var FunctionToString = /** @class */ (function () {
+    function FunctionToString() {
+        /**
+         * @inheritDoc
+         */
+        this.name = FunctionToString.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    FunctionToString.prototype.setupOnce = function () {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        originalFunctionToString = Function.prototype.toString;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Function.prototype.toString = function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            var context = getOriginalFunction(this) || this;
+            return originalFunctionToString.apply(context, args);
+        };
+    };
+    /**
+     * @inheritDoc
+     */
+    FunctionToString.id = 'FunctionToString';
+    return FunctionToString;
+}());
+
+// "Script error." is hard coded into browsers for errors that it can't read.
+// this is the result of a script being pulled in from an external domain and CORS.
+var DEFAULT_IGNORE_ERRORS = [/^Script error\.?$/, /^Javascript error: Script error\.? on line 0$/];
+/** Inbound filters configurable by the user */
+var InboundFilters = /** @class */ (function () {
+    function InboundFilters(_options) {
+        if (_options === void 0) { _options = {}; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = InboundFilters.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    InboundFilters.prototype.setupOnce = function (addGlobalEventProcessor, getCurrentHub) {
+        addGlobalEventProcessor(function (event) {
+            var hub = getCurrentHub();
+            if (hub) {
+                var self_1 = hub.getIntegration(InboundFilters);
+                if (self_1) {
+                    var client = hub.getClient();
+                    var clientOptions = client ? client.getOptions() : {};
+                    var options = _mergeOptions(self_1._options, clientOptions);
+                    return _shouldDropEvent(event, options) ? null : event;
+                }
+            }
+            return event;
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    InboundFilters.id = 'InboundFilters';
+    return InboundFilters;
+}());
+/** JSDoc */
+function _mergeOptions(internalOptions, clientOptions) {
+    if (internalOptions === void 0) { internalOptions = {}; }
+    if (clientOptions === void 0) { clientOptions = {}; }
+    return {
+        allowUrls: __spread((internalOptions.whitelistUrls || []), (internalOptions.allowUrls || []), (clientOptions.whitelistUrls || []), (clientOptions.allowUrls || [])),
+        denyUrls: __spread((internalOptions.blacklistUrls || []), (internalOptions.denyUrls || []), (clientOptions.blacklistUrls || []), (clientOptions.denyUrls || [])),
+        ignoreErrors: __spread((internalOptions.ignoreErrors || []), (clientOptions.ignoreErrors || []), DEFAULT_IGNORE_ERRORS),
+        ignoreInternal: internalOptions.ignoreInternal !== undefined ? internalOptions.ignoreInternal : true,
+    };
+}
+/** JSDoc */
+function _shouldDropEvent(event, options) {
+    if (options.ignoreInternal && _isSentryError(event)) {
+        IS_DEBUG_BUILD$1 &&
+            logger$3.warn("Event dropped due to being internal Sentry Error.\nEvent: " + getEventDescription(event));
+        return true;
+    }
+    if (_isIgnoredError(event, options.ignoreErrors)) {
+        IS_DEBUG_BUILD$1 &&
+            logger$3.warn("Event dropped due to being matched by `ignoreErrors` option.\nEvent: " + getEventDescription(event));
+        return true;
+    }
+    if (_isDeniedUrl(event, options.denyUrls)) {
+        IS_DEBUG_BUILD$1 &&
+            logger$3.warn("Event dropped due to being matched by `denyUrls` option.\nEvent: " + getEventDescription(event) + ".\nUrl: " + _getEventFilterUrl(event));
+        return true;
+    }
+    if (!_isAllowedUrl(event, options.allowUrls)) {
+        IS_DEBUG_BUILD$1 &&
+            logger$3.warn("Event dropped due to not being matched by `allowUrls` option.\nEvent: " + getEventDescription(event) + ".\nUrl: " + _getEventFilterUrl(event));
+        return true;
+    }
+    return false;
+}
+function _isIgnoredError(event, ignoreErrors) {
+    if (!ignoreErrors || !ignoreErrors.length) {
+        return false;
+    }
+    return _getPossibleEventMessages(event).some(function (message) {
+        return ignoreErrors.some(function (pattern) { return isMatchingPattern(message, pattern); });
+    });
+}
+function _isDeniedUrl(event, denyUrls) {
+    // TODO: Use Glob instead?
+    if (!denyUrls || !denyUrls.length) {
+        return false;
+    }
+    var url = _getEventFilterUrl(event);
+    return !url ? false : denyUrls.some(function (pattern) { return isMatchingPattern(url, pattern); });
+}
+function _isAllowedUrl(event, allowUrls) {
+    // TODO: Use Glob instead?
+    if (!allowUrls || !allowUrls.length) {
+        return true;
+    }
+    var url = _getEventFilterUrl(event);
+    return !url ? true : allowUrls.some(function (pattern) { return isMatchingPattern(url, pattern); });
+}
+function _getPossibleEventMessages(event) {
+    if (event.message) {
+        return [event.message];
+    }
+    if (event.exception) {
+        try {
+            var _a = (event.exception.values && event.exception.values[0]) || {}, _b = _a.type, type = _b === void 0 ? '' : _b, _c = _a.value, value = _c === void 0 ? '' : _c;
+            return ["" + value, type + ": " + value];
+        }
+        catch (oO) {
+            IS_DEBUG_BUILD$1 && logger$3.error("Cannot extract message for event " + getEventDescription(event));
+            return [];
+        }
+    }
+    return [];
+}
+function _isSentryError(event) {
+    try {
+        // @ts-ignore can't be a sentry error if undefined
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        return event.exception.values[0].type === 'SentryError';
+    }
+    catch (e) {
+        // ignore
+    }
+    return false;
+}
+function _getLastValidUrl(frames) {
+    if (frames === void 0) { frames = []; }
+    for (var i = frames.length - 1; i >= 0; i--) {
+        var frame = frames[i];
+        if (frame && frame.filename !== '<anonymous>' && frame.filename !== '[native code]') {
+            return frame.filename || null;
+        }
+    }
+    return null;
+}
+function _getEventFilterUrl(event) {
+    try {
+        if (event.stacktrace) {
+            return _getLastValidUrl(event.stacktrace.frames);
+        }
+        var frames_1;
+        try {
+            // @ts-ignore we only care about frames if the whole thing here is defined
+            frames_1 = event.exception.values[0].stacktrace.frames;
+        }
+        catch (e) {
+            // ignore
+        }
+        return frames_1 ? _getLastValidUrl(frames_1) : null;
+    }
+    catch (oO) {
+        IS_DEBUG_BUILD$1 && logger$3.error("Cannot extract url for event " + getEventDescription(event));
+        return null;
+    }
+}
+
+var CoreIntegrations = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	FunctionToString: FunctionToString,
+	InboundFilters: InboundFilters
+});
+
+/** Gets the module */
+function getModule(filename) {
+    if (!filename) {
+        return;
+    }
+    // We could use optional chaining here but webpack does like that mixed with require
+    var base = ((require && require.main && require.main.filename && dirname$1(require.main.filename)) || global.process.cwd()) + "/";
+    // It's specifically a module
+    var file = basename$2(filename, '.js');
+    var path = dirname$1(filename);
+    var n = path.lastIndexOf('/node_modules/');
+    if (n > -1) {
+        // /node_modules/ is 14 chars
+        return path.substr(n + 14).replace(/\//g, '.') + ":" + file;
+    }
+    // Let's see if it's a part of the main module
+    // To be a part of main module, it has to share the same base
+    n = (path + "/").lastIndexOf(base, 0);
+    if (n === 0) {
+        var moduleName = path.substr(base.length).replace(/\//g, '.');
+        if (moduleName) {
+            moduleName += ':';
+        }
+        moduleName += file;
+        return moduleName;
+    }
+    return file;
+}
+var FILENAME_MATCH = /^\s*[-]{4,}$/;
+var FULL_MATCH = /at (?:async )?(?:(.+?)\s+\()?(?:(.+?):(\d+)(?::(\d+))?|([^)]+))\)?/;
+// eslint-disable-next-line complexity
+var node$6 = function (line) {
+    var _a;
+    if (line.match(FILENAME_MATCH)) {
+        return {
+            filename: line,
+        };
+    }
+    var lineMatch = line.match(FULL_MATCH);
+    if (!lineMatch) {
+        return undefined;
+    }
+    var object;
+    var method;
+    var functionName;
+    var typeName;
+    var methodName;
+    if (lineMatch[1]) {
+        functionName = lineMatch[1];
+        var methodStart = functionName.lastIndexOf('.');
+        if (functionName[methodStart - 1] === '.') {
+            // eslint-disable-next-line no-plusplus
+            methodStart--;
+        }
+        if (methodStart > 0) {
+            object = functionName.substr(0, methodStart);
+            method = functionName.substr(methodStart + 1);
+            var objectEnd = object.indexOf('.Module');
+            if (objectEnd > 0) {
+                functionName = functionName.substr(objectEnd + 1);
+                object = object.substr(0, objectEnd);
+            }
+        }
+        typeName = undefined;
+    }
+    if (method) {
+        typeName = object;
+        methodName = method;
+    }
+    if (method === '<anonymous>') {
+        methodName = undefined;
+        functionName = undefined;
+    }
+    if (functionName === undefined) {
+        methodName = methodName || '<anonymous>';
+        functionName = typeName ? typeName + "." + methodName : methodName;
+    }
+    var filename = ((_a = lineMatch[2]) === null || _a === void 0 ? void 0 : _a.startsWith('file://')) ? lineMatch[2].substr(7) : lineMatch[2];
+    var isNative = lineMatch[5] === 'native';
+    var isInternal = isNative || (filename && !filename.startsWith('/') && !filename.startsWith('.') && filename.indexOf(':\\') !== 1);
+    // in_app is all that's not an internal Node function or a module within node_modules
+    // note that isNative appears to return true even for node core libraries
+    // see https://github.com/getsentry/raven-node/issues/176
+    var in_app = !isInternal && filename !== undefined && !filename.includes('node_modules/');
+    return {
+        filename: filename,
+        module: getModule(filename),
+        function: functionName,
+        lineno: parseInt(lineMatch[3], 10) || undefined,
+        colno: parseInt(lineMatch[4], 10) || undefined,
+        in_app: in_app,
+    };
+};
+var nodeStackParser = [90, node$6];
+
+/**
+ * Extracts stack frames from the error.stack string
+ */
+function parseStackFrames(error) {
+    return createStackParser(nodeStackParser)(error.stack || '', 1);
+}
+/**
+ * Extracts stack frames from the error and builds a Sentry Exception
+ */
+function exceptionFromError(error) {
+    var exception = {
+        type: error.name || error.constructor.name,
+        value: error.message,
+    };
+    var frames = parseStackFrames(error);
+    if (frames.length) {
+        exception.stacktrace = { frames: frames };
+    }
+    return exception;
+}
+/**
+ * Builds and Event from a Exception
+ * @hidden
+ */
+function eventFromUnknownInput(exception, hint) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    var ex = exception;
+    var providedMechanism = hint && hint.data && hint.data.mechanism;
+    var mechanism = providedMechanism || {
+        handled: true,
+        type: 'generic',
+    };
+    if (!isError$1(exception)) {
+        if (isPlainObject$1(exception)) {
+            // This will allow us to group events based on top-level keys
+            // which is much better than creating new group when any key/value change
+            var message = "Non-Error exception captured with keys: " + extractExceptionKeysForMessage(exception);
+            getCurrentHub().configureScope(function (scope) {
+                scope.setExtra('__serialized__', normalizeToSize(exception));
+            });
+            ex = (hint && hint.syntheticException) || new Error(message);
+            ex.message = message;
+        }
+        else {
+            // This handles when someone does: `throw "something awesome";`
+            // We use synthesized Error here so we can extract a (rough) stack trace.
+            ex = (hint && hint.syntheticException) || new Error(exception);
+            ex.message = exception;
+        }
+        mechanism.synthetic = true;
+    }
+    var event = {
+        exception: {
+            values: [exceptionFromError(ex)],
+        },
+    };
+    addExceptionTypeValue(event, undefined, undefined);
+    addExceptionMechanism(event, mechanism);
+    return __assign$5(__assign$5({}, event), { event_id: hint && hint.event_id });
+}
+/**
+ * Builds and Event from a Message
+ * @hidden
+ */
+function eventFromMessage(message, level, hint, attachStacktrace) {
+    if (level === void 0) { level = Severity.Info; }
+    var event = {
+        event_id: hint && hint.event_id,
+        level: level,
+        message: message,
+    };
+    if (attachStacktrace && hint && hint.syntheticException) {
+        var frames_1 = parseStackFrames(hint.syntheticException);
+        if (frames_1.length) {
+            event.stacktrace = { frames: frames_1 };
+        }
+    }
+    return event;
+}
+
+/*
+ * This file defines flags and constants that can be modified during compile time in order to facilitate tree shaking
+ * for users.
+ *
+ * Debug flags need to be declared in each package individually and must not be imported across package boundaries,
+ * because some build tools have trouble tree-shaking imported guards.
+ *
+ * As a convention, we define debug flags in a `flags.ts` file in the root of a package's `src` folder.
+ *
+ * Debug flag files will contain "magic strings" like `__SENTRY_DEBUG__` that may get replaced with actual values during
+ * our, or the user's build process. Take care when introducing new flags - they must not throw if they are not
+ * replaced.
+ */
+/** Flag that is true for debug builds, false otherwise. */
+var IS_DEBUG_BUILD = typeof __SENTRY_DEBUG__ === 'undefined' ? true : __SENTRY_DEBUG__;
+
+// TODO: Remove in the next major release and rely only on @sentry/core SDK_VERSION and SdkMetadata
+var SDK_NAME = 'sentry.javascript.node';
+
+var CATEGORY_MAPPING = {
+    event: 'error',
+    transaction: 'transaction',
+    session: 'session',
+    attachment: 'attachment',
+};
+/** Base Transport class implementation */
+var BaseTransport = /** @class */ (function () {
+    /** Create instance and set this.dsn */
+    function BaseTransport(options) {
+        this.options = options;
+        /** A simple buffer holding all requests. */
+        this._buffer = makePromiseBuffer(30);
+        /** Locks transport after receiving rate limits in a response */
+        this._rateLimits = {};
+        /** Default function used to parse URLs */
+        this.urlParser = function (url) { return new Url$2.URL(url); };
+        // eslint-disable-next-line deprecation/deprecation
+        this._api = initAPIDetails(options.dsn, options._metadata, options.tunnel);
+    }
+    /**
+     * @inheritDoc
+     */
+    BaseTransport.prototype.sendEvent = function (_) {
+        throw new SentryError('Transport Class has to implement `sendEvent` method.');
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseTransport.prototype.close = function (timeout) {
+        return this._buffer.drain(timeout);
+    };
+    /**
+     * Extracts proxy settings from client options and env variables.
+     *
+     * Honors `no_proxy` env variable with the highest priority to allow for hosts exclusion.
+     *
+     * An order of priority for available protocols is:
+     * `http`  => `options.httpProxy` | `process.env.http_proxy`
+     * `https` => `options.httpsProxy` | `options.httpProxy` | `process.env.https_proxy` | `process.env.http_proxy`
+     */
+    BaseTransport.prototype._getProxy = function (protocol) {
+        var e_1, _a;
+        var _b = process.env, no_proxy = _b.no_proxy, http_proxy = _b.http_proxy, https_proxy = _b.https_proxy;
+        var _c = this.options, httpProxy = _c.httpProxy, httpsProxy = _c.httpsProxy;
+        var proxy = protocol === 'http' ? httpProxy || http_proxy : httpsProxy || httpProxy || https_proxy || http_proxy;
+        if (!no_proxy) {
+            return proxy;
+        }
+        var _d = this._api.dsn, host = _d.host, port = _d.port;
+        try {
+            for (var _e = __values$2(no_proxy.split(',')), _f = _e.next(); !_f.done; _f = _e.next()) {
+                var np = _f.value;
+                if (host.endsWith(np) || (host + ":" + port).endsWith(np)) {
+                    return;
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_f && !_f.done && (_a = _e.return)) _a.call(_e);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return proxy;
+    };
+    /** Returns a build request option object used by request */
+    BaseTransport.prototype._getRequestOptions = function (urlParts) {
+        var headers = __assign$5(__assign$5({}, getRequestHeaders(this._api.dsn, SDK_NAME, SDK_VERSION)), this.options.headers);
+        var hostname = urlParts.hostname, pathname = urlParts.pathname, port = urlParts.port, protocol = urlParts.protocol;
+        // See https://github.com/nodejs/node/blob/38146e717fed2fabe3aacb6540d839475e0ce1c6/lib/internal/url.js#L1268-L1290
+        // We ignore the query string on purpose
+        var path = "" + pathname;
+        return __assign$5({ agent: this.client, headers: headers,
+            hostname: hostname, method: 'POST', path: path,
+            port: port,
+            protocol: protocol }, (this.options.caCerts && {
+            ca: require$$0__namespace.readFileSync(this.options.caCerts),
+        }));
+    };
+    /**
+     * Gets the time that given category is disabled until for rate limiting
+     */
+    BaseTransport.prototype._disabledUntil = function (requestType) {
+        var category = CATEGORY_MAPPING[requestType];
+        return this._rateLimits[category] || this._rateLimits.all;
+    };
+    /**
+     * Checks if a category is rate limited
+     */
+    BaseTransport.prototype._isRateLimited = function (requestType) {
+        return this._disabledUntil(requestType) > new Date(Date.now());
+    };
+    /**
+     * Sets internal _rateLimits from incoming headers. Returns true if headers contains a non-empty rate limiting header.
+     */
+    BaseTransport.prototype._handleRateLimit = function (headers) {
+        var e_2, _a, e_3, _b;
+        var now = Date.now();
+        var rlHeader = headers['x-sentry-rate-limits'];
+        var raHeader = headers['retry-after'];
+        if (rlHeader) {
+            try {
+                // rate limit headers are of the form
+                //     <header>,<header>,..
+                // where each <header> is of the form
+                //     <retry_after>: <categories>: <scope>: <reason_code>
+                // where
+                //     <retry_after> is a delay in ms
+                //     <categories> is the event type(s) (error, transaction, etc) being rate limited and is of the form
+                //         <category>;<category>;...
+                //     <scope> is what's being limited (org, project, or key) - ignored by SDK
+                //     <reason_code> is an arbitrary string like "org_quota" - ignored by SDK
+                for (var _c = __values$2(rlHeader.trim().split(',')), _d = _c.next(); !_d.done; _d = _c.next()) {
+                    var limit = _d.value;
+                    var parameters = limit.split(':', 2);
+                    var headerDelay = parseInt(parameters[0], 10);
+                    var delay = (!isNaN(headerDelay) ? headerDelay : 60) * 1000; // 60sec default
+                    try {
+                        for (var _e = (e_3 = void 0, __values$2((parameters[1] && parameters[1].split(';')) || ['all'])), _f = _e.next(); !_f.done; _f = _e.next()) {
+                            var category = _f.value;
+                            // categoriesAllowed is added here to ensure we are only storing rate limits for categories we support in this
+                            // sdk and any categories that are not supported will not be added redundantly to the rateLimits object
+                            var categoriesAllowed = __spread$4(Object.keys(CATEGORY_MAPPING).map(function (k) { return CATEGORY_MAPPING[k]; }), [
+                                'all',
+                            ]);
+                            if (categoriesAllowed.includes(category))
+                                this._rateLimits[category] = new Date(now + delay);
+                        }
+                    }
+                    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                    finally {
+                        try {
+                            if (_f && !_f.done && (_b = _e.return)) _b.call(_e);
+                        }
+                        finally { if (e_3) throw e_3.error; }
+                    }
+                }
+            }
+            catch (e_2_1) { e_2 = { error: e_2_1 }; }
+            finally {
+                try {
+                    if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+                }
+                finally { if (e_2) throw e_2.error; }
+            }
+            return true;
+        }
+        else if (raHeader) {
+            this._rateLimits.all = new Date(now + parseRetryAfterHeader(raHeader, now));
+            return true;
+        }
+        return false;
+    };
+    /** JSDoc */
+    BaseTransport.prototype._send = function (sentryRequest, originalPayload) {
+        return __awaiter$3(this, void 0, void 0, function () {
+            var _this = this;
+            return __generator$1(this, function (_a) {
+                if (!this.module) {
+                    throw new SentryError('No module available');
+                }
+                if (originalPayload && this._isRateLimited(sentryRequest.type)) {
+                    return [2 /*return*/, Promise.reject({
+                            payload: originalPayload,
+                            type: sentryRequest.type,
+                            reason: "Transport for " + sentryRequest.type + " requests locked till " + this._disabledUntil(sentryRequest.type) + " due to too many requests.",
+                            status: 429,
+                        })];
+                }
+                return [2 /*return*/, this._buffer.add(function () {
+                        return new Promise(function (resolve, reject) {
+                            if (!_this.module) {
+                                throw new SentryError('No module available');
+                            }
+                            var options = _this._getRequestOptions(_this.urlParser(sentryRequest.url));
+                            var req = _this.module.request(options, function (res) {
+                                var statusCode = res.statusCode || 500;
+                                var status = eventStatusFromHttpCode(statusCode);
+                                res.setEncoding('utf8');
+                                /**
+                                 * "Key-value pairs of header names and values. Header names are lower-cased."
+                                 * https://nodejs.org/api/http.html#http_message_headers
+                                 */
+                                var retryAfterHeader = res.headers ? res.headers['retry-after'] : '';
+                                retryAfterHeader = (Array.isArray(retryAfterHeader) ? retryAfterHeader[0] : retryAfterHeader);
+                                var rlHeader = res.headers ? res.headers['x-sentry-rate-limits'] : '';
+                                rlHeader = (Array.isArray(rlHeader) ? rlHeader[0] : rlHeader);
+                                var headers = {
+                                    'x-sentry-rate-limits': rlHeader,
+                                    'retry-after': retryAfterHeader,
+                                };
+                                var limited = _this._handleRateLimit(headers);
+                                if (limited)
+                                    IS_DEBUG_BUILD &&
+                                        logger$3.warn("Too many " + sentryRequest.type + " requests, backing off until: " + _this._disabledUntil(sentryRequest.type));
+                                if (status === 'success') {
+                                    resolve({ status: status });
+                                }
+                                else {
+                                    var rejectionMessage = "HTTP Error (" + statusCode + ")";
+                                    if (res.headers && res.headers['x-sentry-error']) {
+                                        rejectionMessage += ": " + res.headers['x-sentry-error'];
+                                    }
+                                    reject(new SentryError(rejectionMessage));
+                                }
+                                // Force the socket to drain
+                                res.on('data', function () {
+                                    // Drain
+                                });
+                                res.on('end', function () {
+                                    // Drain
+                                });
+                            });
+                            req.on('error', reject);
+                            req.end(sentryRequest.body);
+                        });
+                    })];
+            });
+        });
+    };
+    return BaseTransport;
+}());
+
+/** Node http module transport */
+var HTTPTransport = /** @class */ (function (_super) {
+    __extends$1(HTTPTransport, _super);
+    /** Create a new instance and set this.agent */
+    function HTTPTransport(options) {
+        var _this = _super.call(this, options) || this;
+        _this.options = options;
+        var proxy = _this._getProxy('http');
+        _this.module = http__namespace;
+        _this.client = proxy
+            ? new (require('https-proxy-agent'))(proxy)
+            : new http__namespace.Agent({ keepAlive: false, maxSockets: 30, timeout: 2000 });
+        return _this;
+    }
+    /**
+     * @inheritDoc
+     */
+    HTTPTransport.prototype.sendEvent = function (event) {
+        return this._send(eventToSentryRequest(event, this._api), event);
+    };
+    /**
+     * @inheritDoc
+     */
+    HTTPTransport.prototype.sendSession = function (session) {
+        return this._send(sessionToSentryRequest(session, this._api), session);
+    };
+    return HTTPTransport;
+}(BaseTransport));
+
+/** Node https module transport */
+var HTTPSTransport = /** @class */ (function (_super) {
+    __extends$1(HTTPSTransport, _super);
+    /** Create a new instance and set this.agent */
+    function HTTPSTransport(options) {
+        var _this = _super.call(this, options) || this;
+        _this.options = options;
+        var proxy = _this._getProxy('https');
+        _this.module = https__namespace;
+        _this.client = proxy
+            ? new (require('https-proxy-agent'))(proxy)
+            : new https__namespace.Agent({ keepAlive: false, maxSockets: 30, timeout: 2000 });
+        return _this;
+    }
+    /**
+     * @inheritDoc
+     */
+    HTTPSTransport.prototype.sendEvent = function (event) {
+        return this._send(eventToSentryRequest(event, this._api), event);
+    };
+    /**
+     * @inheritDoc
+     */
+    HTTPSTransport.prototype.sendSession = function (session) {
+        return this._send(sessionToSentryRequest(session, this._api), session);
+    };
+    return HTTPSTransport;
+}(BaseTransport));
+
+/**
+ * Creates a Transport that uses native the native 'http' and 'https' modules to send events to Sentry.
+ */
+function makeNodeTransport(options) {
+    var _a;
+    var urlSegments = new Url$2.URL(options.url);
+    var isHttps = urlSegments.protocol === 'https:';
+    // Proxy prioritization: http => `options.proxy` | `process.env.http_proxy`
+    // Proxy prioritization: https => `options.proxy` | `process.env.https_proxy` | `process.env.http_proxy`
+    var proxy = applyNoProxyOption(urlSegments, options.proxy || (isHttps ? process.env.https_proxy : undefined) || process.env.http_proxy);
+    var nativeHttpModule = isHttps ? https__namespace : http__namespace;
+    // TODO(v7): Evaluate if we can set keepAlive to true. This would involve testing for memory leaks in older node
+    // versions(>= 8) as they had memory leaks when using it: #2555
+    var agent = proxy
+        ? new (require('https-proxy-agent'))(proxy)
+        : new nativeHttpModule.Agent({ keepAlive: false, maxSockets: 30, timeout: 2000 });
+    var requestExecutor = createRequestExecutor(options, (_a = options.httpModule, (_a !== null && _a !== void 0 ? _a : nativeHttpModule)), agent);
+    return createTransport({ bufferSize: options.bufferSize }, requestExecutor);
+}
+/**
+ * Honors the `no_proxy` env variable with the highest priority to allow for hosts exclusion.
+ *
+ * @param transportUrl The URL the transport intends to send events to.
+ * @param proxy The client configured proxy.
+ * @returns A proxy the transport should use.
+ */
+function applyNoProxyOption(transportUrlSegments, proxy) {
+    var no_proxy = process.env.no_proxy;
+    var urlIsExemptFromProxy = no_proxy &&
+        no_proxy
+            .split(',')
+            .some(function (exemption) { return transportUrlSegments.host.endsWith(exemption) || transportUrlSegments.hostname.endsWith(exemption); });
+    if (urlIsExemptFromProxy) {
+        return undefined;
+    }
+    else {
+        return proxy;
+    }
+}
+/**
+ * Creates a RequestExecutor to be used with `createTransport`.
+ */
+function createRequestExecutor(options, httpModule, agent) {
+    var _a = new Url$2.URL(options.url), hostname = _a.hostname, pathname = _a.pathname, port = _a.port, protocol = _a.protocol, search = _a.search;
+    return function makeRequest(request) {
+        return new Promise(function (resolve, reject) {
+            var req = httpModule.request({
+                method: 'POST',
+                agent: agent,
+                headers: options.headers,
+                hostname: hostname,
+                path: "" + pathname + search,
+                port: port,
+                protocol: protocol,
+                ca: options.caCerts,
+            }, function (res) {
+                var _a, _b, _c;
+                res.on('data', function () {
+                    // Drain socket
+                });
+                res.on('end', function () {
+                    // Drain socket
+                });
+                var statusCode = (_a = res.statusCode, (_a !== null && _a !== void 0 ? _a : 500));
+                var status = eventStatusFromHttpCode(statusCode);
+                res.setEncoding('utf8');
+                // "Key-value pairs of header names and values. Header names are lower-cased."
+                // https://nodejs.org/api/http.html#http_message_headers
+                var retryAfterHeader = (_b = res.headers['retry-after'], (_b !== null && _b !== void 0 ? _b : null));
+                var rateLimitsHeader = (_c = res.headers['x-sentry-rate-limits'], (_c !== null && _c !== void 0 ? _c : null));
+                resolve({
+                    headers: {
+                        'retry-after': retryAfterHeader,
+                        'x-sentry-rate-limits': Array.isArray(rateLimitsHeader) ? rateLimitsHeader[0] : rateLimitsHeader,
+                    },
+                    reason: status,
+                    statusCode: statusCode,
+                });
+            });
+            req.on('error', reject);
+            req.end(request.body);
+        });
+    };
+}
+
+var index$1 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	BaseTransport: BaseTransport,
+	HTTPSTransport: HTTPSTransport,
+	HTTPTransport: HTTPTransport,
+	makeNodeTransport: makeNodeTransport
+});
+
+/**
+ * The Sentry Node SDK Backend.
+ * @hidden
+ */
+var NodeBackend = /** @class */ (function (_super) {
+    __extends$1(NodeBackend, _super);
+    function NodeBackend() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    NodeBackend.prototype.eventFromException = function (exception, hint) {
+        return resolvedSyncPromise(eventFromUnknownInput(exception, hint));
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeBackend.prototype.eventFromMessage = function (message, level, hint) {
+        if (level === void 0) { level = Severity.Info; }
+        return resolvedSyncPromise(eventFromMessage(message, level, hint, this._options.attachStacktrace));
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeBackend.prototype._setupTransport = function () {
+        if (!this._options.dsn) {
+            // We return the noop transport here in case there is no Dsn.
+            return _super.prototype._setupTransport.call(this);
+        }
+        var dsn = makeDsn(this._options.dsn);
+        var transportOptions = __assign$5(__assign$5(__assign$5(__assign$5(__assign$5({}, this._options.transportOptions), (this._options.httpProxy && { httpProxy: this._options.httpProxy })), (this._options.httpsProxy && { httpsProxy: this._options.httpsProxy })), (this._options.caCerts && { caCerts: this._options.caCerts })), { dsn: this._options.dsn, tunnel: this._options.tunnel, _metadata: this._options._metadata });
+        if (this._options.transport) {
+            return new this._options.transport(transportOptions);
+        }
+        var api = initAPIDetails(transportOptions.dsn, transportOptions._metadata, transportOptions.tunnel);
+        var url = getEnvelopeEndpointWithUrlEncodedAuth(api.dsn, api.tunnel);
+        this._newTransport = makeNodeTransport({
+            url: url,
+            headers: transportOptions.headers,
+            proxy: transportOptions.httpProxy,
+            caCerts: transportOptions.caCerts,
+        });
+        if (dsn.protocol === 'http') {
+            return new HTTPTransport(transportOptions);
+        }
+        return new HTTPSTransport(transportOptions);
+    };
+    return NodeBackend;
+}(BaseBackend));
+
+/**
+ * The Sentry Node SDK Client.
+ *
+ * @see NodeOptions for documentation on configuration options.
+ * @see SentryClient for usage documentation.
+ */
+var NodeClient = /** @class */ (function (_super) {
+    __extends$1(NodeClient, _super);
+    /**
+     * Creates a new Node SDK instance.
+     * @param options Configuration options for this SDK.
+     */
+    function NodeClient(options) {
+        var _this = this;
+        options._metadata = options._metadata || {};
+        options._metadata.sdk = options._metadata.sdk || {
+            name: 'sentry.javascript.node',
+            packages: [
+                {
+                    name: 'npm:@sentry/node',
+                    version: SDK_VERSION,
+                },
+            ],
+            version: SDK_VERSION,
+        };
+        _this = _super.call(this, NodeBackend, options) || this;
+        return _this;
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    NodeClient.prototype.captureException = function (exception, hint, scope) {
+        // Check if the flag `autoSessionTracking` is enabled, and if `_sessionFlusher` exists because it is initialised only
+        // when the `requestHandler` middleware is used, and hence the expectation is to have SessionAggregates payload
+        // sent to the Server only when the `requestHandler` middleware is used
+        if (this._options.autoSessionTracking && this._sessionFlusher && scope) {
+            var requestSession = scope.getRequestSession();
+            // Necessary checks to ensure this is code block is executed only within a request
+            // Should override the status only if `requestSession.status` is `Ok`, which is its initial stage
+            if (requestSession && requestSession.status === 'ok') {
+                requestSession.status = 'errored';
+            }
+        }
+        return _super.prototype.captureException.call(this, exception, hint, scope);
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeClient.prototype.captureEvent = function (event, hint, scope) {
+        // Check if the flag `autoSessionTracking` is enabled, and if `_sessionFlusher` exists because it is initialised only
+        // when the `requestHandler` middleware is used, and hence the expectation is to have SessionAggregates payload
+        // sent to the Server only when the `requestHandler` middleware is used
+        if (this._options.autoSessionTracking && this._sessionFlusher && scope) {
+            var eventType = event.type || 'exception';
+            var isException = eventType === 'exception' && event.exception && event.exception.values && event.exception.values.length > 0;
+            // If the event is of type Exception, then a request session should be captured
+            if (isException) {
+                var requestSession = scope.getRequestSession();
+                // Ensure that this is happening within the bounds of a request, and make sure not to override
+                // Session Status if Errored / Crashed
+                if (requestSession && requestSession.status === 'ok') {
+                    requestSession.status = 'errored';
+                }
+            }
+        }
+        return _super.prototype.captureEvent.call(this, event, hint, scope);
+    };
+    /**
+     *
+     * @inheritdoc
+     */
+    NodeClient.prototype.close = function (timeout) {
+        var _a;
+        (_a = this._sessionFlusher) === null || _a === void 0 ? void 0 : _a.close();
+        return _super.prototype.close.call(this, timeout);
+    };
+    /** Method that initialises an instance of SessionFlusher on Client */
+    NodeClient.prototype.initSessionFlusher = function () {
+        var _a = this._options, release = _a.release, environment = _a.environment;
+        if (!release) {
+            IS_DEBUG_BUILD && logger$3.warn('Cannot initialise an instance of SessionFlusher if no release is provided!');
+        }
+        else {
+            this._sessionFlusher = new SessionFlusher(this.getTransport(), {
+                release: release,
+                environment: environment,
+            });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeClient.prototype._prepareEvent = function (event, scope, hint) {
+        event.platform = event.platform || 'node';
+        if (this.getOptions().serverName) {
+            event.server_name = this.getOptions().serverName;
+        }
+        return _super.prototype._prepareEvent.call(this, event, scope, hint);
+    };
+    /**
+     * Method responsible for capturing/ending a request session by calling `incrementSessionStatusCount` to increment
+     * appropriate session aggregates bucket
+     */
+    NodeClient.prototype._captureRequestSession = function () {
+        if (!this._sessionFlusher) {
+            IS_DEBUG_BUILD && logger$3.warn('Discarded request mode session because autoSessionTracking option was disabled');
+        }
+        else {
+            this._sessionFlusher.incrementSessionStatusCount();
+        }
+    };
+    return NodeClient;
+}(BaseClient));
+
+/** Console module integration */
+var Console = /** @class */ (function () {
+    function Console() {
+        /**
+         * @inheritDoc
+         */
+        this.name = Console.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    Console.prototype.setupOnce = function () {
+        var e_1, _a;
+        try {
+            for (var _b = __values$2(['debug', 'info', 'warn', 'error', 'log']), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var level = _c.value;
+                fill(console, level, createConsoleWrapper(level));
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Console.id = 'Console';
+    return Console;
+}());
+/**
+ * Wrapper function that'll be used for every console level
+ */
+function createConsoleWrapper(level) {
+    return function consoleWrapper(originalConsoleMethod) {
+        var sentryLevel = severityFromString(level);
+        /* eslint-disable prefer-rest-params */
+        return function () {
+            if (getCurrentHub().getIntegration(Console)) {
+                getCurrentHub().addBreadcrumb({
+                    category: 'console',
+                    level: sentryLevel,
+                    message: require$$1__namespace.format.apply(undefined, arguments),
+                }, {
+                    input: __spread$4(arguments),
+                    level: level,
+                });
+            }
+            originalConsoleMethod.apply(this, arguments);
+        };
+        /* eslint-enable prefer-rest-params */
+    };
+}
+
+var NODE_VERSION$1 = parseSemver(process.versions.node);
+/**
+ * Checks whether given url points to Sentry server
+ * @param url url to verify
+ */
+function isSentryRequest(url) {
+    var _a;
+    var dsn = (_a = getCurrentHub().getClient()) === null || _a === void 0 ? void 0 : _a.getDsn();
+    return dsn ? url.includes(dsn.host) : false;
+}
+/**
+ * Assemble a URL to be used for breadcrumbs and spans.
+ *
+ * @param requestOptions RequestOptions object containing the component parts for a URL
+ * @returns Fully-formed URL
+ */
+function extractUrl(requestOptions) {
+    var protocol = requestOptions.protocol || '';
+    var hostname = requestOptions.hostname || requestOptions.host || '';
+    // Don't log standard :80 (http) and :443 (https) ports to reduce the noise
+    var port = !requestOptions.port || requestOptions.port === 80 || requestOptions.port === 443 ? '' : ":" + requestOptions.port;
+    var path = requestOptions.path ? requestOptions.path : '/';
+    return protocol + "//" + hostname + port + path;
+}
+/**
+ * Handle various edge cases in the span description (for spans representing http(s) requests).
+ *
+ * @param description current `description` property of the span representing the request
+ * @param requestOptions Configuration data for the request
+ * @param Request Request object
+ *
+ * @returns The cleaned description
+ */
+function cleanSpanDescription(description, requestOptions, request) {
+    var _a, _b, _c;
+    // nothing to clean
+    if (!description) {
+        return description;
+    }
+    // eslint-disable-next-line prefer-const
+    var _d = __read$4(description.split(' '), 2), method = _d[0], requestUrl = _d[1];
+    // superagent sticks the protocol in a weird place (we check for host because if both host *and* protocol are missing,
+    // we're likely dealing with an internal route and this doesn't apply)
+    if (requestOptions.host && !requestOptions.protocol) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        requestOptions.protocol = (_b = (_a = request) === null || _a === void 0 ? void 0 : _a.agent) === null || _b === void 0 ? void 0 : _b.protocol; // worst comes to worst, this is undefined and nothing changes
+        requestUrl = extractUrl(requestOptions);
+    }
+    // internal routes can end up starting with a triple slash rather than a single one
+    if ((_c = requestUrl) === null || _c === void 0 ? void 0 : _c.startsWith('///')) {
+        requestUrl = requestUrl.slice(2);
+    }
+    return method + " " + requestUrl;
+}
+/**
+ * Convert a URL object into a RequestOptions object.
+ *
+ * Copied from Node's internals (where it's used in http(s).request() and http(s).get()), modified only to use the
+ * RequestOptions type above.
+ *
+ * See https://github.com/nodejs/node/blob/master/lib/internal/url.js.
+ */
+function urlToOptions(url) {
+    var options = {
+        protocol: url.protocol,
+        hostname: typeof url.hostname === 'string' && url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname,
+        hash: url.hash,
+        search: url.search,
+        pathname: url.pathname,
+        path: "" + (url.pathname || '') + (url.search || ''),
+        href: url.href,
+    };
+    if (url.port !== '') {
+        options.port = Number(url.port);
+    }
+    if (url.username || url.password) {
+        options.auth = url.username + ":" + url.password;
+    }
+    return options;
+}
+/**
+ * Normalize inputs to `http(s).request()` and `http(s).get()`.
+ *
+ * Legal inputs to `http(s).request()` and `http(s).get()` can take one of ten forms:
+ *     [ RequestOptions | string | URL ],
+ *     [ RequestOptions | string | URL, RequestCallback ],
+ *     [ string | URL, RequestOptions ], and
+ *     [ string | URL, RequestOptions, RequestCallback ].
+ *
+ * This standardizes to one of two forms: [ RequestOptions ] and [ RequestOptions, RequestCallback ]. A similar thing is
+ * done as the first step of `http(s).request()` and `http(s).get()`; this just does it early so that we can interact
+ * with the args in a standard way.
+ *
+ * @param requestArgs The inputs to `http(s).request()` or `http(s).get()`, as an array.
+ *
+ * @returns Equivalent args of the form [ RequestOptions ] or [ RequestOptions, RequestCallback ].
+ */
+function normalizeRequestArgs(httpModule, requestArgs) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var callback, requestOptions;
+    // pop off the callback, if there is one
+    if (typeof requestArgs[requestArgs.length - 1] === 'function') {
+        callback = requestArgs.pop();
+    }
+    // create a RequestOptions object of whatever's at index 0
+    if (typeof requestArgs[0] === 'string') {
+        requestOptions = urlToOptions(new Url$2.URL(requestArgs[0]));
+    }
+    else if (requestArgs[0] instanceof Url$2.URL) {
+        requestOptions = urlToOptions(requestArgs[0]);
+    }
+    else {
+        requestOptions = requestArgs[0];
+    }
+    // if the options were given separately from the URL, fold them in
+    if (requestArgs.length === 2) {
+        requestOptions = __assign$5(__assign$5({}, requestOptions), requestArgs[1]);
+    }
+    // Figure out the protocol if it's currently missing
+    if (requestOptions.protocol === undefined) {
+        // Worst case we end up populating protocol with undefined, which it already is
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+        // NOTE: Prior to Node 9, `https` used internals of `http` module, thus we don't patch it.
+        // Because of that, we cannot rely on `httpModule` to provide us with valid protocol,
+        // as it will always return `http`, even when using `https` module.
+        //
+        // See test/integrations/http.test.ts for more details on Node <=v8 protocol issue.
+        if (NODE_VERSION$1.major && NODE_VERSION$1.major > 8) {
+            requestOptions.protocol =
+                ((_b = (_a = httpModule) === null || _a === void 0 ? void 0 : _a.globalAgent) === null || _b === void 0 ? void 0 : _b.protocol) || ((_c = requestOptions.agent) === null || _c === void 0 ? void 0 : _c.protocol) || ((_d = requestOptions._defaultAgent) === null || _d === void 0 ? void 0 : _d.protocol);
+        }
+        else {
+            requestOptions.protocol =
+                ((_e = requestOptions.agent) === null || _e === void 0 ? void 0 : _e.protocol) || ((_f = requestOptions._defaultAgent) === null || _f === void 0 ? void 0 : _f.protocol) || ((_h = (_g = httpModule) === null || _g === void 0 ? void 0 : _g.globalAgent) === null || _h === void 0 ? void 0 : _h.protocol);
+        }
+        /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+    }
+    // return args in standardized form
+    if (callback) {
+        return [requestOptions, callback];
+    }
+    else {
+        return [requestOptions];
+    }
+}
+
+var NODE_VERSION = parseSemver(process.versions.node);
+/** http module integration */
+var Http = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function Http(options) {
+        if (options === void 0) { options = {}; }
+        /**
+         * @inheritDoc
+         */
+        this.name = Http.id;
+        this._breadcrumbs = typeof options.breadcrumbs === 'undefined' ? true : options.breadcrumbs;
+        this._tracing = typeof options.tracing === 'undefined' ? false : options.tracing;
+    }
+    /**
+     * @inheritDoc
+     */
+    Http.prototype.setupOnce = function () {
+        // No need to instrument if we don't want to track anything
+        if (!this._breadcrumbs && !this._tracing) {
+            return;
+        }
+        var wrappedHandlerMaker = _createWrappedRequestMethodFactory(this._breadcrumbs, this._tracing);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        var httpModule = require('http');
+        fill(httpModule, 'get', wrappedHandlerMaker);
+        fill(httpModule, 'request', wrappedHandlerMaker);
+        // NOTE: Prior to Node 9, `https` used internals of `http` module, thus we don't patch it.
+        // If we do, we'd get double breadcrumbs and double spans for `https` calls.
+        // It has been changed in Node 9, so for all versions equal and above, we patch `https` separately.
+        if (NODE_VERSION.major && NODE_VERSION.major > 8) {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            var httpsModule = require('https');
+            fill(httpsModule, 'get', wrappedHandlerMaker);
+            fill(httpsModule, 'request', wrappedHandlerMaker);
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Http.id = 'Http';
+    return Http;
+}());
+/**
+ * Function which creates a function which creates wrapped versions of internal `request` and `get` calls within `http`
+ * and `https` modules. (NB: Not a typo - this is a creator^2!)
+ *
+ * @param breadcrumbsEnabled Whether or not to record outgoing requests as breadcrumbs
+ * @param tracingEnabled Whether or not to record outgoing requests as tracing spans
+ *
+ * @returns A function which accepts the exiting handler and returns a wrapped handler
+ */
+function _createWrappedRequestMethodFactory(breadcrumbsEnabled, tracingEnabled) {
+    return function wrappedRequestMethodFactory(originalRequestMethod) {
+        return function wrappedMethod() {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            // eslint-disable-next-line @typescript-eslint/no-this-alias
+            var httpModule = this;
+            var requestArgs = normalizeRequestArgs(this, args);
+            var requestOptions = requestArgs[0];
+            var requestUrl = extractUrl(requestOptions);
+            // we don't want to record requests to Sentry as either breadcrumbs or spans, so just use the original method
+            if (isSentryRequest(requestUrl)) {
+                return originalRequestMethod.apply(httpModule, requestArgs);
+            }
+            var span;
+            var parentSpan;
+            var scope = getCurrentHub().getScope();
+            if (scope && tracingEnabled) {
+                parentSpan = scope.getSpan();
+                if (parentSpan) {
+                    span = parentSpan.startChild({
+                        description: (requestOptions.method || 'GET') + " " + requestUrl,
+                        op: 'http.client',
+                    });
+                    var sentryTraceHeader = span.toTraceparent();
+                    IS_DEBUG_BUILD &&
+                        logger$3.log("[Tracing] Adding sentry-trace header " + sentryTraceHeader + " to outgoing request to " + requestUrl + ": ");
+                    requestOptions.headers = __assign$5(__assign$5({}, requestOptions.headers), { 'sentry-trace': sentryTraceHeader });
+                }
+            }
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            return originalRequestMethod
+                .apply(httpModule, requestArgs)
+                .once('response', function (res) {
+                // eslint-disable-next-line @typescript-eslint/no-this-alias
+                var req = this;
+                if (breadcrumbsEnabled) {
+                    addRequestBreadcrumb('response', requestUrl, req, res);
+                }
+                if (tracingEnabled && span) {
+                    if (res.statusCode) {
+                        span.setHttpStatus(res.statusCode);
+                    }
+                    span.description = cleanSpanDescription(span.description, requestOptions, req);
+                    span.finish();
+                }
+            })
+                .once('error', function () {
+                // eslint-disable-next-line @typescript-eslint/no-this-alias
+                var req = this;
+                if (breadcrumbsEnabled) {
+                    addRequestBreadcrumb('error', requestUrl, req);
+                }
+                if (tracingEnabled && span) {
+                    span.setHttpStatus(500);
+                    span.description = cleanSpanDescription(span.description, requestOptions, req);
+                    span.finish();
+                }
+            });
+        };
+    };
+}
+/**
+ * Captures Breadcrumb based on provided request/response pair
+ */
+function addRequestBreadcrumb(event, url, req, res) {
+    if (!getCurrentHub().getIntegration(Http)) {
+        return;
+    }
+    getCurrentHub().addBreadcrumb({
+        category: 'http',
+        data: {
+            method: req.method,
+            status_code: res && res.statusCode,
+            url: url,
+        },
+        type: 'http',
+    }, {
+        event: event,
+        request: req,
+        response: res,
+    });
+}
+
+var DEFAULT_SHUTDOWN_TIMEOUT = 2000;
+/**
+ * @hidden
+ */
+function logAndExitProcess(error) {
+    // eslint-disable-next-line no-console
+    console.error(error && error.stack ? error.stack : error);
+    var client = getCurrentHub().getClient();
+    if (client === undefined) {
+        IS_DEBUG_BUILD && logger$3.warn('No NodeClient was defined, we are exiting the process now.');
+        global.process.exit(1);
+    }
+    var options = client.getOptions();
+    var timeout = (options && options.shutdownTimeout && options.shutdownTimeout > 0 && options.shutdownTimeout) ||
+        DEFAULT_SHUTDOWN_TIMEOUT;
+    forget(client.close(timeout).then(function (result) {
+        if (!result) {
+            IS_DEBUG_BUILD && logger$3.warn('We reached the timeout for emptying the request buffer, still exiting now!');
+        }
+        global.process.exit(1);
+    }));
+}
+
+/** Global Promise Rejection handler */
+var OnUncaughtException = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function OnUncaughtException(_options) {
+        if (_options === void 0) { _options = {}; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = OnUncaughtException.id;
+        /**
+         * @inheritDoc
+         */
+        this.handler = this._makeErrorHandler();
+    }
+    /**
+     * @inheritDoc
+     */
+    OnUncaughtException.prototype.setupOnce = function () {
+        global.process.on('uncaughtException', this.handler.bind(this));
+    };
+    /**
+     * @hidden
+     */
+    OnUncaughtException.prototype._makeErrorHandler = function () {
+        var _this = this;
+        var timeout = 2000;
+        var caughtFirstError = false;
+        var caughtSecondError = false;
+        var calledFatalError = false;
+        var firstError;
+        return function (error) {
+            var onFatalError = logAndExitProcess;
+            var client = getCurrentHub().getClient();
+            if (_this._options.onFatalError) {
+                // eslint-disable-next-line @typescript-eslint/unbound-method
+                onFatalError = _this._options.onFatalError;
+            }
+            else if (client && client.getOptions().onFatalError) {
+                // eslint-disable-next-line @typescript-eslint/unbound-method
+                onFatalError = client.getOptions().onFatalError;
+            }
+            if (!caughtFirstError) {
+                var hub_1 = getCurrentHub();
+                // this is the first uncaught error and the ultimate reason for shutting down
+                // we want to do absolutely everything possible to ensure it gets captured
+                // also we want to make sure we don't go recursion crazy if more errors happen after this one
+                firstError = error;
+                caughtFirstError = true;
+                if (hub_1.getIntegration(OnUncaughtException)) {
+                    hub_1.withScope(function (scope) {
+                        scope.setLevel(Severity.Fatal);
+                        hub_1.captureException(error, {
+                            originalException: error,
+                            data: { mechanism: { handled: false, type: 'onuncaughtexception' } },
+                        });
+                        if (!calledFatalError) {
+                            calledFatalError = true;
+                            onFatalError(error);
+                        }
+                    });
+                }
+                else {
+                    if (!calledFatalError) {
+                        calledFatalError = true;
+                        onFatalError(error);
+                    }
+                }
+            }
+            else if (calledFatalError) {
+                // we hit an error *after* calling onFatalError - pretty boned at this point, just shut it down
+                IS_DEBUG_BUILD &&
+                    logger$3.warn('uncaught exception after calling fatal error shutdown callback - this is bad! forcing shutdown');
+                logAndExitProcess(error);
+            }
+            else if (!caughtSecondError) {
+                // two cases for how we can hit this branch:
+                //   - capturing of first error blew up and we just caught the exception from that
+                //     - quit trying to capture, proceed with shutdown
+                //   - a second independent error happened while waiting for first error to capture
+                //     - want to avoid causing premature shutdown before first error capture finishes
+                // it's hard to immediately tell case 1 from case 2 without doing some fancy/questionable domain stuff
+                // so let's instead just delay a bit before we proceed with our action here
+                // in case 1, we just wait a bit unnecessarily but ultimately do the same thing
+                // in case 2, the delay hopefully made us wait long enough for the capture to finish
+                // two potential nonideal outcomes:
+                //   nonideal case 1: capturing fails fast, we sit around for a few seconds unnecessarily before proceeding correctly by calling onFatalError
+                //   nonideal case 2: case 2 happens, 1st error is captured but slowly, timeout completes before capture and we treat second error as the sendErr of (nonexistent) failure from trying to capture first error
+                // note that after hitting this branch, we might catch more errors where (caughtSecondError && !calledFatalError)
+                //   we ignore them - they don't matter to us, we're just waiting for the second error timeout to finish
+                caughtSecondError = true;
+                setTimeout(function () {
+                    if (!calledFatalError) {
+                        // it was probably case 1, let's treat err as the sendErr and call onFatalError
+                        calledFatalError = true;
+                        onFatalError(firstError, error);
+                    }
+                }, timeout); // capturing could take at least sendTimeout to fail, plus an arbitrary second for how long it takes to collect surrounding source etc
+            }
+        };
+    };
+    /**
+     * @inheritDoc
+     */
+    OnUncaughtException.id = 'OnUncaughtException';
+    return OnUncaughtException;
+}());
+
+/** Global Promise Rejection handler */
+var OnUnhandledRejection = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function OnUnhandledRejection(_options) {
+        if (_options === void 0) { _options = { mode: 'warn' }; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = OnUnhandledRejection.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    OnUnhandledRejection.prototype.setupOnce = function () {
+        global.process.on('unhandledRejection', this.sendUnhandledPromise.bind(this));
+    };
+    /**
+     * Send an exception with reason
+     * @param reason string
+     * @param promise promise
+     */
+    // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
+    OnUnhandledRejection.prototype.sendUnhandledPromise = function (reason, promise) {
+        var hub = getCurrentHub();
+        if (!hub.getIntegration(OnUnhandledRejection)) {
+            this._handleRejection(reason);
+            return;
+        }
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+        var context = (promise.domain && promise.domain.sentryContext) || {};
+        hub.withScope(function (scope) {
+            scope.setExtra('unhandledPromiseRejection', true);
+            // Preserve backwards compatibility with raven-node for now
+            if (context.user) {
+                scope.setUser(context.user);
+            }
+            if (context.tags) {
+                scope.setTags(context.tags);
+            }
+            if (context.extra) {
+                scope.setExtras(context.extra);
+            }
+            hub.captureException(reason, {
+                originalException: promise,
+                data: { mechanism: { handled: false, type: 'onunhandledrejection' } },
+            });
+        });
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+        this._handleRejection(reason);
+    };
+    /**
+     * Handler for `mode` option
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    OnUnhandledRejection.prototype._handleRejection = function (reason) {
+        // https://github.com/nodejs/node/blob/7cf6f9e964aa00772965391c23acda6d71972a9a/lib/internal/process/promises.js#L234-L240
+        var rejectionWarning = 'This error originated either by ' +
+            'throwing inside of an async function without a catch block, ' +
+            'or by rejecting a promise which was not handled with .catch().' +
+            ' The promise rejected with the reason:';
+        /* eslint-disable no-console */
+        if (this._options.mode === 'warn') {
+            consoleSandbox(function () {
+                console.warn(rejectionWarning);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                console.error(reason && reason.stack ? reason.stack : reason);
+            });
+        }
+        else if (this._options.mode === 'strict') {
+            consoleSandbox(function () {
+                console.warn(rejectionWarning);
+            });
+            logAndExitProcess(reason);
+        }
+        /* eslint-enable no-console */
+    };
+    /**
+     * @inheritDoc
+     */
+    OnUnhandledRejection.id = 'OnUnhandledRejection';
+    return OnUnhandledRejection;
+}());
+
+var lru = {};
+
+/**
+ * A doubly linked list-based Least Recently Used (LRU) cache. Will keep most
+ * recently used items while discarding least recently used items when its limit
+ * is reached.
+ *
+ * Licensed under MIT. Copyright (c) 2010 Rasmus Andersson <http://hunch.se/>
+ * See README.md for details.
+ *
+ * Illustration of the design:
+ *
+ *       entry             entry             entry             entry
+ *       ______            ______            ______            ______
+ *      | head |.newer => |      |.newer => |      |.newer => | tail |
+ *      |  A   |          |  B   |          |  C   |          |  D   |
+ *      |______| <= older.|______| <= older.|______| <= older.|______|
+ *
+ *  removed  <--  <--  <--  <--  <--  <--  <--  <--  <--  <--  <--  added
+ */
+
+(function (exports) {
+	(function(g,f){
+	  const e = exports ;
+	  f(e);
+	})(commonjsGlobal, function(exports) {
+
+	const NEWER = Symbol('newer');
+	const OLDER = Symbol('older');
+
+	function LRUMap(limit, entries) {
+	  if (typeof limit !== 'number') {
+	    // called as (entries)
+	    entries = limit;
+	    limit = 0;
+	  }
+
+	  this.size = 0;
+	  this.limit = limit;
+	  this.oldest = this.newest = undefined;
+	  this._keymap = new Map();
+
+	  if (entries) {
+	    this.assign(entries);
+	    if (limit < 1) {
+	      this.limit = this.size;
+	    }
+	  }
+	}
+
+	exports.LRUMap = LRUMap;
+
+	function Entry(key, value) {
+	  this.key = key;
+	  this.value = value;
+	  this[NEWER] = undefined;
+	  this[OLDER] = undefined;
+	}
+
+
+	LRUMap.prototype._markEntryAsUsed = function(entry) {
+	  if (entry === this.newest) {
+	    // Already the most recenlty used entry, so no need to update the list
+	    return;
+	  }
+	  // HEAD--------------TAIL
+	  //   <.older   .newer>
+	  //  <--- add direction --
+	  //   A  B  C  <D>  E
+	  if (entry[NEWER]) {
+	    if (entry === this.oldest) {
+	      this.oldest = entry[NEWER];
+	    }
+	    entry[NEWER][OLDER] = entry[OLDER]; // C <-- E.
+	  }
+	  if (entry[OLDER]) {
+	    entry[OLDER][NEWER] = entry[NEWER]; // C. --> E
+	  }
+	  entry[NEWER] = undefined; // D --x
+	  entry[OLDER] = this.newest; // D. --> E
+	  if (this.newest) {
+	    this.newest[NEWER] = entry; // E. <-- D
+	  }
+	  this.newest = entry;
+	};
+
+	LRUMap.prototype.assign = function(entries) {
+	  let entry, limit = this.limit || Number.MAX_VALUE;
+	  this._keymap.clear();
+	  let it = entries[Symbol.iterator]();
+	  for (let itv = it.next(); !itv.done; itv = it.next()) {
+	    let e = new Entry(itv.value[0], itv.value[1]);
+	    this._keymap.set(e.key, e);
+	    if (!entry) {
+	      this.oldest = e;
+	    } else {
+	      entry[NEWER] = e;
+	      e[OLDER] = entry;
+	    }
+	    entry = e;
+	    if (limit-- == 0) {
+	      throw new Error('overflow');
+	    }
+	  }
+	  this.newest = entry;
+	  this.size = this._keymap.size;
+	};
+
+	LRUMap.prototype.get = function(key) {
+	  // First, find our cache entry
+	  var entry = this._keymap.get(key);
+	  if (!entry) return; // Not cached. Sorry.
+	  // As <key> was found in the cache, register it as being requested recently
+	  this._markEntryAsUsed(entry);
+	  return entry.value;
+	};
+
+	LRUMap.prototype.set = function(key, value) {
+	  var entry = this._keymap.get(key);
+
+	  if (entry) {
+	    // update existing
+	    entry.value = value;
+	    this._markEntryAsUsed(entry);
+	    return this;
+	  }
+
+	  // new entry
+	  this._keymap.set(key, (entry = new Entry(key, value)));
+
+	  if (this.newest) {
+	    // link previous tail to the new tail (entry)
+	    this.newest[NEWER] = entry;
+	    entry[OLDER] = this.newest;
+	  } else {
+	    // we're first in -- yay
+	    this.oldest = entry;
+	  }
+
+	  // add new entry to the end of the linked list -- it's now the freshest entry.
+	  this.newest = entry;
+	  ++this.size;
+	  if (this.size > this.limit) {
+	    // we hit the limit -- remove the head
+	    this.shift();
+	  }
+
+	  return this;
+	};
+
+	LRUMap.prototype.shift = function() {
+	  // todo: handle special case when limit == 1
+	  var entry = this.oldest;
+	  if (entry) {
+	    if (this.oldest[NEWER]) {
+	      // advance the list
+	      this.oldest = this.oldest[NEWER];
+	      this.oldest[OLDER] = undefined;
+	    } else {
+	      // the cache is exhausted
+	      this.oldest = undefined;
+	      this.newest = undefined;
+	    }
+	    // Remove last strong reference to <entry> and remove links from the purged
+	    // entry being returned:
+	    entry[NEWER] = entry[OLDER] = undefined;
+	    this._keymap.delete(entry.key);
+	    --this.size;
+	    return [entry.key, entry.value];
+	  }
+	};
+
+	// ----------------------------------------------------------------------------
+	// Following code is optional and can be removed without breaking the core
+	// functionality.
+
+	LRUMap.prototype.find = function(key) {
+	  let e = this._keymap.get(key);
+	  return e ? e.value : undefined;
+	};
+
+	LRUMap.prototype.has = function(key) {
+	  return this._keymap.has(key);
+	};
+
+	LRUMap.prototype['delete'] = function(key) {
+	  var entry = this._keymap.get(key);
+	  if (!entry) return;
+	  this._keymap.delete(entry.key);
+	  if (entry[NEWER] && entry[OLDER]) {
+	    // relink the older entry with the newer entry
+	    entry[OLDER][NEWER] = entry[NEWER];
+	    entry[NEWER][OLDER] = entry[OLDER];
+	  } else if (entry[NEWER]) {
+	    // remove the link to us
+	    entry[NEWER][OLDER] = undefined;
+	    // link the newer entry to head
+	    this.oldest = entry[NEWER];
+	  } else if (entry[OLDER]) {
+	    // remove the link to us
+	    entry[OLDER][NEWER] = undefined;
+	    // link the newer entry to head
+	    this.newest = entry[OLDER];
+	  } else {// if(entry[OLDER] === undefined && entry.newer === undefined) {
+	    this.oldest = this.newest = undefined;
+	  }
+
+	  this.size--;
+	  return entry.value;
+	};
+
+	LRUMap.prototype.clear = function() {
+	  // Not clearing links should be safe, as we don't expose live links to user
+	  this.oldest = this.newest = undefined;
+	  this.size = 0;
+	  this._keymap.clear();
+	};
+
+
+	function EntryIterator(oldestEntry) { this.entry = oldestEntry; }
+	EntryIterator.prototype[Symbol.iterator] = function() { return this; };
+	EntryIterator.prototype.next = function() {
+	  let ent = this.entry;
+	  if (ent) {
+	    this.entry = ent[NEWER];
+	    return { done: false, value: [ent.key, ent.value] };
+	  } else {
+	    return { done: true, value: undefined };
+	  }
+	};
+
+
+	function KeyIterator(oldestEntry) { this.entry = oldestEntry; }
+	KeyIterator.prototype[Symbol.iterator] = function() { return this; };
+	KeyIterator.prototype.next = function() {
+	  let ent = this.entry;
+	  if (ent) {
+	    this.entry = ent[NEWER];
+	    return { done: false, value: ent.key };
+	  } else {
+	    return { done: true, value: undefined };
+	  }
+	};
+
+	function ValueIterator(oldestEntry) { this.entry = oldestEntry; }
+	ValueIterator.prototype[Symbol.iterator] = function() { return this; };
+	ValueIterator.prototype.next = function() {
+	  let ent = this.entry;
+	  if (ent) {
+	    this.entry = ent[NEWER];
+	    return { done: false, value: ent.value };
+	  } else {
+	    return { done: true, value: undefined };
+	  }
+	};
+
+
+	LRUMap.prototype.keys = function() {
+	  return new KeyIterator(this.oldest);
+	};
+
+	LRUMap.prototype.values = function() {
+	  return new ValueIterator(this.oldest);
+	};
+
+	LRUMap.prototype.entries = function() {
+	  return this;
+	};
+
+	LRUMap.prototype[Symbol.iterator] = function() {
+	  return new EntryIterator(this.oldest);
+	};
+
+	LRUMap.prototype.forEach = function(fun, thisObj) {
+	  if (typeof thisObj !== 'object') {
+	    thisObj = this;
+	  }
+	  let entry = this.oldest;
+	  while (entry) {
+	    fun.call(thisObj, entry.value, entry.key, this);
+	    entry = entry[NEWER];
+	  }
+	};
+
+	/** Returns a JSON (array) representation */
+	LRUMap.prototype.toJSON = function() {
+	  var s = new Array(this.size), i = 0, entry = this.oldest;
+	  while (entry) {
+	    s[i++] = { key: entry.key, value: entry.value };
+	    entry = entry[NEWER];
+	  }
+	  return s;
+	};
+
+	/** Returns a String representation */
+	LRUMap.prototype.toString = function() {
+	  var s = '', entry = this.oldest;
+	  while (entry) {
+	    s += String(entry.key)+':'+entry.value;
+	    entry = entry[NEWER];
+	    if (entry) {
+	      s += ' < ';
+	    }
+	  }
+	  return s;
+	};
+
+	});
+} (lru));
+
+var FILE_CONTENT_CACHE = new lru.LRUMap(100);
+var DEFAULT_LINES_OF_CONTEXT = 7;
+// TODO: Replace with promisify when minimum supported node >= v8
+function readTextFileAsync(path) {
+    return new Promise(function (resolve, reject) {
+        require$$0$e.readFile(path, 'utf8', function (err, data) {
+            if (err)
+                reject(err);
+            else
+                resolve(data);
+        });
+    });
+}
+/** Add node modules / packages to the event */
+var ContextLines = /** @class */ (function () {
+    function ContextLines(_options) {
+        if (_options === void 0) { _options = {}; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = ContextLines.id;
+    }
+    Object.defineProperty(ContextLines.prototype, "_contextLines", {
+        /** Get's the number of context lines to add */
+        get: function () {
+            var _a, _b;
+            // This is only here to copy frameContextLines from init options if it hasn't
+            // been set via this integrations constructor.
+            //
+            // TODO: Remove on next major!
+            if (this._options.frameContextLines === undefined) {
+                var initOptions = (_a = getCurrentHub().getClient()) === null || _a === void 0 ? void 0 : _a.getOptions();
+                // eslint-disable-next-line deprecation/deprecation
+                this._options.frameContextLines = (_b = initOptions) === null || _b === void 0 ? void 0 : _b.frameContextLines;
+            }
+            return this._options.frameContextLines !== undefined ? this._options.frameContextLines : DEFAULT_LINES_OF_CONTEXT;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    /**
+     * @inheritDoc
+     */
+    ContextLines.prototype.setupOnce = function (addGlobalEventProcessor) {
+        var _this = this;
+        addGlobalEventProcessor(function (event) { return _this.addSourceContext(event); });
+    };
+    /** Processes an event and adds context lines */
+    ContextLines.prototype.addSourceContext = function (event) {
+        var _a, _b;
+        return __awaiter$3(this, void 0, void 0, function () {
+            var _c, _d, exception, e_1_1;
+            var e_1, _e;
+            return __generator$1(this, function (_f) {
+                switch (_f.label) {
+                    case 0:
+                        if (!(this._contextLines > 0 && ((_a = event.exception) === null || _a === void 0 ? void 0 : _a.values))) return [3 /*break*/, 8];
+                        _f.label = 1;
+                    case 1:
+                        _f.trys.push([1, 6, 7, 8]);
+                        _c = __values$2(event.exception.values), _d = _c.next();
+                        _f.label = 2;
+                    case 2:
+                        if (!!_d.done) return [3 /*break*/, 5];
+                        exception = _d.value;
+                        if (!((_b = exception.stacktrace) === null || _b === void 0 ? void 0 : _b.frames)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.addSourceContextToFrames(exception.stacktrace.frames)];
+                    case 3:
+                        _f.sent();
+                        _f.label = 4;
+                    case 4:
+                        _d = _c.next();
+                        return [3 /*break*/, 2];
+                    case 5: return [3 /*break*/, 8];
+                    case 6:
+                        e_1_1 = _f.sent();
+                        e_1 = { error: e_1_1 };
+                        return [3 /*break*/, 8];
+                    case 7:
+                        try {
+                            if (_d && !_d.done && (_e = _c.return)) _e.call(_c);
+                        }
+                        finally { if (e_1) throw e_1.error; }
+                        return [7 /*endfinally*/];
+                    case 8: return [2 /*return*/, event];
+                }
+            });
+        });
+    };
+    /** Adds context lines to frames */
+    ContextLines.prototype.addSourceContextToFrames = function (frames) {
+        return __awaiter$3(this, void 0, void 0, function () {
+            var contextLines, frames_1, frames_1_1, frame, sourceFile, lines, e_2_1;
+            var e_2, _a;
+            return __generator$1(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        contextLines = this._contextLines;
+                        _b.label = 1;
+                    case 1:
+                        _b.trys.push([1, 6, 7, 8]);
+                        frames_1 = __values$2(frames), frames_1_1 = frames_1.next();
+                        _b.label = 2;
+                    case 2:
+                        if (!!frames_1_1.done) return [3 /*break*/, 5];
+                        frame = frames_1_1.value;
+                        if (!(frame.filename && frame.context_line === undefined)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, _readSourceFile(frame.filename)];
+                    case 3:
+                        sourceFile = _b.sent();
+                        if (sourceFile) {
+                            try {
+                                lines = sourceFile.split('\n');
+                                addContextToFrame(lines, frame, contextLines);
+                            }
+                            catch (e) {
+                                // anomaly, being defensive in case
+                                // unlikely to ever happen in practice but can definitely happen in theory
+                            }
+                        }
+                        _b.label = 4;
+                    case 4:
+                        frames_1_1 = frames_1.next();
+                        return [3 /*break*/, 2];
+                    case 5: return [3 /*break*/, 8];
+                    case 6:
+                        e_2_1 = _b.sent();
+                        e_2 = { error: e_2_1 };
+                        return [3 /*break*/, 8];
+                    case 7:
+                        try {
+                            if (frames_1_1 && !frames_1_1.done && (_a = frames_1.return)) _a.call(frames_1);
+                        }
+                        finally { if (e_2) throw e_2.error; }
+                        return [7 /*endfinally*/];
+                    case 8: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    ContextLines.id = 'ContextLines';
+    return ContextLines;
+}());
+/**
