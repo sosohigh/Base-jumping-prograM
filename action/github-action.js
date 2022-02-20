@@ -17300,3 +17300,2175 @@ var ContextLines = /** @class */ (function () {
     return ContextLines;
 }());
 /**
+ * Reads file contents and caches them in a global LRU cache.
+ *
+ * @param filename filepath to read content from.
+ */
+function _readSourceFile(filename) {
+    return __awaiter$3(this, void 0, void 0, function () {
+        var cachedFile, content;
+        return __generator$1(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    cachedFile = FILE_CONTENT_CACHE.get(filename);
+                    // We have a cache hit
+                    if (cachedFile !== undefined) {
+                        return [2 /*return*/, cachedFile];
+                    }
+                    content = null;
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, readTextFileAsync(filename)];
+                case 2:
+                    content = _a.sent();
+                    return [3 /*break*/, 4];
+                case 3:
+                    _a.sent();
+                    return [3 /*break*/, 4];
+                case 4:
+                    FILE_CONTENT_CACHE.set(filename, content);
+                    return [2 /*return*/, content];
+            }
+        });
+    });
+}
+
+var DEFAULT_KEY = 'cause';
+var DEFAULT_LIMIT = 5;
+/** Adds SDK info to an event. */
+var LinkedErrors = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function LinkedErrors(options) {
+        if (options === void 0) { options = {}; }
+        /**
+         * @inheritDoc
+         */
+        this.name = LinkedErrors.id;
+        this._key = options.key || DEFAULT_KEY;
+        this._limit = options.limit || DEFAULT_LIMIT;
+    }
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.prototype.setupOnce = function () {
+        addGlobalEventProcessor(function (event, hint) {
+            var self = getCurrentHub().getIntegration(LinkedErrors);
+            if (self) {
+                var handler = self._handler && self._handler.bind(self);
+                return typeof handler === 'function' ? handler(event, hint) : event;
+            }
+            return event;
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.prototype._handler = function (event, hint) {
+        var _this = this;
+        if (!event.exception || !event.exception.values || !hint || !isInstanceOf(hint.originalException, Error)) {
+            return resolvedSyncPromise(event);
+        }
+        return new SyncPromise(function (resolve) {
+            void _this._walkErrorTree(hint.originalException, _this._key)
+                .then(function (linkedErrors) {
+                if (event && event.exception && event.exception.values) {
+                    event.exception.values = __spread$4(linkedErrors, event.exception.values);
+                }
+                resolve(event);
+            })
+                .then(null, function () {
+                resolve(event);
+            });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.prototype._walkErrorTree = function (error, key, stack) {
+        if (stack === void 0) { stack = []; }
+        var _a;
+        return __awaiter$3(this, void 0, void 0, function () {
+            var exception, contextLines;
+            var _this = this;
+            return __generator$1(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        if (!isInstanceOf(error[key], Error) || stack.length + 1 >= this._limit) {
+                            return [2 /*return*/, Promise.resolve(stack)];
+                        }
+                        exception = exceptionFromError(error[key]);
+                        contextLines = getCurrentHub().getIntegration(ContextLines);
+                        if (!(contextLines && ((_a = exception.stacktrace) === null || _a === void 0 ? void 0 : _a.frames))) return [3 /*break*/, 2];
+                        return [4 /*yield*/, contextLines.addSourceContextToFrames(exception.stacktrace.frames)];
+                    case 1:
+                        _b.sent();
+                        _b.label = 2;
+                    case 2: return [2 /*return*/, new Promise(function (resolve, reject) {
+                            void _this._walkErrorTree(error[key], key, __spread$4([exception], stack))
+                                .then(resolve)
+                                .then(null, function () {
+                                reject();
+                            });
+                        })];
+                }
+            });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.id = 'LinkedErrors';
+    return LinkedErrors;
+}());
+
+var moduleCache;
+/** Extract information about paths */
+function getPaths() {
+    try {
+        return require.cache ? Object.keys(require.cache) : [];
+    }
+    catch (e) {
+        return [];
+    }
+}
+/** Extract information about package.json modules */
+function collectModules() {
+    var mainPaths = (require.main && require.main.paths) || [];
+    var paths = getPaths();
+    var infos = {};
+    var seen = {};
+    paths.forEach(function (path) {
+        var dir = path;
+        /** Traverse directories upward in the search of package.json file */
+        var updir = function () {
+            var orig = dir;
+            dir = require$$0$c.dirname(orig);
+            if (!dir || orig === dir || seen[orig]) {
+                return undefined;
+            }
+            if (mainPaths.indexOf(dir) < 0) {
+                return updir();
+            }
+            var pkgfile = require$$0$c.join(orig, 'package.json');
+            seen[orig] = true;
+            if (!require$$0$e.existsSync(pkgfile)) {
+                return updir();
+            }
+            try {
+                var info = JSON.parse(require$$0$e.readFileSync(pkgfile, 'utf8'));
+                infos[info.name] = info.version;
+            }
+            catch (_oO) {
+                // no-empty
+            }
+        };
+        updir();
+    });
+    return infos;
+}
+/** Add node modules / packages to the event */
+var Modules = /** @class */ (function () {
+    function Modules() {
+        /**
+         * @inheritDoc
+         */
+        this.name = Modules.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    Modules.prototype.setupOnce = function (addGlobalEventProcessor, getCurrentHub) {
+        var _this = this;
+        addGlobalEventProcessor(function (event) {
+            if (!getCurrentHub().getIntegration(Modules)) {
+                return event;
+            }
+            return __assign$5(__assign$5({}, event), { modules: _this._getModules() });
+        });
+    };
+    /** Fetches the list of modules and the versions loaded by the entry file for your node.js app. */
+    Modules.prototype._getModules = function () {
+        if (!moduleCache) {
+            moduleCache = collectModules();
+        }
+        return moduleCache;
+    };
+    /**
+     * @inheritDoc
+     */
+    Modules.id = 'Modules';
+    return Modules;
+}());
+
+var NodeIntegrations = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	Console: Console,
+	ContextLines: ContextLines,
+	Http: Http,
+	LinkedErrors: LinkedErrors,
+	Modules: Modules,
+	OnUncaughtException: OnUncaughtException,
+	OnUnhandledRejection: OnUnhandledRejection
+});
+
+var defaultIntegrations = [
+    // Common
+    new InboundFilters(),
+    new FunctionToString(),
+    new ContextLines(),
+    // Native Wrappers
+    new Console(),
+    new Http(),
+    // Global Handlers
+    new OnUncaughtException(),
+    new OnUnhandledRejection(),
+    // Misc
+    new LinkedErrors(),
+];
+/**
+ * The Sentry Node SDK Client.
+ *
+ * To use this SDK, call the {@link init} function as early as possible in the
+ * main entry module. To set context information or send manual events, use the
+ * provided methods.
+ *
+ * @example
+ * ```
+ *
+ * const { init } = require('@sentry/node');
+ *
+ * init({
+ *   dsn: '__DSN__',
+ *   // ...
+ * });
+ * ```
+ *
+ * @example
+ * ```
+ *
+ * const { configureScope } = require('@sentry/node');
+ * configureScope((scope: Scope) => {
+ *   scope.setExtra({ battery: 0.7 });
+ *   scope.setTag({ user_mode: 'admin' });
+ *   scope.setUser({ id: '4711' });
+ * });
+ * ```
+ *
+ * @example
+ * ```
+ *
+ * const { addBreadcrumb } = require('@sentry/node');
+ * addBreadcrumb({
+ *   message: 'My Breadcrumb',
+ *   // ...
+ * });
+ * ```
+ *
+ * @example
+ * ```
+ *
+ * const Sentry = require('@sentry/node');
+ * Sentry.captureMessage('Hello, world!');
+ * Sentry.captureException(new Error('Good bye'));
+ * Sentry.captureEvent({
+ *   message: 'Manual',
+ *   stacktrace: [
+ *     // ...
+ *   ],
+ * });
+ * ```
+ *
+ * @see {@link NodeOptions} for documentation on configuration options.
+ */
+function init$1(options) {
+    if (options === void 0) { options = {}; }
+    var _a;
+    var carrier = getMainCarrier();
+    var autoloadedIntegrations = ((_a = carrier.__SENTRY__) === null || _a === void 0 ? void 0 : _a.integrations) || [];
+    options.defaultIntegrations =
+        options.defaultIntegrations === false
+            ? []
+            : __spread$4((Array.isArray(options.defaultIntegrations) ? options.defaultIntegrations : defaultIntegrations), autoloadedIntegrations);
+    if (options.dsn === undefined && process.env.SENTRY_DSN) {
+        options.dsn = process.env.SENTRY_DSN;
+    }
+    if (options.tracesSampleRate === undefined && process.env.SENTRY_TRACES_SAMPLE_RATE) {
+        var tracesSampleRate = parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE);
+        if (isFinite(tracesSampleRate)) {
+            options.tracesSampleRate = tracesSampleRate;
+        }
+    }
+    if (options.release === undefined) {
+        var detectedRelease = getSentryRelease();
+        if (detectedRelease !== undefined) {
+            options.release = detectedRelease;
+        }
+        else {
+            // If release is not provided, then we should disable autoSessionTracking
+            options.autoSessionTracking = false;
+        }
+    }
+    if (options.environment === undefined && process.env.SENTRY_ENVIRONMENT) {
+        options.environment = process.env.SENTRY_ENVIRONMENT;
+    }
+    if (options.autoSessionTracking === undefined && options.dsn !== undefined) {
+        options.autoSessionTracking = true;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    if (domain__namespace.active) {
+        setHubOnCarrier(carrier, getCurrentHub());
+    }
+    initAndBind(NodeClient, options);
+    if (options.autoSessionTracking) {
+        startSessionTracking();
+    }
+}
+/**
+ * This is the getter for lastEventId.
+ *
+ * @returns The last event id of a captured event.
+ */
+function lastEventId() {
+    return getCurrentHub().lastEventId();
+}
+/**
+ * Call `flush()` on the current client, if there is one. See {@link Client.flush}.
+ *
+ * @param timeout Maximum time in ms the client should wait to flush its event queue. Omitting this parameter will cause
+ * the client to wait until all events are sent before resolving the promise.
+ * @returns A promise which resolves to `true` if the queue successfully drains before the timeout, or `false` if it
+ * doesn't (or if there's no client defined).
+ */
+function flush$2(timeout) {
+    return __awaiter$3(this, void 0, void 0, function () {
+        var client;
+        return __generator$1(this, function (_a) {
+            client = getCurrentHub().getClient();
+            if (client) {
+                return [2 /*return*/, client.flush(timeout)];
+            }
+            IS_DEBUG_BUILD && logger$3.warn('Cannot flush events. No client defined.');
+            return [2 /*return*/, Promise.resolve(false)];
+        });
+    });
+}
+/**
+ * Call `close()` on the current client, if there is one. See {@link Client.close}.
+ *
+ * @param timeout Maximum time in ms the client should wait to flush its event queue before shutting down. Omitting this
+ * parameter will cause the client to wait until all events are sent before disabling itself.
+ * @returns A promise which resolves to `true` if the queue successfully drains before the timeout, or `false` if it
+ * doesn't (or if there's no client defined).
+ */
+function close(timeout) {
+    return __awaiter$3(this, void 0, void 0, function () {
+        var client;
+        return __generator$1(this, function (_a) {
+            client = getCurrentHub().getClient();
+            if (client) {
+                return [2 /*return*/, client.close(timeout)];
+            }
+            IS_DEBUG_BUILD && logger$3.warn('Cannot flush events and disable SDK. No client defined.');
+            return [2 /*return*/, Promise.resolve(false)];
+        });
+    });
+}
+/**
+ * Function that takes an instance of NodeClient and checks if autoSessionTracking option is enabled for that client
+ */
+function isAutoSessionTrackingEnabled(client) {
+    if (client === undefined) {
+        return false;
+    }
+    var clientOptions = client && client.getOptions();
+    if (clientOptions && clientOptions.autoSessionTracking !== undefined) {
+        return clientOptions.autoSessionTracking;
+    }
+    return false;
+}
+/**
+ * Returns a release dynamically from environment variables.
+ */
+function getSentryRelease(fallback) {
+    // Always read first as Sentry takes this as precedence
+    if (process.env.SENTRY_RELEASE) {
+        return process.env.SENTRY_RELEASE;
+    }
+    // This supports the variable that sentry-webpack-plugin injects
+    var global = getGlobalObject();
+    if (global.SENTRY_RELEASE && global.SENTRY_RELEASE.id) {
+        return global.SENTRY_RELEASE.id;
+    }
+    return (
+    // GitHub Actions - https://help.github.com/en/actions/configuring-and-managing-workflows/using-environment-variables#default-environment-variables
+    process.env.GITHUB_SHA ||
+        // Netlify - https://docs.netlify.com/configure-builds/environment-variables/#build-metadata
+        process.env.COMMIT_REF ||
+        // Vercel - https://vercel.com/docs/v2/build-step#system-environment-variables
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.VERCEL_GITHUB_COMMIT_SHA ||
+        process.env.VERCEL_GITLAB_COMMIT_SHA ||
+        process.env.VERCEL_BITBUCKET_COMMIT_SHA ||
+        // Zeit (now known as Vercel)
+        process.env.ZEIT_GITHUB_COMMIT_SHA ||
+        process.env.ZEIT_GITLAB_COMMIT_SHA ||
+        process.env.ZEIT_BITBUCKET_COMMIT_SHA ||
+        fallback);
+}
+/**
+ * Enable automatic Session Tracking for the node process.
+ */
+function startSessionTracking() {
+    var hub = getCurrentHub();
+    hub.startSession();
+    // Emitted in the case of healthy sessions, error of `mechanism.handled: true` and unhandledrejections because
+    // The 'beforeExit' event is not emitted for conditions causing explicit termination,
+    // such as calling process.exit() or uncaught exceptions.
+    // Ref: https://nodejs.org/api/process.html#process_event_beforeexit
+    process.on('beforeExit', function () {
+        var _a;
+        var session = (_a = hub.getScope()) === null || _a === void 0 ? void 0 : _a.getSession();
+        var terminalStates = ['exited', 'crashed'];
+        // Only call endSession, if the Session exists on Scope and SessionStatus is not a
+        // Terminal Status i.e. Exited or Crashed because
+        // "When a session is moved away from ok it must not be updated anymore."
+        // Ref: https://develop.sentry.dev/sdk/sessions/
+        if (session && !terminalStates.includes(session.status))
+            hub.endSession();
+    });
+}
+
+/**
+ * Recursively read the contents of a directory.
+ *
+ * @param targetDir Absolute or relative path of the directory to scan. All returned paths will be relative to this
+ * directory.
+ * @returns Array holding all relative paths
+ */
+function deepReadDirSync(targetDir) {
+    var targetDirAbsPath = require$$0__namespace$1.resolve(targetDir);
+    if (!require$$0__namespace.existsSync(targetDirAbsPath)) {
+        throw new Error("Cannot read contents of " + targetDirAbsPath + ". Directory does not exist.");
+    }
+    if (!require$$0__namespace.statSync(targetDirAbsPath).isDirectory()) {
+        throw new Error("Cannot read contents of " + targetDirAbsPath + ", because it is not a directory.");
+    }
+    // This does the same thing as its containing function, `deepReadDirSync` (except that - purely for convenience - it
+    // deals in absolute paths rather than relative ones). We need this to be separate from the outer function to preserve
+    // the difference between `targetDirAbsPath` and `currentDirAbsPath`.
+    var deepReadCurrentDir = function (currentDirAbsPath) {
+        return require$$0__namespace.readdirSync(currentDirAbsPath).reduce(function (absPaths, itemName) {
+            var itemAbsPath = require$$0__namespace$1.join(currentDirAbsPath, itemName);
+            if (require$$0__namespace.statSync(itemAbsPath).isDirectory()) {
+                return __spread$4(absPaths, deepReadCurrentDir(itemAbsPath));
+            }
+            return __spread$4(absPaths, [itemAbsPath]);
+        }, []);
+    };
+    return deepReadCurrentDir(targetDirAbsPath).map(function (absPath) { return require$$0__namespace$1.relative(targetDirAbsPath, absPath); });
+}
+
+/*!
+ * cookie
+ * Copyright(c) 2012-2014 Roman Shtylman
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var parse_1$1 = parse$n;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var decode$5 = decodeURIComponent;
+
+/**
+ * Parse a cookie header.
+ *
+ * Parse the given cookie header string into an object
+ * The object has the various cookies as keys(names) => values
+ *
+ * @param {string} str
+ * @param {object} [options]
+ * @return {object}
+ * @public
+ */
+
+function parse$n(str, options) {
+  if (typeof str !== 'string') {
+    throw new TypeError('argument str must be a string');
+  }
+
+  var obj = {};
+  var opt = options || {};
+  var pairs = str.split(';');
+  var dec = opt.decode || decode$5;
+
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i];
+    var index = pair.indexOf('=');
+
+    // skip things that don't look like key=value
+    if (index < 0) {
+      continue;
+    }
+
+    var key = pair.substring(0, index).trim();
+
+    // only assign once
+    if (undefined == obj[key]) {
+      var val = pair.substring(index + 1, pair.length).trim();
+
+      // quoted values
+      if (val[0] === '"') {
+        val = val.slice(1, -1);
+      }
+
+      obj[key] = tryDecode$1(val, dec);
+    }
+  }
+
+  return obj;
+}
+
+/**
+ * Try decoding a string using a decoding function.
+ *
+ * @param {string} str
+ * @param {function} decode
+ * @private
+ */
+
+function tryDecode$1(str, decode) {
+  try {
+    return decode(str);
+  } catch (e) {
+    return str;
+  }
+}
+
+/**
+ * Express-compatible tracing handler.
+ * @see Exposed as `Handlers.tracingHandler`
+ */
+function tracingHandler() {
+    return function sentryTracingMiddleware(req, res, next) {
+        // If there is a trace header set, we extract the data from it (parentSpanId, traceId, and sampling decision)
+        var traceparentData;
+        if (req.headers && isString$1(req.headers['sentry-trace'])) {
+            traceparentData = extractTraceparentData(req.headers['sentry-trace']);
+        }
+        var transaction = startTransaction(__assign$5({ name: extractExpressTransactionName(req, { path: true, method: true }), op: 'http.server' }, traceparentData), 
+        // extra context passed to the tracesSampler
+        { request: extractRequestData(req) });
+        // We put the transaction on the scope so users can attach children to it
+        getCurrentHub().configureScope(function (scope) {
+            scope.setSpan(transaction);
+        });
+        // We also set __sentry_transaction on the response so people can grab the transaction there to add
+        // spans to it later.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        res.__sentry_transaction = transaction;
+        res.once('finish', function () {
+            // Push `transaction.finish` to the next event loop so open spans have a chance to finish before the transaction
+            // closes
+            setImmediate(function () {
+                addExpressReqToTransaction(transaction, req);
+                transaction.setHttpStatus(res.statusCode);
+                transaction.finish();
+            });
+        });
+        next();
+    };
+}
+/**
+ * Set parameterized as transaction name e.g.: `GET /users/:id`
+ * Also adds more context data on the transaction from the request
+ */
+function addExpressReqToTransaction(transaction, req) {
+    if (!transaction)
+        return;
+    transaction.name = extractExpressTransactionName(req, { path: true, method: true });
+    transaction.setData('url', req.originalUrl);
+    transaction.setData('baseUrl', req.baseUrl);
+    transaction.setData('query', req.query);
+}
+/**
+ * Extracts complete generalized path from the request object and uses it to construct transaction name.
+ *
+ * eg. GET /mountpoint/user/:id
+ *
+ * @param req The ExpressRequest object
+ * @param options What to include in the transaction name (method, path, or both)
+ *
+ * @returns The fully constructed transaction name
+ */
+function extractExpressTransactionName(req, options) {
+    if (options === void 0) { options = {}; }
+    var _a;
+    var method = (_a = req.method) === null || _a === void 0 ? void 0 : _a.toUpperCase();
+    var path = '';
+    if (req.route) {
+        path = "" + (req.baseUrl || '') + req.route.path;
+    }
+    else if (req.originalUrl || req.url) {
+        path = stripUrlQueryAndFragment(req.originalUrl || req.url || '');
+    }
+    var info = '';
+    if (options.method && method) {
+        info += method;
+    }
+    if (options.method && options.path) {
+        info += ' ';
+    }
+    if (options.path && path) {
+        info += path;
+    }
+    return info;
+}
+/** JSDoc */
+function extractTransaction(req, type) {
+    var _a;
+    switch (type) {
+        case 'path': {
+            return extractExpressTransactionName(req, { path: true });
+        }
+        case 'handler': {
+            return ((_a = req.route) === null || _a === void 0 ? void 0 : _a.stack[0].name) || '<anonymous>';
+        }
+        case 'methodPath':
+        default: {
+            return extractExpressTransactionName(req, { path: true, method: true });
+        }
+    }
+}
+/** Default user keys that'll be used to extract data from the request */
+var DEFAULT_USER_KEYS = ['id', 'username', 'email'];
+/** JSDoc */
+function extractUserData(user, keys) {
+    var extractedUser = {};
+    var attributes = Array.isArray(keys) ? keys : DEFAULT_USER_KEYS;
+    attributes.forEach(function (key) {
+        if (user && key in user) {
+            extractedUser[key] = user[key];
+        }
+    });
+    return extractedUser;
+}
+/** Default request keys that'll be used to extract data from the request */
+var DEFAULT_REQUEST_KEYS = ['cookies', 'data', 'headers', 'method', 'query_string', 'url'];
+/**
+ * Normalizes data from the request object, accounting for framework differences.
+ *
+ * @param req The request object from which to extract data
+ * @param keys An optional array of keys to include in the normalized data. Defaults to DEFAULT_REQUEST_KEYS if not
+ * provided.
+ * @returns An object containing normalized request data
+ */
+function extractRequestData(req, keys) {
+    if (keys === void 0) { keys = DEFAULT_REQUEST_KEYS; }
+    var requestData = {};
+    // headers:
+    //   node, express, nextjs: req.headers
+    //   koa: req.header
+    var headers = (req.headers || req.header || {});
+    // method:
+    //   node, express, koa, nextjs: req.method
+    var method = req.method;
+    // host:
+    //   express: req.hostname in > 4 and req.host in < 4
+    //   koa: req.host
+    //   node, nextjs: req.headers.host
+    var host = req.hostname || req.host || headers.host || '<no host>';
+    // protocol:
+    //   node, nextjs: <n/a>
+    //   express, koa: req.protocol
+    var protocol = req.protocol === 'https' || req.secure || (req.socket || {}).encrypted
+        ? 'https'
+        : 'http';
+    // url (including path and query string):
+    //   node, express: req.originalUrl
+    //   koa, nextjs: req.url
+    var originalUrl = (req.originalUrl || req.url || '');
+    // absolute url
+    var absoluteUrl = protocol + "://" + host + originalUrl;
+    keys.forEach(function (key) {
+        switch (key) {
+            case 'headers':
+                requestData.headers = headers;
+                break;
+            case 'method':
+                requestData.method = method;
+                break;
+            case 'url':
+                requestData.url = absoluteUrl;
+                break;
+            case 'cookies':
+                // cookies:
+                //   node, express, koa: req.headers.cookie
+                //   vercel, sails.js, express (w/ cookie middleware), nextjs: req.cookies
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                requestData.cookies = req.cookies || parse_1$1(headers.cookie || '');
+                break;
+            case 'query_string':
+                // query string:
+                //   node: req.url (raw)
+                //   express, koa, nextjs: req.query
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                requestData.query_string = req.query || Url__namespace.parse(originalUrl || '', false).query;
+                break;
+            case 'data':
+                if (method === 'GET' || method === 'HEAD') {
+                    break;
+                }
+                // body data:
+                //   express, koa, nextjs: req.body
+                //
+                //   when using node by itself, you have to read the incoming stream(see
+                //   https://nodejs.dev/learn/get-http-request-body-data-using-nodejs); if a user is doing that, we can't know
+                //   where they're going to store the final result, so they'll have to capture this data themselves
+                if (req.body !== undefined) {
+                    requestData.data = isString$1(req.body) ? req.body : JSON.stringify(normalize$4(req.body));
+                }
+                break;
+            default:
+                if ({}.hasOwnProperty.call(req, key)) {
+                    requestData[key] = req[key];
+                }
+        }
+    });
+    return requestData;
+}
+/**
+ * Enriches passed event with request data.
+ *
+ * @param event Will be mutated and enriched with req data
+ * @param req Request object
+ * @param options object containing flags to enable functionality
+ * @hidden
+ */
+function parseRequest(event, req, options) {
+    // eslint-disable-next-line no-param-reassign
+    options = __assign$5({ ip: false, request: true, serverName: true, transaction: true, user: true, version: true }, options);
+    if (options.version) {
+        event.contexts = __assign$5(__assign$5({}, event.contexts), { runtime: {
+                name: 'node',
+                version: global.process.version,
+            } });
+    }
+    if (options.request) {
+        // if the option value is `true`, use the default set of keys by not passing anything to `extractRequestData()`
+        var extractedRequestData = Array.isArray(options.request)
+            ? extractRequestData(req, options.request)
+            : extractRequestData(req);
+        event.request = __assign$5(__assign$5({}, event.request), extractedRequestData);
+    }
+    if (options.serverName && !event.server_name) {
+        event.server_name = global.process.env.SENTRY_NAME || require$$0__namespace$2.hostname();
+    }
+    if (options.user) {
+        var extractedUser = req.user && isPlainObject$1(req.user) ? extractUserData(req.user, options.user) : {};
+        if (Object.keys(extractedUser)) {
+            event.user = __assign$5(__assign$5({}, event.user), extractedUser);
+        }
+    }
+    // client ip:
+    //   node, nextjs: req.connection.remoteAddress
+    //   express, koa: req.ip
+    if (options.ip) {
+        var ip = req.ip || (req.connection && req.connection.remoteAddress);
+        if (ip) {
+            event.user = __assign$5(__assign$5({}, event.user), { ip_address: ip });
+        }
+    }
+    if (options.transaction && !event.transaction) {
+        // TODO do we even need this anymore?
+        // TODO make this work for nextjs
+        event.transaction = extractTransaction(req, options.transaction);
+    }
+    return event;
+}
+/**
+ * Express compatible request handler.
+ * @see Exposed as `Handlers.requestHandler`
+ */
+function requestHandler(options) {
+    var currentHub = getCurrentHub();
+    var client = currentHub.getClient();
+    // Initialise an instance of SessionFlusher on the client when `autoSessionTracking` is enabled and the
+    // `requestHandler` middleware is used indicating that we are running in SessionAggregates mode
+    if (client && isAutoSessionTrackingEnabled(client)) {
+        client.initSessionFlusher();
+        // If Scope contains a Single mode Session, it is removed in favor of using Session Aggregates mode
+        var scope = currentHub.getScope();
+        if (scope && scope.getSession()) {
+            scope.setSession();
+        }
+    }
+    return function sentryRequestMiddleware(req, res, next) {
+        if (options && options.flushTimeout && options.flushTimeout > 0) {
+            // eslint-disable-next-line @typescript-eslint/unbound-method
+            var _end_1 = res.end;
+            res.end = function (chunk, encoding, cb) {
+                var _this = this;
+                void flush$2(options.flushTimeout)
+                    .then(function () {
+                    _end_1.call(_this, chunk, encoding, cb);
+                })
+                    .then(null, function (e) {
+                    IS_DEBUG_BUILD && logger$3.error(e);
+                    _end_1.call(_this, chunk, encoding, cb);
+                });
+            };
+        }
+        var local = domain__namespace.create();
+        local.add(req);
+        local.add(res);
+        local.on('error', next);
+        local.run(function () {
+            var currentHub = getCurrentHub();
+            currentHub.configureScope(function (scope) {
+                scope.addEventProcessor(function (event) { return parseRequest(event, req, options); });
+                var client = currentHub.getClient();
+                if (isAutoSessionTrackingEnabled(client)) {
+                    var scope_1 = currentHub.getScope();
+                    if (scope_1) {
+                        // Set `status` of `RequestSession` to Ok, at the beginning of the request
+                        scope_1.setRequestSession({ status: 'ok' });
+                    }
+                }
+            });
+            res.once('finish', function () {
+                var client = currentHub.getClient();
+                if (isAutoSessionTrackingEnabled(client)) {
+                    setImmediate(function () {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                        if (client && client._captureRequestSession) {
+                            // Calling _captureRequestSession to capture request session at the end of the request by incrementing
+                            // the correct SessionAggregates bucket i.e. crashed, errored or exited
+                            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                            client._captureRequestSession();
+                        }
+                    });
+                }
+            });
+            next();
+        });
+    };
+}
+/** JSDoc */
+function getStatusCodeFromResponse(error) {
+    var statusCode = error.status || error.statusCode || error.status_code || (error.output && error.output.statusCode);
+    return statusCode ? parseInt(statusCode, 10) : 500;
+}
+/** Returns true if response code is internal server error */
+function defaultShouldHandleError(error) {
+    var status = getStatusCodeFromResponse(error);
+    return status >= 500;
+}
+/**
+ * Express compatible error handler.
+ * @see Exposed as `Handlers.errorHandler`
+ */
+function errorHandler(options) {
+    return function sentryErrorMiddleware(error, _req, res, next) {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        var shouldHandleError = (options && options.shouldHandleError) || defaultShouldHandleError;
+        if (shouldHandleError(error)) {
+            withScope(function (_scope) {
+                // For some reason we need to set the transaction on the scope again
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                var transaction = res.__sentry_transaction;
+                if (transaction && _scope.getSpan() === undefined) {
+                    _scope.setSpan(transaction);
+                }
+                var client = getCurrentHub().getClient();
+                if (client && isAutoSessionTrackingEnabled(client)) {
+                    // Check if the `SessionFlusher` is instantiated on the client to go into this branch that marks the
+                    // `requestSession.status` as `Crashed`, and this check is necessary because the `SessionFlusher` is only
+                    // instantiated when the the`requestHandler` middleware is initialised, which indicates that we should be
+                    // running in SessionAggregates mode
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                    var isSessionAggregatesMode = client._sessionFlusher !== undefined;
+                    if (isSessionAggregatesMode) {
+                        var requestSession = _scope.getRequestSession();
+                        // If an error bubbles to the `errorHandler`, then this is an unhandled error, and should be reported as a
+                        // Crashed session. The `_requestSession.status` is checked to ensure that this error is happening within
+                        // the bounds of a request, and if so the status is updated
+                        if (requestSession && requestSession.status !== undefined) {
+                            requestSession.status = 'crashed';
+                        }
+                    }
+                }
+                var eventId = captureException(error);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                res.sentry = eventId;
+                next(error);
+            });
+            return;
+        }
+        next(error);
+    };
+}
+
+var handlers = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	errorHandler: errorHandler,
+	extractRequestData: extractRequestData,
+	parseRequest: parseRequest,
+	requestHandler: requestHandler,
+	tracingHandler: tracingHandler
+});
+
+var INTEGRATIONS = __assign$5(__assign$5({}, CoreIntegrations), NodeIntegrations);
+// We need to patch domain on the global __SENTRY__ object to make it work for node in cross-platform packages like
+// @sentry/hub. If we don't do this, browser bundlers will have troubles resolving `require('domain')`.
+var carrier = getMainCarrier();
+if (carrier.__SENTRY__) {
+    carrier.__SENTRY__.extensions = carrier.__SENTRY__.extensions || {};
+    carrier.__SENTRY__.extensions.domain = carrier.__SENTRY__.extensions.domain || domain__namespace;
+}
+
+var esm = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	Handlers: handlers,
+	Hub: Hub,
+	Integrations: INTEGRATIONS,
+	NodeBackend: NodeBackend,
+	NodeClient: NodeClient,
+	SDK_NAME: SDK_NAME,
+	SDK_VERSION: SDK_VERSION,
+	Scope: Scope,
+	Session: Session,
+	get Severity () { return Severity; },
+	Transports: index$1,
+	addBreadcrumb: addBreadcrumb,
+	addGlobalEventProcessor: addGlobalEventProcessor,
+	captureEvent: captureEvent,
+	captureException: captureException,
+	captureMessage: captureMessage,
+	close: close,
+	configureScope: configureScope,
+	deepReadDirSync: deepReadDirSync,
+	defaultIntegrations: defaultIntegrations,
+	flush: flush$2,
+	getCurrentHub: getCurrentHub,
+	getHubFromCarrier: getHubFromCarrier,
+	getSentryRelease: getSentryRelease,
+	init: init$1,
+	lastEventId: lastEventId,
+	makeMain: makeMain,
+	setContext: setContext,
+	setExtra: setExtra,
+	setExtras: setExtras,
+	setTag: setTag,
+	setTags: setTags,
+	setUser: setUser,
+	startTransaction: startTransaction,
+	withScope: withScope
+});
+
+var require$$2$7 = /*@__PURE__*/getAugmentedNamespace(esm);
+
+var pino$5 = { getTransformStream };
+
+const { Transform: Transform$1 } = readableExports;
+
+const prettyFactory = pinoPretty;
+const Sentry = require$$2$7;
+
+const LEVEL_MAP = {
+  10: "trace",
+  20: "debug",
+  30: "info",
+  40: "warn",
+  50: "error",
+  60: "fatal",
+};
+
+/**
+ * Implements Probot's default logging formatting and error captionaing using Sentry.
+ *
+ * @param {import("./").Options} options
+ * @returns Transform
+ * @see https://getpino.io/#/docs/transports
+ */
+function getTransformStream(options = {}) {
+  const formattingEnabled = options.logFormat !== "json";
+
+  const levelAsString = options.logLevelInString;
+  const sentryEnabled = !!options.sentryDsn;
+
+  if (sentryEnabled) {
+    Sentry.init({
+      dsn: options.sentryDsn,
+      // See https://github.com/getsentry/sentry-javascript/issues/1964#issuecomment-688482615
+      // 6 is enough to serialize the deepest property across all GitHub Event payloads
+      normalizeDepth: 6,
+    });
+  }
+
+  const pretty = prettyFactory({
+    ignore: [
+      // default pino keys
+      "time",
+      "pid",
+      "hostname",
+      // remove keys from pino-http
+      "req",
+      "res",
+      "responseTime",
+    ].join(","),
+    errorProps: ["event", "status", "headers", "request", "sentryEventId"].join(
+      ","
+    ),
+  });
+
+  return new Transform$1({
+    objectMode: true,
+    transform(chunk, enc, cb) {
+      const line = chunk.toString().trim();
+
+      /* istanbul ignore if */
+      if (line === undefined) return cb();
+
+      const data = sentryEnabled ? JSON.parse(line) : null;
+
+      if (!sentryEnabled || data.level < 50) {
+        if (formattingEnabled) {
+          return cb(null, pretty(line));
+        }
+
+        if (levelAsString) {
+          return cb(null, stringifyLogLevel(JSON.parse(line)));
+        }
+
+        cb(null, line + "\n");
+        return;
+      }
+
+      Sentry.withScope(function (scope) {
+        const sentryLevelName =
+          data.level === 50 ? Sentry.Severity.Error : Sentry.Severity.Fatal;
+        scope.setLevel(sentryLevelName);
+
+        for (const extra of ["event", "headers", "request", "status"]) {
+          if (!data[extra]) continue;
+
+          scope.setExtra(extra, data[extra]);
+        }
+
+        // set user id and username to installation ID and account login
+        if (data.event && data.event.payload) {
+          const {
+            // When GitHub App is installed organization wide
+            installation: { id, account: { login: account } = {} } = {},
+
+            // When the repository belongs to an organization
+            organization: { login: organization } = {},
+            // When the repository belongs to a user
+            repository: { owner: { login: owner } = {} } = {},
+          } = data.event.payload;
+
+          scope.setUser({
+            id: id,
+            username: account || organization || owner,
+          });
+        }
+
+        const sentryEventId = Sentry.captureException(toSentryError(data));
+
+        // reduce logging data and add reference to sentry event instead
+        if (data.event) {
+          data.event = { id: data.event.id };
+        }
+        if (data.request) {
+          data.request = {
+            method: data.request.method,
+            url: data.request.url,
+          };
+        }
+        data.sentryEventId = sentryEventId;
+
+        if (formattingEnabled) {
+          return cb(null, pretty(data));
+        }
+
+        // istanbul ignore if
+        if (levelAsString) {
+          return cb(null, stringifyLogLevel(data));
+        }
+
+        cb(null, JSON.stringify(data) + "\n");
+      });
+    },
+  });
+}
+
+function stringifyLogLevel(data) {
+  data.level = LEVEL_MAP[data.level];
+  return JSON.stringify(data) + "\n";
+}
+
+function toSentryError(data) {
+  const error = new Error(data.msg);
+  error.name = data.type;
+  error.stack = data.stack;
+  return error;
+}
+
+var __importDefault$7 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(getLog$1, "__esModule", { value: true });
+getLog$1.getLog = void 0;
+/**
+ * A logger backed by [pino](https://getpino.io/)
+ *
+ * The default log level is `info`, but you can change it passing a level
+ * string set to one of: `"trace"`, `"debug"`, `"info"`, `"warn"`,
+ * `"error"`, or `"fatal"`.
+ *
+ * ```js
+ * app.log.debug("…so is this");
+ * app.log.trace("Now we're talking");
+ * app.log.info("I thought you should know…");
+ * app.log.warn("Woah there");
+ * app.log.error("ETOOMANYLOGS");
+ * app.log.fatal("Goodbye, cruel world!");
+ * ```
+ */
+const pino_1 = __importDefault$7(pinoExports$1);
+const pino_2 = pino$5;
+function getLog(options = {}) {
+    const { level, logMessageKey, ...getTransformStreamOptions } = options;
+    const pinoOptions = {
+        level: level || "info",
+        name: "probot",
+        messageKey: logMessageKey || "msg",
+    };
+    const transform = (0, pino_2.getTransformStream)(getTransformStreamOptions);
+    // @ts-ignore TODO: check out what's wrong here
+    transform.pipe(pino_1.default.destination(1));
+    const log = (0, pino_1.default)(pinoOptions, transform);
+    return log;
+}
+getLog$1.getLog = getLog;
+
+var getProbotOctokitWithDefaults$1 = {};
+
+var getOctokitThrottleOptions$1 = {};
+
+var libExports$2 = {};
+var lib$6 = {
+  get exports(){ return libExports$2; },
+  set exports(v){ libExports$2 = v; },
+};
+
+var parser$7 = {};
+
+parser$7.load = function (received, defaults, onto = {}) {
+  var k, ref, v;
+
+  for (k in defaults) {
+    v = defaults[k];
+    onto[k] = (ref = received[k]) != null ? ref : v;
+  }
+
+  return onto;
+};
+
+parser$7.overwrite = function (received, defaults, onto = {}) {
+  var k, v;
+
+  for (k in received) {
+    v = received[k];
+
+    if (defaults[k] !== void 0) {
+      onto[k] = v;
+    }
+  }
+
+  return onto;
+};
+
+var DLList$2;
+DLList$2 = class DLList {
+  constructor(incr, decr) {
+    this.incr = incr;
+    this.decr = decr;
+    this._first = null;
+    this._last = null;
+    this.length = 0;
+  }
+
+  push(value) {
+    var node;
+    this.length++;
+
+    if (typeof this.incr === "function") {
+      this.incr();
+    }
+
+    node = {
+      value,
+      prev: this._last,
+      next: null
+    };
+
+    if (this._last != null) {
+      this._last.next = node;
+      this._last = node;
+    } else {
+      this._first = this._last = node;
+    }
+
+    return void 0;
+  }
+
+  shift() {
+    var value;
+
+    if (this._first == null) {
+      return;
+    } else {
+      this.length--;
+
+      if (typeof this.decr === "function") {
+        this.decr();
+      }
+    }
+
+    value = this._first.value;
+
+    if ((this._first = this._first.next) != null) {
+      this._first.prev = null;
+    } else {
+      this._last = null;
+    }
+
+    return value;
+  }
+
+  first() {
+    if (this._first != null) {
+      return this._first.value;
+    }
+  }
+
+  getArray() {
+    var node, ref, results;
+    node = this._first;
+    results = [];
+
+    while (node != null) {
+      results.push((ref = node, node = node.next, ref.value));
+    }
+
+    return results;
+  }
+
+  forEachShift(cb) {
+    var node;
+    node = this.shift();
+
+    while (node != null) {
+      cb(node), node = this.shift();
+    }
+
+    return void 0;
+  }
+
+  debug() {
+    var node, ref, ref1, ref2, results;
+    node = this._first;
+    results = [];
+
+    while (node != null) {
+      results.push((ref = node, node = node.next, {
+        value: ref.value,
+        prev: (ref1 = ref.prev) != null ? ref1.value : void 0,
+        next: (ref2 = ref.next) != null ? ref2.value : void 0
+      }));
+    }
+
+    return results;
+  }
+
+};
+var DLList_1 = DLList$2;
+
+function asyncGeneratorStep$6(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator$6(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep$6(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep$6(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events$3;
+Events$3 = class Events {
+  constructor(instance) {
+    this.instance = instance;
+    this._events = {};
+
+    if (this.instance.on != null || this.instance.once != null || this.instance.removeAllListeners != null) {
+      throw new Error("An Emitter already exists for this object");
+    }
+
+    this.instance.on = (name, cb) => {
+      return this._addListener(name, "many", cb);
+    };
+
+    this.instance.once = (name, cb) => {
+      return this._addListener(name, "once", cb);
+    };
+
+    this.instance.removeAllListeners = (name = null) => {
+      if (name != null) {
+        return delete this._events[name];
+      } else {
+        return this._events = {};
+      }
+    };
+  }
+
+  _addListener(name, status, cb) {
+    var base;
+
+    if ((base = this._events)[name] == null) {
+      base[name] = [];
+    }
+
+    this._events[name].push({
+      cb,
+      status
+    });
+
+    return this.instance;
+  }
+
+  listenerCount(name) {
+    if (this._events[name] != null) {
+      return this._events[name].length;
+    } else {
+      return 0;
+    }
+  }
+
+  trigger(name, ...args) {
+    var _this = this;
+
+    return _asyncToGenerator$6(function* () {
+      var e, promises;
+
+      try {
+        if (name !== "debug") {
+          _this.trigger("debug", `Event triggered: ${name}`, args);
+        }
+
+        if (_this._events[name] == null) {
+          return;
+        }
+
+        _this._events[name] = _this._events[name].filter(function (listener) {
+          return listener.status !== "none";
+        });
+        promises = _this._events[name].map(
+        /*#__PURE__*/
+        function () {
+          var _ref = _asyncToGenerator$6(function* (listener) {
+            var e, returned;
+
+            if (listener.status === "none") {
+              return;
+            }
+
+            if (listener.status === "once") {
+              listener.status = "none";
+            }
+
+            try {
+              returned = typeof listener.cb === "function" ? listener.cb(...args) : void 0;
+
+              if (typeof (returned != null ? returned.then : void 0) === "function") {
+                return yield returned;
+              } else {
+                return returned;
+              }
+            } catch (error) {
+              e = error;
+
+              if ("name" !== "error") {
+                _this.trigger("error", e);
+              }
+
+              return null;
+            }
+          });
+
+          return function (_x) {
+            return _ref.apply(this, arguments);
+          };
+        }());
+        return (yield Promise.all(promises)).find(function (x) {
+          return x != null;
+        });
+      } catch (error) {
+        e = error;
+
+        {
+          _this.trigger("error", e);
+        }
+
+        return null;
+      }
+    })();
+  }
+
+};
+var Events_1 = Events$3;
+
+var DLList$1, Events$2, Queues;
+DLList$1 = DLList_1;
+Events$2 = Events_1;
+Queues = class Queues {
+  constructor(num_priorities) {
+    this.Events = new Events$2(this);
+    this._length = 0;
+
+    this._lists = function () {
+      var j, ref, results;
+      results = [];
+
+      for (j = 1, ref = num_priorities; 1 <= ref ? j <= ref : j >= ref; 1 <= ref ? ++j : --j) {
+        results.push(new DLList$1(() => {
+          return this.incr();
+        }, () => {
+          return this.decr();
+        }));
+      }
+
+      return results;
+    }.call(this);
+  }
+
+  incr() {
+    if (this._length++ === 0) {
+      return this.Events.trigger("leftzero");
+    }
+  }
+
+  decr() {
+    if (--this._length === 0) {
+      return this.Events.trigger("zero");
+    }
+  }
+
+  push(job) {
+    return this._lists[job.options.priority].push(job);
+  }
+
+  queued(priority) {
+    if (priority != null) {
+      return this._lists[priority].length;
+    } else {
+      return this._length;
+    }
+  }
+
+  shiftAll(fn) {
+    return this._lists.forEach(function (list) {
+      return list.forEachShift(fn);
+    });
+  }
+
+  getFirst(arr = this._lists) {
+    var j, len, list;
+
+    for (j = 0, len = arr.length; j < len; j++) {
+      list = arr[j];
+
+      if (list.length > 0) {
+        return list;
+      }
+    }
+
+    return [];
+  }
+
+  shiftLastFrom(priority) {
+    return this.getFirst(this._lists.slice(priority).reverse()).shift();
+  }
+
+};
+var Queues_1 = Queues;
+
+var BottleneckError$4;
+BottleneckError$4 = class BottleneckError extends Error {};
+var BottleneckError_1 = BottleneckError$4;
+
+function asyncGeneratorStep$5(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator$5(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep$5(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep$5(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var BottleneckError$3, DEFAULT_PRIORITY, Job, NUM_PRIORITIES, parser$6;
+NUM_PRIORITIES = 10;
+DEFAULT_PRIORITY = 5;
+parser$6 = parser$7;
+BottleneckError$3 = BottleneckError_1;
+Job = class Job {
+  constructor(task, args, options, jobDefaults, rejectOnDrop, Events, _states, Promise) {
+    this.task = task;
+    this.args = args;
+    this.rejectOnDrop = rejectOnDrop;
+    this.Events = Events;
+    this._states = _states;
+    this.Promise = Promise;
+    this.options = parser$6.load(options, jobDefaults);
+    this.options.priority = this._sanitizePriority(this.options.priority);
+
+    if (this.options.id === jobDefaults.id) {
+      this.options.id = `${this.options.id}-${this._randomIndex()}`;
+    }
+
+    this.promise = new this.Promise((_resolve, _reject) => {
+      this._resolve = _resolve;
+      this._reject = _reject;
+    });
+    this.retryCount = 0;
+  }
+
+  _sanitizePriority(priority) {
+    var sProperty;
+    sProperty = ~~priority !== priority ? DEFAULT_PRIORITY : priority;
+
+    if (sProperty < 0) {
+      return 0;
+    } else if (sProperty > NUM_PRIORITIES - 1) {
+      return NUM_PRIORITIES - 1;
+    } else {
+      return sProperty;
+    }
+  }
+
+  _randomIndex() {
+    return Math.random().toString(36).slice(2);
+  }
+
+  doDrop({
+    error,
+    message = "This job has been dropped by Bottleneck"
+  } = {}) {
+    if (this._states.remove(this.options.id)) {
+      if (this.rejectOnDrop) {
+        this._reject(error != null ? error : new BottleneckError$3(message));
+      }
+
+      this.Events.trigger("dropped", {
+        args: this.args,
+        options: this.options,
+        task: this.task,
+        promise: this.promise
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  _assertStatus(expected) {
+    var status;
+    status = this._states.jobStatus(this.options.id);
+
+    if (!(status === expected || expected === "DONE" && status === null)) {
+      throw new BottleneckError$3(`Invalid job status ${status}, expected ${expected}. Please open an issue at https://github.com/SGrondin/bottleneck/issues`);
+    }
+  }
+
+  doReceive() {
+    this._states.start(this.options.id);
+
+    return this.Events.trigger("received", {
+      args: this.args,
+      options: this.options
+    });
+  }
+
+  doQueue(reachedHWM, blocked) {
+    this._assertStatus("RECEIVED");
+
+    this._states.next(this.options.id);
+
+    return this.Events.trigger("queued", {
+      args: this.args,
+      options: this.options,
+      reachedHWM,
+      blocked
+    });
+  }
+
+  doRun() {
+    if (this.retryCount === 0) {
+      this._assertStatus("QUEUED");
+
+      this._states.next(this.options.id);
+    } else {
+      this._assertStatus("EXECUTING");
+    }
+
+    return this.Events.trigger("scheduled", {
+      args: this.args,
+      options: this.options
+    });
+  }
+
+  doExecute(chained, clearGlobalState, run, free) {
+    var _this = this;
+
+    return _asyncToGenerator$5(function* () {
+      var error, eventInfo, passed;
+
+      if (_this.retryCount === 0) {
+        _this._assertStatus("RUNNING");
+
+        _this._states.next(_this.options.id);
+      } else {
+        _this._assertStatus("EXECUTING");
+      }
+
+      eventInfo = {
+        args: _this.args,
+        options: _this.options,
+        retryCount: _this.retryCount
+      };
+
+      _this.Events.trigger("executing", eventInfo);
+
+      try {
+        passed = yield chained != null ? chained.schedule(_this.options, _this.task, ..._this.args) : _this.task(..._this.args);
+
+        if (clearGlobalState()) {
+          _this.doDone(eventInfo);
+
+          yield free(_this.options, eventInfo);
+
+          _this._assertStatus("DONE");
+
+          return _this._resolve(passed);
+        }
+      } catch (error1) {
+        error = error1;
+        return _this._onFailure(error, eventInfo, clearGlobalState, run, free);
+      }
+    })();
+  }
+
+  doExpire(clearGlobalState, run, free) {
+    var error, eventInfo;
+
+    if (this._states.jobStatus(this.options.id === "RUNNING")) {
+      this._states.next(this.options.id);
+    }
+
+    this._assertStatus("EXECUTING");
+
+    eventInfo = {
+      args: this.args,
+      options: this.options,
+      retryCount: this.retryCount
+    };
+    error = new BottleneckError$3(`This job timed out after ${this.options.expiration} ms.`);
+    return this._onFailure(error, eventInfo, clearGlobalState, run, free);
+  }
+
+  _onFailure(error, eventInfo, clearGlobalState, run, free) {
+    var _this2 = this;
+
+    return _asyncToGenerator$5(function* () {
+      var retry, retryAfter;
+
+      if (clearGlobalState()) {
+        retry = yield _this2.Events.trigger("failed", error, eventInfo);
+
+        if (retry != null) {
+          retryAfter = ~~retry;
+
+          _this2.Events.trigger("retry", `Retrying ${_this2.options.id} after ${retryAfter} ms`, eventInfo);
+
+          _this2.retryCount++;
+          return run(retryAfter);
+        } else {
+          _this2.doDone(eventInfo);
+
+          yield free(_this2.options, eventInfo);
+
+          _this2._assertStatus("DONE");
+
+          return _this2._reject(error);
+        }
+      }
+    })();
+  }
+
+  doDone(eventInfo) {
+    this._assertStatus("EXECUTING");
+
+    this._states.next(this.options.id);
+
+    return this.Events.trigger("done", eventInfo);
+  }
+
+};
+var Job_1 = Job;
+
+function asyncGeneratorStep$4(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator$4(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep$4(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep$4(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var BottleneckError$2, LocalDatastore, parser$5;
+parser$5 = parser$7;
+BottleneckError$2 = BottleneckError_1;
+LocalDatastore = class LocalDatastore {
+  constructor(instance, storeOptions, storeInstanceOptions) {
+    this.instance = instance;
+    this.storeOptions = storeOptions;
+    this.clientId = this.instance._randomIndex();
+    parser$5.load(storeInstanceOptions, storeInstanceOptions, this);
+    this._nextRequest = this._lastReservoirRefresh = this._lastReservoirIncrease = Date.now();
+    this._running = 0;
+    this._done = 0;
+    this._unblockTime = 0;
+    this.ready = this.Promise.resolve();
+    this.clients = {};
+
+    this._startHeartbeat();
+  }
+
+  _startHeartbeat() {
+    var base;
+
+    if (this.heartbeat == null && (this.storeOptions.reservoirRefreshInterval != null && this.storeOptions.reservoirRefreshAmount != null || this.storeOptions.reservoirIncreaseInterval != null && this.storeOptions.reservoirIncreaseAmount != null)) {
+      return typeof (base = this.heartbeat = setInterval(() => {
+        var amount, incr, maximum, now, reservoir;
+        now = Date.now();
+
+        if (this.storeOptions.reservoirRefreshInterval != null && now >= this._lastReservoirRefresh + this.storeOptions.reservoirRefreshInterval) {
+          this._lastReservoirRefresh = now;
+          this.storeOptions.reservoir = this.storeOptions.reservoirRefreshAmount;
+
+          this.instance._drainAll(this.computeCapacity());
+        }
+
+        if (this.storeOptions.reservoirIncreaseInterval != null && now >= this._lastReservoirIncrease + this.storeOptions.reservoirIncreaseInterval) {
+          var _this$storeOptions = this.storeOptions;
+          amount = _this$storeOptions.reservoirIncreaseAmount;
+          maximum = _this$storeOptions.reservoirIncreaseMaximum;
+          reservoir = _this$storeOptions.reservoir;
+          this._lastReservoirIncrease = now;
+          incr = maximum != null ? Math.min(amount, maximum - reservoir) : amount;
+
+          if (incr > 0) {
+            this.storeOptions.reservoir += incr;
+            return this.instance._drainAll(this.computeCapacity());
+          }
+        }
+      }, this.heartbeatInterval)).unref === "function" ? base.unref() : void 0;
+    } else {
+      return clearInterval(this.heartbeat);
+    }
+  }
+
+  __publish__(message) {
+    var _this = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this.yieldLoop();
+      return _this.instance.Events.trigger("message", message.toString());
+    })();
+  }
+
+  __disconnect__(flush) {
+    var _this2 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this2.yieldLoop();
+      clearInterval(_this2.heartbeat);
+      return _this2.Promise.resolve();
+    })();
+  }
+
+  yieldLoop(t = 0) {
+    return new this.Promise(function (resolve, reject) {
+      return setTimeout(resolve, t);
+    });
+  }
+
+  computePenalty() {
+    var ref;
+    return (ref = this.storeOptions.penalty) != null ? ref : 15 * this.storeOptions.minTime || 5000;
+  }
+
+  __updateSettings__(options) {
+    var _this3 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this3.yieldLoop();
+      parser$5.overwrite(options, options, _this3.storeOptions);
+
+      _this3._startHeartbeat();
+
+      _this3.instance._drainAll(_this3.computeCapacity());
+
+      return true;
+    })();
+  }
+
+  __running__() {
+    var _this4 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this4.yieldLoop();
+      return _this4._running;
+    })();
+  }
+
+  __queued__() {
+    var _this5 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this5.yieldLoop();
+      return _this5.instance.queued();
+    })();
+  }
+
+  __done__() {
+    var _this6 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this6.yieldLoop();
+      return _this6._done;
+    })();
+  }
+
+  __groupCheck__(time) {
+    var _this7 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this7.yieldLoop();
+      return _this7._nextRequest + _this7.timeout < time;
+    })();
+  }
+
+  computeCapacity() {
+    var maxConcurrent, reservoir;
+    var _this$storeOptions2 = this.storeOptions;
+    maxConcurrent = _this$storeOptions2.maxConcurrent;
+    reservoir = _this$storeOptions2.reservoir;
+
+    if (maxConcurrent != null && reservoir != null) {
+      return Math.min(maxConcurrent - this._running, reservoir);
+    } else if (maxConcurrent != null) {
+      return maxConcurrent - this._running;
+    } else if (reservoir != null) {
+      return reservoir;
+    } else {
+      return null;
+    }
+  }
+
+  conditionsCheck(weight) {
+    var capacity;
+    capacity = this.computeCapacity();
+    return capacity == null || weight <= capacity;
+  }
+
+  __incrementReservoir__(incr) {
+    var _this8 = this;
+
+    return _asyncToGenerator$4(function* () {
+      var reservoir;
+      yield _this8.yieldLoop();
+      reservoir = _this8.storeOptions.reservoir += incr;
+
+      _this8.instance._drainAll(_this8.computeCapacity());
+
+      return reservoir;
+    })();
+  }
+
+  __currentReservoir__() {
+    var _this9 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this9.yieldLoop();
+      return _this9.storeOptions.reservoir;
+    })();
+  }
+
+  isBlocked(now) {
+    return this._unblockTime >= now;
+  }
+
+  check(weight, now) {
+    return this.conditionsCheck(weight) && this._nextRequest - now <= 0;
+  }
+
+  __check__(weight) {
+    var _this10 = this;
+
+    return _asyncToGenerator$4(function* () {
+      var now;
+      yield _this10.yieldLoop();
+      now = Date.now();
+      return _this10.check(weight, now);
+    })();
+  }
+
+  __register__(index, weight, expiration) {
+    var _this11 = this;
+
+    return _asyncToGenerator$4(function* () {
+      var now, wait;
+      yield _this11.yieldLoop();
+      now = Date.now();
+
+      if (_this11.conditionsCheck(weight)) {
+        _this11._running += weight;
+
+        if (_this11.storeOptions.reservoir != null) {
+          _this11.storeOptions.reservoir -= weight;
+        }
+
+        wait = Math.max(_this11._nextRequest - now, 0);
+        _this11._nextRequest = now + wait + _this11.storeOptions.minTime;
+        return {
+          success: true,
+          wait,
+          reservoir: _this11.storeOptions.reservoir
+        };
+      } else {
+        return {
+          success: false
+        };
+      }
+    })();
+  }
+
+  strategyIsBlock() {
+    return this.storeOptions.strategy === 3;
+  }
+
+  __submit__(queueLength, weight) {
+    var _this12 = this;
+
+    return _asyncToGenerator$4(function* () {
+      var blocked, now, reachedHWM;
+      yield _this12.yieldLoop();
+
+      if (_this12.storeOptions.maxConcurrent != null && weight > _this12.storeOptions.maxConcurrent) {
+        throw new BottleneckError$2(`Impossible to add a job having a weight of ${weight} to a limiter having a maxConcurrent setting of ${_this12.storeOptions.maxConcurrent}`);
+      }
+
+      now = Date.now();
+      reachedHWM = _this12.storeOptions.highWater != null && queueLength === _this12.storeOptions.highWater && !_this12.check(weight, now);
+      blocked = _this12.strategyIsBlock() && (reachedHWM || _this12.isBlocked(now));
+
+      if (blocked) {
+        _this12._unblockTime = now + _this12.computePenalty();
+        _this12._nextRequest = _this12._unblockTime + _this12.storeOptions.minTime;
+
+        _this12.instance._dropAllQueued();
+      }
+
+      return {
+        reachedHWM,
+        blocked,
+        strategy: _this12.storeOptions.strategy
+      };
+    })();
+  }
+
+  __free__(index, weight) {
+    var _this13 = this;
+
+    return _asyncToGenerator$4(function* () {
+      yield _this13.yieldLoop();
+      _this13._running -= weight;
+      _this13._done += weight;
+
+      _this13.instance._drainAll(_this13.computeCapacity());
+
+      return {
+        running: _this13._running
+      };
+    })();
+  }
+
+};
+var LocalDatastore_1 = LocalDatastore;
+
+var Scripts$2 = {};
+
+var require$$0$a = {
+	"blacklist_client.lua": "local blacklist = ARGV[num_static_argv + 1]\n\nif redis.call('zscore', client_last_seen_key, blacklist) then\n  redis.call('zadd', client_last_seen_key, 0, blacklist)\nend\n\n\nreturn {}\n",
+	"check.lua": "local weight = tonumber(ARGV[num_static_argv + 1])\n\nlocal capacity = process_tick(now, false)['capacity']\nlocal nextRequest = tonumber(redis.call('hget', settings_key, 'nextRequest'))\n\nreturn conditions_check(capacity, weight) and nextRequest - now <= 0\n",
+	"conditions_check.lua": "local conditions_check = function (capacity, weight)\n  return capacity == nil or weight <= capacity\nend\n",
+	"current_reservoir.lua": "return process_tick(now, false)['reservoir']\n",
+	"done.lua": "process_tick(now, false)\n\nreturn tonumber(redis.call('hget', settings_key, 'done'))\n",
+	"free.lua": "local index = ARGV[num_static_argv + 1]\n\nredis.call('zadd', job_expirations_key, 0, index)\n\nreturn process_tick(now, false)['running']\n",
+	"get_time.lua": "redis.replicate_commands()\n\nlocal get_time = function ()\n  local time = redis.call('time')\n\n  return tonumber(time[1]..string.sub(time[2], 1, 3))\nend\n",
+	"group_check.lua": "return not (redis.call('exists', settings_key) == 1)\n",
+	"heartbeat.lua": "process_tick(now, true)\n",
+	"increment_reservoir.lua": "local incr = tonumber(ARGV[num_static_argv + 1])\n\nredis.call('hincrby', settings_key, 'reservoir', incr)\n\nlocal reservoir = process_tick(now, true)['reservoir']\n\nlocal groupTimeout = tonumber(redis.call('hget', settings_key, 'groupTimeout'))\nrefresh_expiration(0, 0, groupTimeout)\n\nreturn reservoir\n",
+	"init.lua": "local clear = tonumber(ARGV[num_static_argv + 1])\nlocal limiter_version = ARGV[num_static_argv + 2]\nlocal num_local_argv = num_static_argv + 2\n\nif clear == 1 then\n  redis.call('del', unpack(KEYS))\nend\n\nif redis.call('exists', settings_key) == 0 then\n  -- Create\n  local args = {'hmset', settings_key}\n\n  for i = num_local_argv + 1, #ARGV do\n    table.insert(args, ARGV[i])\n  end\n\n  redis.call(unpack(args))\n  redis.call('hmset', settings_key,\n    'nextRequest', now,\n    'lastReservoirRefresh', now,\n    'lastReservoirIncrease', now,\n    'running', 0,\n    'done', 0,\n    'unblockTime', 0,\n    'capacityPriorityCounter', 0\n  )\n\nelse\n  -- Apply migrations\n  local settings = redis.call('hmget', settings_key,\n    'id',\n    'version'\n  )\n  local id = settings[1]\n  local current_version = settings[2]\n\n  if current_version ~= limiter_version then\n    local version_digits = {}\n    for k, v in string.gmatch(current_version, \"([^.]+)\") do\n      table.insert(version_digits, tonumber(k))\n    end\n\n    -- 2.10.0\n    if version_digits[2] < 10 then\n      redis.call('hsetnx', settings_key, 'reservoirRefreshInterval', '')\n      redis.call('hsetnx', settings_key, 'reservoirRefreshAmount', '')\n      redis.call('hsetnx', settings_key, 'lastReservoirRefresh', '')\n      redis.call('hsetnx', settings_key, 'done', 0)\n      redis.call('hset', settings_key, 'version', '2.10.0')\n    end\n\n    -- 2.11.1\n    if version_digits[2] < 11 or (version_digits[2] == 11 and version_digits[3] < 1) then\n      if redis.call('hstrlen', settings_key, 'lastReservoirRefresh') == 0 then\n        redis.call('hmset', settings_key,\n          'lastReservoirRefresh', now,\n          'version', '2.11.1'\n        )\n      end\n    end\n\n    -- 2.14.0\n    if version_digits[2] < 14 then\n      local old_running_key = 'b_'..id..'_running'\n      local old_executing_key = 'b_'..id..'_executing'\n\n      if redis.call('exists', old_running_key) == 1 then\n        redis.call('rename', old_running_key, job_weights_key)\n      end\n      if redis.call('exists', old_executing_key) == 1 then\n        redis.call('rename', old_executing_key, job_expirations_key)\n      end\n      redis.call('hset', settings_key, 'version', '2.14.0')\n    end\n\n    -- 2.15.2\n    if version_digits[2] < 15 or (version_digits[2] == 15 and version_digits[3] < 2) then\n      redis.call('hsetnx', settings_key, 'capacityPriorityCounter', 0)\n      redis.call('hset', settings_key, 'version', '2.15.2')\n    end\n\n    -- 2.17.0\n    if version_digits[2] < 17 then\n      redis.call('hsetnx', settings_key, 'clientTimeout', 10000)\n      redis.call('hset', settings_key, 'version', '2.17.0')\n    end\n\n    -- 2.18.0\n    if version_digits[2] < 18 then\n      redis.call('hsetnx', settings_key, 'reservoirIncreaseInterval', '')\n      redis.call('hsetnx', settings_key, 'reservoirIncreaseAmount', '')\n      redis.call('hsetnx', settings_key, 'reservoirIncreaseMaximum', '')\n      redis.call('hsetnx', settings_key, 'lastReservoirIncrease', now)\n      redis.call('hset', settings_key, 'version', '2.18.0')\n    end\n\n  end\n\n  process_tick(now, false)\nend\n\nlocal groupTimeout = tonumber(redis.call('hget', settings_key, 'groupTimeout'))\nrefresh_expiration(0, 0, groupTimeout)\n\nreturn {}\n",
+	"process_tick.lua": "local process_tick = function (now, always_publish)\n\n  local compute_capacity = function (maxConcurrent, running, reservoir)\n    if maxConcurrent ~= nil and reservoir ~= nil then\n      return math.min((maxConcurrent - running), reservoir)\n    elseif maxConcurrent ~= nil then\n      return maxConcurrent - running\n    elseif reservoir ~= nil then\n      return reservoir\n    else\n      return nil\n    end\n  end\n\n  local settings = redis.call('hmget', settings_key,\n    'id',\n    'maxConcurrent',\n    'running',\n    'reservoir',\n    'reservoirRefreshInterval',\n    'reservoirRefreshAmount',\n    'lastReservoirRefresh',\n    'reservoirIncreaseInterval',\n    'reservoirIncreaseAmount',\n    'reservoirIncreaseMaximum',\n    'lastReservoirIncrease',\n    'capacityPriorityCounter',\n    'clientTimeout'\n  )\n  local id = settings[1]\n  local maxConcurrent = tonumber(settings[2])\n  local running = tonumber(settings[3])\n  local reservoir = tonumber(settings[4])\n  local reservoirRefreshInterval = tonumber(settings[5])\n  local reservoirRefreshAmount = tonumber(settings[6])\n  local lastReservoirRefresh = tonumber(settings[7])\n  local reservoirIncreaseInterval = tonumber(settings[8])\n  local reservoirIncreaseAmount = tonumber(settings[9])\n  local reservoirIncreaseMaximum = tonumber(settings[10])\n  local lastReservoirIncrease = tonumber(settings[11])\n  local capacityPriorityCounter = tonumber(settings[12])\n  local clientTimeout = tonumber(settings[13])\n\n  local initial_capacity = compute_capacity(maxConcurrent, running, reservoir)\n\n  --\n  -- Process 'running' changes\n  --\n  local expired = redis.call('zrangebyscore', job_expirations_key, '-inf', '('..now)\n\n  if #expired > 0 then\n    redis.call('zremrangebyscore', job_expirations_key, '-inf', '('..now)\n\n    local flush_batch = function (batch, acc)\n      local weights = redis.call('hmget', job_weights_key, unpack(batch))\n                      redis.call('hdel',  job_weights_key, unpack(batch))\n      local clients = redis.call('hmget', job_clients_key, unpack(batch))\n                      redis.call('hdel',  job_clients_key, unpack(batch))\n\n      -- Calculate sum of removed weights\n      for i = 1, #weights do\n        acc['total'] = acc['total'] + (tonumber(weights[i]) or 0)\n      end\n\n      -- Calculate sum of removed weights by client\n      local client_weights = {}\n      for i = 1, #clients do\n        local removed = tonumber(weights[i]) or 0\n        if removed > 0 then\n          acc['client_weights'][clients[i]] = (acc['client_weights'][clients[i]] or 0) + removed\n        end\n      end\n    end\n\n    local acc = {\n      ['total'] = 0,\n      ['client_weights'] = {}\n    }\n    local batch_size = 1000\n\n    -- Compute changes to Zsets and apply changes to Hashes\n    for i = 1, #expired, batch_size do\n      local batch = {}\n      for j = i, math.min(i + batch_size - 1, #expired) do\n        table.insert(batch, expired[j])\n      end\n\n      flush_batch(batch, acc)\n    end\n\n    -- Apply changes to Zsets\n    if acc['total'] > 0 then\n      redis.call('hincrby', settings_key, 'done', acc['total'])\n      running = tonumber(redis.call('hincrby', settings_key, 'running', -acc['total']))\n    end\n\n    for client, weight in pairs(acc['client_weights']) do\n      redis.call('zincrby', client_running_key, -weight, client)\n    end\n  end\n\n  --\n  -- Process 'reservoir' changes\n  --\n  local reservoirRefreshActive = reservoirRefreshInterval ~= nil and reservoirRefreshAmount ~= nil\n  if reservoirRefreshActive and now >= lastReservoirRefresh + reservoirRefreshInterval then\n    reservoir = reservoirRefreshAmount\n    redis.call('hmset', settings_key,\n      'reservoir', reservoir,\n      'lastReservoirRefresh', now\n    )\n  end\n\n  local reservoirIncreaseActive = reservoirIncreaseInterval ~= nil and reservoirIncreaseAmount ~= nil\n  if reservoirIncreaseActive and now >= lastReservoirIncrease + reservoirIncreaseInterval then\n    local num_intervals = math.floor((now - lastReservoirIncrease) / reservoirIncreaseInterval)\n    local incr = reservoirIncreaseAmount * num_intervals\n    if reservoirIncreaseMaximum ~= nil then\n      incr = math.min(incr, reservoirIncreaseMaximum - (reservoir or 0))\n    end\n    if incr > 0 then\n      reservoir = (reservoir or 0) + incr\n    end\n    redis.call('hmset', settings_key,\n      'reservoir', reservoir,\n      'lastReservoirIncrease', lastReservoirIncrease + (num_intervals * reservoirIncreaseInterval)\n    )\n  end\n\n  --\n  -- Clear unresponsive clients\n  --\n  local unresponsive = redis.call('zrangebyscore', client_last_seen_key, '-inf', (now - clientTimeout))\n  local unresponsive_lookup = {}\n  local terminated_clients = {}\n  for i = 1, #unresponsive do\n    unresponsive_lookup[unresponsive[i]] = true\n    if tonumber(redis.call('zscore', client_running_key, unresponsive[i])) == 0 then\n      table.insert(terminated_clients, unresponsive[i])\n    end\n  end\n  if #terminated_clients > 0 then\n    redis.call('zrem', client_running_key,         unpack(terminated_clients))\n    redis.call('hdel', client_num_queued_key,      unpack(terminated_clients))\n    redis.call('zrem', client_last_registered_key, unpack(terminated_clients))\n    redis.call('zrem', client_last_seen_key,       unpack(terminated_clients))\n  end\n\n  --\n  -- Broadcast capacity changes\n  --\n  local final_capacity = compute_capacity(maxConcurrent, running, reservoir)\n\n  if always_publish or (initial_capacity ~= nil and final_capacity == nil) then\n    -- always_publish or was not unlimited, now unlimited\n    redis.call('publish', 'b_'..id, 'capacity:'..(final_capacity or ''))\n\n  elseif initial_capacity ~= nil and final_capacity ~= nil and final_capacity > initial_capacity then\n    -- capacity was increased\n    -- send the capacity message to the limiter having the lowest number of running jobs\n    -- the tiebreaker is the limiter having not registered a job in the longest time\n\n    local lowest_concurrency_value = nil\n    local lowest_concurrency_clients = {}\n    local lowest_concurrency_last_registered = {}\n    local client_concurrencies = redis.call('zrange', client_running_key, 0, -1, 'withscores')\n\n    for i = 1, #client_concurrencies, 2 do\n      local client = client_concurrencies[i]\n      local concurrency = tonumber(client_concurrencies[i+1])\n\n      if (\n        lowest_concurrency_value == nil or lowest_concurrency_value == concurrency\n      ) and (\n        not unresponsive_lookup[client]\n      ) and (\n        tonumber(redis.call('hget', client_num_queued_key, client)) > 0\n      ) then\n        lowest_concurrency_value = concurrency\n        table.insert(lowest_concurrency_clients, client)\n        local last_registered = tonumber(redis.call('zscore', client_last_registered_key, client))\n        table.insert(lowest_concurrency_last_registered, last_registered)\n      end\n    end\n\n    if #lowest_concurrency_clients > 0 then\n      local position = 1\n      local earliest = lowest_concurrency_last_registered[1]\n\n      for i,v in ipairs(lowest_concurrency_last_registered) do\n        if v < earliest then\n          position = i\n          earliest = v\n        end\n      end\n\n      local next_client = lowest_concurrency_clients[position]\n      redis.call('publish', 'b_'..id,\n        'capacity-priority:'..(final_capacity or '')..\n        ':'..next_client..\n        ':'..capacityPriorityCounter\n      )\n      redis.call('hincrby', settings_key, 'capacityPriorityCounter', '1')\n    else\n      redis.call('publish', 'b_'..id, 'capacity:'..(final_capacity or ''))\n    end\n  end\n\n  return {\n    ['capacity'] = final_capacity,\n    ['running'] = running,\n    ['reservoir'] = reservoir\n  }\nend\n",
+	"queued.lua": "local clientTimeout = tonumber(redis.call('hget', settings_key, 'clientTimeout'))\nlocal valid_clients = redis.call('zrangebyscore', client_last_seen_key, (now - clientTimeout), 'inf')\nlocal client_queued = redis.call('hmget', client_num_queued_key, unpack(valid_clients))\n\nlocal sum = 0\nfor i = 1, #client_queued do\n  sum = sum + tonumber(client_queued[i])\nend\n\nreturn sum\n",
+	"refresh_expiration.lua": "local refresh_expiration = function (now, nextRequest, groupTimeout)\n\n  if groupTimeout ~= nil then\n    local ttl = (nextRequest + groupTimeout) - now\n\n    for i = 1, #KEYS do\n      redis.call('pexpire', KEYS[i], ttl)\n    end\n  end\n\nend\n",
+	"refs.lua": "local settings_key = KEYS[1]\nlocal job_weights_key = KEYS[2]\nlocal job_expirations_key = KEYS[3]\nlocal job_clients_key = KEYS[4]\nlocal client_running_key = KEYS[5]\nlocal client_num_queued_key = KEYS[6]\nlocal client_last_registered_key = KEYS[7]\nlocal client_last_seen_key = KEYS[8]\n\nlocal now = tonumber(ARGV[1])\nlocal client = ARGV[2]\n\nlocal num_static_argv = 2\n",
+	"register.lua": "local index = ARGV[num_static_argv + 1]\nlocal weight = tonumber(ARGV[num_static_argv + 2])\nlocal expiration = tonumber(ARGV[num_static_argv + 3])\n\nlocal state = process_tick(now, false)\nlocal capacity = state['capacity']\nlocal reservoir = state['reservoir']\n\nlocal settings = redis.call('hmget', settings_key,\n  'nextRequest',\n  'minTime',\n  'groupTimeout'\n)\nlocal nextRequest = tonumber(settings[1])\nlocal minTime = tonumber(settings[2])\nlocal groupTimeout = tonumber(settings[3])\n\nif conditions_check(capacity, weight) then\n\n  redis.call('hincrby', settings_key, 'running', weight)\n  redis.call('hset', job_weights_key, index, weight)\n  if expiration ~= nil then\n    redis.call('zadd', job_expirations_key, now + expiration, index)\n  end\n  redis.call('hset', job_clients_key, index, client)\n  redis.call('zincrby', client_running_key, weight, client)\n  redis.call('hincrby', client_num_queued_key, client, -1)\n  redis.call('zadd', client_last_registered_key, now, client)\n\n  local wait = math.max(nextRequest - now, 0)\n  local newNextRequest = now + wait + minTime\n\n  if reservoir == nil then\n    redis.call('hset', settings_key,\n      'nextRequest', newNextRequest\n    )\n  else\n    reservoir = reservoir - weight\n    redis.call('hmset', settings_key,\n      'reservoir', reservoir,\n      'nextRequest', newNextRequest\n    )\n  end\n\n  refresh_expiration(now, newNextRequest, groupTimeout)\n\n  return {true, wait, reservoir}\n\nelse\n  return {false}\nend\n",
+	"register_client.lua": "local queued = tonumber(ARGV[num_static_argv + 1])\n\n-- Could have been re-registered concurrently\nif not redis.call('zscore', client_last_seen_key, client) then\n  redis.call('zadd', client_running_key, 0, client)\n  redis.call('hset', client_num_queued_key, client, queued)\n  redis.call('zadd', client_last_registered_key, 0, client)\nend\n\nredis.call('zadd', client_last_seen_key, now, client)\n\nreturn {}\n",
+	"running.lua": "return process_tick(now, false)['running']\n",
+	"submit.lua": "local queueLength = tonumber(ARGV[num_static_argv + 1])\nlocal weight = tonumber(ARGV[num_static_argv + 2])\n\nlocal capacity = process_tick(now, false)['capacity']\n\nlocal settings = redis.call('hmget', settings_key,\n  'id',\n  'maxConcurrent',\n  'highWater',\n  'nextRequest',\n  'strategy',\n  'unblockTime',\n  'penalty',\n  'minTime',\n  'groupTimeout'\n)\nlocal id = settings[1]\nlocal maxConcurrent = tonumber(settings[2])\nlocal highWater = tonumber(settings[3])\nlocal nextRequest = tonumber(settings[4])\nlocal strategy = tonumber(settings[5])\nlocal unblockTime = tonumber(settings[6])\nlocal penalty = tonumber(settings[7])\nlocal minTime = tonumber(settings[8])\nlocal groupTimeout = tonumber(settings[9])\n\nif maxConcurrent ~= nil and weight > maxConcurrent then\n  return redis.error_reply('OVERWEIGHT:'..weight..':'..maxConcurrent)\nend\n\nlocal reachedHWM = (highWater ~= nil and queueLength == highWater\n  and not (\n    conditions_check(capacity, weight)\n    and nextRequest - now <= 0\n  )\n)\n\nlocal blocked = strategy == 3 and (reachedHWM or unblockTime >= now)\n\nif blocked then\n  local computedPenalty = penalty\n  if computedPenalty == nil then\n    if minTime == 0 then\n      computedPenalty = 5000\n    else\n      computedPenalty = 15 * minTime\n    end\n  end\n\n  local newNextRequest = now + computedPenalty + minTime\n\n  redis.call('hmset', settings_key,\n    'unblockTime', now + computedPenalty,\n    'nextRequest', newNextRequest\n  )\n\n  local clients_queued_reset = redis.call('hkeys', client_num_queued_key)\n  local queued_reset = {}\n  for i = 1, #clients_queued_reset do\n    table.insert(queued_reset, clients_queued_reset[i])\n    table.insert(queued_reset, 0)\n  end\n  redis.call('hmset', client_num_queued_key, unpack(queued_reset))\n\n  redis.call('publish', 'b_'..id, 'blocked:')\n\n  refresh_expiration(now, newNextRequest, groupTimeout)\nend\n\nif not blocked and not reachedHWM then\n  redis.call('hincrby', client_num_queued_key, client, 1)\nend\n\nreturn {reachedHWM, blocked, strategy}\n",
+	"update_settings.lua": "local args = {'hmset', settings_key}\n\nfor i = num_static_argv + 1, #ARGV do\n  table.insert(args, ARGV[i])\nend\n\nredis.call(unpack(args))\n\nprocess_tick(now, true)\n\nlocal groupTimeout = tonumber(redis.call('hget', settings_key, 'groupTimeout'))\nrefresh_expiration(0, 0, groupTimeout)\n\nreturn {}\n",
+	"validate_client.lua": "if not redis.call('zscore', client_last_seen_key, client) then\n  return redis.error_reply('UNKNOWN_CLIENT')\nend\n\nredis.call('zadd', client_last_seen_key, now, client)\n",
+	"validate_keys.lua": "if not (redis.call('exists', settings_key) == 1) then\n  return redis.error_reply('SETTINGS_KEY_NOT_FOUND')\nend\n"
+};
+
+(function (exports) {
+
+	var headers, lua, templates;
+	lua = require$$0$a;
+	headers = {
+	  refs: lua["refs.lua"],
+	  validate_keys: lua["validate_keys.lua"],
+	  validate_client: lua["validate_client.lua"],
+	  refresh_expiration: lua["refresh_expiration.lua"],
+	  process_tick: lua["process_tick.lua"],
+	  conditions_check: lua["conditions_check.lua"],
+	  get_time: lua["get_time.lua"]
+	};
+
+	exports.allKeys = function (id) {
+	  return [
+	  /*
+	  HASH
+	  */
+	  `b_${id}_settings`,
+	  /*
+	  HASH
+	  job index -> weight
+	  */
+	  `b_${id}_job_weights`,
+	  /*
+	  ZSET
+	  job index -> expiration
+	  */
+	  `b_${id}_job_expirations`,
+	  /*
+	  HASH
+	  job index -> client
+	  */
+	  `b_${id}_job_clients`,
+	  /*
+	  ZSET
+	  client -> sum running
+	  */
+	  `b_${id}_client_running`,
+	  /*
+	  HASH
+	  client -> num queued
+	  */
+	  `b_${id}_client_num_queued`,
+	  /*
+	  ZSET
+	  client -> last job registered
+	  */
+	  `b_${id}_client_last_registered`,
+	  /*
+	  ZSET
+	  client -> last seen
+	  */
+	  `b_${id}_client_last_seen`];
+	};
+
+	templates = {
+	  init: {
+	    keys: exports.allKeys,
+	    headers: ["process_tick"],
+	    refresh_expiration: true,
+	    code: lua["init.lua"]
+	  },
+	  group_check: {
+	    keys: exports.allKeys,
+	    headers: [],
+	    refresh_expiration: false,
+	    code: lua["group_check.lua"]
+	  },
+	  register_client: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys"],
+	    refresh_expiration: false,
+	    code: lua["register_client.lua"]
+	  },
+	  blacklist_client: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client"],
+	    refresh_expiration: false,
+	    code: lua["blacklist_client.lua"]
+	  },
+	  heartbeat: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: false,
+	    code: lua["heartbeat.lua"]
+	  },
+	  update_settings: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: true,
+	    code: lua["update_settings.lua"]
+	  },
+	  running: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: false,
+	    code: lua["running.lua"]
+	  },
+	  queued: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client"],
+	    refresh_expiration: false,
+	    code: lua["queued.lua"]
+	  },
+	  done: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: false,
+	    code: lua["done.lua"]
+	  },
+	  check: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick", "conditions_check"],
+	    refresh_expiration: false,
+	    code: lua["check.lua"]
+	  },
+	  submit: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick", "conditions_check"],
+	    refresh_expiration: true,
+	    code: lua["submit.lua"]
+	  },
+	  register: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick", "conditions_check"],
+	    refresh_expiration: true,
+	    code: lua["register.lua"]
+	  },
+	  free: {
