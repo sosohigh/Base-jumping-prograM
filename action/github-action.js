@@ -21657,3 +21657,2126 @@ function eq(value, other) {
  *
  * @static
  * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an `arguments` object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArguments(function() { return arguments; }());
+ * // => true
+ *
+ * _.isArguments([1, 2, 3]);
+ * // => false
+ */
+function isArguments$3(value) {
+  // Safari 8.1 makes `arguments.callee` enumerable in strict mode.
+  return isArrayLikeObject$2(value) && hasOwnProperty$5.call(value, 'callee') &&
+    (!propertyIsEnumerable$2.call(value, 'callee') || objectToString$3.call(value) == argsTag$2);
+}
+
+/**
+ * Checks if `value` is classified as an `Array` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array, else `false`.
+ * @example
+ *
+ * _.isArray([1, 2, 3]);
+ * // => true
+ *
+ * _.isArray(document.body.children);
+ * // => false
+ *
+ * _.isArray('abc');
+ * // => false
+ *
+ * _.isArray(_.noop);
+ * // => false
+ */
+var isArray$6 = Array.isArray;
+
+/**
+ * Checks if `value` is array-like. A value is considered array-like if it's
+ * not a function and has a `value.length` that's an integer greater than or
+ * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
+ * @example
+ *
+ * _.isArrayLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLike(document.body.children);
+ * // => true
+ *
+ * _.isArrayLike('abc');
+ * // => true
+ *
+ * _.isArrayLike(_.noop);
+ * // => false
+ */
+function isArrayLike$2(value) {
+  return value != null && isLength$3(value.length) && !isFunction$4(value);
+}
+
+/**
+ * This method is like `_.isArrayLike` except that it also checks if `value`
+ * is an object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array-like object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArrayLikeObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLikeObject(document.body.children);
+ * // => true
+ *
+ * _.isArrayLikeObject('abc');
+ * // => false
+ *
+ * _.isArrayLikeObject(_.noop);
+ * // => false
+ */
+function isArrayLikeObject$2(value) {
+  return isObjectLike$2(value) && isArrayLike$2(value);
+}
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction$4(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 8-9 which returns 'object' for typed array and other constructors.
+  var tag = isObject$5(value) ? objectToString$3.call(value) : '';
+  return tag == funcTag$2 || tag == genTag$2;
+}
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This method is loosely based on
+ * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ * @example
+ *
+ * _.isLength(3);
+ * // => true
+ *
+ * _.isLength(Number.MIN_VALUE);
+ * // => false
+ *
+ * _.isLength(Infinity);
+ * // => false
+ *
+ * _.isLength('3');
+ * // => false
+ */
+function isLength$3(value) {
+  return typeof value == 'number' &&
+    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER$2;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject$5(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike$2(value) {
+  return !!value && typeof value == 'object';
+}
+
+/**
+ * This method is like `_.assignIn` except that it accepts `customizer`
+ * which is invoked to produce the assigned values. If `customizer` returns
+ * `undefined`, assignment is handled by the method instead. The `customizer`
+ * is invoked with five arguments: (objValue, srcValue, key, object, source).
+ *
+ * **Note:** This method mutates `object`.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @alias extendWith
+ * @category Object
+ * @param {Object} object The destination object.
+ * @param {...Object} sources The source objects.
+ * @param {Function} [customizer] The function to customize assigned values.
+ * @returns {Object} Returns `object`.
+ * @see _.assignWith
+ * @example
+ *
+ * function customizer(objValue, srcValue) {
+ *   return _.isUndefined(objValue) ? srcValue : objValue;
+ * }
+ *
+ * var defaults = _.partialRight(_.assignInWith, customizer);
+ *
+ * defaults({ 'a': 1 }, { 'b': 2 }, { 'a': 3 });
+ * // => { 'a': 1, 'b': 2 }
+ */
+var assignInWith = createAssigner(function(object, source, srcIndex, customizer) {
+  copyObject(source, keysIn(source), object, customizer);
+});
+
+/**
+ * Assigns own and inherited enumerable string keyed properties of source
+ * objects to the destination object for all destination properties that
+ * resolve to `undefined`. Source objects are applied from left to right.
+ * Once a property is set, additional values of the same property are ignored.
+ *
+ * **Note:** This method mutates `object`.
+ *
+ * @static
+ * @since 0.1.0
+ * @memberOf _
+ * @category Object
+ * @param {Object} object The destination object.
+ * @param {...Object} [sources] The source objects.
+ * @returns {Object} Returns `object`.
+ * @see _.defaultsDeep
+ * @example
+ *
+ * _.defaults({ 'a': 1 }, { 'b': 2 }, { 'a': 3 });
+ * // => { 'a': 1, 'b': 2 }
+ */
+var defaults$3 = baseRest(function(args) {
+  args.push(undefined, assignInDefaults);
+  return apply(assignInWith, undefined, args);
+});
+
+/**
+ * Creates an array of the own and inherited enumerable property names of `object`.
+ *
+ * **Note:** Non-object values are coerced to objects.
+ *
+ * @static
+ * @memberOf _
+ * @since 3.0.0
+ * @category Object
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ * @example
+ *
+ * function Foo() {
+ *   this.a = 1;
+ *   this.b = 2;
+ * }
+ *
+ * Foo.prototype.c = 3;
+ *
+ * _.keysIn(new Foo);
+ * // => ['a', 'b', 'c'] (iteration order is not guaranteed)
+ */
+function keysIn(object) {
+  return isArrayLike$2(object) ? arrayLikeKeys(object, true) : baseKeysIn(object);
+}
+
+var lodash_defaults = defaults$3;
+
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as references for various `Number` constants. */
+var MAX_SAFE_INTEGER$1 = 9007199254740991;
+
+/** `Object#toString` result references. */
+var argsTag$1 = '[object Arguments]',
+    funcTag$1 = '[object Function]',
+    genTag$1 = '[object GeneratorFunction]';
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof commonjsGlobal == 'object' && commonjsGlobal && commonjsGlobal.Object === Object && commonjsGlobal;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/**
+ * Appends the elements of `values` to `array`.
+ *
+ * @private
+ * @param {Array} array The array to modify.
+ * @param {Array} values The values to append.
+ * @returns {Array} Returns `array`.
+ */
+function arrayPush(array, values) {
+  var index = -1,
+      length = values.length,
+      offset = array.length;
+
+  while (++index < length) {
+    array[offset + index] = values[index];
+  }
+  return array;
+}
+
+/** Used for built-in method references. */
+var objectProto$1 = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty$4 = objectProto$1.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString$2 = objectProto$1.toString;
+
+/** Built-in value references. */
+var Symbol$1 = root.Symbol,
+    propertyIsEnumerable$1 = objectProto$1.propertyIsEnumerable,
+    spreadableSymbol = Symbol$1 ? Symbol$1.isConcatSpreadable : undefined;
+
+/**
+ * The base implementation of `_.flatten` with support for restricting flattening.
+ *
+ * @private
+ * @param {Array} array The array to flatten.
+ * @param {number} depth The maximum recursion depth.
+ * @param {boolean} [predicate=isFlattenable] The function invoked per iteration.
+ * @param {boolean} [isStrict] Restrict to values that pass `predicate` checks.
+ * @param {Array} [result=[]] The initial result value.
+ * @returns {Array} Returns the new flattened array.
+ */
+function baseFlatten(array, depth, predicate, isStrict, result) {
+  var index = -1,
+      length = array.length;
+
+  predicate || (predicate = isFlattenable);
+  result || (result = []);
+
+  while (++index < length) {
+    var value = array[index];
+    if (depth > 0 && predicate(value)) {
+      if (depth > 1) {
+        // Recursively flatten arrays (susceptible to call stack limits).
+        baseFlatten(value, depth - 1, predicate, isStrict, result);
+      } else {
+        arrayPush(result, value);
+      }
+    } else if (!isStrict) {
+      result[result.length] = value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Checks if `value` is a flattenable `arguments` object or array.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is flattenable, else `false`.
+ */
+function isFlattenable(value) {
+  return isArray$5(value) || isArguments$2(value) ||
+    !!(spreadableSymbol && value && value[spreadableSymbol]);
+}
+
+/**
+ * Flattens `array` a single level deep.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Array
+ * @param {Array} array The array to flatten.
+ * @returns {Array} Returns the new flattened array.
+ * @example
+ *
+ * _.flatten([1, [2, [3, [4]], 5]]);
+ * // => [1, 2, [3, [4]], 5]
+ */
+function flatten$3(array) {
+  var length = array ? array.length : 0;
+  return length ? baseFlatten(array, 1) : [];
+}
+
+/**
+ * Checks if `value` is likely an `arguments` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an `arguments` object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArguments(function() { return arguments; }());
+ * // => true
+ *
+ * _.isArguments([1, 2, 3]);
+ * // => false
+ */
+function isArguments$2(value) {
+  // Safari 8.1 makes `arguments.callee` enumerable in strict mode.
+  return isArrayLikeObject$1(value) && hasOwnProperty$4.call(value, 'callee') &&
+    (!propertyIsEnumerable$1.call(value, 'callee') || objectToString$2.call(value) == argsTag$1);
+}
+
+/**
+ * Checks if `value` is classified as an `Array` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array, else `false`.
+ * @example
+ *
+ * _.isArray([1, 2, 3]);
+ * // => true
+ *
+ * _.isArray(document.body.children);
+ * // => false
+ *
+ * _.isArray('abc');
+ * // => false
+ *
+ * _.isArray(_.noop);
+ * // => false
+ */
+var isArray$5 = Array.isArray;
+
+/**
+ * Checks if `value` is array-like. A value is considered array-like if it's
+ * not a function and has a `value.length` that's an integer greater than or
+ * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
+ * @example
+ *
+ * _.isArrayLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLike(document.body.children);
+ * // => true
+ *
+ * _.isArrayLike('abc');
+ * // => true
+ *
+ * _.isArrayLike(_.noop);
+ * // => false
+ */
+function isArrayLike$1(value) {
+  return value != null && isLength$2(value.length) && !isFunction$3(value);
+}
+
+/**
+ * This method is like `_.isArrayLike` except that it also checks if `value`
+ * is an object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array-like object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArrayLikeObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLikeObject(document.body.children);
+ * // => true
+ *
+ * _.isArrayLikeObject('abc');
+ * // => false
+ *
+ * _.isArrayLikeObject(_.noop);
+ * // => false
+ */
+function isArrayLikeObject$1(value) {
+  return isObjectLike$1(value) && isArrayLike$1(value);
+}
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction$3(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 8-9 which returns 'object' for typed array and other constructors.
+  var tag = isObject$4(value) ? objectToString$2.call(value) : '';
+  return tag == funcTag$1 || tag == genTag$1;
+}
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This method is loosely based on
+ * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ * @example
+ *
+ * _.isLength(3);
+ * // => true
+ *
+ * _.isLength(Number.MIN_VALUE);
+ * // => false
+ *
+ * _.isLength(Infinity);
+ * // => false
+ *
+ * _.isLength('3');
+ * // => false
+ */
+function isLength$2(value) {
+  return typeof value == 'number' &&
+    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER$1;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject$4(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike$1(value) {
+  return !!value && typeof value == 'object';
+}
+
+var lodash_flatten = flatten$3;
+
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as references for various `Number` constants. */
+var MAX_SAFE_INTEGER = 9007199254740991;
+
+/** `Object#toString` result references. */
+var argsTag = '[object Arguments]',
+    funcTag = '[object Function]',
+    genTag = '[object GeneratorFunction]';
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty$3 = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString$1 = objectProto.toString;
+
+/** Built-in value references. */
+var propertyIsEnumerable = objectProto.propertyIsEnumerable;
+
+/**
+ * Checks if `value` is likely an `arguments` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an `arguments` object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArguments(function() { return arguments; }());
+ * // => true
+ *
+ * _.isArguments([1, 2, 3]);
+ * // => false
+ */
+function isArguments$1(value) {
+  // Safari 8.1 makes `arguments.callee` enumerable in strict mode.
+  return isArrayLikeObject(value) && hasOwnProperty$3.call(value, 'callee') &&
+    (!propertyIsEnumerable.call(value, 'callee') || objectToString$1.call(value) == argsTag);
+}
+
+/**
+ * Checks if `value` is array-like. A value is considered array-like if it's
+ * not a function and has a `value.length` that's an integer greater than or
+ * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
+ * @example
+ *
+ * _.isArrayLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLike(document.body.children);
+ * // => true
+ *
+ * _.isArrayLike('abc');
+ * // => true
+ *
+ * _.isArrayLike(_.noop);
+ * // => false
+ */
+function isArrayLike(value) {
+  return value != null && isLength$1(value.length) && !isFunction$2(value);
+}
+
+/**
+ * This method is like `_.isArrayLike` except that it also checks if `value`
+ * is an object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an array-like object,
+ *  else `false`.
+ * @example
+ *
+ * _.isArrayLikeObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isArrayLikeObject(document.body.children);
+ * // => true
+ *
+ * _.isArrayLikeObject('abc');
+ * // => false
+ *
+ * _.isArrayLikeObject(_.noop);
+ * // => false
+ */
+function isArrayLikeObject(value) {
+  return isObjectLike(value) && isArrayLike(value);
+}
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction$2(value) {
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 8-9 which returns 'object' for typed array and other constructors.
+  var tag = isObject$3(value) ? objectToString$1.call(value) : '';
+  return tag == funcTag || tag == genTag;
+}
+
+/**
+ * Checks if `value` is a valid array-like length.
+ *
+ * **Note:** This method is loosely based on
+ * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
+ * @example
+ *
+ * _.isLength(3);
+ * // => true
+ *
+ * _.isLength(Number.MIN_VALUE);
+ * // => false
+ *
+ * _.isLength(Infinity);
+ * // => false
+ *
+ * _.isLength('3');
+ * // => false
+ */
+function isLength$1(value) {
+  return typeof value == 'number' &&
+    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject$3(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
+}
+
+var lodash_isarguments = isArguments$1;
+
+Object.defineProperty(lodash, "__esModule", { value: true });
+const defaults$2 = lodash_defaults;
+lodash.defaults = defaults$2;
+const flatten$2 = lodash_flatten;
+lodash.flatten = flatten$2;
+const isArguments = lodash_isarguments;
+lodash.isArguments = isArguments;
+function noop$7() { }
+lodash.noop = noop$7;
+
+/**
+ * Custom implementation of a double ended queue.
+ */
+function Denque(array, options) {
+  var options = options || {};
+
+  this._head = 0;
+  this._tail = 0;
+  this._capacity = options.capacity;
+  this._capacityMask = 0x3;
+  this._list = new Array(4);
+  if (Array.isArray(array)) {
+    this._fromArray(array);
+  }
+}
+
+/**
+ * -------------
+ *  PUBLIC API
+ * -------------
+ */
+
+/**
+ * Returns the item at the specified index from the list.
+ * 0 is the first element, 1 is the second, and so on...
+ * Elements at negative values are that many from the end: -1 is one before the end
+ * (the last element), -2 is two before the end (one before last), etc.
+ * @param index
+ * @returns {*}
+ */
+Denque.prototype.peekAt = function peekAt(index) {
+  var i = index;
+  // expect a number or return undefined
+  if ((i !== (i | 0))) {
+    return void 0;
+  }
+  var len = this.size();
+  if (i >= len || i < -len) return undefined;
+  if (i < 0) i += len;
+  i = (this._head + i) & this._capacityMask;
+  return this._list[i];
+};
+
+/**
+ * Alias for peekAt()
+ * @param i
+ * @returns {*}
+ */
+Denque.prototype.get = function get(i) {
+  return this.peekAt(i);
+};
+
+/**
+ * Returns the first item in the list without removing it.
+ * @returns {*}
+ */
+Denque.prototype.peek = function peek() {
+  if (this._head === this._tail) return undefined;
+  return this._list[this._head];
+};
+
+/**
+ * Alias for peek()
+ * @returns {*}
+ */
+Denque.prototype.peekFront = function peekFront() {
+  return this.peek();
+};
+
+/**
+ * Returns the item that is at the back of the queue without removing it.
+ * Uses peekAt(-1)
+ */
+Denque.prototype.peekBack = function peekBack() {
+  return this.peekAt(-1);
+};
+
+/**
+ * Returns the current length of the queue
+ * @return {Number}
+ */
+Object.defineProperty(Denque.prototype, 'length', {
+  get: function length() {
+    return this.size();
+  }
+});
+
+/**
+ * Return the number of items on the list, or 0 if empty.
+ * @returns {number}
+ */
+Denque.prototype.size = function size() {
+  if (this._head === this._tail) return 0;
+  if (this._head < this._tail) return this._tail - this._head;
+  else return this._capacityMask + 1 - (this._head - this._tail);
+};
+
+/**
+ * Add an item at the beginning of the list.
+ * @param item
+ */
+Denque.prototype.unshift = function unshift(item) {
+  if (item === undefined) return this.size();
+  var len = this._list.length;
+  this._head = (this._head - 1 + len) & this._capacityMask;
+  this._list[this._head] = item;
+  if (this._tail === this._head) this._growArray();
+  if (this._capacity && this.size() > this._capacity) this.pop();
+  if (this._head < this._tail) return this._tail - this._head;
+  else return this._capacityMask + 1 - (this._head - this._tail);
+};
+
+/**
+ * Remove and return the first item on the list,
+ * Returns undefined if the list is empty.
+ * @returns {*}
+ */
+Denque.prototype.shift = function shift() {
+  var head = this._head;
+  if (head === this._tail) return undefined;
+  var item = this._list[head];
+  this._list[head] = undefined;
+  this._head = (head + 1) & this._capacityMask;
+  if (head < 2 && this._tail > 10000 && this._tail <= this._list.length >>> 2) this._shrinkArray();
+  return item;
+};
+
+/**
+ * Add an item to the bottom of the list.
+ * @param item
+ */
+Denque.prototype.push = function push(item) {
+  if (item === undefined) return this.size();
+  var tail = this._tail;
+  this._list[tail] = item;
+  this._tail = (tail + 1) & this._capacityMask;
+  if (this._tail === this._head) {
+    this._growArray();
+  }
+  if (this._capacity && this.size() > this._capacity) {
+    this.shift();
+  }
+  if (this._head < this._tail) return this._tail - this._head;
+  else return this._capacityMask + 1 - (this._head - this._tail);
+};
+
+/**
+ * Remove and return the last item on the list.
+ * Returns undefined if the list is empty.
+ * @returns {*}
+ */
+Denque.prototype.pop = function pop() {
+  var tail = this._tail;
+  if (tail === this._head) return undefined;
+  var len = this._list.length;
+  this._tail = (tail - 1 + len) & this._capacityMask;
+  var item = this._list[this._tail];
+  this._list[this._tail] = undefined;
+  if (this._head < 2 && tail > 10000 && tail <= len >>> 2) this._shrinkArray();
+  return item;
+};
+
+/**
+ * Remove and return the item at the specified index from the list.
+ * Returns undefined if the list is empty.
+ * @param index
+ * @returns {*}
+ */
+Denque.prototype.removeOne = function removeOne(index) {
+  var i = index;
+  // expect a number or return undefined
+  if ((i !== (i | 0))) {
+    return void 0;
+  }
+  if (this._head === this._tail) return void 0;
+  var size = this.size();
+  var len = this._list.length;
+  if (i >= size || i < -size) return void 0;
+  if (i < 0) i += size;
+  i = (this._head + i) & this._capacityMask;
+  var item = this._list[i];
+  var k;
+  if (index < size / 2) {
+    for (k = index; k > 0; k--) {
+      this._list[i] = this._list[i = (i - 1 + len) & this._capacityMask];
+    }
+    this._list[i] = void 0;
+    this._head = (this._head + 1 + len) & this._capacityMask;
+  } else {
+    for (k = size - 1 - index; k > 0; k--) {
+      this._list[i] = this._list[i = ( i + 1 + len) & this._capacityMask];
+    }
+    this._list[i] = void 0;
+    this._tail = (this._tail - 1 + len) & this._capacityMask;
+  }
+  return item;
+};
+
+/**
+ * Remove number of items from the specified index from the list.
+ * Returns array of removed items.
+ * Returns undefined if the list is empty.
+ * @param index
+ * @param count
+ * @returns {array}
+ */
+Denque.prototype.remove = function remove(index, count) {
+  var i = index;
+  var removed;
+  var del_count = count;
+  // expect a number or return undefined
+  if ((i !== (i | 0))) {
+    return void 0;
+  }
+  if (this._head === this._tail) return void 0;
+  var size = this.size();
+  var len = this._list.length;
+  if (i >= size || i < -size || count < 1) return void 0;
+  if (i < 0) i += size;
+  if (count === 1 || !count) {
+    removed = new Array(1);
+    removed[0] = this.removeOne(i);
+    return removed;
+  }
+  if (i === 0 && i + count >= size) {
+    removed = this.toArray();
+    this.clear();
+    return removed;
+  }
+  if (i + count > size) count = size - i;
+  var k;
+  removed = new Array(count);
+  for (k = 0; k < count; k++) {
+    removed[k] = this._list[(this._head + i + k) & this._capacityMask];
+  }
+  i = (this._head + i) & this._capacityMask;
+  if (index + count === size) {
+    this._tail = (this._tail - count + len) & this._capacityMask;
+    for (k = count; k > 0; k--) {
+      this._list[i = (i + 1 + len) & this._capacityMask] = void 0;
+    }
+    return removed;
+  }
+  if (index === 0) {
+    this._head = (this._head + count + len) & this._capacityMask;
+    for (k = count - 1; k > 0; k--) {
+      this._list[i = (i + 1 + len) & this._capacityMask] = void 0;
+    }
+    return removed;
+  }
+  if (i < size / 2) {
+    this._head = (this._head + index + count + len) & this._capacityMask;
+    for (k = index; k > 0; k--) {
+      this.unshift(this._list[i = (i - 1 + len) & this._capacityMask]);
+    }
+    i = (this._head - 1 + len) & this._capacityMask;
+    while (del_count > 0) {
+      this._list[i = (i - 1 + len) & this._capacityMask] = void 0;
+      del_count--;
+    }
+    if (index < 0) this._tail = i;
+  } else {
+    this._tail = i;
+    i = (i + count + len) & this._capacityMask;
+    for (k = size - (count + index); k > 0; k--) {
+      this.push(this._list[i++]);
+    }
+    i = this._tail;
+    while (del_count > 0) {
+      this._list[i = (i + 1 + len) & this._capacityMask] = void 0;
+      del_count--;
+    }
+  }
+  if (this._head < 2 && this._tail > 10000 && this._tail <= len >>> 2) this._shrinkArray();
+  return removed;
+};
+
+/**
+ * Native splice implementation.
+ * Remove number of items from the specified index from the list and/or add new elements.
+ * Returns array of removed items or empty array if count == 0.
+ * Returns undefined if the list is empty.
+ *
+ * @param index
+ * @param count
+ * @param {...*} [elements]
+ * @returns {array}
+ */
+Denque.prototype.splice = function splice(index, count) {
+  var i = index;
+  // expect a number or return undefined
+  if ((i !== (i | 0))) {
+    return void 0;
+  }
+  var size = this.size();
+  if (i < 0) i += size;
+  if (i > size) return void 0;
+  if (arguments.length > 2) {
+    var k;
+    var temp;
+    var removed;
+    var arg_len = arguments.length;
+    var len = this._list.length;
+    var arguments_index = 2;
+    if (!size || i < size / 2) {
+      temp = new Array(i);
+      for (k = 0; k < i; k++) {
+        temp[k] = this._list[(this._head + k) & this._capacityMask];
+      }
+      if (count === 0) {
+        removed = [];
+        if (i > 0) {
+          this._head = (this._head + i + len) & this._capacityMask;
+        }
+      } else {
+        removed = this.remove(i, count);
+        this._head = (this._head + i + len) & this._capacityMask;
+      }
+      while (arg_len > arguments_index) {
+        this.unshift(arguments[--arg_len]);
+      }
+      for (k = i; k > 0; k--) {
+        this.unshift(temp[k - 1]);
+      }
+    } else {
+      temp = new Array(size - (i + count));
+      var leng = temp.length;
+      for (k = 0; k < leng; k++) {
+        temp[k] = this._list[(this._head + i + count + k) & this._capacityMask];
+      }
+      if (count === 0) {
+        removed = [];
+        if (i != size) {
+          this._tail = (this._head + i + len) & this._capacityMask;
+        }
+      } else {
+        removed = this.remove(i, count);
+        this._tail = (this._tail - leng + len) & this._capacityMask;
+      }
+      while (arguments_index < arg_len) {
+        this.push(arguments[arguments_index++]);
+      }
+      for (k = 0; k < leng; k++) {
+        this.push(temp[k]);
+      }
+    }
+    return removed;
+  } else {
+    return this.remove(i, count);
+  }
+};
+
+/**
+ * Soft clear - does not reset capacity.
+ */
+Denque.prototype.clear = function clear() {
+  this._head = 0;
+  this._tail = 0;
+};
+
+/**
+ * Returns true or false whether the list is empty.
+ * @returns {boolean}
+ */
+Denque.prototype.isEmpty = function isEmpty() {
+  return this._head === this._tail;
+};
+
+/**
+ * Returns an array of all queue items.
+ * @returns {Array}
+ */
+Denque.prototype.toArray = function toArray() {
+  return this._copyArray(false);
+};
+
+/**
+ * -------------
+ *   INTERNALS
+ * -------------
+ */
+
+/**
+ * Fills the queue with items from an array
+ * For use in the constructor
+ * @param array
+ * @private
+ */
+Denque.prototype._fromArray = function _fromArray(array) {
+  for (var i = 0; i < array.length; i++) this.push(array[i]);
+};
+
+/**
+ *
+ * @param fullCopy
+ * @returns {Array}
+ * @private
+ */
+Denque.prototype._copyArray = function _copyArray(fullCopy) {
+  var newArray = [];
+  var list = this._list;
+  var len = list.length;
+  var i;
+  if (fullCopy || this._head > this._tail) {
+    for (i = this._head; i < len; i++) newArray.push(list[i]);
+    for (i = 0; i < this._tail; i++) newArray.push(list[i]);
+  } else {
+    for (i = this._head; i < this._tail; i++) newArray.push(list[i]);
+  }
+  return newArray;
+};
+
+/**
+ * Grows the internal list array.
+ * @private
+ */
+Denque.prototype._growArray = function _growArray() {
+  if (this._head) {
+    // copy existing data, head to end, then beginning to tail.
+    this._list = this._copyArray(true);
+    this._head = 0;
+  }
+
+  // head is at 0 and array is now full, safe to extend
+  this._tail = this._list.length;
+
+  this._list.length <<= 1;
+  this._capacityMask = (this._capacityMask << 1) | 1;
+};
+
+/**
+ * Shrinks the internal list array.
+ * @private
+ */
+Denque.prototype._shrinkArray = function _shrinkArray() {
+  this._list.length >>>= 1;
+  this._capacityMask >>>= 1;
+};
+
+
+var denque = Denque;
+
+var command$2 = {};
+
+var redisCommands = {};
+
+var acl = {
+	arity: -2,
+	flags: [
+		"admin",
+		"noscript",
+		"loading",
+		"stale",
+		"skip_slowlog"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var append$1 = {
+	arity: 3,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var asking = {
+	arity: 1,
+	flags: [
+		"fast"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var auth$9 = {
+	arity: -2,
+	flags: [
+		"noscript",
+		"loading",
+		"stale",
+		"skip_monitor",
+		"skip_slowlog",
+		"fast",
+		"no_auth"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var bgrewriteaof = {
+	arity: 1,
+	flags: [
+		"admin",
+		"noscript"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var bgsave = {
+	arity: -1,
+	flags: [
+		"admin",
+		"noscript"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var bitcount = {
+	arity: -2,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var bitfield = {
+	arity: -2,
+	flags: [
+		"write",
+		"denyoom"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var bitfield_ro = {
+	arity: -2,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var bitop = {
+	arity: -4,
+	flags: [
+		"write",
+		"denyoom"
+	],
+	keyStart: 2,
+	keyStop: -1,
+	step: 1
+};
+var bitpos = {
+	arity: -3,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var blmove = {
+	arity: 6,
+	flags: [
+		"write",
+		"denyoom",
+		"noscript"
+	],
+	keyStart: 1,
+	keyStop: 2,
+	step: 1
+};
+var blpop = {
+	arity: -3,
+	flags: [
+		"write",
+		"noscript"
+	],
+	keyStart: 1,
+	keyStop: -2,
+	step: 1
+};
+var brpop = {
+	arity: -3,
+	flags: [
+		"write",
+		"noscript"
+	],
+	keyStart: 1,
+	keyStop: -2,
+	step: 1
+};
+var brpoplpush = {
+	arity: 4,
+	flags: [
+		"write",
+		"denyoom",
+		"noscript"
+	],
+	keyStart: 1,
+	keyStop: 2,
+	step: 1
+};
+var bzpopmax = {
+	arity: -3,
+	flags: [
+		"write",
+		"noscript",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: -2,
+	step: 1
+};
+var bzpopmin = {
+	arity: -3,
+	flags: [
+		"write",
+		"noscript",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: -2,
+	step: 1
+};
+var client = {
+	arity: -2,
+	flags: [
+		"admin",
+		"noscript",
+		"random",
+		"loading",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var cluster$3 = {
+	arity: -2,
+	flags: [
+		"admin",
+		"random",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var command$1 = {
+	arity: -1,
+	flags: [
+		"random",
+		"loading",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var config$2 = {
+	arity: -2,
+	flags: [
+		"admin",
+		"noscript",
+		"loading",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var copy = {
+	arity: -3,
+	flags: [
+		"write",
+		"denyoom"
+	],
+	keyStart: 1,
+	keyStop: 2,
+	step: 1
+};
+var dbsize = {
+	arity: 1,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var debug$k = {
+	arity: -2,
+	flags: [
+		"admin",
+		"noscript",
+		"loading",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var decr = {
+	arity: 2,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var decrby = {
+	arity: 3,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var del$1 = {
+	arity: -2,
+	flags: [
+		"write"
+	],
+	keyStart: 1,
+	keyStop: -1,
+	step: 1
+};
+var discard = {
+	arity: 1,
+	flags: [
+		"noscript",
+		"loading",
+		"stale",
+		"fast"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var dump$3 = {
+	arity: 2,
+	flags: [
+		"readonly",
+		"random"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var echo = {
+	arity: 2,
+	flags: [
+		"fast"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var evalsha = {
+	arity: -3,
+	flags: [
+		"noscript",
+		"may_replicate",
+		"movablekeys"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var exec$1 = {
+	arity: 1,
+	flags: [
+		"noscript",
+		"loading",
+		"stale",
+		"skip_monitor",
+		"skip_slowlog"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var exists = {
+	arity: -2,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: -1,
+	step: 1
+};
+var expire = {
+	arity: 3,
+	flags: [
+		"write",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var expireat = {
+	arity: 3,
+	flags: [
+		"write",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var failover = {
+	arity: -1,
+	flags: [
+		"admin",
+		"noscript",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var flushall = {
+	arity: -1,
+	flags: [
+		"write"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var flushdb = {
+	arity: -1,
+	flags: [
+		"write"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var geoadd = {
+	arity: -5,
+	flags: [
+		"write",
+		"denyoom"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var geodist = {
+	arity: -4,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var geohash = {
+	arity: -2,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var geopos = {
+	arity: -2,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var georadius = {
+	arity: -6,
+	flags: [
+		"write",
+		"denyoom",
+		"movablekeys"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var georadius_ro = {
+	arity: -6,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var georadiusbymember = {
+	arity: -5,
+	flags: [
+		"write",
+		"denyoom",
+		"movablekeys"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var georadiusbymember_ro = {
+	arity: -5,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var geosearch = {
+	arity: -7,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var geosearchstore = {
+	arity: -8,
+	flags: [
+		"write",
+		"denyoom"
+	],
+	keyStart: 1,
+	keyStop: 2,
+	step: 1
+};
+var get$3 = {
+	arity: 2,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var getbit = {
+	arity: 3,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var getdel = {
+	arity: 2,
+	flags: [
+		"write",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var getex = {
+	arity: -2,
+	flags: [
+		"write",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var getrange = {
+	arity: 4,
+	flags: [
+		"readonly"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var getset = {
+	arity: 3,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hdel = {
+	arity: -3,
+	flags: [
+		"write",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hello = {
+	arity: -1,
+	flags: [
+		"noscript",
+		"loading",
+		"stale",
+		"skip_monitor",
+		"skip_slowlog",
+		"fast",
+		"no_auth"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
+var hexists = {
+	arity: 3,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hget = {
+	arity: 3,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hgetall = {
+	arity: 2,
+	flags: [
+		"readonly",
+		"random"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hincrby = {
+	arity: 4,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hincrbyfloat = {
+	arity: 4,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hkeys = {
+	arity: 2,
+	flags: [
+		"readonly",
+		"sort_for_script"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hlen = {
+	arity: 2,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hmget = {
+	arity: -3,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hmset = {
+	arity: -4,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hrandfield = {
+	arity: -2,
+	flags: [
+		"readonly",
+		"random"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hscan = {
+	arity: -3,
+	flags: [
+		"readonly",
+		"random"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hset = {
+	arity: -4,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hsetnx = {
+	arity: 4,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hstrlen = {
+	arity: 3,
+	flags: [
+		"readonly",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var hvals = {
+	arity: 2,
+	flags: [
+		"readonly",
+		"sort_for_script"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var incr = {
+	arity: 2,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var incrby = {
+	arity: 3,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var incrbyfloat = {
+	arity: 3,
+	flags: [
+		"write",
+		"denyoom",
+		"fast"
+	],
+	keyStart: 1,
+	keyStop: 1,
+	step: 1
+};
+var info = {
+	arity: -1,
+	flags: [
+		"random",
+		"loading",
+		"stale"
+	],
+	keyStart: 0,
+	keyStop: 0,
+	step: 0
+};
