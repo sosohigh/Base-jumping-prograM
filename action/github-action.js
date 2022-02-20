@@ -19472,3 +19472,2188 @@ var require$$0$a = {
 	    code: lua["register.lua"]
 	  },
 	  free: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: true,
+	    code: lua["free.lua"]
+	  },
+	  current_reservoir: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: false,
+	    code: lua["current_reservoir.lua"]
+	  },
+	  increment_reservoir: {
+	    keys: exports.allKeys,
+	    headers: ["validate_keys", "validate_client", "process_tick"],
+	    refresh_expiration: true,
+	    code: lua["increment_reservoir.lua"]
+	  }
+	};
+	exports.names = Object.keys(templates);
+
+	exports.keys = function (name, id) {
+	  return templates[name].keys(id);
+	};
+
+	exports.payload = function (name) {
+	  var template;
+	  template = templates[name];
+	  return Array.prototype.concat(headers.refs, template.headers.map(function (h) {
+	    return headers[h];
+	  }), template.refresh_expiration ? headers.refresh_expiration : "", template.code).join("\n");
+	};
+} (Scripts$2));
+
+function asyncGeneratorStep$3(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator$3(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep$3(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep$3(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events$1, RedisConnection$1, Scripts$1, parser$4;
+parser$4 = parser$7;
+Events$1 = Events_1;
+Scripts$1 = Scripts$2;
+
+RedisConnection$1 = function () {
+  class RedisConnection {
+    constructor(options = {}) {
+      parser$4.load(options, this.defaults, this);
+
+      if (this.Redis == null) {
+        this.Redis = eval("require")("redis"); // Obfuscated or else Webpack/Angular will try to inline the optional redis module. To override this behavior: pass the redis module to Bottleneck as the 'Redis' option.
+      }
+
+      if (this.Events == null) {
+        this.Events = new Events$1(this);
+      }
+
+      this.terminated = false;
+
+      if (this.client == null) {
+        this.client = this.Redis.createClient(this.clientOptions);
+      }
+
+      this.subscriber = this.client.duplicate();
+      this.limiters = {};
+      this.shas = {};
+      this.ready = this.Promise.all([this._setup(this.client, false), this._setup(this.subscriber, true)]).then(() => {
+        return this._loadScripts();
+      }).then(() => {
+        return {
+          client: this.client,
+          subscriber: this.subscriber
+        };
+      });
+    }
+
+    _setup(client, sub) {
+      client.setMaxListeners(0);
+      return new this.Promise((resolve, reject) => {
+        client.on("error", e => {
+          return this.Events.trigger("error", e);
+        });
+
+        if (sub) {
+          client.on("message", (channel, message) => {
+            var ref;
+            return (ref = this.limiters[channel]) != null ? ref._store.onMessage(channel, message) : void 0;
+          });
+        }
+
+        if (client.ready) {
+          return resolve();
+        } else {
+          return client.once("ready", resolve);
+        }
+      });
+    }
+
+    _loadScript(name) {
+      return new this.Promise((resolve, reject) => {
+        var payload;
+        payload = Scripts$1.payload(name);
+        return this.client.multi([["script", "load", payload]]).exec((err, replies) => {
+          if (err != null) {
+            return reject(err);
+          }
+
+          this.shas[name] = replies[0];
+          return resolve(replies[0]);
+        });
+      });
+    }
+
+    _loadScripts() {
+      return this.Promise.all(Scripts$1.names.map(k => {
+        return this._loadScript(k);
+      }));
+    }
+
+    __runCommand__(cmd) {
+      var _this = this;
+
+      return _asyncToGenerator$3(function* () {
+        yield _this.ready;
+        return new _this.Promise((resolve, reject) => {
+          return _this.client.multi([cmd]).exec_atomic(function (err, replies) {
+            if (err != null) {
+              return reject(err);
+            } else {
+              return resolve(replies[0]);
+            }
+          });
+        });
+      })();
+    }
+
+    __addLimiter__(instance) {
+      return this.Promise.all([instance.channel(), instance.channel_client()].map(channel => {
+        return new this.Promise((resolve, reject) => {
+          var handler;
+
+          handler = chan => {
+            if (chan === channel) {
+              this.subscriber.removeListener("subscribe", handler);
+              this.limiters[channel] = instance;
+              return resolve();
+            }
+          };
+
+          this.subscriber.on("subscribe", handler);
+          return this.subscriber.subscribe(channel);
+        });
+      }));
+    }
+
+    __removeLimiter__(instance) {
+      var _this2 = this;
+
+      return this.Promise.all([instance.channel(), instance.channel_client()].map(
+      /*#__PURE__*/
+      function () {
+        var _ref = _asyncToGenerator$3(function* (channel) {
+          if (!_this2.terminated) {
+            yield new _this2.Promise((resolve, reject) => {
+              return _this2.subscriber.unsubscribe(channel, function (err, chan) {
+                if (err != null) {
+                  return reject(err);
+                }
+
+                if (chan === channel) {
+                  return resolve();
+                }
+              });
+            });
+          }
+
+          return delete _this2.limiters[channel];
+        });
+
+        return function (_x) {
+          return _ref.apply(this, arguments);
+        };
+      }()));
+    }
+
+    __scriptArgs__(name, id, args, cb) {
+      var keys;
+      keys = Scripts$1.keys(name, id);
+      return [this.shas[name], keys.length].concat(keys, args, cb);
+    }
+
+    __scriptFn__(name) {
+      return this.client.evalsha.bind(this.client);
+    }
+
+    disconnect(flush = true) {
+      var i, k, len, ref;
+      ref = Object.keys(this.limiters);
+
+      for (i = 0, len = ref.length; i < len; i++) {
+        k = ref[i];
+        clearInterval(this.limiters[k]._store.heartbeat);
+      }
+
+      this.limiters = {};
+      this.terminated = true;
+      this.client.end(flush);
+      this.subscriber.end(flush);
+      return this.Promise.resolve();
+    }
+
+  }
+  RedisConnection.prototype.datastore = "redis";
+  RedisConnection.prototype.defaults = {
+    Redis: null,
+    clientOptions: {},
+    client: null,
+    Promise: Promise,
+    Events: null
+  };
+  return RedisConnection;
+}.call(void 0);
+
+var RedisConnection_1 = RedisConnection$1;
+
+function _slicedToArray$1(arr, i) { return _arrayWithHoles$1(arr) || _iterableToArrayLimit$1(arr, i) || _nonIterableRest$1(); }
+
+function _nonIterableRest$1() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+function _iterableToArrayLimit$1(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+function _arrayWithHoles$1(arr) { if (Array.isArray(arr)) return arr; }
+
+function asyncGeneratorStep$2(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator$2(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep$2(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep$2(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events, IORedisConnection$1, Scripts, parser$3;
+parser$3 = parser$7;
+Events = Events_1;
+Scripts = Scripts$2;
+
+IORedisConnection$1 = function () {
+  class IORedisConnection {
+    constructor(options = {}) {
+      parser$3.load(options, this.defaults, this);
+
+      if (this.Redis == null) {
+        this.Redis = eval("require")("ioredis"); // Obfuscated or else Webpack/Angular will try to inline the optional ioredis module. To override this behavior: pass the ioredis module to Bottleneck as the 'Redis' option.
+      }
+
+      if (this.Events == null) {
+        this.Events = new Events(this);
+      }
+
+      this.terminated = false;
+
+      if (this.clusterNodes != null) {
+        this.client = new this.Redis.Cluster(this.clusterNodes, this.clientOptions);
+        this.subscriber = new this.Redis.Cluster(this.clusterNodes, this.clientOptions);
+      } else if (this.client != null && this.client.duplicate == null) {
+        this.subscriber = new this.Redis.Cluster(this.client.startupNodes, this.client.options);
+      } else {
+        if (this.client == null) {
+          this.client = new this.Redis(this.clientOptions);
+        }
+
+        this.subscriber = this.client.duplicate();
+      }
+
+      this.limiters = {};
+      this.ready = this.Promise.all([this._setup(this.client, false), this._setup(this.subscriber, true)]).then(() => {
+        this._loadScripts();
+
+        return {
+          client: this.client,
+          subscriber: this.subscriber
+        };
+      });
+    }
+
+    _setup(client, sub) {
+      client.setMaxListeners(0);
+      return new this.Promise((resolve, reject) => {
+        client.on("error", e => {
+          return this.Events.trigger("error", e);
+        });
+
+        if (sub) {
+          client.on("message", (channel, message) => {
+            var ref;
+            return (ref = this.limiters[channel]) != null ? ref._store.onMessage(channel, message) : void 0;
+          });
+        }
+
+        if (client.status === "ready") {
+          return resolve();
+        } else {
+          return client.once("ready", resolve);
+        }
+      });
+    }
+
+    _loadScripts() {
+      return Scripts.names.forEach(name => {
+        return this.client.defineCommand(name, {
+          lua: Scripts.payload(name)
+        });
+      });
+    }
+
+    __runCommand__(cmd) {
+      var _this = this;
+
+      return _asyncToGenerator$2(function* () {
+        var deleted;
+
+        yield _this.ready;
+
+        var _ref = yield _this.client.pipeline([cmd]).exec();
+
+        var _ref2 = _slicedToArray$1(_ref, 1);
+
+        var _ref2$ = _slicedToArray$1(_ref2[0], 2);
+
+        _ref2$[0];
+        deleted = _ref2$[1];
+        return deleted;
+      })();
+    }
+
+    __addLimiter__(instance) {
+      return this.Promise.all([instance.channel(), instance.channel_client()].map(channel => {
+        return new this.Promise((resolve, reject) => {
+          return this.subscriber.subscribe(channel, () => {
+            this.limiters[channel] = instance;
+            return resolve();
+          });
+        });
+      }));
+    }
+
+    __removeLimiter__(instance) {
+      var _this2 = this;
+
+      return [instance.channel(), instance.channel_client()].forEach(
+      /*#__PURE__*/
+      function () {
+        var _ref3 = _asyncToGenerator$2(function* (channel) {
+          if (!_this2.terminated) {
+            yield _this2.subscriber.unsubscribe(channel);
+          }
+
+          return delete _this2.limiters[channel];
+        });
+
+        return function (_x) {
+          return _ref3.apply(this, arguments);
+        };
+      }());
+    }
+
+    __scriptArgs__(name, id, args, cb) {
+      var keys;
+      keys = Scripts.keys(name, id);
+      return [keys.length].concat(keys, args, cb);
+    }
+
+    __scriptFn__(name) {
+      return this.client[name].bind(this.client);
+    }
+
+    disconnect(flush = true) {
+      var i, k, len, ref;
+      ref = Object.keys(this.limiters);
+
+      for (i = 0, len = ref.length; i < len; i++) {
+        k = ref[i];
+        clearInterval(this.limiters[k]._store.heartbeat);
+      }
+
+      this.limiters = {};
+      this.terminated = true;
+
+      if (flush) {
+        return this.Promise.all([this.client.quit(), this.subscriber.quit()]);
+      } else {
+        this.client.disconnect();
+        this.subscriber.disconnect();
+        return this.Promise.resolve();
+      }
+    }
+
+  }
+  IORedisConnection.prototype.datastore = "ioredis";
+  IORedisConnection.prototype.defaults = {
+    Redis: null,
+    clientOptions: {},
+    clusterNodes: null,
+    client: null,
+    Promise: Promise,
+    Events: null
+  };
+  return IORedisConnection;
+}.call(void 0);
+
+var IORedisConnection_1 = IORedisConnection$1;
+
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+function asyncGeneratorStep$1(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator$1(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep$1(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep$1(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var BottleneckError$1, IORedisConnection, RedisConnection, RedisDatastore, parser$2;
+parser$2 = parser$7;
+BottleneckError$1 = BottleneckError_1;
+RedisConnection = RedisConnection_1;
+IORedisConnection = IORedisConnection_1;
+RedisDatastore = class RedisDatastore {
+  constructor(instance, storeOptions, storeInstanceOptions) {
+    this.instance = instance;
+    this.storeOptions = storeOptions;
+    this.originalId = this.instance.id;
+    this.clientId = this.instance._randomIndex();
+    parser$2.load(storeInstanceOptions, storeInstanceOptions, this);
+    this.clients = {};
+    this.capacityPriorityCounters = {};
+    this.sharedConnection = this.connection != null;
+
+    if (this.connection == null) {
+      this.connection = this.instance.datastore === "redis" ? new RedisConnection({
+        Redis: this.Redis,
+        clientOptions: this.clientOptions,
+        Promise: this.Promise,
+        Events: this.instance.Events
+      }) : this.instance.datastore === "ioredis" ? new IORedisConnection({
+        Redis: this.Redis,
+        clientOptions: this.clientOptions,
+        clusterNodes: this.clusterNodes,
+        Promise: this.Promise,
+        Events: this.instance.Events
+      }) : void 0;
+    }
+
+    this.instance.connection = this.connection;
+    this.instance.datastore = this.connection.datastore;
+    this.ready = this.connection.ready.then(clients => {
+      this.clients = clients;
+      return this.runScript("init", this.prepareInitSettings(this.clearDatastore));
+    }).then(() => {
+      return this.connection.__addLimiter__(this.instance);
+    }).then(() => {
+      return this.runScript("register_client", [this.instance.queued()]);
+    }).then(() => {
+      var base;
+
+      if (typeof (base = this.heartbeat = setInterval(() => {
+        return this.runScript("heartbeat", []).catch(e => {
+          return this.instance.Events.trigger("error", e);
+        });
+      }, this.heartbeatInterval)).unref === "function") {
+        base.unref();
+      }
+
+      return this.clients;
+    });
+  }
+
+  __publish__(message) {
+    var _this = this;
+
+    return _asyncToGenerator$1(function* () {
+      var client;
+
+      var _ref = yield _this.ready;
+
+      client = _ref.client;
+      return client.publish(_this.instance.channel(), `message:${message.toString()}`);
+    })();
+  }
+
+  onMessage(channel, message) {
+    var _this2 = this;
+
+    return _asyncToGenerator$1(function* () {
+      var capacity, counter, data, drained, e, newCapacity, pos, priorityClient, rawCapacity, type;
+
+      try {
+        pos = message.indexOf(":");
+        var _ref2 = [message.slice(0, pos), message.slice(pos + 1)];
+        type = _ref2[0];
+        data = _ref2[1];
+
+        if (type === "capacity") {
+          return yield _this2.instance._drainAll(data.length > 0 ? ~~data : void 0);
+        } else if (type === "capacity-priority") {
+          var _data$split = data.split(":");
+
+          var _data$split2 = _slicedToArray(_data$split, 3);
+
+          rawCapacity = _data$split2[0];
+          priorityClient = _data$split2[1];
+          counter = _data$split2[2];
+          capacity = rawCapacity.length > 0 ? ~~rawCapacity : void 0;
+
+          if (priorityClient === _this2.clientId) {
+            drained = yield _this2.instance._drainAll(capacity);
+            newCapacity = capacity != null ? capacity - (drained || 0) : "";
+            return yield _this2.clients.client.publish(_this2.instance.channel(), `capacity-priority:${newCapacity}::${counter}`);
+          } else if (priorityClient === "") {
+            clearTimeout(_this2.capacityPriorityCounters[counter]);
+            delete _this2.capacityPriorityCounters[counter];
+            return _this2.instance._drainAll(capacity);
+          } else {
+            return _this2.capacityPriorityCounters[counter] = setTimeout(
+            /*#__PURE__*/
+            _asyncToGenerator$1(function* () {
+              var e;
+
+              try {
+                delete _this2.capacityPriorityCounters[counter];
+                yield _this2.runScript("blacklist_client", [priorityClient]);
+                return yield _this2.instance._drainAll(capacity);
+              } catch (error) {
+                e = error;
+                return _this2.instance.Events.trigger("error", e);
+              }
+            }), 1000);
+          }
+        } else if (type === "message") {
+          return _this2.instance.Events.trigger("message", data);
+        } else if (type === "blocked") {
+          return yield _this2.instance._dropAllQueued();
+        }
+      } catch (error) {
+        e = error;
+        return _this2.instance.Events.trigger("error", e);
+      }
+    })();
+  }
+
+  __disconnect__(flush) {
+    clearInterval(this.heartbeat);
+
+    if (this.sharedConnection) {
+      return this.connection.__removeLimiter__(this.instance);
+    } else {
+      return this.connection.disconnect(flush);
+    }
+  }
+
+  runScript(name, args) {
+    var _this3 = this;
+
+    return _asyncToGenerator$1(function* () {
+      if (!(name === "init" || name === "register_client")) {
+        yield _this3.ready;
+      }
+
+      return new _this3.Promise((resolve, reject) => {
+        var all_args, arr;
+        all_args = [Date.now(), _this3.clientId].concat(args);
+
+        _this3.instance.Events.trigger("debug", `Calling Redis script: ${name}.lua`, all_args);
+
+        arr = _this3.connection.__scriptArgs__(name, _this3.originalId, all_args, function (err, replies) {
+          if (err != null) {
+            return reject(err);
+          }
+
+          return resolve(replies);
+        });
+        return _this3.connection.__scriptFn__(name)(...arr);
+      }).catch(e => {
+        if (e.message === "SETTINGS_KEY_NOT_FOUND") {
+          if (name === "heartbeat") {
+            return _this3.Promise.resolve();
+          } else {
+            return _this3.runScript("init", _this3.prepareInitSettings(false)).then(() => {
+              return _this3.runScript(name, args);
+            });
+          }
+        } else if (e.message === "UNKNOWN_CLIENT") {
+          return _this3.runScript("register_client", [_this3.instance.queued()]).then(() => {
+            return _this3.runScript(name, args);
+          });
+        } else {
+          return _this3.Promise.reject(e);
+        }
+      });
+    })();
+  }
+
+  prepareArray(arr) {
+    var i, len, results, x;
+    results = [];
+
+    for (i = 0, len = arr.length; i < len; i++) {
+      x = arr[i];
+      results.push(x != null ? x.toString() : "");
+    }
+
+    return results;
+  }
+
+  prepareObject(obj) {
+    var arr, k, v;
+    arr = [];
+
+    for (k in obj) {
+      v = obj[k];
+      arr.push(k, v != null ? v.toString() : "");
+    }
+
+    return arr;
+  }
+
+  prepareInitSettings(clear) {
+    var args;
+    args = this.prepareObject(Object.assign({}, this.storeOptions, {
+      id: this.originalId,
+      version: this.instance.version,
+      groupTimeout: this.timeout,
+      clientTimeout: this.clientTimeout
+    }));
+    args.unshift(clear ? 1 : 0, this.instance.version);
+    return args;
+  }
+
+  convertBool(b) {
+    return !!b;
+  }
+
+  __updateSettings__(options) {
+    var _this4 = this;
+
+    return _asyncToGenerator$1(function* () {
+      yield _this4.runScript("update_settings", _this4.prepareObject(options));
+      return parser$2.overwrite(options, options, _this4.storeOptions);
+    })();
+  }
+
+  __running__() {
+    return this.runScript("running", []);
+  }
+
+  __queued__() {
+    return this.runScript("queued", []);
+  }
+
+  __done__() {
+    return this.runScript("done", []);
+  }
+
+  __groupCheck__() {
+    var _this5 = this;
+
+    return _asyncToGenerator$1(function* () {
+      return _this5.convertBool((yield _this5.runScript("group_check", [])));
+    })();
+  }
+
+  __incrementReservoir__(incr) {
+    return this.runScript("increment_reservoir", [incr]);
+  }
+
+  __currentReservoir__() {
+    return this.runScript("current_reservoir", []);
+  }
+
+  __check__(weight) {
+    var _this6 = this;
+
+    return _asyncToGenerator$1(function* () {
+      return _this6.convertBool((yield _this6.runScript("check", _this6.prepareArray([weight]))));
+    })();
+  }
+
+  __register__(index, weight, expiration) {
+    var _this7 = this;
+
+    return _asyncToGenerator$1(function* () {
+      var reservoir, success, wait;
+
+      var _ref4 = yield _this7.runScript("register", _this7.prepareArray([index, weight, expiration]));
+
+      var _ref5 = _slicedToArray(_ref4, 3);
+
+      success = _ref5[0];
+      wait = _ref5[1];
+      reservoir = _ref5[2];
+      return {
+        success: _this7.convertBool(success),
+        wait,
+        reservoir
+      };
+    })();
+  }
+
+  __submit__(queueLength, weight) {
+    var _this8 = this;
+
+    return _asyncToGenerator$1(function* () {
+      var blocked, e, maxConcurrent, reachedHWM, strategy;
+
+      try {
+        var _ref6 = yield _this8.runScript("submit", _this8.prepareArray([queueLength, weight]));
+
+        var _ref7 = _slicedToArray(_ref6, 3);
+
+        reachedHWM = _ref7[0];
+        blocked = _ref7[1];
+        strategy = _ref7[2];
+        return {
+          reachedHWM: _this8.convertBool(reachedHWM),
+          blocked: _this8.convertBool(blocked),
+          strategy
+        };
+      } catch (error) {
+        e = error;
+
+        if (e.message.indexOf("OVERWEIGHT") === 0) {
+          var _e$message$split = e.message.split(":");
+
+          var _e$message$split2 = _slicedToArray(_e$message$split, 3);
+
+          _e$message$split2[0];
+          weight = _e$message$split2[1];
+          maxConcurrent = _e$message$split2[2];
+          throw new BottleneckError$1(`Impossible to add a job having a weight of ${weight} to a limiter having a maxConcurrent setting of ${maxConcurrent}`);
+        } else {
+          throw e;
+        }
+      }
+    })();
+  }
+
+  __free__(index, weight) {
+    var _this9 = this;
+
+    return _asyncToGenerator$1(function* () {
+      var running;
+      running = yield _this9.runScript("free", _this9.prepareArray([index]));
+      return {
+        running
+      };
+    })();
+  }
+
+};
+var RedisDatastore_1 = RedisDatastore;
+
+var BottleneckError, States;
+BottleneckError = BottleneckError_1;
+States = class States {
+  constructor(status1) {
+    this.status = status1;
+    this._jobs = {};
+    this.counts = this.status.map(function () {
+      return 0;
+    });
+  }
+
+  next(id) {
+    var current, next;
+    current = this._jobs[id];
+    next = current + 1;
+
+    if (current != null && next < this.status.length) {
+      this.counts[current]--;
+      this.counts[next]++;
+      return this._jobs[id]++;
+    } else if (current != null) {
+      this.counts[current]--;
+      return delete this._jobs[id];
+    }
+  }
+
+  start(id) {
+    var initial;
+    initial = 0;
+    this._jobs[id] = initial;
+    return this.counts[initial]++;
+  }
+
+  remove(id) {
+    var current;
+    current = this._jobs[id];
+
+    if (current != null) {
+      this.counts[current]--;
+      delete this._jobs[id];
+    }
+
+    return current != null;
+  }
+
+  jobStatus(id) {
+    var ref;
+    return (ref = this.status[this._jobs[id]]) != null ? ref : null;
+  }
+
+  statusJobs(status) {
+    var k, pos, ref, results, v;
+
+    if (status != null) {
+      pos = this.status.indexOf(status);
+
+      if (pos < 0) {
+        throw new BottleneckError(`status must be one of ${this.status.join(', ')}`);
+      }
+
+      ref = this._jobs;
+      results = [];
+
+      for (k in ref) {
+        v = ref[k];
+
+        if (v === pos) {
+          results.push(k);
+        }
+      }
+
+      return results;
+    } else {
+      return Object.keys(this._jobs);
+    }
+  }
+
+  statusCounts() {
+    return this.counts.reduce((acc, v, i) => {
+      acc[this.status[i]] = v;
+      return acc;
+    }, {});
+  }
+
+};
+var States_1 = States;
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var DLList, Sync;
+DLList = DLList_1;
+Sync = class Sync {
+  constructor(name, Promise) {
+    this.schedule = this.schedule.bind(this);
+    this.name = name;
+    this.Promise = Promise;
+    this._running = 0;
+    this._queue = new DLList();
+  }
+
+  isEmpty() {
+    return this._queue.length === 0;
+  }
+
+  _tryToRun() {
+    var _this = this;
+
+    return _asyncToGenerator(function* () {
+      var args, cb, error, reject, resolve, returned, task;
+
+      if (_this._running < 1 && _this._queue.length > 0) {
+        _this._running++;
+
+        var _this$_queue$shift = _this._queue.shift();
+
+        task = _this$_queue$shift.task;
+        args = _this$_queue$shift.args;
+        resolve = _this$_queue$shift.resolve;
+        reject = _this$_queue$shift.reject;
+        cb = yield _asyncToGenerator(function* () {
+          try {
+            returned = yield task(...args);
+            return function () {
+              return resolve(returned);
+            };
+          } catch (error1) {
+            error = error1;
+            return function () {
+              return reject(error);
+            };
+          }
+        })();
+        _this._running--;
+
+        _this._tryToRun();
+
+        return cb();
+      }
+    })();
+  }
+
+  schedule(task, ...args) {
+    var promise, reject, resolve;
+    resolve = reject = null;
+    promise = new this.Promise(function (_resolve, _reject) {
+      resolve = _resolve;
+      return reject = _reject;
+    });
+
+    this._queue.push({
+      task,
+      args,
+      resolve,
+      reject
+    });
+
+    this._tryToRun();
+
+    return promise;
+  }
+
+};
+var Sync_1 = Sync;
+
+var version$a = "2.19.5";
+var require$$8 = {
+	version: version$a
+};
+
+var Group_1;
+var hasRequiredGroup;
+
+function requireGroup () {
+	if (hasRequiredGroup) return Group_1;
+	hasRequiredGroup = 1;
+
+	function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+	function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+	function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+	function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+	function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+	function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+	var Events, Group, IORedisConnection, RedisConnection, Scripts, parser;
+	parser = parser$7;
+	Events = Events_1;
+	RedisConnection = RedisConnection_1;
+	IORedisConnection = IORedisConnection_1;
+	Scripts = Scripts$2;
+
+	Group = function () {
+	  class Group {
+	    constructor(limiterOptions = {}) {
+	      this.deleteKey = this.deleteKey.bind(this);
+	      this.limiterOptions = limiterOptions;
+	      parser.load(this.limiterOptions, this.defaults, this);
+	      this.Events = new Events(this);
+	      this.instances = {};
+	      this.Bottleneck = requireBottleneck();
+
+	      this._startAutoCleanup();
+
+	      this.sharedConnection = this.connection != null;
+
+	      if (this.connection == null) {
+	        if (this.limiterOptions.datastore === "redis") {
+	          this.connection = new RedisConnection(Object.assign({}, this.limiterOptions, {
+	            Events: this.Events
+	          }));
+	        } else if (this.limiterOptions.datastore === "ioredis") {
+	          this.connection = new IORedisConnection(Object.assign({}, this.limiterOptions, {
+	            Events: this.Events
+	          }));
+	        }
+	      }
+	    }
+
+	    key(key = "") {
+	      var ref;
+	      return (ref = this.instances[key]) != null ? ref : (() => {
+	        var limiter;
+	        limiter = this.instances[key] = new this.Bottleneck(Object.assign(this.limiterOptions, {
+	          id: `${this.id}-${key}`,
+	          timeout: this.timeout,
+	          connection: this.connection
+	        }));
+	        this.Events.trigger("created", limiter, key);
+	        return limiter;
+	      })();
+	    }
+
+	    deleteKey(key = "") {
+	      var _this = this;
+
+	      return _asyncToGenerator(function* () {
+	        var deleted, instance;
+	        instance = _this.instances[key];
+
+	        if (_this.connection) {
+	          deleted = yield _this.connection.__runCommand__(['del', ...Scripts.allKeys(`${_this.id}-${key}`)]);
+	        }
+
+	        if (instance != null) {
+	          delete _this.instances[key];
+	          yield instance.disconnect();
+	        }
+
+	        return instance != null || deleted > 0;
+	      })();
+	    }
+
+	    limiters() {
+	      var k, ref, results, v;
+	      ref = this.instances;
+	      results = [];
+
+	      for (k in ref) {
+	        v = ref[k];
+	        results.push({
+	          key: k,
+	          limiter: v
+	        });
+	      }
+
+	      return results;
+	    }
+
+	    keys() {
+	      return Object.keys(this.instances);
+	    }
+
+	    clusterKeys() {
+	      var _this2 = this;
+
+	      return _asyncToGenerator(function* () {
+	        var cursor, end, found, i, k, keys, len, next, start;
+
+	        if (_this2.connection == null) {
+	          return _this2.Promise.resolve(_this2.keys());
+	        }
+
+	        keys = [];
+	        cursor = null;
+	        start = `b_${_this2.id}-`.length;
+	        end = "_settings".length;
+
+	        while (cursor !== 0) {
+	          var _ref = yield _this2.connection.__runCommand__(["scan", cursor != null ? cursor : 0, "match", `b_${_this2.id}-*_settings`, "count", 10000]);
+
+	          var _ref2 = _slicedToArray(_ref, 2);
+
+	          next = _ref2[0];
+	          found = _ref2[1];
+	          cursor = ~~next;
+
+	          for (i = 0, len = found.length; i < len; i++) {
+	            k = found[i];
+	            keys.push(k.slice(start, -end));
+	          }
+	        }
+
+	        return keys;
+	      })();
+	    }
+
+	    _startAutoCleanup() {
+	      var _this3 = this;
+
+	      var base;
+	      clearInterval(this.interval);
+	      return typeof (base = this.interval = setInterval(
+	      /*#__PURE__*/
+	      _asyncToGenerator(function* () {
+	        var e, k, ref, results, time, v;
+	        time = Date.now();
+	        ref = _this3.instances;
+	        results = [];
+
+	        for (k in ref) {
+	          v = ref[k];
+
+	          try {
+	            if (yield v._store.__groupCheck__(time)) {
+	              results.push(_this3.deleteKey(k));
+	            } else {
+	              results.push(void 0);
+	            }
+	          } catch (error) {
+	            e = error;
+	            results.push(v.Events.trigger("error", e));
+	          }
+	        }
+
+	        return results;
+	      }), this.timeout / 2)).unref === "function" ? base.unref() : void 0;
+	    }
+
+	    updateSettings(options = {}) {
+	      parser.overwrite(options, this.defaults, this);
+	      parser.overwrite(options, options, this.limiterOptions);
+
+	      if (options.timeout != null) {
+	        return this._startAutoCleanup();
+	      }
+	    }
+
+	    disconnect(flush = true) {
+	      var ref;
+
+	      if (!this.sharedConnection) {
+	        return (ref = this.connection) != null ? ref.disconnect(flush) : void 0;
+	      }
+	    }
+
+	  }
+	  Group.prototype.defaults = {
+	    timeout: 1000 * 60 * 5,
+	    connection: null,
+	    Promise: Promise,
+	    id: "group-key"
+	  };
+	  return Group;
+	}.call(void 0);
+
+	Group_1 = Group;
+	return Group_1;
+}
+
+var Batcher_1;
+var hasRequiredBatcher;
+
+function requireBatcher () {
+	if (hasRequiredBatcher) return Batcher_1;
+	hasRequiredBatcher = 1;
+
+	var Batcher, Events, parser;
+	parser = parser$7;
+	Events = Events_1;
+
+	Batcher = function () {
+	  class Batcher {
+	    constructor(options = {}) {
+	      this.options = options;
+	      parser.load(this.options, this.defaults, this);
+	      this.Events = new Events(this);
+	      this._arr = [];
+
+	      this._resetPromise();
+
+	      this._lastFlush = Date.now();
+	    }
+
+	    _resetPromise() {
+	      return this._promise = new this.Promise((res, rej) => {
+	        return this._resolve = res;
+	      });
+	    }
+
+	    _flush() {
+	      clearTimeout(this._timeout);
+	      this._lastFlush = Date.now();
+
+	      this._resolve();
+
+	      this.Events.trigger("batch", this._arr);
+	      this._arr = [];
+	      return this._resetPromise();
+	    }
+
+	    add(data) {
+	      var ret;
+
+	      this._arr.push(data);
+
+	      ret = this._promise;
+
+	      if (this._arr.length === this.maxSize) {
+	        this._flush();
+	      } else if (this.maxTime != null && this._arr.length === 1) {
+	        this._timeout = setTimeout(() => {
+	          return this._flush();
+	        }, this.maxTime);
+	      }
+
+	      return ret;
+	    }
+
+	  }
+	  Batcher.prototype.defaults = {
+	    maxTime: null,
+	    maxSize: null,
+	    Promise: Promise
+	  };
+	  return Batcher;
+	}.call(void 0);
+
+	Batcher_1 = Batcher;
+	return Batcher_1;
+}
+
+var Bottleneck_1;
+var hasRequiredBottleneck;
+
+function requireBottleneck () {
+	if (hasRequiredBottleneck) return Bottleneck_1;
+	hasRequiredBottleneck = 1;
+
+	function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+	function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+	function _toArray(arr) { return _arrayWithHoles(arr) || _iterableToArray(arr) || _nonIterableRest(); }
+
+	function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+	function _iterableToArray(iter) { if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter); }
+
+	function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+	function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+	function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+	var Bottleneck,
+	    DEFAULT_PRIORITY,
+	    Events,
+	    Job,
+	    LocalDatastore,
+	    NUM_PRIORITIES,
+	    Queues,
+	    RedisDatastore,
+	    States,
+	    Sync,
+	    parser,
+	    splice = [].splice;
+	NUM_PRIORITIES = 10;
+	DEFAULT_PRIORITY = 5;
+	parser = parser$7;
+	Queues = Queues_1;
+	Job = Job_1;
+	LocalDatastore = LocalDatastore_1;
+	RedisDatastore = RedisDatastore_1;
+	Events = Events_1;
+	States = States_1;
+	Sync = Sync_1;
+
+	Bottleneck = function () {
+	  class Bottleneck {
+	    constructor(options = {}, ...invalid) {
+	      var storeInstanceOptions, storeOptions;
+	      this._addToQueue = this._addToQueue.bind(this);
+
+	      this._validateOptions(options, invalid);
+
+	      parser.load(options, this.instanceDefaults, this);
+	      this._queues = new Queues(NUM_PRIORITIES);
+	      this._scheduled = {};
+	      this._states = new States(["RECEIVED", "QUEUED", "RUNNING", "EXECUTING"].concat(this.trackDoneStatus ? ["DONE"] : []));
+	      this._limiter = null;
+	      this.Events = new Events(this);
+	      this._submitLock = new Sync("submit", this.Promise);
+	      this._registerLock = new Sync("register", this.Promise);
+	      storeOptions = parser.load(options, this.storeDefaults, {});
+
+	      this._store = function () {
+	        if (this.datastore === "redis" || this.datastore === "ioredis" || this.connection != null) {
+	          storeInstanceOptions = parser.load(options, this.redisStoreDefaults, {});
+	          return new RedisDatastore(this, storeOptions, storeInstanceOptions);
+	        } else if (this.datastore === "local") {
+	          storeInstanceOptions = parser.load(options, this.localStoreDefaults, {});
+	          return new LocalDatastore(this, storeOptions, storeInstanceOptions);
+	        } else {
+	          throw new Bottleneck.prototype.BottleneckError(`Invalid datastore type: ${this.datastore}`);
+	        }
+	      }.call(this);
+
+	      this._queues.on("leftzero", () => {
+	        var ref;
+	        return (ref = this._store.heartbeat) != null ? typeof ref.ref === "function" ? ref.ref() : void 0 : void 0;
+	      });
+
+	      this._queues.on("zero", () => {
+	        var ref;
+	        return (ref = this._store.heartbeat) != null ? typeof ref.unref === "function" ? ref.unref() : void 0 : void 0;
+	      });
+	    }
+
+	    _validateOptions(options, invalid) {
+	      if (!(options != null && typeof options === "object" && invalid.length === 0)) {
+	        throw new Bottleneck.prototype.BottleneckError("Bottleneck v2 takes a single object argument. Refer to https://github.com/SGrondin/bottleneck#upgrading-to-v2 if you're upgrading from Bottleneck v1.");
+	      }
+	    }
+
+	    ready() {
+	      return this._store.ready;
+	    }
+
+	    clients() {
+	      return this._store.clients;
+	    }
+
+	    channel() {
+	      return `b_${this.id}`;
+	    }
+
+	    channel_client() {
+	      return `b_${this.id}_${this._store.clientId}`;
+	    }
+
+	    publish(message) {
+	      return this._store.__publish__(message);
+	    }
+
+	    disconnect(flush = true) {
+	      return this._store.__disconnect__(flush);
+	    }
+
+	    chain(_limiter) {
+	      this._limiter = _limiter;
+	      return this;
+	    }
+
+	    queued(priority) {
+	      return this._queues.queued(priority);
+	    }
+
+	    clusterQueued() {
+	      return this._store.__queued__();
+	    }
+
+	    empty() {
+	      return this.queued() === 0 && this._submitLock.isEmpty();
+	    }
+
+	    running() {
+	      return this._store.__running__();
+	    }
+
+	    done() {
+	      return this._store.__done__();
+	    }
+
+	    jobStatus(id) {
+	      return this._states.jobStatus(id);
+	    }
+
+	    jobs(status) {
+	      return this._states.statusJobs(status);
+	    }
+
+	    counts() {
+	      return this._states.statusCounts();
+	    }
+
+	    _randomIndex() {
+	      return Math.random().toString(36).slice(2);
+	    }
+
+	    check(weight = 1) {
+	      return this._store.__check__(weight);
+	    }
+
+	    _clearGlobalState(index) {
+	      if (this._scheduled[index] != null) {
+	        clearTimeout(this._scheduled[index].expiration);
+	        delete this._scheduled[index];
+	        return true;
+	      } else {
+	        return false;
+	      }
+	    }
+
+	    _free(index, job, options, eventInfo) {
+	      var _this = this;
+
+	      return _asyncToGenerator(function* () {
+	        var e, running;
+
+	        try {
+	          var _ref = yield _this._store.__free__(index, options.weight);
+
+	          running = _ref.running;
+
+	          _this.Events.trigger("debug", `Freed ${options.id}`, eventInfo);
+
+	          if (running === 0 && _this.empty()) {
+	            return _this.Events.trigger("idle");
+	          }
+	        } catch (error1) {
+	          e = error1;
+	          return _this.Events.trigger("error", e);
+	        }
+	      })();
+	    }
+
+	    _run(index, job, wait) {
+	      var clearGlobalState, free, run;
+	      job.doRun();
+	      clearGlobalState = this._clearGlobalState.bind(this, index);
+	      run = this._run.bind(this, index, job);
+	      free = this._free.bind(this, index, job);
+	      return this._scheduled[index] = {
+	        timeout: setTimeout(() => {
+	          return job.doExecute(this._limiter, clearGlobalState, run, free);
+	        }, wait),
+	        expiration: job.options.expiration != null ? setTimeout(function () {
+	          return job.doExpire(clearGlobalState, run, free);
+	        }, wait + job.options.expiration) : void 0,
+	        job: job
+	      };
+	    }
+
+	    _drainOne(capacity) {
+	      return this._registerLock.schedule(() => {
+	        var args, index, next, options, queue;
+
+	        if (this.queued() === 0) {
+	          return this.Promise.resolve(null);
+	        }
+
+	        queue = this._queues.getFirst();
+
+	        var _next2 = next = queue.first();
+
+	        options = _next2.options;
+	        args = _next2.args;
+
+	        if (capacity != null && options.weight > capacity) {
+	          return this.Promise.resolve(null);
+	        }
+
+	        this.Events.trigger("debug", `Draining ${options.id}`, {
+	          args,
+	          options
+	        });
+	        index = this._randomIndex();
+	        return this._store.__register__(index, options.weight, options.expiration).then(({
+	          success,
+	          wait,
+	          reservoir
+	        }) => {
+	          var empty;
+	          this.Events.trigger("debug", `Drained ${options.id}`, {
+	            success,
+	            args,
+	            options
+	          });
+
+	          if (success) {
+	            queue.shift();
+	            empty = this.empty();
+
+	            if (empty) {
+	              this.Events.trigger("empty");
+	            }
+
+	            if (reservoir === 0) {
+	              this.Events.trigger("depleted", empty);
+	            }
+
+	            this._run(index, next, wait);
+
+	            return this.Promise.resolve(options.weight);
+	          } else {
+	            return this.Promise.resolve(null);
+	          }
+	        });
+	      });
+	    }
+
+	    _drainAll(capacity, total = 0) {
+	      return this._drainOne(capacity).then(drained => {
+	        var newCapacity;
+
+	        if (drained != null) {
+	          newCapacity = capacity != null ? capacity - drained : capacity;
+	          return this._drainAll(newCapacity, total + drained);
+	        } else {
+	          return this.Promise.resolve(total);
+	        }
+	      }).catch(e => {
+	        return this.Events.trigger("error", e);
+	      });
+	    }
+
+	    _dropAllQueued(message) {
+	      return this._queues.shiftAll(function (job) {
+	        return job.doDrop({
+	          message
+	        });
+	      });
+	    }
+
+	    stop(options = {}) {
+	      var done, waitForExecuting;
+	      options = parser.load(options, this.stopDefaults);
+
+	      waitForExecuting = at => {
+	        var finished;
+
+	        finished = () => {
+	          var counts;
+	          counts = this._states.counts;
+	          return counts[0] + counts[1] + counts[2] + counts[3] === at;
+	        };
+
+	        return new this.Promise((resolve, reject) => {
+	          if (finished()) {
+	            return resolve();
+	          } else {
+	            return this.on("done", () => {
+	              if (finished()) {
+	                this.removeAllListeners("done");
+	                return resolve();
+	              }
+	            });
+	          }
+	        });
+	      };
+
+	      done = options.dropWaitingJobs ? (this._run = function (index, next) {
+	        return next.doDrop({
+	          message: options.dropErrorMessage
+	        });
+	      }, this._drainOne = () => {
+	        return this.Promise.resolve(null);
+	      }, this._registerLock.schedule(() => {
+	        return this._submitLock.schedule(() => {
+	          var k, ref, v;
+	          ref = this._scheduled;
+
+	          for (k in ref) {
+	            v = ref[k];
+
+	            if (this.jobStatus(v.job.options.id) === "RUNNING") {
+	              clearTimeout(v.timeout);
+	              clearTimeout(v.expiration);
+	              v.job.doDrop({
+	                message: options.dropErrorMessage
+	              });
+	            }
+	          }
+
+	          this._dropAllQueued(options.dropErrorMessage);
+
+	          return waitForExecuting(0);
+	        });
+	      })) : this.schedule({
+	        priority: NUM_PRIORITIES - 1,
+	        weight: 0
+	      }, () => {
+	        return waitForExecuting(1);
+	      });
+
+	      this._receive = function (job) {
+	        return job._reject(new Bottleneck.prototype.BottleneckError(options.enqueueErrorMessage));
+	      };
+
+	      this.stop = () => {
+	        return this.Promise.reject(new Bottleneck.prototype.BottleneckError("stop() has already been called"));
+	      };
+
+	      return done;
+	    }
+
+	    _addToQueue(job) {
+	      var _this2 = this;
+
+	      return _asyncToGenerator(function* () {
+	        var args, blocked, error, options, reachedHWM, shifted, strategy;
+	        args = job.args;
+	        options = job.options;
+
+	        try {
+	          var _ref2 = yield _this2._store.__submit__(_this2.queued(), options.weight);
+
+	          reachedHWM = _ref2.reachedHWM;
+	          blocked = _ref2.blocked;
+	          strategy = _ref2.strategy;
+	        } catch (error1) {
+	          error = error1;
+
+	          _this2.Events.trigger("debug", `Could not queue ${options.id}`, {
+	            args,
+	            options,
+	            error
+	          });
+
+	          job.doDrop({
+	            error
+	          });
+	          return false;
+	        }
+
+	        if (blocked) {
+	          job.doDrop();
+	          return true;
+	        } else if (reachedHWM) {
+	          shifted = strategy === Bottleneck.prototype.strategy.LEAK ? _this2._queues.shiftLastFrom(options.priority) : strategy === Bottleneck.prototype.strategy.OVERFLOW_PRIORITY ? _this2._queues.shiftLastFrom(options.priority + 1) : strategy === Bottleneck.prototype.strategy.OVERFLOW ? job : void 0;
+
+	          if (shifted != null) {
+	            shifted.doDrop();
+	          }
+
+	          if (shifted == null || strategy === Bottleneck.prototype.strategy.OVERFLOW) {
+	            if (shifted == null) {
+	              job.doDrop();
+	            }
+
+	            return reachedHWM;
+	          }
+	        }
+
+	        job.doQueue(reachedHWM, blocked);
+
+	        _this2._queues.push(job);
+
+	        yield _this2._drainAll();
+	        return reachedHWM;
+	      })();
+	    }
+
+	    _receive(job) {
+	      if (this._states.jobStatus(job.options.id) != null) {
+	        job._reject(new Bottleneck.prototype.BottleneckError(`A job with the same id already exists (id=${job.options.id})`));
+
+	        return false;
+	      } else {
+	        job.doReceive();
+	        return this._submitLock.schedule(this._addToQueue, job);
+	      }
+	    }
+
+	    submit(...args) {
+	      var cb, fn, job, options, ref, ref1, task;
+
+	      if (typeof args[0] === "function") {
+	        var _ref3, _ref4, _splice$call, _splice$call2;
+
+	        ref = args, (_ref3 = ref, _ref4 = _toArray(_ref3), fn = _ref4[0], args = _ref4.slice(1), _ref3), (_splice$call = splice.call(args, -1), _splice$call2 = _slicedToArray(_splice$call, 1), cb = _splice$call2[0], _splice$call);
+	        options = parser.load({}, this.jobDefaults);
+	      } else {
+	        var _ref5, _ref6, _splice$call3, _splice$call4;
+
+	        ref1 = args, (_ref5 = ref1, _ref6 = _toArray(_ref5), options = _ref6[0], fn = _ref6[1], args = _ref6.slice(2), _ref5), (_splice$call3 = splice.call(args, -1), _splice$call4 = _slicedToArray(_splice$call3, 1), cb = _splice$call4[0], _splice$call3);
+	        options = parser.load(options, this.jobDefaults);
+	      }
+
+	      task = (...args) => {
+	        return new this.Promise(function (resolve, reject) {
+	          return fn(...args, function (...args) {
+	            return (args[0] != null ? reject : resolve)(args);
+	          });
+	        });
+	      };
+
+	      job = new Job(task, args, options, this.jobDefaults, this.rejectOnDrop, this.Events, this._states, this.Promise);
+	      job.promise.then(function (args) {
+	        return typeof cb === "function" ? cb(...args) : void 0;
+	      }).catch(function (args) {
+	        if (Array.isArray(args)) {
+	          return typeof cb === "function" ? cb(...args) : void 0;
+	        } else {
+	          return typeof cb === "function" ? cb(args) : void 0;
+	        }
+	      });
+	      return this._receive(job);
+	    }
+
+	    schedule(...args) {
+	      var job, options, task;
+
+	      if (typeof args[0] === "function") {
+	        var _args = args;
+
+	        var _args2 = _toArray(_args);
+
+	        task = _args2[0];
+	        args = _args2.slice(1);
+	        options = {};
+	      } else {
+	        var _args3 = args;
+
+	        var _args4 = _toArray(_args3);
+
+	        options = _args4[0];
+	        task = _args4[1];
+	        args = _args4.slice(2);
+	      }
+
+	      job = new Job(task, args, options, this.jobDefaults, this.rejectOnDrop, this.Events, this._states, this.Promise);
+
+	      this._receive(job);
+
+	      return job.promise;
+	    }
+
+	    wrap(fn) {
+	      var schedule, wrapped;
+	      schedule = this.schedule.bind(this);
+
+	      wrapped = function wrapped(...args) {
+	        return schedule(fn.bind(this), ...args);
+	      };
+
+	      wrapped.withOptions = function (options, ...args) {
+	        return schedule(options, fn, ...args);
+	      };
+
+	      return wrapped;
+	    }
+
+	    updateSettings(options = {}) {
+	      var _this3 = this;
+
+	      return _asyncToGenerator(function* () {
+	        yield _this3._store.__updateSettings__(parser.overwrite(options, _this3.storeDefaults));
+	        parser.overwrite(options, _this3.instanceDefaults, _this3);
+	        return _this3;
+	      })();
+	    }
+
+	    currentReservoir() {
+	      return this._store.__currentReservoir__();
+	    }
+
+	    incrementReservoir(incr = 0) {
+	      return this._store.__incrementReservoir__(incr);
+	    }
+
+	  }
+	  Bottleneck.default = Bottleneck;
+	  Bottleneck.Events = Events;
+	  Bottleneck.version = Bottleneck.prototype.version = require$$8.version;
+	  Bottleneck.strategy = Bottleneck.prototype.strategy = {
+	    LEAK: 1,
+	    OVERFLOW: 2,
+	    OVERFLOW_PRIORITY: 4,
+	    BLOCK: 3
+	  };
+	  Bottleneck.BottleneckError = Bottleneck.prototype.BottleneckError = BottleneckError_1;
+	  Bottleneck.Group = Bottleneck.prototype.Group = requireGroup();
+	  Bottleneck.RedisConnection = Bottleneck.prototype.RedisConnection = RedisConnection_1;
+	  Bottleneck.IORedisConnection = Bottleneck.prototype.IORedisConnection = IORedisConnection_1;
+	  Bottleneck.Batcher = Bottleneck.prototype.Batcher = requireBatcher();
+	  Bottleneck.prototype.jobDefaults = {
+	    priority: DEFAULT_PRIORITY,
+	    weight: 1,
+	    expiration: null,
+	    id: "<no-id>"
+	  };
+	  Bottleneck.prototype.storeDefaults = {
+	    maxConcurrent: null,
+	    minTime: 0,
+	    highWater: null,
+	    strategy: Bottleneck.prototype.strategy.LEAK,
+	    penalty: null,
+	    reservoir: null,
+	    reservoirRefreshInterval: null,
+	    reservoirRefreshAmount: null,
+	    reservoirIncreaseInterval: null,
+	    reservoirIncreaseAmount: null,
+	    reservoirIncreaseMaximum: null
+	  };
+	  Bottleneck.prototype.localStoreDefaults = {
+	    Promise: Promise,
+	    timeout: null,
+	    heartbeatInterval: 250
+	  };
+	  Bottleneck.prototype.redisStoreDefaults = {
+	    Promise: Promise,
+	    timeout: null,
+	    heartbeatInterval: 5000,
+	    clientTimeout: 10000,
+	    Redis: null,
+	    clientOptions: {},
+	    clusterNodes: null,
+	    clearDatastore: false,
+	    connection: null
+	  };
+	  Bottleneck.prototype.instanceDefaults = {
+	    datastore: "local",
+	    connection: null,
+	    id: "<no-id>",
+	    rejectOnDrop: true,
+	    trackDoneStatus: false,
+	    Promise: Promise
+	  };
+	  Bottleneck.prototype.stopDefaults = {
+	    enqueueErrorMessage: "This limiter has been stopped and cannot accept new jobs.",
+	    dropWaitingJobs: true,
+	    dropErrorMessage: "This limiter has been stopped."
+	  };
+	  return Bottleneck;
+	}.call(void 0);
+
+	Bottleneck_1 = Bottleneck;
+	return Bottleneck_1;
+}
+
+(function (module) {
+
+	module.exports = requireBottleneck();
+} (lib$6));
+
+var builtExports = {};
+var built$1 = {
+  get exports(){ return builtExports; },
+  set exports(v){ builtExports = v; },
+};
+
+var redis = {};
+
+var lodash = {};
+
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as references for various `Number` constants. */
+var MAX_SAFE_INTEGER$2 = 9007199254740991;
+
+/** `Object#toString` result references. */
+var argsTag$2 = '[object Arguments]',
+    funcTag$2 = '[object Function]',
+    genTag$2 = '[object GeneratorFunction]';
+
+/** Used to detect unsigned integer values. */
+var reIsUint = /^(?:0|[1-9]\d*)$/;
+
+/**
+ * A faster alternative to `Function#apply`, this function invokes `func`
+ * with the `this` binding of `thisArg` and the arguments of `args`.
+ *
+ * @private
+ * @param {Function} func The function to invoke.
+ * @param {*} thisArg The `this` binding of `func`.
+ * @param {Array} args The arguments to invoke `func` with.
+ * @returns {*} Returns the result of `func`.
+ */
+function apply(func, thisArg, args) {
+  switch (args.length) {
+    case 0: return func.call(thisArg);
+    case 1: return func.call(thisArg, args[0]);
+    case 2: return func.call(thisArg, args[0], args[1]);
+    case 3: return func.call(thisArg, args[0], args[1], args[2]);
+  }
+  return func.apply(thisArg, args);
+}
+
+/**
+ * The base implementation of `_.times` without support for iteratee shorthands
+ * or max array length checks.
+ *
+ * @private
+ * @param {number} n The number of times to invoke `iteratee`.
+ * @param {Function} iteratee The function invoked per iteration.
+ * @returns {Array} Returns the array of results.
+ */
+function baseTimes(n, iteratee) {
+  var index = -1,
+      result = Array(n);
+
+  while (++index < n) {
+    result[index] = iteratee(index);
+  }
+  return result;
+}
+
+/** Used for built-in method references. */
+var objectProto$2 = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty$5 = objectProto$2.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString$3 = objectProto$2.toString;
+
+/** Built-in value references. */
+var propertyIsEnumerable$2 = objectProto$2.propertyIsEnumerable;
+
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeMax = Math.max;
+
+/**
+ * Creates an array of the enumerable property names of the array-like `value`.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @param {boolean} inherited Specify returning inherited property names.
+ * @returns {Array} Returns the array of property names.
+ */
+function arrayLikeKeys(value, inherited) {
+  // Safari 8.1 makes `arguments.callee` enumerable in strict mode.
+  // Safari 9 makes `arguments.length` enumerable in strict mode.
+  var result = (isArray$6(value) || isArguments$3(value))
+    ? baseTimes(value.length, String)
+    : [];
+
+  var length = result.length,
+      skipIndexes = !!length;
+
+  for (var key in value) {
+    if ((inherited || hasOwnProperty$5.call(value, key)) &&
+        !(skipIndexes && (key == 'length' || isIndex(key, length)))) {
+      result.push(key);
+    }
+  }
+  return result;
+}
+
+/**
+ * Used by `_.defaults` to customize its `_.assignIn` use.
+ *
+ * @private
+ * @param {*} objValue The destination value.
+ * @param {*} srcValue The source value.
+ * @param {string} key The key of the property to assign.
+ * @param {Object} object The parent object of `objValue`.
+ * @returns {*} Returns the value to assign.
+ */
+function assignInDefaults(objValue, srcValue, key, object) {
+  if (objValue === undefined ||
+      (eq(objValue, objectProto$2[key]) && !hasOwnProperty$5.call(object, key))) {
+    return srcValue;
+  }
+  return objValue;
+}
+
+/**
+ * Assigns `value` to `key` of `object` if the existing value is not equivalent
+ * using [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * for equality comparisons.
+ *
+ * @private
+ * @param {Object} object The object to modify.
+ * @param {string} key The key of the property to assign.
+ * @param {*} value The value to assign.
+ */
+function assignValue(object, key, value) {
+  var objValue = object[key];
+  if (!(hasOwnProperty$5.call(object, key) && eq(objValue, value)) ||
+      (value === undefined && !(key in object))) {
+    object[key] = value;
+  }
+}
+
+/**
+ * The base implementation of `_.keysIn` which doesn't treat sparse arrays as dense.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ */
+function baseKeysIn(object) {
+  if (!isObject$5(object)) {
+    return nativeKeysIn(object);
+  }
+  var isProto = isPrototype(object),
+      result = [];
+
+  for (var key in object) {
+    if (!(key == 'constructor' && (isProto || !hasOwnProperty$5.call(object, key)))) {
+      result.push(key);
+    }
+  }
+  return result;
+}
+
+/**
+ * The base implementation of `_.rest` which doesn't validate or coerce arguments.
+ *
+ * @private
+ * @param {Function} func The function to apply a rest parameter to.
+ * @param {number} [start=func.length-1] The start position of the rest parameter.
+ * @returns {Function} Returns the new function.
+ */
+function baseRest(func, start) {
+  start = nativeMax(start === undefined ? (func.length - 1) : start, 0);
+  return function() {
+    var args = arguments,
+        index = -1,
+        length = nativeMax(args.length - start, 0),
+        array = Array(length);
+
+    while (++index < length) {
+      array[index] = args[start + index];
+    }
+    index = -1;
+    var otherArgs = Array(start + 1);
+    while (++index < start) {
+      otherArgs[index] = args[index];
+    }
+    otherArgs[start] = array;
+    return apply(func, this, otherArgs);
+  };
+}
+
+/**
+ * Copies properties of `source` to `object`.
+ *
+ * @private
+ * @param {Object} source The object to copy properties from.
+ * @param {Array} props The property identifiers to copy.
+ * @param {Object} [object={}] The object to copy properties to.
+ * @param {Function} [customizer] The function to customize copied values.
+ * @returns {Object} Returns `object`.
+ */
+function copyObject(source, props, object, customizer) {
+  object || (object = {});
+
+  var index = -1,
+      length = props.length;
+
+  while (++index < length) {
+    var key = props[index];
+
+    var newValue = customizer
+      ? customizer(object[key], source[key], key, object, source)
+      : undefined;
+
+    assignValue(object, key, newValue === undefined ? source[key] : newValue);
+  }
+  return object;
+}
+
+/**
+ * Creates a function like `_.assign`.
+ *
+ * @private
+ * @param {Function} assigner The function to assign values.
+ * @returns {Function} Returns the new assigner function.
+ */
+function createAssigner(assigner) {
+  return baseRest(function(object, sources) {
+    var index = -1,
+        length = sources.length,
+        customizer = length > 1 ? sources[length - 1] : undefined,
+        guard = length > 2 ? sources[2] : undefined;
+
+    customizer = (assigner.length > 3 && typeof customizer == 'function')
+      ? (length--, customizer)
+      : undefined;
+
+    if (guard && isIterateeCall(sources[0], sources[1], guard)) {
+      customizer = length < 3 ? undefined : customizer;
+      length = 1;
+    }
+    object = Object(object);
+    while (++index < length) {
+      var source = sources[index];
+      if (source) {
+        assigner(object, source, index, customizer);
+      }
+    }
+    return object;
+  });
+}
+
+/**
+ * Checks if `value` is a valid array-like index.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
+ * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
+ */
+function isIndex(value, length) {
+  length = length == null ? MAX_SAFE_INTEGER$2 : length;
+  return !!length &&
+    (typeof value == 'number' || reIsUint.test(value)) &&
+    (value > -1 && value % 1 == 0 && value < length);
+}
+
+/**
+ * Checks if the given arguments are from an iteratee call.
+ *
+ * @private
+ * @param {*} value The potential iteratee value argument.
+ * @param {*} index The potential iteratee index or key argument.
+ * @param {*} object The potential iteratee object argument.
+ * @returns {boolean} Returns `true` if the arguments are from an iteratee call,
+ *  else `false`.
+ */
+function isIterateeCall(value, index, object) {
+  if (!isObject$5(object)) {
+    return false;
+  }
+  var type = typeof index;
+  if (type == 'number'
+        ? (isArrayLike$2(object) && isIndex(index, object.length))
+        : (type == 'string' && index in object)
+      ) {
+    return eq(object[index], value);
+  }
+  return false;
+}
+
+/**
+ * Checks if `value` is likely a prototype object.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a prototype, else `false`.
+ */
+function isPrototype(value) {
+  var Ctor = value && value.constructor,
+      proto = (typeof Ctor == 'function' && Ctor.prototype) || objectProto$2;
+
+  return value === proto;
+}
+
+/**
+ * This function is like
+ * [`Object.keys`](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
+ * except that it includes inherited enumerable properties.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ */
+function nativeKeysIn(object) {
+  var result = [];
+  if (object != null) {
+    for (var key in Object(object)) {
+      result.push(key);
+    }
+  }
+  return result;
+}
+
+/**
+ * Performs a
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * comparison between two values to determine if they are equivalent.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.eq(object, object);
+ * // => true
+ *
+ * _.eq(object, other);
+ * // => false
+ *
+ * _.eq('a', 'a');
+ * // => true
+ *
+ * _.eq('a', Object('a'));
+ * // => false
+ *
+ * _.eq(NaN, NaN);
+ * // => true
+ */
+function eq(value, other) {
+  return value === other || (value !== value && other !== other);
+}
+
+/**
+ * Checks if `value` is likely an `arguments` object.
+ *
+ * @static
+ * @memberOf _
