@@ -26078,3 +26078,2227 @@ function requireMs$4 () {
 	    case 'seconds':
 	    case 'second':
 	    case 'secs':
+	    case 'sec':
+	    case 's':
+	      return n * s;
+	    case 'milliseconds':
+	    case 'millisecond':
+	    case 'msecs':
+	    case 'msec':
+	    case 'ms':
+	      return n;
+	    default:
+	      return undefined;
+	  }
+	}
+
+	/**
+	 * Short format for `ms`.
+	 *
+	 * @param {Number} ms
+	 * @return {String}
+	 * @api private
+	 */
+
+	function fmtShort(ms) {
+	  var msAbs = Math.abs(ms);
+	  if (msAbs >= d) {
+	    return Math.round(ms / d) + 'd';
+	  }
+	  if (msAbs >= h) {
+	    return Math.round(ms / h) + 'h';
+	  }
+	  if (msAbs >= m) {
+	    return Math.round(ms / m) + 'm';
+	  }
+	  if (msAbs >= s) {
+	    return Math.round(ms / s) + 's';
+	  }
+	  return ms + 'ms';
+	}
+
+	/**
+	 * Long format for `ms`.
+	 *
+	 * @param {Number} ms
+	 * @return {String}
+	 * @api private
+	 */
+
+	function fmtLong(ms) {
+	  var msAbs = Math.abs(ms);
+	  if (msAbs >= d) {
+	    return plural(ms, msAbs, d, 'day');
+	  }
+	  if (msAbs >= h) {
+	    return plural(ms, msAbs, h, 'hour');
+	  }
+	  if (msAbs >= m) {
+	    return plural(ms, msAbs, m, 'minute');
+	  }
+	  if (msAbs >= s) {
+	    return plural(ms, msAbs, s, 'second');
+	  }
+	  return ms + ' ms';
+	}
+
+	/**
+	 * Pluralization helper.
+	 */
+
+	function plural(ms, msAbs, n, name) {
+	  var isPlural = msAbs >= n * 1.5;
+	  return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
+	}
+	return ms$6;
+}
+
+var common$9;
+var hasRequiredCommon;
+
+function requireCommon () {
+	if (hasRequiredCommon) return common$9;
+	hasRequiredCommon = 1;
+	/**
+	 * This is the common logic for both the Node.js and web browser
+	 * implementations of `debug()`.
+	 */
+
+	function setup(env) {
+		createDebug.debug = createDebug;
+		createDebug.default = createDebug;
+		createDebug.coerce = coerce;
+		createDebug.disable = disable;
+		createDebug.enable = enable;
+		createDebug.enabled = enabled;
+		createDebug.humanize = requireMs$4();
+		createDebug.destroy = destroy;
+
+		Object.keys(env).forEach(key => {
+			createDebug[key] = env[key];
+		});
+
+		/**
+		* The currently active debug mode names, and names to skip.
+		*/
+
+		createDebug.names = [];
+		createDebug.skips = [];
+
+		/**
+		* Map of special "%n" handling functions, for the debug "format" argument.
+		*
+		* Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
+		*/
+		createDebug.formatters = {};
+
+		/**
+		* Selects a color for a debug namespace
+		* @param {String} namespace The namespace string for the debug instance to be colored
+		* @return {Number|String} An ANSI color code for the given namespace
+		* @api private
+		*/
+		function selectColor(namespace) {
+			let hash = 0;
+
+			for (let i = 0; i < namespace.length; i++) {
+				hash = ((hash << 5) - hash) + namespace.charCodeAt(i);
+				hash |= 0; // Convert to 32bit integer
+			}
+
+			return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+		}
+		createDebug.selectColor = selectColor;
+
+		/**
+		* Create a debugger with the given `namespace`.
+		*
+		* @param {String} namespace
+		* @return {Function}
+		* @api public
+		*/
+		function createDebug(namespace) {
+			let prevTime;
+			let enableOverride = null;
+			let namespacesCache;
+			let enabledCache;
+
+			function debug(...args) {
+				// Disabled?
+				if (!debug.enabled) {
+					return;
+				}
+
+				const self = debug;
+
+				// Set `diff` timestamp
+				const curr = Number(new Date());
+				const ms = curr - (prevTime || curr);
+				self.diff = ms;
+				self.prev = prevTime;
+				self.curr = curr;
+				prevTime = curr;
+
+				args[0] = createDebug.coerce(args[0]);
+
+				if (typeof args[0] !== 'string') {
+					// Anything else let's inspect with %O
+					args.unshift('%O');
+				}
+
+				// Apply any `formatters` transformations
+				let index = 0;
+				args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+					// If we encounter an escaped % then don't increase the array index
+					if (match === '%%') {
+						return '%';
+					}
+					index++;
+					const formatter = createDebug.formatters[format];
+					if (typeof formatter === 'function') {
+						const val = args[index];
+						match = formatter.call(self, val);
+
+						// Now we need to remove `args[index]` since it's inlined in the `format`
+						args.splice(index, 1);
+						index--;
+					}
+					return match;
+				});
+
+				// Apply env-specific formatting (colors, etc.)
+				createDebug.formatArgs.call(self, args);
+
+				const logFn = self.log || createDebug.log;
+				logFn.apply(self, args);
+			}
+
+			debug.namespace = namespace;
+			debug.useColors = createDebug.useColors();
+			debug.color = createDebug.selectColor(namespace);
+			debug.extend = extend;
+			debug.destroy = createDebug.destroy; // XXX Temporary. Will be removed in the next major release.
+
+			Object.defineProperty(debug, 'enabled', {
+				enumerable: true,
+				configurable: false,
+				get: () => {
+					if (enableOverride !== null) {
+						return enableOverride;
+					}
+					if (namespacesCache !== createDebug.namespaces) {
+						namespacesCache = createDebug.namespaces;
+						enabledCache = createDebug.enabled(namespace);
+					}
+
+					return enabledCache;
+				},
+				set: v => {
+					enableOverride = v;
+				}
+			});
+
+			// Env-specific initialization logic for debug instances
+			if (typeof createDebug.init === 'function') {
+				createDebug.init(debug);
+			}
+
+			return debug;
+		}
+
+		function extend(namespace, delimiter) {
+			const newDebug = createDebug(this.namespace + (typeof delimiter === 'undefined' ? ':' : delimiter) + namespace);
+			newDebug.log = this.log;
+			return newDebug;
+		}
+
+		/**
+		* Enables a debug mode by namespaces. This can include modes
+		* separated by a colon and wildcards.
+		*
+		* @param {String} namespaces
+		* @api public
+		*/
+		function enable(namespaces) {
+			createDebug.save(namespaces);
+			createDebug.namespaces = namespaces;
+
+			createDebug.names = [];
+			createDebug.skips = [];
+
+			let i;
+			const split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
+			const len = split.length;
+
+			for (i = 0; i < len; i++) {
+				if (!split[i]) {
+					// ignore empty strings
+					continue;
+				}
+
+				namespaces = split[i].replace(/\*/g, '.*?');
+
+				if (namespaces[0] === '-') {
+					createDebug.skips.push(new RegExp('^' + namespaces.slice(1) + '$'));
+				} else {
+					createDebug.names.push(new RegExp('^' + namespaces + '$'));
+				}
+			}
+		}
+
+		/**
+		* Disable debug output.
+		*
+		* @return {String} namespaces
+		* @api public
+		*/
+		function disable() {
+			const namespaces = [
+				...createDebug.names.map(toNamespace),
+				...createDebug.skips.map(toNamespace).map(namespace => '-' + namespace)
+			].join(',');
+			createDebug.enable('');
+			return namespaces;
+		}
+
+		/**
+		* Returns true if the given mode name is enabled, false otherwise.
+		*
+		* @param {String} name
+		* @return {Boolean}
+		* @api public
+		*/
+		function enabled(name) {
+			if (name[name.length - 1] === '*') {
+				return true;
+			}
+
+			let i;
+			let len;
+
+			for (i = 0, len = createDebug.skips.length; i < len; i++) {
+				if (createDebug.skips[i].test(name)) {
+					return false;
+				}
+			}
+
+			for (i = 0, len = createDebug.names.length; i < len; i++) {
+				if (createDebug.names[i].test(name)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		* Convert regexp to namespace
+		*
+		* @param {RegExp} regxep
+		* @return {String} namespace
+		* @api private
+		*/
+		function toNamespace(regexp) {
+			return regexp.toString()
+				.substring(2, regexp.toString().length - 2)
+				.replace(/\.\*\?$/, '*');
+		}
+
+		/**
+		* Coerce `val`.
+		*
+		* @param {Mixed} val
+		* @return {Mixed}
+		* @api private
+		*/
+		function coerce(val) {
+			if (val instanceof Error) {
+				return val.stack || val.message;
+			}
+			return val;
+		}
+
+		/**
+		* XXX DO NOT USE. This is a temporary stub function.
+		* XXX It WILL be removed in the next major release.
+		*/
+		function destroy() {
+			console.warn('Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.');
+		}
+
+		createDebug.enable(createDebug.load());
+
+		return createDebug;
+	}
+
+	common$9 = setup;
+	return common$9;
+}
+
+/* eslint-env browser */
+
+var hasRequiredBrowser$4;
+
+function requireBrowser$4 () {
+	if (hasRequiredBrowser$4) return browserExports$4;
+	hasRequiredBrowser$4 = 1;
+	(function (module, exports) {
+		/**
+		 * This is the web browser implementation of `debug()`.
+		 */
+
+		exports.formatArgs = formatArgs;
+		exports.save = save;
+		exports.load = load;
+		exports.useColors = useColors;
+		exports.storage = localstorage();
+		exports.destroy = (() => {
+			let warned = false;
+
+			return () => {
+				if (!warned) {
+					warned = true;
+					console.warn('Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.');
+				}
+			};
+		})();
+
+		/**
+		 * Colors.
+		 */
+
+		exports.colors = [
+			'#0000CC',
+			'#0000FF',
+			'#0033CC',
+			'#0033FF',
+			'#0066CC',
+			'#0066FF',
+			'#0099CC',
+			'#0099FF',
+			'#00CC00',
+			'#00CC33',
+			'#00CC66',
+			'#00CC99',
+			'#00CCCC',
+			'#00CCFF',
+			'#3300CC',
+			'#3300FF',
+			'#3333CC',
+			'#3333FF',
+			'#3366CC',
+			'#3366FF',
+			'#3399CC',
+			'#3399FF',
+			'#33CC00',
+			'#33CC33',
+			'#33CC66',
+			'#33CC99',
+			'#33CCCC',
+			'#33CCFF',
+			'#6600CC',
+			'#6600FF',
+			'#6633CC',
+			'#6633FF',
+			'#66CC00',
+			'#66CC33',
+			'#9900CC',
+			'#9900FF',
+			'#9933CC',
+			'#9933FF',
+			'#99CC00',
+			'#99CC33',
+			'#CC0000',
+			'#CC0033',
+			'#CC0066',
+			'#CC0099',
+			'#CC00CC',
+			'#CC00FF',
+			'#CC3300',
+			'#CC3333',
+			'#CC3366',
+			'#CC3399',
+			'#CC33CC',
+			'#CC33FF',
+			'#CC6600',
+			'#CC6633',
+			'#CC9900',
+			'#CC9933',
+			'#CCCC00',
+			'#CCCC33',
+			'#FF0000',
+			'#FF0033',
+			'#FF0066',
+			'#FF0099',
+			'#FF00CC',
+			'#FF00FF',
+			'#FF3300',
+			'#FF3333',
+			'#FF3366',
+			'#FF3399',
+			'#FF33CC',
+			'#FF33FF',
+			'#FF6600',
+			'#FF6633',
+			'#FF9900',
+			'#FF9933',
+			'#FFCC00',
+			'#FFCC33'
+		];
+
+		/**
+		 * Currently only WebKit-based Web Inspectors, Firefox >= v31,
+		 * and the Firebug extension (any Firefox version) are known
+		 * to support "%c" CSS customizations.
+		 *
+		 * TODO: add a `localStorage` variable to explicitly enable/disable colors
+		 */
+
+		// eslint-disable-next-line complexity
+		function useColors() {
+			// NB: In an Electron preload script, document will be defined but not fully
+			// initialized. Since we know we're in Chrome, we'll just detect this case
+			// explicitly
+			if (typeof window !== 'undefined' && window.process && (window.process.type === 'renderer' || window.process.__nwjs)) {
+				return true;
+			}
+
+			// Internet Explorer and Edge do not support colors.
+			if (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+				return false;
+			}
+
+			// Is webkit? http://stackoverflow.com/a/16459606/376773
+			// document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+			return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
+				// Is firebug? http://stackoverflow.com/a/398120/376773
+				(typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
+				// Is firefox >= v31?
+				// https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+				(typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
+				// Double check webkit in userAgent just in case we are in a worker
+				(typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
+		}
+
+		/**
+		 * Colorize log arguments if enabled.
+		 *
+		 * @api public
+		 */
+
+		function formatArgs(args) {
+			args[0] = (this.useColors ? '%c' : '') +
+				this.namespace +
+				(this.useColors ? ' %c' : ' ') +
+				args[0] +
+				(this.useColors ? '%c ' : ' ') +
+				'+' + module.exports.humanize(this.diff);
+
+			if (!this.useColors) {
+				return;
+			}
+
+			const c = 'color: ' + this.color;
+			args.splice(1, 0, c, 'color: inherit');
+
+			// The final "%c" is somewhat tricky, because there could be other
+			// arguments passed either before or after the %c, so we need to
+			// figure out the correct index to insert the CSS into
+			let index = 0;
+			let lastC = 0;
+			args[0].replace(/%[a-zA-Z%]/g, match => {
+				if (match === '%%') {
+					return;
+				}
+				index++;
+				if (match === '%c') {
+					// We only are interested in the *last* %c
+					// (the user may have provided their own)
+					lastC = index;
+				}
+			});
+
+			args.splice(lastC, 0, c);
+		}
+
+		/**
+		 * Invokes `console.debug()` when available.
+		 * No-op when `console.debug` is not a "function".
+		 * If `console.debug` is not available, falls back
+		 * to `console.log`.
+		 *
+		 * @api public
+		 */
+		exports.log = console.debug || console.log || (() => {});
+
+		/**
+		 * Save `namespaces`.
+		 *
+		 * @param {String} namespaces
+		 * @api private
+		 */
+		function save(namespaces) {
+			try {
+				if (namespaces) {
+					exports.storage.setItem('debug', namespaces);
+				} else {
+					exports.storage.removeItem('debug');
+				}
+			} catch (error) {
+				// Swallow
+				// XXX (@Qix-) should we be logging these?
+			}
+		}
+
+		/**
+		 * Load `namespaces`.
+		 *
+		 * @return {String} returns the previously persisted debug modes
+		 * @api private
+		 */
+		function load() {
+			let r;
+			try {
+				r = exports.storage.getItem('debug');
+			} catch (error) {
+				// Swallow
+				// XXX (@Qix-) should we be logging these?
+			}
+
+			// If debug isn't set in LS, and we're in Electron, try to load $DEBUG
+			if (!r && typeof process !== 'undefined' && 'env' in process) {
+				r = process.env.DEBUG;
+			}
+
+			return r;
+		}
+
+		/**
+		 * Localstorage attempts to return the localstorage.
+		 *
+		 * This is necessary because safari throws
+		 * when a user disables cookies/localstorage
+		 * and you attempt to access it.
+		 *
+		 * @return {LocalStorage}
+		 * @api private
+		 */
+
+		function localstorage() {
+			try {
+				// TVMLKit (Apple TV JS Runtime) does not have a window object, just localStorage in the global context
+				// The Browser also has localStorage in the global context.
+				return localStorage;
+			} catch (error) {
+				// Swallow
+				// XXX (@Qix-) should we be logging these?
+			}
+		}
+
+		module.exports = requireCommon()(exports);
+
+		const {formatters} = module.exports;
+
+		/**
+		 * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
+		 */
+
+		formatters.j = function (v) {
+			try {
+				return JSON.stringify(v);
+			} catch (error) {
+				return '[UnexpectedJSONParseError]: ' + error.message;
+			}
+		};
+} (browser$4, browserExports$4));
+	return browserExports$4;
+}
+
+var nodeExports$5 = {};
+var node$5 = {
+  get exports(){ return nodeExports$5; },
+  set exports(v){ nodeExports$5 = v; },
+};
+
+var hasFlag;
+var hasRequiredHasFlag;
+
+function requireHasFlag () {
+	if (hasRequiredHasFlag) return hasFlag;
+	hasRequiredHasFlag = 1;
+
+	hasFlag = (flag, argv = process.argv) => {
+		const prefix = flag.startsWith('-') ? '' : (flag.length === 1 ? '-' : '--');
+		const position = argv.indexOf(prefix + flag);
+		const terminatorPosition = argv.indexOf('--');
+		return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+	};
+	return hasFlag;
+}
+
+var supportsColor_1;
+var hasRequiredSupportsColor;
+
+function requireSupportsColor () {
+	if (hasRequiredSupportsColor) return supportsColor_1;
+	hasRequiredSupportsColor = 1;
+	const os = require$$0$h;
+	const tty = require$$0$g;
+	const hasFlag = requireHasFlag();
+
+	const {env} = process;
+
+	let forceColor;
+	if (hasFlag('no-color') ||
+		hasFlag('no-colors') ||
+		hasFlag('color=false') ||
+		hasFlag('color=never')) {
+		forceColor = 0;
+	} else if (hasFlag('color') ||
+		hasFlag('colors') ||
+		hasFlag('color=true') ||
+		hasFlag('color=always')) {
+		forceColor = 1;
+	}
+
+	if ('FORCE_COLOR' in env) {
+		if (env.FORCE_COLOR === 'true') {
+			forceColor = 1;
+		} else if (env.FORCE_COLOR === 'false') {
+			forceColor = 0;
+		} else {
+			forceColor = env.FORCE_COLOR.length === 0 ? 1 : Math.min(parseInt(env.FORCE_COLOR, 10), 3);
+		}
+	}
+
+	function translateLevel(level) {
+		if (level === 0) {
+			return false;
+		}
+
+		return {
+			level,
+			hasBasic: true,
+			has256: level >= 2,
+			has16m: level >= 3
+		};
+	}
+
+	function supportsColor(haveStream, streamIsTTY) {
+		if (forceColor === 0) {
+			return 0;
+		}
+
+		if (hasFlag('color=16m') ||
+			hasFlag('color=full') ||
+			hasFlag('color=truecolor')) {
+			return 3;
+		}
+
+		if (hasFlag('color=256')) {
+			return 2;
+		}
+
+		if (haveStream && !streamIsTTY && forceColor === undefined) {
+			return 0;
+		}
+
+		const min = forceColor || 0;
+
+		if (env.TERM === 'dumb') {
+			return min;
+		}
+
+		if (process.platform === 'win32') {
+			// Windows 10 build 10586 is the first Windows release that supports 256 colors.
+			// Windows 10 build 14931 is the first release that supports 16m/TrueColor.
+			const osRelease = os.release().split('.');
+			if (
+				Number(osRelease[0]) >= 10 &&
+				Number(osRelease[2]) >= 10586
+			) {
+				return Number(osRelease[2]) >= 14931 ? 3 : 2;
+			}
+
+			return 1;
+		}
+
+		if ('CI' in env) {
+			if (['TRAVIS', 'CIRCLECI', 'APPVEYOR', 'GITLAB_CI', 'GITHUB_ACTIONS', 'BUILDKITE'].some(sign => sign in env) || env.CI_NAME === 'codeship') {
+				return 1;
+			}
+
+			return min;
+		}
+
+		if ('TEAMCITY_VERSION' in env) {
+			return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
+		}
+
+		if (env.COLORTERM === 'truecolor') {
+			return 3;
+		}
+
+		if ('TERM_PROGRAM' in env) {
+			const version = parseInt((env.TERM_PROGRAM_VERSION || '').split('.')[0], 10);
+
+			switch (env.TERM_PROGRAM) {
+				case 'iTerm.app':
+					return version >= 3 ? 3 : 2;
+				case 'Apple_Terminal':
+					return 2;
+				// No default
+			}
+		}
+
+		if (/-256(color)?$/i.test(env.TERM)) {
+			return 2;
+		}
+
+		if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) {
+			return 1;
+		}
+
+		if ('COLORTERM' in env) {
+			return 1;
+		}
+
+		return min;
+	}
+
+	function getSupportLevel(stream) {
+		const level = supportsColor(stream, stream && stream.isTTY);
+		return translateLevel(level);
+	}
+
+	supportsColor_1 = {
+		supportsColor: getSupportLevel,
+		stdout: translateLevel(supportsColor(true, tty.isatty(1))),
+		stderr: translateLevel(supportsColor(true, tty.isatty(2)))
+	};
+	return supportsColor_1;
+}
+
+/**
+ * Module dependencies.
+ */
+
+var hasRequiredNode$5;
+
+function requireNode$5 () {
+	if (hasRequiredNode$5) return nodeExports$5;
+	hasRequiredNode$5 = 1;
+	(function (module, exports) {
+		const tty = require$$0$g;
+		const util = require$$1$7;
+
+		/**
+		 * This is the Node.js implementation of `debug()`.
+		 */
+
+		exports.init = init;
+		exports.log = log;
+		exports.formatArgs = formatArgs;
+		exports.save = save;
+		exports.load = load;
+		exports.useColors = useColors;
+		exports.destroy = util.deprecate(
+			() => {},
+			'Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.'
+		);
+
+		/**
+		 * Colors.
+		 */
+
+		exports.colors = [6, 2, 3, 4, 5, 1];
+
+		try {
+			// Optional dependency (as in, doesn't need to be installed, NOT like optionalDependencies in package.json)
+			// eslint-disable-next-line import/no-extraneous-dependencies
+			const supportsColor = requireSupportsColor();
+
+			if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+				exports.colors = [
+					20,
+					21,
+					26,
+					27,
+					32,
+					33,
+					38,
+					39,
+					40,
+					41,
+					42,
+					43,
+					44,
+					45,
+					56,
+					57,
+					62,
+					63,
+					68,
+					69,
+					74,
+					75,
+					76,
+					77,
+					78,
+					79,
+					80,
+					81,
+					92,
+					93,
+					98,
+					99,
+					112,
+					113,
+					128,
+					129,
+					134,
+					135,
+					148,
+					149,
+					160,
+					161,
+					162,
+					163,
+					164,
+					165,
+					166,
+					167,
+					168,
+					169,
+					170,
+					171,
+					172,
+					173,
+					178,
+					179,
+					184,
+					185,
+					196,
+					197,
+					198,
+					199,
+					200,
+					201,
+					202,
+					203,
+					204,
+					205,
+					206,
+					207,
+					208,
+					209,
+					214,
+					215,
+					220,
+					221
+				];
+			}
+		} catch (error) {
+			// Swallow - we only care if `supports-color` is available; it doesn't have to be.
+		}
+
+		/**
+		 * Build up the default `inspectOpts` object from the environment variables.
+		 *
+		 *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+		 */
+
+		exports.inspectOpts = Object.keys(process.env).filter(key => {
+			return /^debug_/i.test(key);
+		}).reduce((obj, key) => {
+			// Camel-case
+			const prop = key
+				.substring(6)
+				.toLowerCase()
+				.replace(/_([a-z])/g, (_, k) => {
+					return k.toUpperCase();
+				});
+
+			// Coerce string value into JS value
+			let val = process.env[key];
+			if (/^(yes|on|true|enabled)$/i.test(val)) {
+				val = true;
+			} else if (/^(no|off|false|disabled)$/i.test(val)) {
+				val = false;
+			} else if (val === 'null') {
+				val = null;
+			} else {
+				val = Number(val);
+			}
+
+			obj[prop] = val;
+			return obj;
+		}, {});
+
+		/**
+		 * Is stdout a TTY? Colored output is enabled when `true`.
+		 */
+
+		function useColors() {
+			return 'colors' in exports.inspectOpts ?
+				Boolean(exports.inspectOpts.colors) :
+				tty.isatty(process.stderr.fd);
+		}
+
+		/**
+		 * Adds ANSI color escape codes if enabled.
+		 *
+		 * @api public
+		 */
+
+		function formatArgs(args) {
+			const {namespace: name, useColors} = this;
+
+			if (useColors) {
+				const c = this.color;
+				const colorCode = '\u001B[3' + (c < 8 ? c : '8;5;' + c);
+				const prefix = `  ${colorCode};1m${name} \u001B[0m`;
+
+				args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+				args.push(colorCode + 'm+' + module.exports.humanize(this.diff) + '\u001B[0m');
+			} else {
+				args[0] = getDate() + name + ' ' + args[0];
+			}
+		}
+
+		function getDate() {
+			if (exports.inspectOpts.hideDate) {
+				return '';
+			}
+			return new Date().toISOString() + ' ';
+		}
+
+		/**
+		 * Invokes `util.format()` with the specified arguments and writes to stderr.
+		 */
+
+		function log(...args) {
+			return process.stderr.write(util.format(...args) + '\n');
+		}
+
+		/**
+		 * Save `namespaces`.
+		 *
+		 * @param {String} namespaces
+		 * @api private
+		 */
+		function save(namespaces) {
+			if (namespaces) {
+				process.env.DEBUG = namespaces;
+			} else {
+				// If you set a process.env field to null or undefined, it gets cast to the
+				// string 'null' or 'undefined'. Just delete instead.
+				delete process.env.DEBUG;
+			}
+		}
+
+		/**
+		 * Load `namespaces`.
+		 *
+		 * @return {String} returns the previously persisted debug modes
+		 * @api private
+		 */
+
+		function load() {
+			return process.env.DEBUG;
+		}
+
+		/**
+		 * Init logic for `debug` instances.
+		 *
+		 * Create a new `inspectOpts` object in case `useColors` is set
+		 * differently for a particular `debug` instance.
+		 */
+
+		function init(debug) {
+			debug.inspectOpts = {};
+
+			const keys = Object.keys(exports.inspectOpts);
+			for (let i = 0; i < keys.length; i++) {
+				debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+			}
+		}
+
+		module.exports = requireCommon()(exports);
+
+		const {formatters} = module.exports;
+
+		/**
+		 * Map %o to `util.inspect()`, all on a single line.
+		 */
+
+		formatters.o = function (v) {
+			this.inspectOpts.colors = this.useColors;
+			return util.inspect(v, this.inspectOpts)
+				.split('\n')
+				.map(str => str.trim())
+				.join(' ');
+		};
+
+		/**
+		 * Map %O to `util.inspect()`, allowing multiple lines if needed.
+		 */
+
+		formatters.O = function (v) {
+			this.inspectOpts.colors = this.useColors;
+			return util.inspect(v, this.inspectOpts);
+		};
+} (node$5, nodeExports$5));
+	return nodeExports$5;
+}
+
+/**
+ * Detect Electron renderer / nwjs process, which is node, but we should
+ * treat as a browser.
+ */
+
+(function (module) {
+	if (typeof process === 'undefined' || process.type === 'renderer' || process.browser === true || process.__nwjs) {
+		module.exports = requireBrowser$4();
+	} else {
+		module.exports = requireNode$5();
+	}
+} (src$7));
+
+Object.defineProperty(debug$j, "__esModule", { value: true });
+const debug_1$2 = srcExports$4;
+const MAX_ARGUMENT_LENGTH = 200;
+debug$j.MAX_ARGUMENT_LENGTH = MAX_ARGUMENT_LENGTH;
+const NAMESPACE_PREFIX = "ioredis";
+/**
+ * helper function that tried to get a string value for
+ * arbitrary "debug" arg
+ */
+function getStringValue(v) {
+    if (v === null) {
+        return;
+    }
+    switch (typeof v) {
+        case "boolean":
+            return;
+        case "number":
+            return;
+        case "object":
+            if (Buffer.isBuffer(v)) {
+                return v.toString("hex");
+            }
+            if (Array.isArray(v)) {
+                return v.join(",");
+            }
+            try {
+                return JSON.stringify(v);
+            }
+            catch (e) {
+                return;
+            }
+        case "string":
+            return v;
+    }
+}
+debug$j.getStringValue = getStringValue;
+/**
+ * helper function that redacts a string representation of a "debug" arg
+ */
+function genRedactedString(str, maxLen) {
+    const { length } = str;
+    return length <= maxLen
+        ? str
+        : str.slice(0, maxLen) + ' ... <REDACTED full-length="' + length + '">';
+}
+debug$j.genRedactedString = genRedactedString;
+/**
+ * a wrapper for the `debug` module, used to generate
+ * "debug functions" that trim the values in their output
+ */
+function genDebugFunction(namespace) {
+    const fn = debug_1$2.default(`${NAMESPACE_PREFIX}:${namespace}`);
+    function wrappedDebug(...args) {
+        if (!fn.enabled) {
+            return; // no-op
+        }
+        // we skip the first arg because that is the message
+        for (let i = 1; i < args.length; i++) {
+            const str = getStringValue(args[i]);
+            if (typeof str === "string" && str.length > MAX_ARGUMENT_LENGTH) {
+                args[i] = genRedactedString(str, MAX_ARGUMENT_LENGTH);
+            }
+        }
+        return fn.apply(null, args);
+    }
+    Object.defineProperties(wrappedDebug, {
+        namespace: {
+            get() {
+                return fn.namespace;
+            },
+        },
+        enabled: {
+            get() {
+                return fn.enabled;
+            },
+        },
+        destroy: {
+            get() {
+                return fn.destroy;
+            },
+        },
+        log: {
+            get() {
+                return fn.log;
+            },
+            set(l) {
+                fn.log = l;
+            },
+        },
+    });
+    return wrappedDebug;
+}
+debug$j.default = genDebugFunction;
+
+var TLSProfiles = {};
+
+Object.defineProperty(TLSProfiles, "__esModule", { value: true });
+TLSProfiles.default = {
+    /**
+     * TLS settings for Redis.com Cloud Fixed plan. Updated on 2021-10-06.
+     */
+    RedisCloudFixed: {
+        ca: "-----BEGIN CERTIFICATE-----\n" +
+            "MIIDTzCCAjegAwIBAgIJAKSVpiDswLcwMA0GCSqGSIb3DQEBBQUAMD4xFjAUBgNV\n" +
+            "BAoMDUdhcmFudGlhIERhdGExJDAiBgNVBAMMG1NTTCBDZXJ0aWZpY2F0aW9uIEF1\n" +
+            "dGhvcml0eTAeFw0xMzEwMDExMjE0NTVaFw0yMzA5MjkxMjE0NTVaMD4xFjAUBgNV\n" +
+            "BAoMDUdhcmFudGlhIERhdGExJDAiBgNVBAMMG1NTTCBDZXJ0aWZpY2F0aW9uIEF1\n" +
+            "dGhvcml0eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALZqkh/DczWP\n" +
+            "JnxnHLQ7QL0T4B4CDKWBKCcisriGbA6ZePWVNo4hfKQC6JrzfR+081NeD6VcWUiz\n" +
+            "rmd+jtPhIY4c+WVQYm5PKaN6DT1imYdxQw7aqO5j2KUCEh/cznpLxeSHoTxlR34E\n" +
+            "QwF28Wl3eg2vc5ct8LjU3eozWVk3gb7alx9mSA2SgmuX5lEQawl++rSjsBStemY2\n" +
+            "BDwOpAMXIrdEyP/cVn8mkvi/BDs5M5G+09j0gfhyCzRWMQ7Hn71u1eolRxwVxgi3\n" +
+            "TMn+/vTaFSqxKjgck6zuAYjBRPaHe7qLxHNr1So/Mc9nPy+3wHebFwbIcnUojwbp\n" +
+            "4nctkWbjb2cCAwEAAaNQME4wHQYDVR0OBBYEFP1whtcrydmW3ZJeuSoKZIKjze3w\n" +
+            "MB8GA1UdIwQYMBaAFP1whtcrydmW3ZJeuSoKZIKjze3wMAwGA1UdEwQFMAMBAf8w\n" +
+            "DQYJKoZIhvcNAQEFBQADggEBAG2erXhwRAa7+ZOBs0B6X57Hwyd1R4kfmXcs0rta\n" +
+            "lbPpvgULSiB+TCbf3EbhJnHGyvdCY1tvlffLjdA7HJ0PCOn+YYLBA0pTU/dyvrN6\n" +
+            "Su8NuS5yubnt9mb13nDGYo1rnt0YRfxN+8DM3fXIVr038A30UlPX2Ou1ExFJT0MZ\n" +
+            "uFKY6ZvLdI6/1cbgmguMlAhM+DhKyV6Sr5699LM3zqeI816pZmlREETYkGr91q7k\n" +
+            "BpXJu/dtHaGxg1ZGu6w/PCsYGUcECWENYD4VQPd8N32JjOfu6vEgoEAwfPP+3oGp\n" +
+            "Z4m3ewACcWOAenqflb+cQYC4PsF7qbXDmRaWrbKntOlZ3n0=\n" +
+            "-----END CERTIFICATE-----\n",
+    },
+    /**
+     * TLS settings for Redis.com Cloud Flexible plan. Updated on 2021-10-06.
+     */
+    RedisCloudFlexible: {
+        ca: "-----BEGIN CERTIFICATE-----\n" +
+            "MIIGMTCCBBmgAwIBAgICEAAwDQYJKoZIhvcNAQELBQAwajELMAkGA1UEBhMCVVMx\n" +
+            "CzAJBgNVBAgMAkNBMQswCQYDVQQHDAJDQTESMBAGA1UECgwJUmVkaXNMYWJzMS0w\n" +
+            "KwYDVQQDDCRSZWRpc0xhYnMgUm9vdCBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHhcN\n" +
+            "MTgwMjI1MTUzNzM3WhcNMjgwMjIzMTUzNzM3WjBfMQswCQYDVQQGEwJVUzELMAkG\n" +
+            "A1UECAwCQ0ExEjAQBgNVBAoMCVJlZGlzTGFiczEvMC0GA1UEAwwmUkNQIEludGVy\n" +
+            "bWVkaWF0ZSBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwggIiMA0GCSqGSIb3DQEBAQUA\n" +
+            "A4ICDwAwggIKAoICAQDf9dqbxc8Bq7Ctq9rWcxrGNKKHivqLAFpPq02yLPx6fsOv\n" +
+            "Tq7GsDChAYBBc4v7Y2Ap9RD5Vs3dIhEANcnolf27QwrG9RMnnvzk8pCvp1o6zSU4\n" +
+            "VuOE1W66/O1/7e2rVxyrnTcP7UgK43zNIXu7+tiAqWsO92uSnuMoGPGpeaUm1jym\n" +
+            "hjWKtkAwDFSqvHY+XL5qDVBEjeUe+WHkYUg40cAXjusAqgm2hZt29c2wnVrxW25W\n" +
+            "P0meNlzHGFdA2AC5z54iRiqj57dTfBTkHoBczQxcyw6hhzxZQ4e5I5zOKjXXEhZN\n" +
+            "r0tA3YC14CTabKRus/JmZieyZzRgEy2oti64tmLYTqSlAD78pRL40VNoaSYetXLw\n" +
+            "hhNsXCHgWaY6d5bLOc/aIQMAV5oLvZQKvuXAF1IDmhPA+bZbpWipp0zagf1P1H3s\n" +
+            "UzsMdn2KM0ejzgotbtNlj5TcrVwpmvE3ktvUAuA+hi3FkVx1US+2Gsp5x4YOzJ7u\n" +
+            "P1WPk6ShF0JgnJH2ILdj6kttTWwFzH17keSFICWDfH/+kM+k7Y1v3EXMQXE7y0T9\n" +
+            "MjvJskz6d/nv+sQhY04xt64xFMGTnZjlJMzfQNi7zWFLTZnDD0lPowq7l3YiPoTT\n" +
+            "t5Xky83lu0KZsZBo0WlWaDG00gLVdtRgVbcuSWxpi5BdLb1kRab66JptWjxwXQID\n" +
+            "AQABo4HrMIHoMDoGA1UdHwQzMDEwL6AtoCuGKWh0dHBzOi8vcmwtY2Etc2VydmVy\n" +
+            "LnJlZGlzbGFicy5jb20vdjEvY3JsMEYGCCsGAQUFBwEBBDowODA2BggrBgEFBQcw\n" +
+            "AYYqaHR0cHM6Ly9ybC1jYS1zZXJ2ZXIucmVkaXNsYWJzLmNvbS92MS9vY3NwMB0G\n" +
+            "A1UdDgQWBBQHar5OKvQUpP2qWt6mckzToeCOHDAfBgNVHSMEGDAWgBQi42wH6hM4\n" +
+            "L2sujEvLM0/u8lRXTzASBgNVHRMBAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIB\n" +
+            "hjANBgkqhkiG9w0BAQsFAAOCAgEAirEn/iTsAKyhd+pu2W3Z5NjCko4NPU0EYUbr\n" +
+            "AP7+POK2rzjIrJO3nFYQ/LLuC7KCXG+2qwan2SAOGmqWst13Y+WHp44Kae0kaChW\n" +
+            "vcYLXXSoGQGC8QuFSNUdaeg3RbMDYFT04dOkqufeWVccoHVxyTSg9eD8LZuHn5jw\n" +
+            "7QDLiEECBmIJHk5Eeo2TAZrx4Yx6ufSUX5HeVjlAzqwtAqdt99uCJ/EL8bgpWbe+\n" +
+            "XoSpvUv0SEC1I1dCAhCKAvRlIOA6VBcmzg5Am12KzkqTul12/VEFIgzqu0Zy2Jbc\n" +
+            "AUPrYVu/+tOGXQaijy7YgwH8P8n3s7ZeUa1VABJHcxrxYduDDJBLZi+MjheUDaZ1\n" +
+            "jQRHYevI2tlqeSBqdPKG4zBY5lS0GiAlmuze5oENt0P3XboHoZPHiqcK3VECgTVh\n" +
+            "/BkJcuudETSJcZDmQ8YfoKfBzRQNg2sv/hwvUv73Ss51Sco8GEt2lD8uEdib1Q6z\n" +
+            "zDT5lXJowSzOD5ZA9OGDjnSRL+2riNtKWKEqvtEG3VBJoBzu9GoxbAc7wIZLxmli\n" +
+            "iF5a/Zf5X+UXD3s4TMmy6C4QZJpAA2egsSQCnraWO2ULhh7iXMysSkF/nzVfZn43\n" +
+            "iqpaB8++9a37hWq14ZmOv0TJIDz//b2+KC4VFXWQ5W5QC6whsjT+OlG4p5ZYG0jo\n" +
+            "616pxqo=\n" +
+            "-----END CERTIFICATE-----\n" +
+            "-----BEGIN CERTIFICATE-----\n" +
+            "MIIFujCCA6KgAwIBAgIJAJ1aTT1lu2ScMA0GCSqGSIb3DQEBCwUAMGoxCzAJBgNV\n" +
+            "BAYTAlVTMQswCQYDVQQIDAJDQTELMAkGA1UEBwwCQ0ExEjAQBgNVBAoMCVJlZGlz\n" +
+            "TGFiczEtMCsGA1UEAwwkUmVkaXNMYWJzIFJvb3QgQ2VydGlmaWNhdGUgQXV0aG9y\n" +
+            "aXR5MB4XDTE4MDIyNTE1MjA0MloXDTM4MDIyMDE1MjA0MlowajELMAkGA1UEBhMC\n" +
+            "VVMxCzAJBgNVBAgMAkNBMQswCQYDVQQHDAJDQTESMBAGA1UECgwJUmVkaXNMYWJz\n" +
+            "MS0wKwYDVQQDDCRSZWRpc0xhYnMgUm9vdCBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkw\n" +
+            "ggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQDLEjXy7YrbN5Waau5cd6g1\n" +
+            "G5C2tMmeTpZ0duFAPxNU4oE3RHS5gGiok346fUXuUxbZ6QkuzeN2/2Z+RmRcJhQY\n" +
+            "Dm0ZgdG4x59An1TJfnzKKoWj8ISmoHS/TGNBdFzXV7FYNLBuqZouqePI6ReC6Qhl\n" +
+            "pp45huV32Q3a6IDrrvx7Wo5ZczEQeFNbCeCOQYNDdTmCyEkHqc2AGo8eoIlSTutT\n" +
+            "ULOC7R5gzJVTS0e1hesQ7jmqHjbO+VQS1NAL4/5K6cuTEqUl+XhVhPdLWBXJQ5ag\n" +
+            "54qhX4v+ojLzeU1R/Vc6NjMvVtptWY6JihpgplprN0Yh2556ewcXMeturcKgXfGJ\n" +
+            "xeYzsjzXerEjrVocX5V8BNrg64NlifzTMKNOOv4fVZszq1SIHR8F9ROrqiOdh8iC\n" +
+            "JpUbLpXH9hWCSEO6VRMB2xJoKu3cgl63kF30s77x7wLFMEHiwsQRKxooE1UhgS9K\n" +
+            "2sO4TlQ1eWUvFvHSTVDQDlGQ6zu4qjbOpb3Q8bQwoK+ai2alkXVR4Ltxe9QlgYK3\n" +
+            "StsnPhruzZGA0wbXdpw0bnM+YdlEm5ffSTpNIfgHeaa7Dtb801FtA71ZlH7A6TaI\n" +
+            "SIQuUST9EKmv7xrJyx0W1pGoPOLw5T029aTjnICSLdtV9bLwysrLhIYG5bnPq78B\n" +
+            "cS+jZHFGzD7PUVGQD01nOQIDAQABo2MwYTAdBgNVHQ4EFgQUIuNsB+oTOC9rLoxL\n" +
+            "yzNP7vJUV08wHwYDVR0jBBgwFoAUIuNsB+oTOC9rLoxLyzNP7vJUV08wDwYDVR0T\n" +
+            "AQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAYYwDQYJKoZIhvcNAQELBQADggIBAHfg\n" +
+            "z5pMNUAKdMzK1aS1EDdK9yKz4qicILz5czSLj1mC7HKDRy8cVADUxEICis++CsCu\n" +
+            "rYOvyCVergHQLREcxPq4rc5Nq1uj6J6649NEeh4WazOOjL4ZfQ1jVznMbGy+fJm3\n" +
+            "3Hoelv6jWRG9iqeJZja7/1s6YC6bWymI/OY1e4wUKeNHAo+Vger7MlHV+RuabaX+\n" +
+            "hSJ8bJAM59NCM7AgMTQpJCncrcdLeceYniGy5Q/qt2b5mJkQVkIdy4TPGGB+AXDJ\n" +
+            "D0q3I/JDRkDUFNFdeW0js7fHdsvCR7O3tJy5zIgEV/o/BCkmJVtuwPYOrw/yOlKj\n" +
+            "TY/U7ATAx9VFF6/vYEOMYSmrZlFX+98L6nJtwDqfLB5VTltqZ4H/KBxGE3IRSt9l\n" +
+            "FXy40U+LnXzhhW+7VBAvyYX8GEXhHkKU8Gqk1xitrqfBXY74xKgyUSTolFSfFVgj\n" +
+            "mcM/X4K45bka+qpkj7Kfv/8D4j6aZekwhN2ly6hhC1SmQ8qjMjpG/mrWOSSHZFmf\n" +
+            "ybu9iD2AYHeIOkshIl6xYIa++Q/00/vs46IzAbQyriOi0XxlSMMVtPx0Q3isp+ji\n" +
+            "n8Mq9eOuxYOEQ4of8twUkUDd528iwGtEdwf0Q01UyT84S62N8AySl1ZBKXJz6W4F\n" +
+            "UhWfa/HQYOAPDdEjNgnVwLI23b8t0TozyCWw7q8h\n" +
+            "-----END CERTIFICATE-----\n",
+    },
+};
+
+Object.defineProperty(utils$8, "__esModule", { value: true });
+const url_1 = Url$2;
+const lodash_1$2 = lodash;
+utils$8.defaults = lodash_1$2.defaults;
+utils$8.noop = lodash_1$2.noop;
+utils$8.flatten = lodash_1$2.flatten;
+const debug_1$1 = debug$j;
+utils$8.Debug = debug_1$1.default;
+const TLSProfiles_1 = TLSProfiles;
+/**
+ * Test if two buffers are equal
+ *
+ * @export
+ * @param {Buffer} a
+ * @param {Buffer} b
+ * @returns {boolean} Whether the two buffers are equal
+ */
+function bufferEqual(a, b) {
+    if (typeof a.equals === "function") {
+        return a.equals(b);
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; ++i) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+utils$8.bufferEqual = bufferEqual;
+/**
+ * Convert a buffer to string, supports buffer array
+ *
+ * @param {*} value - The input value
+ * @param {string} encoding - string encoding
+ * @return {*} The result
+ * @example
+ * ```js
+ * var input = [Buffer.from('foo'), [Buffer.from('bar')]]
+ * var res = convertBufferToString(input, 'utf8')
+ * expect(res).to.eql(['foo', ['bar']])
+ * ```
+ * @private
+ */
+function convertBufferToString(value, encoding) {
+    if (value instanceof Buffer) {
+        return value.toString(encoding);
+    }
+    if (Array.isArray(value)) {
+        const length = value.length;
+        const res = Array(length);
+        for (let i = 0; i < length; ++i) {
+            res[i] =
+                value[i] instanceof Buffer && encoding === "utf8"
+                    ? value[i].toString()
+                    : convertBufferToString(value[i], encoding);
+        }
+        return res;
+    }
+    return value;
+}
+utils$8.convertBufferToString = convertBufferToString;
+/**
+ * Convert a list of results to node-style
+ *
+ * @param {Array} arr - The input value
+ * @return {Array} The output value
+ * @example
+ * ```js
+ * var input = ['a', 'b', new Error('c'), 'd']
+ * var output = exports.wrapMultiResult(input)
+ * expect(output).to.eql([[null, 'a'], [null, 'b'], [new Error('c')], [null, 'd'])
+ * ```
+ * @private
+ */
+function wrapMultiResult(arr) {
+    // When using WATCH/EXEC transactions, the EXEC will return
+    // a null instead of an array
+    if (!arr) {
+        return null;
+    }
+    const result = [];
+    const length = arr.length;
+    for (let i = 0; i < length; ++i) {
+        const item = arr[i];
+        if (item instanceof Error) {
+            result.push([item]);
+        }
+        else {
+            result.push([null, item]);
+        }
+    }
+    return result;
+}
+utils$8.wrapMultiResult = wrapMultiResult;
+/**
+ * Detect if the argument is a int
+ *
+ * @param {string} value
+ * @return {boolean} Whether the value is a int
+ * @example
+ * ```js
+ * > isInt('123')
+ * true
+ * > isInt('123.3')
+ * false
+ * > isInt('1x')
+ * false
+ * > isInt(123)
+ * true
+ * > isInt(true)
+ * false
+ * ```
+ * @private
+ */
+function isInt$1(value) {
+    const x = parseFloat(value);
+    return !isNaN(value) && (x | 0) === x;
+}
+utils$8.isInt = isInt$1;
+/**
+ * Pack an array to an Object
+ *
+ * @param {array} array
+ * @return {object}
+ * @example
+ * ```js
+ * > packObject(['a', 'b', 'c', 'd'])
+ * { a: 'b', c: 'd' }
+ * ```
+ */
+function packObject(array) {
+    const result = {};
+    const length = array.length;
+    for (let i = 1; i < length; i += 2) {
+        result[array[i - 1]] = array[i];
+    }
+    return result;
+}
+utils$8.packObject = packObject;
+/**
+ * Return a callback with timeout
+ *
+ * @param {function} callback
+ * @param {number} timeout
+ * @return {function}
+ */
+function timeout(callback, timeout) {
+    let timer;
+    const run = function () {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+            callback.apply(this, arguments);
+        }
+    };
+    timer = setTimeout(run, timeout, new Error("timeout"));
+    return run;
+}
+utils$8.timeout = timeout;
+/**
+ * Convert an object to an array
+ *
+ * @param {object} obj
+ * @return {array}
+ * @example
+ * ```js
+ * > convertObjectToArray({ a: '1' })
+ * ['a', '1']
+ * ```
+ */
+function convertObjectToArray(obj) {
+    const result = [];
+    const keys = Object.keys(obj); // Object.entries requires node 7+
+    for (let i = 0, l = keys.length; i < l; i++) {
+        result.push(keys[i], obj[keys[i]]);
+    }
+    return result;
+}
+utils$8.convertObjectToArray = convertObjectToArray;
+/**
+ * Convert a map to an array
+ *
+ * @param {Map} map
+ * @return {array}
+ * @example
+ * ```js
+ * > convertMapToArray(new Map([[1, '2']]))
+ * [1, '2']
+ * ```
+ */
+function convertMapToArray(map) {
+    const result = [];
+    let pos = 0;
+    map.forEach(function (value, key) {
+        result[pos] = key;
+        result[pos + 1] = value;
+        pos += 2;
+    });
+    return result;
+}
+utils$8.convertMapToArray = convertMapToArray;
+/**
+ * Convert a non-string arg to a string
+ *
+ * @param {*} arg
+ * @return {string}
+ */
+function toArg(arg) {
+    if (arg === null || typeof arg === "undefined") {
+        return "";
+    }
+    return String(arg);
+}
+utils$8.toArg = toArg;
+/**
+ * Optimize error stack
+ *
+ * @param {Error} error - actually error
+ * @param {string} friendlyStack - the stack that more meaningful
+ * @param {string} filterPath - only show stacks with the specified path
+ */
+function optimizeErrorStack(error, friendlyStack, filterPath) {
+    const stacks = friendlyStack.split("\n");
+    let lines = "";
+    let i;
+    for (i = 1; i < stacks.length; ++i) {
+        if (stacks[i].indexOf(filterPath) === -1) {
+            break;
+        }
+    }
+    for (let j = i; j < stacks.length; ++j) {
+        lines += "\n" + stacks[j];
+    }
+    const pos = error.stack.indexOf("\n");
+    error.stack = error.stack.slice(0, pos) + lines;
+    return error;
+}
+utils$8.optimizeErrorStack = optimizeErrorStack;
+/**
+ * Parse the redis protocol url
+ *
+ * @param {string} url - the redis protocol url
+ * @return {Object}
+ */
+function parseURL$6(url) {
+    if (isInt$1(url)) {
+        return { port: url };
+    }
+    let parsed = url_1.parse(url, true, true);
+    if (!parsed.slashes && url[0] !== "/") {
+        url = "//" + url;
+        parsed = url_1.parse(url, true, true);
+    }
+    const options = parsed.query || {};
+    const allowUsernameInURI = options.allowUsernameInURI && options.allowUsernameInURI !== "false";
+    delete options.allowUsernameInURI;
+    const result = {};
+    if (parsed.auth) {
+        const index = parsed.auth.indexOf(":");
+        if (allowUsernameInURI) {
+            result.username =
+                index === -1 ? parsed.auth : parsed.auth.slice(0, index);
+        }
+        result.password = index === -1 ? "" : parsed.auth.slice(index + 1);
+    }
+    if (parsed.pathname) {
+        if (parsed.protocol === "redis:" || parsed.protocol === "rediss:") {
+            if (parsed.pathname.length > 1) {
+                result.db = parsed.pathname.slice(1);
+            }
+        }
+        else {
+            result.path = parsed.pathname;
+        }
+    }
+    if (parsed.host) {
+        result.host = parsed.hostname;
+    }
+    if (parsed.port) {
+        result.port = parsed.port;
+    }
+    lodash_1$2.defaults(result, options);
+    return result;
+}
+utils$8.parseURL = parseURL$6;
+/**
+ * Resolve TLS profile shortcut in connection options
+ *
+ * @param {Object} options - the redis connection options
+ * @return {Object}
+ */
+function resolveTLSProfile(options) {
+    let tls = options === null || options === void 0 ? void 0 : options.tls;
+    if (typeof tls === "string")
+        tls = { profile: tls };
+    const profile = TLSProfiles_1.default[tls === null || tls === void 0 ? void 0 : tls.profile];
+    if (profile) {
+        tls = Object.assign({}, profile, tls);
+        delete tls.profile;
+        options = Object.assign({}, options, { tls });
+    }
+    return options;
+}
+utils$8.resolveTLSProfile = resolveTLSProfile;
+/**
+ * Get a random element from `array`
+ *
+ * @export
+ * @template T
+ * @param {T[]} array the array
+ * @param {number} [from=0] start index
+ * @returns {T}
+ */
+function sample(array, from = 0) {
+    const length = array.length;
+    if (from >= length) {
+        return;
+    }
+    return array[from + Math.floor(Math.random() * (length - from))];
+}
+utils$8.sample = sample;
+/**
+ * Shuffle the array using the Fisher-Yates Shuffle.
+ * This method will mutate the original array.
+ *
+ * @export
+ * @template T
+ * @param {T[]} array
+ * @returns {T[]}
+ */
+function shuffle(array) {
+    let counter = array.length;
+    // While there are elements in the array
+    while (counter > 0) {
+        // Pick a random index
+        const index = Math.floor(Math.random() * counter);
+        // Decrease counter by 1
+        counter--;
+        // And swap the last element with it
+        [array[counter], array[index]] = [array[index], array[counter]];
+    }
+    return array;
+}
+utils$8.shuffle = shuffle;
+/**
+ * Error message for connection being disconnected
+ */
+utils$8.CONNECTION_CLOSED_ERROR_MSG = "Connection is closed.";
+function zipMap(keys, values) {
+    const map = new Map();
+    keys.forEach((key, index) => {
+        map.set(key, values[index]);
+    });
+    return map;
+}
+utils$8.zipMap = zipMap;
+
+var promiseContainer = {};
+
+Object.defineProperty(promiseContainer, "__esModule", { value: true });
+function isPromise(obj) {
+    return (!!obj &&
+        (typeof obj === "object" || typeof obj === "function") &&
+        typeof obj.then === "function");
+}
+promiseContainer.isPromise = isPromise;
+let promise = Promise;
+function get$2() {
+    return promise;
+}
+promiseContainer.get = get$2;
+function set$3(lib) {
+    if (typeof lib !== "function") {
+        throw new Error(`Provided Promise must be a function, got ${lib}`);
+    }
+    promise = lib;
+}
+promiseContainer.set = set$3;
+
+Object.defineProperty(command$2, "__esModule", { value: true });
+const commands$2 = redisCommands;
+const calculateSlot$1 = libExports$1;
+const standard_as_callback_1$5 = built;
+const utils_1$d = utils$8;
+const lodash_1$1 = lodash;
+const promiseContainer_1$1 = promiseContainer;
+/**
+ * Command instance
+ *
+ * It's rare that you need to create a Command instance yourself.
+ *
+ * @export
+ * @class Command
+ *
+ * @example
+ * ```js
+ * var infoCommand = new Command('info', null, function (err, result) {
+ *   console.log('result', result);
+ * });
+ *
+ * redis.sendCommand(infoCommand);
+ *
+ * // When no callback provided, Command instance will have a `promise` property,
+ * // which will resolve/reject with the result of the command.
+ * var getCommand = new Command('get', ['foo']);
+ * getCommand.promise.then(function (result) {
+ *   console.log('result', result);
+ * });
+ * ```
+ * @see {@link Redis#sendCommand} which can send a Command instance to Redis
+ */
+let Command$1 = class Command {
+    /**
+     * Creates an instance of Command.
+     * @param {string} name Command name
+     * @param {(Array<string | Buffer | number>)} [args=[]] An array of command arguments
+     * @param {ICommandOptions} [options={}]
+     * @param {CallbackFunction} [callback] The callback that handles the response.
+     * If omit, the response will be handled via Promise
+     * @memberof Command
+     */
+    constructor(name, args = [], options = {}, callback) {
+        this.name = name;
+        this.transformed = false;
+        this.isCustomCommand = false;
+        this.inTransaction = false;
+        this.isResolved = false;
+        this.replyEncoding = options.replyEncoding;
+        this.errorStack = options.errorStack;
+        this.args = lodash_1$1.flatten(args);
+        this.callback = callback;
+        this.initPromise();
+        if (options.keyPrefix) {
+            this._iterateKeys((key) => options.keyPrefix + key);
+        }
+        if (options.readOnly) {
+            this.isReadOnly = true;
+        }
+    }
+    static getFlagMap() {
+        if (!this.flagMap) {
+            this.flagMap = Object.keys(Command.FLAGS).reduce((map, flagName) => {
+                map[flagName] = {};
+                Command.FLAGS[flagName].forEach((commandName) => {
+                    map[flagName][commandName] = true;
+                });
+                return map;
+            }, {});
+        }
+        return this.flagMap;
+    }
+    /**
+     * Check whether the command has the flag
+     *
+     * @param {string} flagName
+     * @param {string} commandName
+     * @return {boolean}
+     */
+    static checkFlag(flagName, commandName) {
+        return !!this.getFlagMap()[flagName][commandName];
+    }
+    static setArgumentTransformer(name, func) {
+        this._transformer.argument[name] = func;
+    }
+    static setReplyTransformer(name, func) {
+        this._transformer.reply[name] = func;
+    }
+    initPromise() {
+        const Promise = promiseContainer_1$1.get();
+        const promise = new Promise((resolve, reject) => {
+            if (!this.transformed) {
+                this.transformed = true;
+                const transformer = Command._transformer.argument[this.name];
+                if (transformer) {
+                    this.args = transformer(this.args);
+                }
+                this.stringifyArguments();
+            }
+            this.resolve = this._convertValue(resolve);
+            if (this.errorStack) {
+                this.reject = (err) => {
+                    reject(utils_1$d.optimizeErrorStack(err, this.errorStack.stack, __dirname));
+                };
+            }
+            else {
+                this.reject = reject;
+            }
+        });
+        this.promise = standard_as_callback_1$5.default(promise, this.callback);
+    }
+    getSlot() {
+        if (typeof this.slot === "undefined") {
+            const key = this.getKeys()[0];
+            this.slot = key == null ? null : calculateSlot$1(key);
+        }
+        return this.slot;
+    }
+    getKeys() {
+        return this._iterateKeys();
+    }
+    /**
+     * Iterate through the command arguments that are considered keys.
+     *
+     * @param {Function} [transform=(key) => key] The transformation that should be applied to
+     * each key. The transformations will persist.
+     * @returns {string[]} The keys of the command.
+     * @memberof Command
+     */
+    _iterateKeys(transform = (key) => key) {
+        if (typeof this.keys === "undefined") {
+            this.keys = [];
+            if (commands$2.exists(this.name)) {
+                const keyIndexes = commands$2.getKeyIndexes(this.name, this.args);
+                for (const index of keyIndexes) {
+                    this.args[index] = transform(this.args[index]);
+                    this.keys.push(this.args[index]);
+                }
+            }
+        }
+        return this.keys;
+    }
+    /**
+     * Convert command to writable buffer or string
+     *
+     * @return {string|Buffer}
+     * @see {@link Redis#sendCommand}
+     * @public
+     */
+    toWritable() {
+        let bufferMode = false;
+        for (const arg of this.args) {
+            if (arg instanceof Buffer) {
+                bufferMode = true;
+                break;
+            }
+        }
+        let result;
+        const commandStr = "*" +
+            (this.args.length + 1) +
+            "\r\n$" +
+            Buffer.byteLength(this.name) +
+            "\r\n" +
+            this.name +
+            "\r\n";
+        if (bufferMode) {
+            const buffers = new MixedBuffers();
+            buffers.push(commandStr);
+            for (const arg of this.args) {
+                if (arg instanceof Buffer) {
+                    if (arg.length === 0) {
+                        buffers.push("$0\r\n\r\n");
+                    }
+                    else {
+                        buffers.push("$" + arg.length + "\r\n");
+                        buffers.push(arg);
+                        buffers.push("\r\n");
+                    }
+                }
+                else {
+                    buffers.push("$" +
+                        Buffer.byteLength(arg) +
+                        "\r\n" +
+                        arg +
+                        "\r\n");
+                }
+            }
+            result = buffers.toBuffer();
+        }
+        else {
+            result = commandStr;
+            for (const arg of this.args) {
+                result +=
+                    "$" +
+                        Buffer.byteLength(arg) +
+                        "\r\n" +
+                        arg +
+                        "\r\n";
+            }
+        }
+        return result;
+    }
+    stringifyArguments() {
+        for (let i = 0; i < this.args.length; ++i) {
+            const arg = this.args[i];
+            if (!(arg instanceof Buffer) && typeof arg !== "string") {
+                this.args[i] = utils_1$d.toArg(arg);
+            }
+        }
+    }
+    /**
+     * Convert the value from buffer to the target encoding.
+     *
+     * @private
+     * @param {Function} resolve The resolve function of the Promise
+     * @returns {Function} A function to transform and resolve a value
+     * @memberof Command
+     */
+    _convertValue(resolve) {
+        return (value) => {
+            try {
+                const existingTimer = this._commandTimeoutTimer;
+                if (existingTimer) {
+                    clearTimeout(existingTimer);
+                    delete this._commandTimeoutTimer;
+                }
+                resolve(this.transformReply(value));
+                this.isResolved = true;
+            }
+            catch (err) {
+                this.reject(err);
+            }
+            return this.promise;
+        };
+    }
+    /**
+     * Convert buffer/buffer[] to string/string[],
+     * and apply reply transformer.
+     *
+     * @memberof Command
+     */
+    transformReply(result) {
+        if (this.replyEncoding) {
+            result = utils_1$d.convertBufferToString(result, this.replyEncoding);
+        }
+        const transformer = Command._transformer.reply[this.name];
+        if (transformer) {
+            result = transformer(result);
+        }
+        return result;
+    }
+    /**
+     * Set the wait time before terminating the attempt to execute a command
+     * and generating an error.
+     */
+    setTimeout(ms) {
+        if (!this._commandTimeoutTimer) {
+            this._commandTimeoutTimer = setTimeout(() => {
+                if (!this.isResolved) {
+                    this.reject(new Error("Command timed out"));
+                }
+            }, ms);
+        }
+    }
+};
+command$2.default = Command$1;
+Command$1.FLAGS = {
+    VALID_IN_SUBSCRIBER_MODE: [
+        "subscribe",
+        "psubscribe",
+        "unsubscribe",
+        "punsubscribe",
+        "ping",
+        "quit",
+    ],
+    VALID_IN_MONITOR_MODE: ["monitor", "auth"],
+    ENTER_SUBSCRIBER_MODE: ["subscribe", "psubscribe"],
+    EXIT_SUBSCRIBER_MODE: ["unsubscribe", "punsubscribe"],
+    WILL_DISCONNECT: ["quit"],
+};
+Command$1._transformer = {
+    argument: {},
+    reply: {},
+};
+const msetArgumentTransformer = function (args) {
+    if (args.length === 1) {
+        if (typeof Map !== "undefined" && args[0] instanceof Map) {
+            return utils_1$d.convertMapToArray(args[0]);
+        }
+        if (typeof args[0] === "object" && args[0] !== null) {
+            return utils_1$d.convertObjectToArray(args[0]);
+        }
+    }
+    return args;
+};
+const hsetArgumentTransformer = function (args) {
+    if (args.length === 2) {
+        if (typeof Map !== "undefined" && args[1] instanceof Map) {
+            return [args[0]].concat(utils_1$d.convertMapToArray(args[1]));
+        }
+        if (typeof args[1] === "object" && args[1] !== null) {
+            return [args[0]].concat(utils_1$d.convertObjectToArray(args[1]));
+        }
+    }
+    return args;
+};
+Command$1.setArgumentTransformer("mset", msetArgumentTransformer);
+Command$1.setArgumentTransformer("msetnx", msetArgumentTransformer);
+Command$1.setArgumentTransformer("hset", hsetArgumentTransformer);
+Command$1.setArgumentTransformer("hmset", hsetArgumentTransformer);
+Command$1.setReplyTransformer("hgetall", function (result) {
+    if (Array.isArray(result)) {
+        const obj = {};
+        for (let i = 0; i < result.length; i += 2) {
+            const key = result[i];
+            const value = result[i + 1];
+            if (key in obj) {
+                // can only be truthy if the property is special somehow, like '__proto__' or 'constructor'
+                // https://github.com/luin/ioredis/issues/1267
+                Object.defineProperty(obj, key, {
+                    value,
+                    configurable: true,
+                    enumerable: true,
+                    writable: true,
+                });
+            }
+            else {
+                obj[key] = value;
+            }
+        }
+        return obj;
+    }
+    return result;
+});
+class MixedBuffers {
+    constructor() {
+        this.length = 0;
+        this.items = [];
+    }
+    push(x) {
+        this.length += Buffer.byteLength(x);
+        this.items.push(x);
+    }
+    toBuffer() {
+        const result = Buffer.allocUnsafe(this.length);
+        let offset = 0;
+        for (const item of this.items) {
+            const length = Buffer.byteLength(item);
+            Buffer.isBuffer(item)
+                ? item.copy(result, offset)
+                : result.write(item, offset, length);
+            offset += length;
+        }
+        return result;
+    }
+}
+
+var commander$1 = {};
+
+var script = {};
+
+Object.defineProperty(script, "__esModule", { value: true });
+const crypto_1 = require$$0$j;
+const promiseContainer_1 = promiseContainer;
+const command_1$4 = command$2;
+const standard_as_callback_1$4 = built;
+class Script {
+    constructor(lua, numberOfKeys = null, keyPrefix = "", readOnly = false) {
+        this.lua = lua;
+        this.numberOfKeys = numberOfKeys;
+        this.keyPrefix = keyPrefix;
+        this.readOnly = readOnly;
+        this.sha = crypto_1.createHash("sha1").update(lua).digest("hex");
+    }
+    execute(container, args, options, callback) {
+        if (typeof this.numberOfKeys === "number") {
+            args.unshift(this.numberOfKeys);
+        }
+        if (this.keyPrefix) {
+            options.keyPrefix = this.keyPrefix;
+        }
+        if (this.readOnly) {
+            options.readOnly = true;
+        }
+        const evalsha = new command_1$4.default("evalsha", [this.sha].concat(args), options);
+        evalsha.isCustomCommand = true;
+        const result = container.sendCommand(evalsha);
+        if (promiseContainer_1.isPromise(result)) {
+            return standard_as_callback_1$4.default(result.catch((err) => {
+                if (err.toString().indexOf("NOSCRIPT") === -1) {
+                    throw err;
+                }
+                return container.sendCommand(new command_1$4.default("eval", [this.lua].concat(args), options));
+            }), callback);
+        }
+        // result is not a Promise--probably returned from a pipeline chain; however,
+        // we still need the callback to fire when the script is evaluated
+        standard_as_callback_1$4.default(evalsha.promise, callback);
+        return result;
+    }
+}
+script.default = Script;
+
+var autoPipelining = {};
+
+(function (exports) {
+	Object.defineProperty(exports, "__esModule", { value: true });
+	const PromiseContainer = promiseContainer;
+	const lodash_1 = lodash;
+	const calculateSlot = libExports$1;
+	const standard_as_callback_1 = built;
+	exports.kExec = Symbol("exec");
+	exports.kCallbacks = Symbol("callbacks");
+	exports.notAllowedAutoPipelineCommands = [
+	    "auth",
+	    "info",
+	    "script",
+	    "quit",
+	    "cluster",
+	    "pipeline",
+	    "multi",
+	    "subscribe",
+	    "psubscribe",
+	    "unsubscribe",
+	    "unpsubscribe",
+	];
+	function executeAutoPipeline(client, slotKey) {
+	    /*
+	      If a pipeline is already executing, keep queueing up commands
+	      since ioredis won't serve two pipelines at the same time
+	    */
+	    if (client._runningAutoPipelines.has(slotKey)) {
+	        return;
+	    }
+	    if (!client._autoPipelines.has(slotKey)) {
+	        /*
+	          Rare edge case. Somehow, something has deleted this running autopipeline in an immediate
+	          call to executeAutoPipeline.
+	         
+	          Maybe the callback in the pipeline.exec is sometimes called in the same tick,
+	          e.g. if redis is disconnected?
+	        */
+	        return;
+	    }
+	    client._runningAutoPipelines.add(slotKey);
+	    // Get the pipeline and immediately delete it so that new commands are queued on a new pipeline
+	    const pipeline = client._autoPipelines.get(slotKey);
+	    client._autoPipelines.delete(slotKey);
+	    const callbacks = pipeline[exports.kCallbacks];
+	    // Stop keeping a reference to callbacks immediately after the callbacks stop being used.
+	    // This allows the GC to reclaim objects referenced by callbacks, especially with 16384 slots
+	    // in Redis.Cluster
+	    pipeline[exports.kCallbacks] = null;
+	    // Perform the call
+	    pipeline.exec(function (err, results) {
+	        client._runningAutoPipelines.delete(slotKey);
+	        /*
+	          Invoke all callback in nextTick so the stack is cleared
+	          and callbacks can throw errors without affecting other callbacks.
+	        */
+	        if (err) {
+	            for (let i = 0; i < callbacks.length; i++) {
+	                process.nextTick(callbacks[i], err);
+	            }
+	        }
+	        else {
+	            for (let i = 0; i < callbacks.length; i++) {
+	                process.nextTick(callbacks[i], ...results[i]);
+	            }
+	        }
+	        // If there is another pipeline on the same node, immediately execute it without waiting for nextTick
+	        if (client._autoPipelines.has(slotKey)) {
+	            executeAutoPipeline(client, slotKey);
+	        }
+	    });
+	}
+	function shouldUseAutoPipelining(client, functionName, commandName) {
+	    return (functionName &&
+	        client.options.enableAutoPipelining &&
+	        !client.isPipeline &&
+	        !exports.notAllowedAutoPipelineCommands.includes(commandName) &&
+	        !client.options.autoPipeliningIgnoredCommands.includes(commandName));
+	}
+	exports.shouldUseAutoPipelining = shouldUseAutoPipelining;
+	/**
+	 * @private
+	 */
+	function getFirstValueInFlattenedArray(args) {
+	    for (let i = 0; i < args.length; i++) {
+	        const arg = args[i];
+	        if (typeof arg === "string") {
+	            return arg;
+	        }
+	        else if (Array.isArray(arg) || lodash_1.isArguments(arg)) {
+	            if (arg.length === 0) {
+	                continue;
+	            }
+	            return arg[0];
+	        }
+	        const flattened = lodash_1.flatten([arg]);
+	        if (flattened.length > 0) {
+	            return flattened[0];
+	        }
+	    }
+	    return undefined;
+	}
+	exports.getFirstValueInFlattenedArray = getFirstValueInFlattenedArray;
+	function executeWithAutoPipelining(client, functionName, commandName, args, callback) {
+	    const CustomPromise = PromiseContainer.get();
+	    // On cluster mode let's wait for slots to be available
+	    if (client.isCluster && !client.slots.length) {
+	        if (client.status === "wait")
+	            client.connect().catch(lodash_1.noop);
+	        return standard_as_callback_1.default(new CustomPromise(function (resolve, reject) {
+	            client.delayUntilReady((err) => {
+	                if (err) {
+	                    reject(err);
+	                    return;
+	                }
+	                executeWithAutoPipelining(client, functionName, commandName, args, null).then(resolve, reject);
+	            });
+	        }), callback);
+	    }
+	    // If we have slot information, we can improve routing by grouping slots served by the same subset of nodes
+	    // Note that the first value in args may be a (possibly empty) array.
+	    // ioredis will only flatten one level of the array, in the Command constructor.
+	    const prefix = client.options.keyPrefix || "";
+	    const slotKey = client.isCluster
+	        ? client.slots[calculateSlot(`${prefix}${getFirstValueInFlattenedArray(args)}`)].join(",")
+	        : "main";
+	    if (!client._autoPipelines.has(slotKey)) {
+	        const pipeline = client.pipeline();
+	        pipeline[exports.kExec] = false;
+	        pipeline[exports.kCallbacks] = [];
+	        client._autoPipelines.set(slotKey, pipeline);
+	    }
+	    const pipeline = client._autoPipelines.get(slotKey);
+	    /*
+	      Mark the pipeline as scheduled.
+	      The symbol will make sure that the pipeline is only scheduled once per tick.
+	      New commands are appended to an already scheduled pipeline.
+	    */
+	    if (!pipeline[exports.kExec]) {
+	        pipeline[exports.kExec] = true;
+	        /*
+	          Deferring with setImmediate so we have a chance to capture multiple
+	          commands that can be scheduled by I/O events already in the event loop queue.
+	        */
+	        setImmediate(executeAutoPipeline, client, slotKey);
+	    }
+	    // Create the promise which will execute the command in the pipeline.
+	    const autoPipelinePromise = new CustomPromise(function (resolve, reject) {
+	        pipeline[exports.kCallbacks].push(function (err, value) {
+	            if (err) {
+	                reject(err);
+	                return;
