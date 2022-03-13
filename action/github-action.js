@@ -32653,3 +32653,2260 @@ class Cluster extends events_1.EventEmitter {
         while (this.offlineQueue.length > 0) {
             item = this.offlineQueue.shift();
             item.command.reject(error);
+        }
+    }
+    executeOfflineCommands() {
+        if (this.offlineQueue.length) {
+            debug$c("send %d commands in offline queue", this.offlineQueue.length);
+            const offlineQueue = this.offlineQueue;
+            this.resetOfflineQueue();
+            while (offlineQueue.length > 0) {
+                const item = offlineQueue.shift();
+                this.sendCommand(item.command, item.stream, item.node);
+            }
+        }
+    }
+    natMapper(nodeKey) {
+        if (this.options.natMap && typeof this.options.natMap === "object") {
+            const key = typeof nodeKey === "string"
+                ? nodeKey
+                : `${nodeKey.host}:${nodeKey.port}`;
+            const mapped = this.options.natMap[key];
+            if (mapped) {
+                debug$c("NAT mapping %s -> %O", key, mapped);
+                return Object.assign({}, mapped);
+            }
+        }
+        return typeof nodeKey === "string"
+            ? util_1$1.nodeKeyToRedisOptions(nodeKey)
+            : nodeKey;
+    }
+    sendCommand(command, stream, node) {
+        if (this.status === "wait") {
+            this.connect().catch(utils_1$2.noop);
+        }
+        if (this.status === "end") {
+            command.reject(new Error(utils_2.CONNECTION_CLOSED_ERROR_MSG));
+            return command.promise;
+        }
+        let to = this.options.scaleReads;
+        if (to !== "master") {
+            const isCommandReadOnly = command.isReadOnly ||
+                (commands.exists(command.name) &&
+                    commands.hasFlag(command.name, "readonly"));
+            if (!isCommandReadOnly) {
+                to = "master";
+            }
+        }
+        let targetSlot = node ? node.slot : command.getSlot();
+        const ttl = {};
+        const _this = this;
+        if (!node && !command.__is_reject_overwritten) {
+            // eslint-disable-next-line @typescript-eslint/camelcase
+            command.__is_reject_overwritten = true;
+            const reject = command.reject;
+            command.reject = function (err) {
+                const partialTry = tryConnection.bind(null, true);
+                _this.handleError(err, ttl, {
+                    moved: function (slot, key) {
+                        debug$c("command %s is moved to %s", command.name, key);
+                        targetSlot = Number(slot);
+                        if (_this.slots[slot]) {
+                            _this.slots[slot][0] = key;
+                        }
+                        else {
+                            _this.slots[slot] = [key];
+                        }
+                        _this._groupsBySlot[slot] =
+                            _this._groupsIds[_this.slots[slot].join(";")];
+                        _this.connectionPool.findOrCreate(_this.natMapper(key));
+                        tryConnection();
+                        debug$c("refreshing slot caches... (triggered by MOVED error)");
+                        _this.refreshSlotsCache();
+                    },
+                    ask: function (slot, key) {
+                        debug$c("command %s is required to ask %s:%s", command.name, key);
+                        const mapped = _this.natMapper(key);
+                        _this.connectionPool.findOrCreate(mapped);
+                        tryConnection(false, `${mapped.host}:${mapped.port}`);
+                    },
+                    tryagain: partialTry,
+                    clusterDown: partialTry,
+                    connectionClosed: partialTry,
+                    maxRedirections: function (redirectionError) {
+                        reject.call(command, redirectionError);
+                    },
+                    defaults: function () {
+                        reject.call(command, err);
+                    },
+                });
+            };
+        }
+        tryConnection();
+        function tryConnection(random, asking) {
+            if (_this.status === "end") {
+                command.reject(new redis_errors_1.AbortError("Cluster is ended."));
+                return;
+            }
+            let redis;
+            if (_this.status === "ready" || command.name === "cluster") {
+                if (node && node.redis) {
+                    redis = node.redis;
+                }
+                else if (command_1.default.checkFlag("ENTER_SUBSCRIBER_MODE", command.name) ||
+                    command_1.default.checkFlag("EXIT_SUBSCRIBER_MODE", command.name)) {
+                    redis = _this.subscriber.getInstance();
+                    if (!redis) {
+                        command.reject(new redis_errors_1.AbortError("No subscriber for the cluster"));
+                        return;
+                    }
+                }
+                else {
+                    if (!random) {
+                        if (typeof targetSlot === "number" && _this.slots[targetSlot]) {
+                            const nodeKeys = _this.slots[targetSlot];
+                            if (typeof to === "function") {
+                                const nodes = nodeKeys.map(function (key) {
+                                    return _this.connectionPool.getInstanceByKey(key);
+                                });
+                                redis = to(nodes, command);
+                                if (Array.isArray(redis)) {
+                                    redis = utils_2.sample(redis);
+                                }
+                                if (!redis) {
+                                    redis = nodes[0];
+                                }
+                            }
+                            else {
+                                let key;
+                                if (to === "all") {
+                                    key = utils_2.sample(nodeKeys);
+                                }
+                                else if (to === "slave" && nodeKeys.length > 1) {
+                                    key = utils_2.sample(nodeKeys, 1);
+                                }
+                                else {
+                                    key = nodeKeys[0];
+                                }
+                                redis = _this.connectionPool.getInstanceByKey(key);
+                            }
+                        }
+                        if (asking) {
+                            redis = _this.connectionPool.getInstanceByKey(asking);
+                            redis.asking();
+                        }
+                    }
+                    if (!redis) {
+                        redis =
+                            (typeof to === "function"
+                                ? null
+                                : _this.connectionPool.getSampleInstance(to)) ||
+                                _this.connectionPool.getSampleInstance("all");
+                    }
+                }
+                if (node && !node.redis) {
+                    node.redis = redis;
+                }
+            }
+            if (redis) {
+                redis.sendCommand(command, stream);
+            }
+            else if (_this.options.enableOfflineQueue) {
+                _this.offlineQueue.push({
+                    command: command,
+                    stream: stream,
+                    node: node,
+                });
+            }
+            else {
+                command.reject(new Error("Cluster isn't ready and enableOfflineQueue options is false"));
+            }
+        }
+        return command.promise;
+    }
+    handleError(error, ttl, handlers) {
+        if (typeof ttl.value === "undefined") {
+            ttl.value = this.options.maxRedirections;
+        }
+        else {
+            ttl.value -= 1;
+        }
+        if (ttl.value <= 0) {
+            handlers.maxRedirections(new Error("Too many Cluster redirections. Last error: " + error));
+            return;
+        }
+        const errv = error.message.split(" ");
+        if (errv[0] === "MOVED") {
+            const timeout = this.options.retryDelayOnMoved;
+            if (timeout && typeof timeout === "number") {
+                this.delayQueue.push("moved", handlers.moved.bind(null, errv[1], errv[2]), { timeout });
+            }
+            else {
+                handlers.moved(errv[1], errv[2]);
+            }
+        }
+        else if (errv[0] === "ASK") {
+            handlers.ask(errv[1], errv[2]);
+        }
+        else if (errv[0] === "TRYAGAIN") {
+            this.delayQueue.push("tryagain", handlers.tryagain, {
+                timeout: this.options.retryDelayOnTryAgain,
+            });
+        }
+        else if (errv[0] === "CLUSTERDOWN" &&
+            this.options.retryDelayOnClusterDown > 0) {
+            this.delayQueue.push("clusterdown", handlers.connectionClosed, {
+                timeout: this.options.retryDelayOnClusterDown,
+                callback: this.refreshSlotsCache.bind(this),
+            });
+        }
+        else if (error.message === utils_2.CONNECTION_CLOSED_ERROR_MSG &&
+            this.options.retryDelayOnFailover > 0 &&
+            this.status === "ready") {
+            this.delayQueue.push("failover", handlers.connectionClosed, {
+                timeout: this.options.retryDelayOnFailover,
+                callback: this.refreshSlotsCache.bind(this),
+            });
+        }
+        else {
+            handlers.defaults();
+        }
+    }
+    getInfoFromNode(redis, callback) {
+        if (!redis) {
+            return callback(new Error("Node is disconnected"));
+        }
+        // Use a duplication of the connection to avoid
+        // timeouts when the connection is in the blocking
+        // mode (e.g. waiting for BLPOP).
+        const duplicatedConnection = redis.duplicate({
+            enableOfflineQueue: true,
+            enableReadyCheck: false,
+            retryStrategy: null,
+            connectionName: util_1$1.getConnectionName("refresher", this.options.redisOptions && this.options.redisOptions.connectionName),
+        });
+        // Ignore error events since we will handle
+        // exceptions for the CLUSTER SLOTS command.
+        duplicatedConnection.on("error", utils_1$2.noop);
+        duplicatedConnection.cluster("slots", utils_2.timeout((err, result) => {
+            duplicatedConnection.disconnect();
+            if (err) {
+                return callback(err);
+            }
+            if (this.status === "disconnecting" ||
+                this.status === "close" ||
+                this.status === "end") {
+                debug$c("ignore CLUSTER.SLOTS results (count: %d) since cluster status is %s", result.length, this.status);
+                callback();
+                return;
+            }
+            const nodes = [];
+            debug$c("cluster slots result count: %d", result.length);
+            for (let i = 0; i < result.length; ++i) {
+                const items = result[i];
+                const slotRangeStart = items[0];
+                const slotRangeEnd = items[1];
+                const keys = [];
+                for (let j = 2; j < items.length; j++) {
+                    if (!items[j][0]) {
+                        continue;
+                    }
+                    items[j] = this.natMapper({ host: items[j][0], port: items[j][1] });
+                    items[j].readOnly = j !== 2;
+                    nodes.push(items[j]);
+                    keys.push(items[j].host + ":" + items[j].port);
+                }
+                debug$c("cluster slots result [%d]: slots %d~%d served by %s", i, slotRangeStart, slotRangeEnd, keys);
+                for (let slot = slotRangeStart; slot <= slotRangeEnd; slot++) {
+                    this.slots[slot] = keys;
+                }
+            }
+            // Assign to each node keys a numeric value to make autopipeline comparison faster.
+            this._groupsIds = Object.create(null);
+            let j = 0;
+            for (let i = 0; i < 16384; i++) {
+                const target = (this.slots[i] || []).join(";");
+                if (!target.length) {
+                    this._groupsBySlot[i] = undefined;
+                    continue;
+                }
+                if (!this._groupsIds[target]) {
+                    this._groupsIds[target] = ++j;
+                }
+                this._groupsBySlot[i] = this._groupsIds[target];
+            }
+            this.connectionPool.reset(nodes);
+            callback();
+        }, this.options.slotsRefreshTimeout));
+    }
+    invokeReadyDelayedCallbacks(err) {
+        for (const c of this._readyDelayedCallbacks) {
+            process.nextTick(c, err);
+        }
+        this._readyDelayedCallbacks = [];
+    }
+    /**
+     * Check whether Cluster is able to process commands
+     *
+     * @param {Function} callback
+     * @private
+     */
+    readyCheck(callback) {
+        this.cluster("info", function (err, res) {
+            if (err) {
+                return callback(err);
+            }
+            if (typeof res !== "string") {
+                return callback();
+            }
+            let state;
+            const lines = res.split("\r\n");
+            for (let i = 0; i < lines.length; ++i) {
+                const parts = lines[i].split(":");
+                if (parts[0] === "cluster_state") {
+                    state = parts[1];
+                    break;
+                }
+            }
+            if (state === "fail") {
+                debug$c("cluster state not ok (%s)", state);
+                callback(null, state);
+            }
+            else {
+                callback();
+            }
+        });
+    }
+    resolveSrv(hostname) {
+        return new Promise((resolve, reject) => {
+            this.options.resolveSrv(hostname, (err, records) => {
+                if (err) {
+                    return reject(err);
+                }
+                const self = this, groupedRecords = util_1$1.groupSrvRecords(records), sortedKeys = Object.keys(groupedRecords).sort((a, b) => parseInt(a) - parseInt(b));
+                function tryFirstOne(err) {
+                    if (!sortedKeys.length) {
+                        return reject(err);
+                    }
+                    const key = sortedKeys[0], group = groupedRecords[key], record = util_1$1.weightSrvRecords(group);
+                    if (!group.records.length) {
+                        sortedKeys.shift();
+                    }
+                    self.dnsLookup(record.name).then((host) => resolve({
+                        host,
+                        port: record.port,
+                    }), tryFirstOne);
+                }
+                tryFirstOne();
+            });
+        });
+    }
+    dnsLookup(hostname) {
+        return new Promise((resolve, reject) => {
+            this.options.dnsLookup(hostname, (err, address) => {
+                if (err) {
+                    debug$c("failed to resolve hostname %s to IP: %s", hostname, err.message);
+                    reject(err);
+                }
+                else {
+                    debug$c("resolved hostname %s to IP %s", hostname, address);
+                    resolve(address);
+                }
+            });
+        });
+    }
+    /**
+     * Normalize startup nodes, and resolving hostnames to IPs.
+     *
+     * This process happens every time when #connect() is called since
+     * #startupNodes and DNS records may chanage.
+     *
+     * @private
+     * @returns {Promise<IRedisOptions[]>}
+     */
+    resolveStartupNodeHostnames() {
+        if (!Array.isArray(this.startupNodes) || this.startupNodes.length === 0) {
+            return Promise.reject(new Error("`startupNodes` should contain at least one node."));
+        }
+        const startupNodes = util_1$1.normalizeNodeOptions(this.startupNodes);
+        const hostnames = util_1$1.getUniqueHostnamesFromOptions(startupNodes);
+        if (hostnames.length === 0) {
+            return Promise.resolve(startupNodes);
+        }
+        return Promise.all(hostnames.map((this.options.useSRVRecords ? this.resolveSrv : this.dnsLookup).bind(this))).then((configs) => {
+            const hostnameToConfig = utils_2.zipMap(hostnames, configs);
+            return startupNodes.map((node) => {
+                const config = hostnameToConfig.get(node.host);
+                if (!config) {
+                    return node;
+                }
+                else if (this.options.useSRVRecords) {
+                    return Object.assign({}, node, config);
+                }
+                else {
+                    return Object.assign({}, node, { host: config });
+                }
+            });
+        });
+    }
+}
+Object.getOwnPropertyNames(commander_1$1.default.prototype).forEach((name) => {
+    if (!Cluster.prototype.hasOwnProperty(name)) {
+        Cluster.prototype[name] = commander_1$1.default.prototype[name];
+    }
+});
+const scanCommands = [
+    "sscan",
+    "hscan",
+    "zscan",
+    "sscanBuffer",
+    "hscanBuffer",
+    "zscanBuffer",
+];
+scanCommands.forEach((command) => {
+    Cluster.prototype[command + "Stream"] = function (key, options) {
+        return new ScanStream_1.default(utils_1$2.defaults({
+            objectMode: true,
+            key: key,
+            redis: this,
+            command: command,
+        }, options));
+    };
+});
+transaction.addTransactionSupport(Cluster.prototype);
+cluster$2.default = Cluster;
+
+(function (module, exports) {
+	Object.defineProperty(exports, "__esModule", { value: true });
+	exports = module.exports = requireRedis().default;
+	var redis_1 = requireRedis();
+	exports.default = redis_1.default;
+	var cluster_1 = cluster$2;
+	exports.Cluster = cluster_1.default;
+	var command_1 = command$2;
+	exports.Command = command_1.default;
+	var ScanStream_1 = ScanStream$1;
+	exports.ScanStream = ScanStream_1.default;
+	var pipeline_1 = pipeline$1;
+	exports.Pipeline = pipeline_1.default;
+	var AbstractConnector_1 = AbstractConnector$1;
+	exports.AbstractConnector = AbstractConnector_1.default;
+	var SentinelConnector_1 = requireSentinelConnector();
+	exports.SentinelConnector = SentinelConnector_1.default;
+	exports.SentinelIterator = SentinelConnector_1.SentinelIterator;
+	// No TS typings
+	exports.ReplyError = redisErrors.ReplyError;
+	const PromiseContainer = promiseContainer;
+	Object.defineProperty(exports, "Promise", {
+	    get() {
+	        return PromiseContainer.get();
+	    },
+	    set(lib) {
+	        PromiseContainer.set(lib);
+	    },
+	});
+	function print(err, reply) {
+	    if (err) {
+	        console.log("Error: " + err);
+	    }
+	    else {
+	        console.log("Reply: " + reply);
+	    }
+	}
+	exports.print = print;
+} (built$1, builtExports));
+
+var __importDefault$6 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(getOctokitThrottleOptions$1, "__esModule", { value: true });
+getOctokitThrottleOptions$1.getOctokitThrottleOptions = void 0;
+const bottleneck_1 = __importDefault$6(libExports$2);
+const ioredis_1 = __importDefault$6(builtExports);
+function getOctokitThrottleOptions(options) {
+    let { log, redisConfig } = options;
+    if (!redisConfig)
+        return;
+    const connection = new bottleneck_1.default.IORedisConnection({
+        client: getRedisClient(options),
+    });
+    connection.on("error", (error) => {
+        log.error(Object.assign(error, { source: "bottleneck" }));
+    });
+    return {
+        Bottleneck: bottleneck_1.default,
+        connection,
+    };
+}
+getOctokitThrottleOptions$1.getOctokitThrottleOptions = getOctokitThrottleOptions;
+function getRedisClient({ log, redisConfig }) {
+    if (redisConfig)
+        return new ioredis_1.default(redisConfig);
+}
+
+Object.defineProperty(getProbotOctokitWithDefaults$1, "__esModule", { value: true });
+getProbotOctokitWithDefaults$1.getProbotOctokitWithDefaults = void 0;
+const get_octokit_throttle_options_1 = getOctokitThrottleOptions$1;
+const alias_log_1$1 = aliasLog$1;
+/**
+ * Returns an Octokit instance with default settings for authentication. If
+ * a `githubToken` is passed explicitly, the Octokit instance will be
+ * pre-authenticated with that token when instantiated. Otherwise Octokit's
+ * app authentication strategy is used, and `options.auth` options are merged
+ * deeply when instantiated.
+ *
+ * Besides the authentication, the Octokit's baseUrl is set as well when run
+ * against a GitHub Enterprise Server with a custom domain.
+ */
+function getProbotOctokitWithDefaults(options) {
+    const authOptions = options.githubToken
+        ? {
+            token: options.githubToken,
+        }
+        : {
+            cache: options.cache,
+            appId: options.appId,
+            privateKey: options.privateKey,
+        };
+    const octokitThrottleOptions = (0, get_octokit_throttle_options_1.getOctokitThrottleOptions)({
+        log: options.log,
+        redisConfig: options.redisConfig,
+    });
+    let defaultOptions = {
+        auth: authOptions,
+        log: options.log.child
+            ? (0, alias_log_1$1.aliasLog)(options.log.child({ name: "octokit" }))
+            : options.log,
+    };
+    if (options.baseUrl) {
+        defaultOptions.baseUrl = options.baseUrl;
+    }
+    if (octokitThrottleOptions) {
+        defaultOptions.throttle = octokitThrottleOptions;
+    }
+    return options.Octokit.defaults((instanceOptions) => {
+        const options = Object.assign({}, defaultOptions, instanceOptions, {
+            auth: instanceOptions.auth
+                ? Object.assign({}, defaultOptions.auth, instanceOptions.auth)
+                : defaultOptions.auth,
+        });
+        if (instanceOptions.throttle) {
+            options.throttle = Object.assign({}, defaultOptions.throttle, instanceOptions.throttle);
+        }
+        return options;
+    });
+}
+getProbotOctokitWithDefaults$1.getProbotOctokitWithDefaults = getProbotOctokitWithDefaults;
+
+var getWebhooks$1 = {};
+
+var indentString$3 = (string, count = 1, options) => {
+	options = {
+		indent: ' ',
+		includeEmptyLines: false,
+		...options
+	};
+
+	if (typeof string !== 'string') {
+		throw new TypeError(
+			`Expected \`input\` to be a \`string\`, got \`${typeof string}\``
+		);
+	}
+
+	if (typeof count !== 'number') {
+		throw new TypeError(
+			`Expected \`count\` to be a \`number\`, got \`${typeof count}\``
+		);
+	}
+
+	if (typeof options.indent !== 'string') {
+		throw new TypeError(
+			`Expected \`options.indent\` to be a \`string\`, got \`${typeof options.indent}\``
+		);
+	}
+
+	if (count === 0) {
+		return string;
+	}
+
+	const regex = options.includeEmptyLines ? /^/gm : /^(?!\s*$)/gm;
+
+	return string.replace(regex, options.indent.repeat(count));
+};
+
+const os$7 = require$$0$h;
+
+const extractPathRegex = /\s+at.*(?:\(|\s)(.*)\)?/;
+const pathRegex = /^(?:(?:(?:node|(?:internal\/[\w/]*|.*node_modules\/(?:babel-polyfill|pirates)\/.*)?\w+)\.js:\d+:\d+)|native)/;
+const homeDir = typeof os$7.homedir === 'undefined' ? '' : os$7.homedir();
+
+var cleanStack$1 = (stack, options) => {
+	options = Object.assign({pretty: false}, options);
+
+	return stack.replace(/\\/g, '/')
+		.split('\n')
+		.filter(line => {
+			const pathMatches = line.match(extractPathRegex);
+			if (pathMatches === null || !pathMatches[1]) {
+				return true;
+			}
+
+			const match = pathMatches[1];
+
+			// Electron
+			if (
+				match.includes('.app/Contents/Resources/electron.asar') ||
+				match.includes('.app/Contents/Resources/default_app.asar')
+			) {
+				return false;
+			}
+
+			return !pathRegex.test(match);
+		})
+		.filter(line => line.trim() !== '')
+		.map(line => {
+			if (options.pretty) {
+				return line.replace(extractPathRegex, (m, p1) => m.replace(p1, p1.replace(homeDir, '~')));
+			}
+
+			return line;
+		})
+		.join('\n');
+};
+
+const indentString$2 = indentString$3;
+const cleanStack = cleanStack$1;
+
+const cleanInternalStack = stack => stack.replace(/\s+at .*aggregate-error\/index.js:\d+:\d+\)?/g, '');
+
+let AggregateError$1 = class AggregateError extends Error {
+	constructor(errors) {
+		if (!Array.isArray(errors)) {
+			throw new TypeError(`Expected input to be an Array, got ${typeof errors}`);
+		}
+
+		errors = [...errors].map(error => {
+			if (error instanceof Error) {
+				return error;
+			}
+
+			if (error !== null && typeof error === 'object') {
+				// Handle plain error objects with message property and/or possibly other metadata
+				return Object.assign(new Error(error.message), error);
+			}
+
+			return new Error(error);
+		});
+
+		let message = errors
+			.map(error => {
+				// The `stack` property is not standardized, so we can't assume it exists
+				return typeof error.stack === 'string' ? cleanInternalStack(cleanStack(error.stack)) : String(error);
+			})
+			.join('\n');
+		message = '\n' + indentString$2(message, 4);
+		super(message);
+
+		this.name = 'AggregateError';
+
+		Object.defineProperty(this, '_errors', {value: errors});
+	}
+
+	* [Symbol.iterator]() {
+		for (const error of this._errors) {
+			yield error;
+		}
+	}
+};
+
+var aggregateError = AggregateError$1;
+
+const enc = new TextEncoder();
+async function sign$3(secret, data) {
+    const signature = await crypto.subtle.sign("HMAC", await importKey(secret), enc.encode(data));
+    return UInt8ArrayToHex(signature);
+}
+async function verify$1(secret, data, signature) {
+    return await crypto.subtle.verify("HMAC", await importKey(secret), hexToUInt8Array(signature), enc.encode(data));
+}
+function hexToUInt8Array(string) {
+    // convert string to pairs of 2 characters
+    const pairs = string.match(/[\dA-F]{2}/gi);
+    // convert the octets to integers
+    const integers = pairs.map(function (s) {
+        return parseInt(s, 16);
+    });
+    return new Uint8Array(integers);
+}
+function UInt8ArrayToHex(signature) {
+    return Array.prototype.map
+        .call(new Uint8Array(signature), (x) => x.toString(16).padStart(2, "0"))
+        .join("");
+}
+async function importKey(secret) {
+    return crypto.subtle.importKey("raw", // raw format of the key - should be Uint8Array
+    enc.encode(secret), {
+        // algorithm details
+        name: "HMAC",
+        hash: { name: "SHA-256" },
+    }, false, // export = false
+    ["sign", "verify"] // what this key can do
+    );
+}
+
+const createLogger = (logger) => ({
+    debug: () => { },
+    info: () => { },
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+    ...logger,
+});
+
+// THIS FILE IS GENERATED - DO NOT EDIT DIRECTLY
+// make edits in scripts/generate-types.ts
+const emitterEventNames = [
+    "branch_protection_rule",
+    "branch_protection_rule.created",
+    "branch_protection_rule.deleted",
+    "branch_protection_rule.edited",
+    "check_run",
+    "check_run.completed",
+    "check_run.created",
+    "check_run.requested_action",
+    "check_run.rerequested",
+    "check_suite",
+    "check_suite.completed",
+    "check_suite.requested",
+    "check_suite.rerequested",
+    "code_scanning_alert",
+    "code_scanning_alert.appeared_in_branch",
+    "code_scanning_alert.closed_by_user",
+    "code_scanning_alert.created",
+    "code_scanning_alert.fixed",
+    "code_scanning_alert.reopened",
+    "code_scanning_alert.reopened_by_user",
+    "commit_comment",
+    "commit_comment.created",
+    "create",
+    "delete",
+    "deploy_key",
+    "deploy_key.created",
+    "deploy_key.deleted",
+    "deployment",
+    "deployment.created",
+    "deployment_status",
+    "deployment_status.created",
+    "discussion",
+    "discussion.answered",
+    "discussion.category_changed",
+    "discussion.created",
+    "discussion.deleted",
+    "discussion.edited",
+    "discussion.labeled",
+    "discussion.locked",
+    "discussion.pinned",
+    "discussion.transferred",
+    "discussion.unanswered",
+    "discussion.unlabeled",
+    "discussion.unlocked",
+    "discussion.unpinned",
+    "discussion_comment",
+    "discussion_comment.created",
+    "discussion_comment.deleted",
+    "discussion_comment.edited",
+    "fork",
+    "github_app_authorization",
+    "github_app_authorization.revoked",
+    "gollum",
+    "installation",
+    "installation.created",
+    "installation.deleted",
+    "installation.new_permissions_accepted",
+    "installation.suspend",
+    "installation.unsuspend",
+    "installation_repositories",
+    "installation_repositories.added",
+    "installation_repositories.removed",
+    "issue_comment",
+    "issue_comment.created",
+    "issue_comment.deleted",
+    "issue_comment.edited",
+    "issues",
+    "issues.assigned",
+    "issues.closed",
+    "issues.deleted",
+    "issues.demilestoned",
+    "issues.edited",
+    "issues.labeled",
+    "issues.locked",
+    "issues.milestoned",
+    "issues.opened",
+    "issues.pinned",
+    "issues.reopened",
+    "issues.transferred",
+    "issues.unassigned",
+    "issues.unlabeled",
+    "issues.unlocked",
+    "issues.unpinned",
+    "label",
+    "label.created",
+    "label.deleted",
+    "label.edited",
+    "marketplace_purchase",
+    "marketplace_purchase.cancelled",
+    "marketplace_purchase.changed",
+    "marketplace_purchase.pending_change",
+    "marketplace_purchase.pending_change_cancelled",
+    "marketplace_purchase.purchased",
+    "member",
+    "member.added",
+    "member.edited",
+    "member.removed",
+    "membership",
+    "membership.added",
+    "membership.removed",
+    "meta",
+    "meta.deleted",
+    "milestone",
+    "milestone.closed",
+    "milestone.created",
+    "milestone.deleted",
+    "milestone.edited",
+    "milestone.opened",
+    "org_block",
+    "org_block.blocked",
+    "org_block.unblocked",
+    "organization",
+    "organization.deleted",
+    "organization.member_added",
+    "organization.member_invited",
+    "organization.member_removed",
+    "organization.renamed",
+    "package",
+    "package.published",
+    "package.updated",
+    "page_build",
+    "ping",
+    "project",
+    "project.closed",
+    "project.created",
+    "project.deleted",
+    "project.edited",
+    "project.reopened",
+    "project_card",
+    "project_card.converted",
+    "project_card.created",
+    "project_card.deleted",
+    "project_card.edited",
+    "project_card.moved",
+    "project_column",
+    "project_column.created",
+    "project_column.deleted",
+    "project_column.edited",
+    "project_column.moved",
+    "projects_v2_item",
+    "projects_v2_item.archived",
+    "projects_v2_item.converted",
+    "projects_v2_item.created",
+    "projects_v2_item.deleted",
+    "projects_v2_item.edited",
+    "projects_v2_item.reordered",
+    "projects_v2_item.restored",
+    "public",
+    "pull_request",
+    "pull_request.assigned",
+    "pull_request.auto_merge_disabled",
+    "pull_request.auto_merge_enabled",
+    "pull_request.closed",
+    "pull_request.converted_to_draft",
+    "pull_request.edited",
+    "pull_request.labeled",
+    "pull_request.locked",
+    "pull_request.opened",
+    "pull_request.ready_for_review",
+    "pull_request.reopened",
+    "pull_request.review_request_removed",
+    "pull_request.review_requested",
+    "pull_request.synchronize",
+    "pull_request.unassigned",
+    "pull_request.unlabeled",
+    "pull_request.unlocked",
+    "pull_request_review",
+    "pull_request_review.dismissed",
+    "pull_request_review.edited",
+    "pull_request_review.submitted",
+    "pull_request_review_comment",
+    "pull_request_review_comment.created",
+    "pull_request_review_comment.deleted",
+    "pull_request_review_comment.edited",
+    "pull_request_review_thread",
+    "pull_request_review_thread.resolved",
+    "pull_request_review_thread.unresolved",
+    "push",
+    "release",
+    "release.created",
+    "release.deleted",
+    "release.edited",
+    "release.prereleased",
+    "release.published",
+    "release.released",
+    "release.unpublished",
+    "repository",
+    "repository.archived",
+    "repository.created",
+    "repository.deleted",
+    "repository.edited",
+    "repository.privatized",
+    "repository.publicized",
+    "repository.renamed",
+    "repository.transferred",
+    "repository.unarchived",
+    "repository_dispatch",
+    "repository_import",
+    "repository_vulnerability_alert",
+    "repository_vulnerability_alert.create",
+    "repository_vulnerability_alert.dismiss",
+    "repository_vulnerability_alert.reopen",
+    "repository_vulnerability_alert.resolve",
+    "secret_scanning_alert",
+    "secret_scanning_alert.created",
+    "secret_scanning_alert.reopened",
+    "secret_scanning_alert.resolved",
+    "security_advisory",
+    "security_advisory.performed",
+    "security_advisory.published",
+    "security_advisory.updated",
+    "security_advisory.withdrawn",
+    "sponsorship",
+    "sponsorship.cancelled",
+    "sponsorship.created",
+    "sponsorship.edited",
+    "sponsorship.pending_cancellation",
+    "sponsorship.pending_tier_change",
+    "sponsorship.tier_changed",
+    "star",
+    "star.created",
+    "star.deleted",
+    "status",
+    "team",
+    "team.added_to_repository",
+    "team.created",
+    "team.deleted",
+    "team.edited",
+    "team.removed_from_repository",
+    "team_add",
+    "watch",
+    "watch.started",
+    "workflow_dispatch",
+    "workflow_job",
+    "workflow_job.completed",
+    "workflow_job.in_progress",
+    "workflow_job.queued",
+    "workflow_run",
+    "workflow_run.completed",
+    "workflow_run.requested",
+];
+
+function handleEventHandlers(state, webhookName, handler) {
+    if (!state.hooks[webhookName]) {
+        state.hooks[webhookName] = [];
+    }
+    state.hooks[webhookName].push(handler);
+}
+function receiverOn(state, webhookNameOrNames, handler) {
+    if (Array.isArray(webhookNameOrNames)) {
+        webhookNameOrNames.forEach((webhookName) => receiverOn(state, webhookName, handler));
+        return;
+    }
+    if (["*", "error"].includes(webhookNameOrNames)) {
+        const webhookName = webhookNameOrNames === "*" ? "any" : webhookNameOrNames;
+        const message = `Using the "${webhookNameOrNames}" event with the regular Webhooks.on() function is not supported. Please use the Webhooks.on${webhookName.charAt(0).toUpperCase() + webhookName.slice(1)}() method instead`;
+        throw new Error(message);
+    }
+    if (!emitterEventNames.includes(webhookNameOrNames)) {
+        state.log.warn(`"${webhookNameOrNames}" is not a known webhook name (https://developer.github.com/v3/activity/events/types/)`);
+    }
+    handleEventHandlers(state, webhookNameOrNames, handler);
+}
+function receiverOnAny(state, handler) {
+    handleEventHandlers(state, "*", handler);
+}
+function receiverOnError(state, handler) {
+    handleEventHandlers(state, "error", handler);
+}
+
+// Errors thrown or rejected Promises in "error" event handlers are not handled
+// as they are in the webhook event handlers. If errors occur, we log a
+// "Fatal: Error occurred" message to stdout
+function wrapErrorHandler(handler, error) {
+    let returnValue;
+    try {
+        returnValue = handler(error);
+    }
+    catch (error) {
+        console.log('FATAL: Error occurred in "error" event handler');
+        console.log(error);
+    }
+    if (returnValue && returnValue.catch) {
+        returnValue.catch((error) => {
+            console.log('FATAL: Error occurred in "error" event handler');
+            console.log(error);
+        });
+    }
+}
+
+// @ts-ignore to address #245
+function getHooks(state, eventPayloadAction, eventName) {
+    const hooks = [state.hooks[eventName], state.hooks["*"]];
+    if (eventPayloadAction) {
+        hooks.unshift(state.hooks[`${eventName}.${eventPayloadAction}`]);
+    }
+    return [].concat(...hooks.filter(Boolean));
+}
+// main handler function
+function receiverHandle(state, event) {
+    const errorHandlers = state.hooks.error || [];
+    if (event instanceof Error) {
+        const error = Object.assign(new aggregateError([event]), {
+            event,
+            errors: [event],
+        });
+        errorHandlers.forEach((handler) => wrapErrorHandler(handler, error));
+        return Promise.reject(error);
+    }
+    if (!event || !event.name) {
+        throw new aggregateError(["Event name not passed"]);
+    }
+    if (!event.payload) {
+        throw new aggregateError(["Event payload not passed"]);
+    }
+    // flatten arrays of event listeners and remove undefined values
+    const hooks = getHooks(state, "action" in event.payload ? event.payload.action : null, event.name);
+    if (hooks.length === 0) {
+        return Promise.resolve();
+    }
+    const errors = [];
+    const promises = hooks.map((handler) => {
+        let promise = Promise.resolve(event);
+        if (state.transform) {
+            promise = promise.then(state.transform);
+        }
+        return promise
+            .then((event) => {
+            return handler(event);
+        })
+            .catch((error) => errors.push(Object.assign(error, { event })));
+    });
+    return Promise.all(promises).then(() => {
+        if (errors.length === 0) {
+            return;
+        }
+        const error = new aggregateError(errors);
+        Object.assign(error, {
+            event,
+            errors,
+        });
+        errorHandlers.forEach((handler) => wrapErrorHandler(handler, error));
+        throw error;
+    });
+}
+
+function removeListener(state, webhookNameOrNames, handler) {
+    if (Array.isArray(webhookNameOrNames)) {
+        webhookNameOrNames.forEach((webhookName) => removeListener(state, webhookName, handler));
+        return;
+    }
+    if (!state.hooks[webhookNameOrNames]) {
+        return;
+    }
+    // remove last hook that has been added, that way
+    // it behaves the same as removeListener
+    for (let i = state.hooks[webhookNameOrNames].length - 1; i >= 0; i--) {
+        if (state.hooks[webhookNameOrNames][i] === handler) {
+            state.hooks[webhookNameOrNames].splice(i, 1);
+            return;
+        }
+    }
+}
+
+function createEventHandler(options) {
+    const state = {
+        hooks: {},
+        log: createLogger(options && options.log),
+    };
+    if (options && options.transform) {
+        state.transform = options.transform;
+    }
+    return {
+        on: receiverOn.bind(null, state),
+        onAny: receiverOnAny.bind(null, state),
+        onError: receiverOnError.bind(null, state),
+        removeListener: removeListener.bind(null, state),
+        receive: receiverHandle.bind(null, state),
+    };
+}
+
+/**
+ * GitHub sends its JSON with an indentation of 2 spaces and a line break at the end
+ */
+function toNormalizedJsonString(payload) {
+    const payloadString = JSON.stringify(payload);
+    return payloadString.replace(/[^\\]\\u[\da-f]{4}/g, (s) => {
+        return s.substr(0, 3) + s.substr(3).toUpperCase();
+    });
+}
+
+async function sign$2(secret, payload) {
+    return sign$3(secret, typeof payload === "string" ? payload : toNormalizedJsonString(payload));
+}
+
+async function verify(secret, payload, signature) {
+    return verify$1(secret, typeof payload === "string" ? payload : toNormalizedJsonString(payload), signature);
+}
+
+async function verifyAndReceive(state, event) {
+    // verify will validate that the secret is not undefined
+    const matchesSignature = await verify$1(state.secret, typeof event.payload === "object"
+        ? toNormalizedJsonString(event.payload)
+        : event.payload, event.signature);
+    if (!matchesSignature) {
+        const error = new Error("[@octokit/webhooks] signature does not match event payload and secret");
+        return state.eventHandler.receive(Object.assign(error, { event, status: 400 }));
+    }
+    return state.eventHandler.receive({
+        id: event.id,
+        name: event.name,
+        payload: typeof event.payload === "string"
+            ? JSON.parse(event.payload)
+            : event.payload,
+    });
+}
+
+const WEBHOOK_HEADERS = [
+    "x-github-event",
+    "x-hub-signature-256",
+    "x-github-delivery",
+];
+// https://docs.github.com/en/developers/webhooks-and-events/webhook-events-and-payloads#delivery-headers
+function getMissingHeaders(request) {
+    return WEBHOOK_HEADERS.filter((header) => !(header in request.headers));
+}
+
+// @ts-ignore to address #245
+function getPayload(request) {
+    // If request.body already exists we can stop here
+    // See https://github.com/octokit/webhooks.js/pull/23
+    if (request.body)
+        return Promise.resolve(request.body);
+    return new Promise((resolve, reject) => {
+        let data = "";
+        request.setEncoding("utf8");
+        // istanbul ignore next
+        request.on("error", (error) => reject(new aggregateError([error])));
+        request.on("data", (chunk) => (data += chunk));
+        request.on("end", () => {
+            try {
+                resolve(JSON.parse(data));
+            }
+            catch (error) {
+                error.message = "Invalid JSON";
+                error.status = 400;
+                reject(new aggregateError([error]));
+            }
+        });
+    });
+}
+
+async function middleware(webhooks, options, request, response, next) {
+    let pathname;
+    try {
+        pathname = new URL(request.url, "http://localhost").pathname;
+    }
+    catch (error) {
+        response.writeHead(422, {
+            "content-type": "application/json",
+        });
+        response.end(JSON.stringify({
+            error: `Request URL could not be parsed: ${request.url}`,
+        }));
+        return;
+    }
+    const isUnknownRoute = request.method !== "POST" || pathname !== options.path;
+    const isExpressMiddleware = typeof next === "function";
+    if (isUnknownRoute) {
+        if (isExpressMiddleware) {
+            return next();
+        }
+        else {
+            return options.onUnhandledRequest(request, response);
+        }
+    }
+    const missingHeaders = getMissingHeaders(request).join(", ");
+    if (missingHeaders) {
+        response.writeHead(400, {
+            "content-type": "application/json",
+        });
+        response.end(JSON.stringify({
+            error: `Required headers missing: ${missingHeaders}`,
+        }));
+        return;
+    }
+    const eventName = request.headers["x-github-event"];
+    const signatureSHA256 = request.headers["x-hub-signature-256"];
+    const id = request.headers["x-github-delivery"];
+    options.log.debug(`${eventName} event received (id: ${id})`);
+    // GitHub will abort the request if it does not receive a response within 10s
+    // See https://github.com/octokit/webhooks.js/issues/185
+    let didTimeout = false;
+    const timeout = setTimeout(() => {
+        didTimeout = true;
+        response.statusCode = 202;
+        response.end("still processing\n");
+    }, 9000).unref();
+    try {
+        const payload = await getPayload(request);
+        await webhooks.verifyAndReceive({
+            id: id,
+            name: eventName,
+            payload: payload,
+            signature: signatureSHA256,
+        });
+        clearTimeout(timeout);
+        if (didTimeout)
+            return;
+        response.end("ok\n");
+    }
+    catch (error) {
+        clearTimeout(timeout);
+        if (didTimeout)
+            return;
+        const statusCode = Array.from(error)[0].status;
+        response.statusCode = typeof statusCode !== "undefined" ? statusCode : 500;
+        response.end(String(error));
+    }
+}
+
+function onUnhandledRequestDefault(request, response) {
+    response.writeHead(404, {
+        "content-type": "application/json",
+    });
+    response.end(JSON.stringify({
+        error: `Unknown route: ${request.method} ${request.url}`,
+    }));
+}
+
+function createNodeMiddleware$2(webhooks, { path = "/api/github/webhooks", onUnhandledRequest = onUnhandledRequestDefault, log = createLogger(), } = {}) {
+    return middleware.bind(null, webhooks, {
+        path,
+        onUnhandledRequest,
+        log,
+    });
+}
+
+// U holds the return value of `transform` function in Options
+class Webhooks {
+    constructor(options) {
+        if (!options || !options.secret) {
+            throw new Error("[@octokit/webhooks] options.secret required");
+        }
+        const state = {
+            eventHandler: createEventHandler(options),
+            secret: options.secret,
+            hooks: {},
+            log: createLogger(options.log),
+        };
+        this.sign = sign$2.bind(null, options.secret);
+        this.verify = verify.bind(null, options.secret);
+        this.on = state.eventHandler.on;
+        this.onAny = state.eventHandler.onAny;
+        this.onError = state.eventHandler.onError;
+        this.removeListener = state.eventHandler.removeListener;
+        this.receive = state.eventHandler.receive;
+        this.verifyAndReceive = verifyAndReceive.bind(null, state);
+    }
+}
+
+var distWeb$d = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	Webhooks: Webhooks,
+	createEventHandler: createEventHandler,
+	createNodeMiddleware: createNodeMiddleware$2,
+	emitterEventNames: emitterEventNames
+});
+
+var require$$0$8 = /*@__PURE__*/getAugmentedNamespace(distWeb$d);
+
+var getErrorHandler$1 = {};
+
+Object.defineProperty(getErrorHandler$1, "__esModule", { value: true });
+getErrorHandler$1.getErrorHandler = void 0;
+function getErrorHandler(log) {
+    return (error) => {
+        const errors = (error.name === "AggregateError" ? error : [error]);
+        const event = error.event;
+        for (const error of errors) {
+            const errMessage = (error.message || "").toLowerCase();
+            if (errMessage.includes("x-hub-signature-256")) {
+                log.error(error, "Go to https://github.com/settings/apps/YOUR_APP and verify that the Webhook secret matches the value of the WEBHOOK_SECRET environment variable.");
+                continue;
+            }
+            if (errMessage.includes("pem") || errMessage.includes("json web token")) {
+                log.error(error, "Your private key (a .pem file or PRIVATE_KEY environment variable) or APP_ID is incorrect. Go to https://github.com/settings/apps/YOUR_APP, verify that APP_ID is set correctly, and generate a new PEM file if necessary.");
+                continue;
+            }
+            log
+                .child({
+                name: "event",
+                id: event ? event.id : undefined,
+            })
+                .error(error);
+        }
+    };
+}
+getErrorHandler$1.getErrorHandler = getErrorHandler;
+
+var octokitWebhooksTransform = {};
+
+Object.defineProperty(octokitWebhooksTransform, "__esModule", { value: true });
+octokitWebhooksTransform.webhookTransform = void 0;
+const context_1 = context;
+/**
+ * Probot's transform option, which extends the `event` object that is passed
+ * to webhook event handlers by `@octokit/webhooks`
+ * @see https://github.com/octokit/webhooks.js/#constructor
+ */
+async function webhookTransform(state, event) {
+    const log = state.log.child({ name: "event", id: event.id });
+    const octokit = (await state.octokit.auth({
+        type: "event-octokit",
+        event,
+    }));
+    return new context_1.Context(event, octokit, log);
+}
+octokitWebhooksTransform.webhookTransform = webhookTransform;
+
+Object.defineProperty(getWebhooks$1, "__esModule", { value: true });
+getWebhooks$1.getWebhooks = void 0;
+const webhooks_1$2 = require$$0$8;
+const get_error_handler_1 = getErrorHandler$1;
+const octokit_webhooks_transform_1 = octokitWebhooksTransform;
+// import { Context } from "../context";
+function getWebhooks(state) {
+    // TODO: This should be webhooks = new Webhooks<Context>({...}) but fails with
+    //       > The context of the event that was triggered, including the payload and
+    //         helpers for extracting information can be passed to GitHub API calls
+    const webhooks = new webhooks_1$2.Webhooks({
+        secret: state.webhooks.secret,
+        transform: octokit_webhooks_transform_1.webhookTransform.bind(null, state),
+    });
+    webhooks.onError((0, get_error_handler_1.getErrorHandler)(state.log));
+    return webhooks;
+}
+getWebhooks$1.getWebhooks = getWebhooks;
+
+var probotOctokit = {};
+
+function getUserAgent() {
+    if (typeof navigator === "object" && "userAgent" in navigator) {
+        return navigator.userAgent;
+    }
+    if (typeof process === "object" && "version" in process) {
+        return `Node.js/${process.version.substr(1)} (${process.platform}; ${process.arch})`;
+    }
+    return "<environment undetectable>";
+}
+
+var beforeAfterHookExports = {};
+var beforeAfterHook = {
+  get exports(){ return beforeAfterHookExports; },
+  set exports(v){ beforeAfterHookExports = v; },
+};
+
+var register_1 = register$2;
+
+function register$2(state, name, method, options) {
+  if (typeof method !== "function") {
+    throw new Error("method for before hook must be a function");
+  }
+
+  if (!options) {
+    options = {};
+  }
+
+  if (Array.isArray(name)) {
+    return name.reverse().reduce(function (callback, name) {
+      return register$2.bind(null, state, name, callback, options);
+    }, method)();
+  }
+
+  return Promise.resolve().then(function () {
+    if (!state.registry[name]) {
+      return method(options);
+    }
+
+    return state.registry[name].reduce(function (method, registered) {
+      return registered.hook.bind(null, method, options);
+    }, method)();
+  });
+}
+
+var add = addHook$1;
+
+function addHook$1(state, kind, name, hook) {
+  var orig = hook;
+  if (!state.registry[name]) {
+    state.registry[name] = [];
+  }
+
+  if (kind === "before") {
+    hook = function (method, options) {
+      return Promise.resolve()
+        .then(orig.bind(null, options))
+        .then(method.bind(null, options));
+    };
+  }
+
+  if (kind === "after") {
+    hook = function (method, options) {
+      var result;
+      return Promise.resolve()
+        .then(method.bind(null, options))
+        .then(function (result_) {
+          result = result_;
+          return orig(result, options);
+        })
+        .then(function () {
+          return result;
+        });
+    };
+  }
+
+  if (kind === "error") {
+    hook = function (method, options) {
+      return Promise.resolve()
+        .then(method.bind(null, options))
+        .catch(function (error) {
+          return orig(error, options);
+        });
+    };
+  }
+
+  state.registry[name].push({
+    hook: hook,
+    orig: orig,
+  });
+}
+
+var remove = removeHook$1;
+
+function removeHook$1(state, name, method) {
+  if (!state.registry[name]) {
+    return;
+  }
+
+  var index = state.registry[name]
+    .map(function (registered) {
+      return registered.orig;
+    })
+    .indexOf(method);
+
+  if (index === -1) {
+    return;
+  }
+
+  state.registry[name].splice(index, 1);
+}
+
+var register$1 = register_1;
+var addHook = add;
+var removeHook = remove;
+
+// bind with array of arguments: https://stackoverflow.com/a/21792913
+var bind$2 = Function.bind;
+var bindable = bind$2.bind(bind$2);
+
+function bindApi(hook, state, name) {
+  var removeHookRef = bindable(removeHook, null).apply(
+    null,
+    name ? [state, name] : [state]
+  );
+  hook.api = { remove: removeHookRef };
+  hook.remove = removeHookRef;
+  ["before", "error", "after", "wrap"].forEach(function (kind) {
+    var args = name ? [state, kind, name] : [state, kind];
+    hook[kind] = hook.api[kind] = bindable(addHook, null).apply(null, args);
+  });
+}
+
+function HookSingular() {
+  var singularHookName = "h";
+  var singularHookState = {
+    registry: {},
+  };
+  var singularHook = register$1.bind(null, singularHookState, singularHookName);
+  bindApi(singularHook, singularHookState, singularHookName);
+  return singularHook;
+}
+
+function HookCollection() {
+  var state = {
+    registry: {},
+  };
+
+  var hook = register$1.bind(null, state);
+  bindApi(hook, state);
+
+  return hook;
+}
+
+var collectionHookDeprecationMessageDisplayed = false;
+function Hook() {
+  if (!collectionHookDeprecationMessageDisplayed) {
+    console.warn(
+      '[before-after-hook]: "Hook()" repurposing warning, use "Hook.Collection()". Read more: https://git.io/upgrade-before-after-hook-to-1.4'
+    );
+    collectionHookDeprecationMessageDisplayed = true;
+  }
+  return HookCollection();
+}
+
+Hook.Singular = HookSingular.bind();
+Hook.Collection = HookCollection.bind();
+
+beforeAfterHook.exports = Hook;
+// expose constructors as a named property for TypeScript
+beforeAfterHookExports.Hook = Hook;
+beforeAfterHookExports.Singular = Hook.Singular;
+var Collection = beforeAfterHookExports.Collection = Hook.Collection;
+
+/*!
+ * is-plain-object <https://github.com/jonschlinkert/is-plain-object>
+ *
+ * Copyright (c) 2014-2017, Jon Schlinkert.
+ * Released under the MIT License.
+ */
+
+function isObject$2(o) {
+  return Object.prototype.toString.call(o) === '[object Object]';
+}
+
+function isPlainObject(o) {
+  var ctor,prot;
+
+  if (isObject$2(o) === false) return false;
+
+  // If has modified constructor
+  ctor = o.constructor;
+  if (ctor === undefined) return true;
+
+  // If has modified prototype
+  prot = ctor.prototype;
+  if (isObject$2(prot) === false) return false;
+
+  // If constructor does not have an Object-specific method
+  if (prot.hasOwnProperty('isPrototypeOf') === false) {
+    return false;
+  }
+
+  // Most likely a plain Object
+  return true;
+}
+
+function lowercaseKeys$5(object) {
+    if (!object) {
+        return {};
+    }
+    return Object.keys(object).reduce((newObj, key) => {
+        newObj[key.toLowerCase()] = object[key];
+        return newObj;
+    }, {});
+}
+
+function mergeDeep$5(defaults, options) {
+    const result = Object.assign({}, defaults);
+    Object.keys(options).forEach((key) => {
+        if (isPlainObject(options[key])) {
+            if (!(key in defaults))
+                Object.assign(result, { [key]: options[key] });
+            else
+                result[key] = mergeDeep$5(defaults[key], options[key]);
+        }
+        else {
+            Object.assign(result, { [key]: options[key] });
+        }
+    });
+    return result;
+}
+
+function removeUndefinedProperties$5(obj) {
+    for (const key in obj) {
+        if (obj[key] === undefined) {
+            delete obj[key];
+        }
+    }
+    return obj;
+}
+
+function merge$c(defaults, route, options) {
+    if (typeof route === "string") {
+        let [method, url] = route.split(" ");
+        options = Object.assign(url ? { method, url } : { url: method }, options);
+    }
+    else {
+        options = Object.assign({}, route);
+    }
+    // lowercase header names before merging with defaults to avoid duplicates
+    options.headers = lowercaseKeys$5(options.headers);
+    // remove properties with undefined values before merging
+    removeUndefinedProperties$5(options);
+    removeUndefinedProperties$5(options.headers);
+    const mergedOptions = mergeDeep$5(defaults || {}, options);
+    // mediaType.previews arrays are merged, instead of overwritten
+    if (defaults && defaults.mediaType.previews.length) {
+        mergedOptions.mediaType.previews = defaults.mediaType.previews
+            .filter((preview) => !mergedOptions.mediaType.previews.includes(preview))
+            .concat(mergedOptions.mediaType.previews);
+    }
+    mergedOptions.mediaType.previews = mergedOptions.mediaType.previews.map((preview) => preview.replace(/-preview/, ""));
+    return mergedOptions;
+}
+
+function addQueryParameters$5(url, parameters) {
+    const separator = /\?/.test(url) ? "&" : "?";
+    const names = Object.keys(parameters);
+    if (names.length === 0) {
+        return url;
+    }
+    return (url +
+        separator +
+        names
+            .map((name) => {
+            if (name === "q") {
+                return ("q=" + parameters.q.split("+").map(encodeURIComponent).join("+"));
+            }
+            return `${name}=${encodeURIComponent(parameters[name])}`;
+        })
+            .join("&"));
+}
+
+const urlVariableRegex$5 = /\{[^}]+\}/g;
+function removeNonChars$5(variableName) {
+    return variableName.replace(/^\W+|\W+$/g, "").split(/,/);
+}
+function extractUrlVariableNames$5(url) {
+    const matches = url.match(urlVariableRegex$5);
+    if (!matches) {
+        return [];
+    }
+    return matches.map(removeNonChars$5).reduce((a, b) => a.concat(b), []);
+}
+
+function omit$5(object, keysToOmit) {
+    return Object.keys(object)
+        .filter((option) => !keysToOmit.includes(option))
+        .reduce((obj, key) => {
+        obj[key] = object[key];
+        return obj;
+    }, {});
+}
+
+// Based on https://github.com/bramstein/url-template, licensed under BSD
+// TODO: create separate package.
+//
+// Copyright (c) 2012-2014, Bram Stein
+// All rights reserved.
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  1. Redistributions of source code must retain the above copyright
+//     notice, this list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright
+//     notice, this list of conditions and the following disclaimer in the
+//     documentation and/or other materials provided with the distribution.
+//  3. The name of the author may not be used to endorse or promote products
+//     derived from this software without specific prior written permission.
+// THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+// EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+// INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+// BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+// EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/* istanbul ignore file */
+function encodeReserved$5(str) {
+    return str
+        .split(/(%[0-9A-Fa-f]{2})/g)
+        .map(function (part) {
+        if (!/%[0-9A-Fa-f]/.test(part)) {
+            part = encodeURI(part).replace(/%5B/g, "[").replace(/%5D/g, "]");
+        }
+        return part;
+    })
+        .join("");
+}
+function encodeUnreserved$5(str) {
+    return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
+        return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+    });
+}
+function encodeValue$5(operator, value, key) {
+    value =
+        operator === "+" || operator === "#"
+            ? encodeReserved$5(value)
+            : encodeUnreserved$5(value);
+    if (key) {
+        return encodeUnreserved$5(key) + "=" + value;
+    }
+    else {
+        return value;
+    }
+}
+function isDefined$5(value) {
+    return value !== undefined && value !== null;
+}
+function isKeyOperator$5(operator) {
+    return operator === ";" || operator === "&" || operator === "?";
+}
+function getValues$5(context, operator, key, modifier) {
+    var value = context[key], result = [];
+    if (isDefined$5(value) && value !== "") {
+        if (typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean") {
+            value = value.toString();
+            if (modifier && modifier !== "*") {
+                value = value.substring(0, parseInt(modifier, 10));
+            }
+            result.push(encodeValue$5(operator, value, isKeyOperator$5(operator) ? key : ""));
+        }
+        else {
+            if (modifier === "*") {
+                if (Array.isArray(value)) {
+                    value.filter(isDefined$5).forEach(function (value) {
+                        result.push(encodeValue$5(operator, value, isKeyOperator$5(operator) ? key : ""));
+                    });
+                }
+                else {
+                    Object.keys(value).forEach(function (k) {
+                        if (isDefined$5(value[k])) {
+                            result.push(encodeValue$5(operator, value[k], k));
+                        }
+                    });
+                }
+            }
+            else {
+                const tmp = [];
+                if (Array.isArray(value)) {
+                    value.filter(isDefined$5).forEach(function (value) {
+                        tmp.push(encodeValue$5(operator, value));
+                    });
+                }
+                else {
+                    Object.keys(value).forEach(function (k) {
+                        if (isDefined$5(value[k])) {
+                            tmp.push(encodeUnreserved$5(k));
+                            tmp.push(encodeValue$5(operator, value[k].toString()));
+                        }
+                    });
+                }
+                if (isKeyOperator$5(operator)) {
+                    result.push(encodeUnreserved$5(key) + "=" + tmp.join(","));
+                }
+                else if (tmp.length !== 0) {
+                    result.push(tmp.join(","));
+                }
+            }
+        }
+    }
+    else {
+        if (operator === ";") {
+            if (isDefined$5(value)) {
+                result.push(encodeUnreserved$5(key));
+            }
+        }
+        else if (value === "" && (operator === "&" || operator === "?")) {
+            result.push(encodeUnreserved$5(key) + "=");
+        }
+        else if (value === "") {
+            result.push("");
+        }
+    }
+    return result;
+}
+function parseUrl$8(template) {
+    return {
+        expand: expand$7.bind(null, template),
+    };
+}
+function expand$7(template, context) {
+    var operators = ["+", "#", ".", "/", ";", "?", "&"];
+    return template.replace(/\{([^\{\}]+)\}|([^\{\}]+)/g, function (_, expression, literal) {
+        if (expression) {
+            let operator = "";
+            const values = [];
+            if (operators.indexOf(expression.charAt(0)) !== -1) {
+                operator = expression.charAt(0);
+                expression = expression.substr(1);
+            }
+            expression.split(/,/g).forEach(function (variable) {
+                var tmp = /([^:\*]*)(?::(\d+)|(\*))?/.exec(variable);
+                values.push(getValues$5(context, operator, tmp[1], tmp[2] || tmp[3]));
+            });
+            if (operator && operator !== "+") {
+                var separator = ",";
+                if (operator === "?") {
+                    separator = "&";
+                }
+                else if (operator !== "#") {
+                    separator = operator;
+                }
+                return (values.length !== 0 ? operator : "") + values.join(separator);
+            }
+            else {
+                return values.join(",");
+            }
+        }
+        else {
+            return encodeReserved$5(literal);
+        }
+    });
+}
+
+function parse$m(options) {
+    // https://fetch.spec.whatwg.org/#methods
+    let method = options.method.toUpperCase();
+    // replace :varname with {varname} to make it RFC 6570 compatible
+    let url = (options.url || "/").replace(/:([a-z]\w+)/g, "{$1}");
+    let headers = Object.assign({}, options.headers);
+    let body;
+    let parameters = omit$5(options, [
+        "method",
+        "baseUrl",
+        "url",
+        "headers",
+        "request",
+        "mediaType",
+    ]);
+    // extract variable names from URL to calculate remaining variables later
+    const urlVariableNames = extractUrlVariableNames$5(url);
+    url = parseUrl$8(url).expand(parameters);
+    if (!/^http/.test(url)) {
+        url = options.baseUrl + url;
+    }
+    const omittedParameters = Object.keys(options)
+        .filter((option) => urlVariableNames.includes(option))
+        .concat("baseUrl");
+    const remainingParameters = omit$5(parameters, omittedParameters);
+    const isBinaryRequest = /application\/octet-stream/i.test(headers.accept);
+    if (!isBinaryRequest) {
+        if (options.mediaType.format) {
+            // e.g. application/vnd.github.v3+json => application/vnd.github.v3.raw
+            headers.accept = headers.accept
+                .split(/,/)
+                .map((preview) => preview.replace(/application\/vnd(\.\w+)(\.v3)?(\.\w+)?(\+json)?$/, `application/vnd$1$2.${options.mediaType.format}`))
+                .join(",");
+        }
+        if (options.mediaType.previews.length) {
+            const previewsFromAcceptHeader = headers.accept.match(/[\w-]+(?=-preview)/g) || [];
+            headers.accept = previewsFromAcceptHeader
+                .concat(options.mediaType.previews)
+                .map((preview) => {
+                const format = options.mediaType.format
+                    ? `.${options.mediaType.format}`
+                    : "+json";
+                return `application/vnd.github.${preview}-preview${format}`;
+            })
+                .join(",");
+        }
+    }
+    // for GET/HEAD requests, set URL query parameters from remaining parameters
+    // for PATCH/POST/PUT/DELETE requests, set request body from remaining parameters
+    if (["GET", "HEAD"].includes(method)) {
+        url = addQueryParameters$5(url, remainingParameters);
+    }
+    else {
+        if ("data" in remainingParameters) {
+            body = remainingParameters.data;
+        }
+        else {
+            if (Object.keys(remainingParameters).length) {
+                body = remainingParameters;
+            }
+            else {
+                headers["content-length"] = 0;
+            }
+        }
+    }
+    // default content-type for JSON if body is set
+    if (!headers["content-type"] && typeof body !== "undefined") {
+        headers["content-type"] = "application/json; charset=utf-8";
+    }
+    // GitHub expects 'content-length: 0' header for PUT/PATCH requests without body.
+    // fetch does not allow to set `content-length` header, but we can set body to an empty string
+    if (["PATCH", "PUT"].includes(method) && typeof body === "undefined") {
+        body = "";
+    }
+    // Only return body/request keys if present
+    return Object.assign({ method, url, headers }, typeof body !== "undefined" ? { body } : null, options.request ? { request: options.request } : null);
+}
+
+function endpointWithDefaults$5(defaults, route, options) {
+    return parse$m(merge$c(defaults, route, options));
+}
+
+function withDefaults$c(oldDefaults, newDefaults) {
+    const DEFAULTS = merge$c(oldDefaults, newDefaults);
+    const endpoint = endpointWithDefaults$5.bind(null, DEFAULTS);
+    return Object.assign(endpoint, {
+        DEFAULTS,
+        defaults: withDefaults$c.bind(null, DEFAULTS),
+        merge: merge$c.bind(null, DEFAULTS),
+        parse: parse$m,
+    });
+}
+
+const VERSION$r = "6.0.12";
+
+const userAgent$5 = `octokit-endpoint.js/${VERSION$r} ${getUserAgent()}`;
+// DEFAULTS has all properties set that EndpointOptions has, except url.
+// So we use RequestParameters and add method as additional required property.
+const DEFAULTS$6 = {
+    method: "GET",
+    baseUrl: "https://api.github.com",
+    headers: {
+        accept: "application/vnd.github.v3+json",
+        "user-agent": userAgent$5,
+    },
+    mediaType: {
+        format: "",
+        previews: [],
+    },
+};
+
+const endpoint$5 = withDefaults$c(null, DEFAULTS$6);
+
+var publicApi = {};
+
+var URLExports = {};
+var URL$a = {
+  get exports(){ return URLExports; },
+  set exports(v){ URLExports = v; },
+};
+
+var conversions = {};
+var lib$4 = conversions;
+
+function sign$1(x) {
+    return x < 0 ? -1 : 1;
+}
+
+function evenRound(x) {
+    // Round x to the nearest integer, choosing the even integer if it lies halfway between two.
+    if ((x % 1) === 0.5 && (x & 1) === 0) { // [even number].5; round down (i.e. floor)
+        return Math.floor(x);
+    } else {
+        return Math.round(x);
+    }
+}
+
+function createNumberConversion(bitLength, typeOpts) {
+    if (!typeOpts.unsigned) {
+        --bitLength;
+    }
+    const lowerBound = typeOpts.unsigned ? 0 : -Math.pow(2, bitLength);
+    const upperBound = Math.pow(2, bitLength) - 1;
+
+    const moduloVal = typeOpts.moduloBitLength ? Math.pow(2, typeOpts.moduloBitLength) : Math.pow(2, bitLength);
+    const moduloBound = typeOpts.moduloBitLength ? Math.pow(2, typeOpts.moduloBitLength - 1) : Math.pow(2, bitLength - 1);
+
+    return function(V, opts) {
+        if (!opts) opts = {};
+
+        let x = +V;
+
+        if (opts.enforceRange) {
+            if (!Number.isFinite(x)) {
+                throw new TypeError("Argument is not a finite number");
+            }
+
+            x = sign$1(x) * Math.floor(Math.abs(x));
+            if (x < lowerBound || x > upperBound) {
+                throw new TypeError("Argument is not in byte range");
+            }
+
+            return x;
+        }
+
+        if (!isNaN(x) && opts.clamp) {
+            x = evenRound(x);
+
+            if (x < lowerBound) x = lowerBound;
+            if (x > upperBound) x = upperBound;
+            return x;
+        }
+
+        if (!Number.isFinite(x) || x === 0) {
+            return 0;
+        }
+
+        x = sign$1(x) * Math.floor(Math.abs(x));
+        x = x % moduloVal;
+
+        if (!typeOpts.unsigned && x >= moduloBound) {
+            return x - moduloVal;
+        } else if (typeOpts.unsigned) {
+            if (x < 0) {
+              x += moduloVal;
+            } else if (x === -0) { // don't return negative zero
+              return 0;
+            }
+        }
+
+        return x;
+    }
+}
+
+conversions["void"] = function () {
+    return undefined;
+};
+
+conversions["boolean"] = function (val) {
+    return !!val;
+};
+
+conversions["byte"] = createNumberConversion(8, { unsigned: false });
+conversions["octet"] = createNumberConversion(8, { unsigned: true });
+
+conversions["short"] = createNumberConversion(16, { unsigned: false });
+conversions["unsigned short"] = createNumberConversion(16, { unsigned: true });
+
+conversions["long"] = createNumberConversion(32, { unsigned: false });
+conversions["unsigned long"] = createNumberConversion(32, { unsigned: true });
+
+conversions["long long"] = createNumberConversion(32, { unsigned: false, moduloBitLength: 64 });
+conversions["unsigned long long"] = createNumberConversion(32, { unsigned: true, moduloBitLength: 64 });
+
+conversions["double"] = function (V) {
+    const x = +V;
+
+    if (!Number.isFinite(x)) {
+        throw new TypeError("Argument is not a finite floating-point value");
+    }
+
+    return x;
+};
+
+conversions["unrestricted double"] = function (V) {
+    const x = +V;
+
+    if (isNaN(x)) {
+        throw new TypeError("Argument is NaN");
+    }
+
+    return x;
+};
+
+// not quite valid, but good enough for JS
+conversions["float"] = conversions["double"];
+conversions["unrestricted float"] = conversions["unrestricted double"];
+
+conversions["DOMString"] = function (V, opts) {
+    if (!opts) opts = {};
+
+    if (opts.treatNullAsEmptyString && V === null) {
+        return "";
+    }
+
+    return String(V);
+};
+
+conversions["ByteString"] = function (V, opts) {
+    const x = String(V);
+    let c = undefined;
+    for (let i = 0; (c = x.codePointAt(i)) !== undefined; ++i) {
+        if (c > 255) {
+            throw new TypeError("Argument is not a valid bytestring");
+        }
+    }
+
+    return x;
+};
+
+conversions["USVString"] = function (V) {
+    const S = String(V);
+    const n = S.length;
+    const U = [];
+    for (let i = 0; i < n; ++i) {
+        const c = S.charCodeAt(i);
+        if (c < 0xD800 || c > 0xDFFF) {
+            U.push(String.fromCodePoint(c));
+        } else if (0xDC00 <= c && c <= 0xDFFF) {
+            U.push(String.fromCodePoint(0xFFFD));
+        } else {
+            if (i === n - 1) {
+                U.push(String.fromCodePoint(0xFFFD));
+            } else {
+                const d = S.charCodeAt(i + 1);
+                if (0xDC00 <= d && d <= 0xDFFF) {
+                    const a = c & 0x3FF;
+                    const b = d & 0x3FF;
+                    U.push(String.fromCodePoint((2 << 15) + (2 << 9) * a + b));
+                    ++i;
+                } else {
+                    U.push(String.fromCodePoint(0xFFFD));
+                }
+            }
+        }
+    }
+
+    return U.join('');
+};
+
+conversions["Date"] = function (V, opts) {
+    if (!(V instanceof Date)) {
+        throw new TypeError("Argument is not a Date object");
+    }
+    if (isNaN(V)) {
+        return undefined;
+    }
+
+    return V;
+};
+
+conversions["RegExp"] = function (V, opts) {
+    if (!(V instanceof RegExp)) {
+        V = new RegExp(V);
+    }
+
+    return V;
+};
+
+var utilsExports = {};
+var utils$7 = {
+  get exports(){ return utilsExports; },
+  set exports(v){ utilsExports = v; },
+};
+
+(function (module) {
+
+	module.exports.mixin = function mixin(target, source) {
+	  const keys = Object.getOwnPropertyNames(source);
+	  for (let i = 0; i < keys.length; ++i) {
+	    Object.defineProperty(target, keys[i], Object.getOwnPropertyDescriptor(source, keys[i]));
+	  }
+	};
+
+	module.exports.wrapperSymbol = Symbol("wrapper");
+	module.exports.implSymbol = Symbol("impl");
+
+	module.exports.wrapperForImpl = function (impl) {
+	  return impl[module.exports.wrapperSymbol];
+	};
+
+	module.exports.implForWrapper = function (wrapper) {
+	  return wrapper[module.exports.implSymbol];
+	};
+} (utils$7));
+
+var URLImpl = {};
+
+var urlStateMachineExports = {};
+var urlStateMachine = {
+  get exports(){ return urlStateMachineExports; },
+  set exports(v){ urlStateMachineExports = v; },
+};
+
+var tr46 = {};
+
+var require$$1$6 = [
+	[
+		[
+			0,
+			44
+		],
+		"disallowed_STD3_valid"
+	],
+	[
+		[
+			45,
+			46
+		],
+		"valid"
+	],
+	[
+		[
+			47,
+			47
+		],
+		"disallowed_STD3_valid"
+	],
+	[
+		[
+			48,
+			57
+		],
+		"valid"
+	],
+	[
+		[
+			58,
+			64
+		],
+		"disallowed_STD3_valid"
+	],
+	[
+		[
+			65,
+			65
+		],
+		"mapped",
+		[
+			97
+		]
+	],
+	[
+		[
+			66,
+			66
+		],
+		"mapped",
+		[
+			98
+		]
+	],
+	[
+		[
+			67,
+			67
+		],
+		"mapped",
+		[
+			99
+		]
+	],
+	[
+		[
+			68,
+			68
+		],
+		"mapped",
+		[
+			100
+		]
+	],
+	[
+		[
+			69,
+			69
+		],
+		"mapped",
+		[
+			101
+		]
+	],
+	[
+		[
+			70,
