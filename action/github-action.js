@@ -30452,3 +30452,2204 @@ Object.defineProperty(pipeline$1, "__esModule", { value: true });
 const command_1$1 = command$2;
 const util_1$4 = require$$1$7;
 const standard_as_callback_1$2 = built;
+const redis_commands_1 = redisCommands;
+const calculateSlot = libExports$1;
+const pMap = pMapExports;
+const PromiseContainer$1 = promiseContainer;
+const commander_1$2 = commander$1;
+const utils_1$8 = utils$8;
+/*
+  This function derives from the cluster-key-slot implementation.
+  Instead of checking that all keys have the same slot, it checks that all slots are served by the same set of nodes.
+  If this is satisfied, it returns the first key's slot.
+*/
+function generateMultiWithNodes(redis, keys) {
+    const slot = calculateSlot(keys[0]);
+    const target = redis._groupsBySlot[slot];
+    for (let i = 1; i < keys.length; i++) {
+        if (redis._groupsBySlot[calculateSlot(keys[i])] !== target) {
+            return -1;
+        }
+    }
+    return slot;
+}
+function Pipeline(redis) {
+    commander_1$2.default.call(this);
+    this.redis = redis;
+    this.isCluster =
+        this.redis.constructor.name === "Cluster" || this.redis.isCluster;
+    this.isPipeline = true;
+    this.options = redis.options;
+    this._queue = [];
+    this._result = [];
+    this._transactions = 0;
+    this._shaToScript = {};
+    Object.keys(redis.scriptsSet).forEach((name) => {
+        const script = redis.scriptsSet[name];
+        this._shaToScript[script.sha] = script;
+        this[name] = redis[name];
+        this[name + "Buffer"] = redis[name + "Buffer"];
+    });
+    redis.addedBuiltinSet.forEach((name) => {
+        this[name] = redis[name];
+        this[name + "Buffer"] = redis[name + "Buffer"];
+    });
+    const Promise = PromiseContainer$1.get();
+    this.promise = new Promise((resolve, reject) => {
+        this.resolve = resolve;
+        this.reject = reject;
+    });
+    const _this = this;
+    Object.defineProperty(this, "length", {
+        get: function () {
+            return _this._queue.length;
+        },
+    });
+}
+pipeline$1.default = Pipeline;
+Object.assign(Pipeline.prototype, commander_1$2.default.prototype);
+Pipeline.prototype.fillResult = function (value, position) {
+    if (this._queue[position].name === "exec" && Array.isArray(value[1])) {
+        const execLength = value[1].length;
+        for (let i = 0; i < execLength; i++) {
+            if (value[1][i] instanceof Error) {
+                continue;
+            }
+            const cmd = this._queue[position - (execLength - i)];
+            try {
+                value[1][i] = cmd.transformReply(value[1][i]);
+            }
+            catch (err) {
+                value[1][i] = err;
+            }
+        }
+    }
+    this._result[position] = value;
+    if (--this.replyPending) {
+        return;
+    }
+    if (this.isCluster) {
+        let retriable = true;
+        let commonError;
+        for (let i = 0; i < this._result.length; ++i) {
+            const error = this._result[i][0];
+            const command = this._queue[i];
+            if (error) {
+                if (command.name === "exec" &&
+                    error.message ===
+                        "EXECABORT Transaction discarded because of previous errors.") {
+                    continue;
+                }
+                if (!commonError) {
+                    commonError = {
+                        name: error.name,
+                        message: error.message,
+                    };
+                }
+                else if (commonError.name !== error.name ||
+                    commonError.message !== error.message) {
+                    retriable = false;
+                    break;
+                }
+            }
+            else if (!command.inTransaction) {
+                const isReadOnly = redis_commands_1.exists(command.name) && redis_commands_1.hasFlag(command.name, "readonly");
+                if (!isReadOnly) {
+                    retriable = false;
+                    break;
+                }
+            }
+        }
+        if (commonError && retriable) {
+            const _this = this;
+            const errv = commonError.message.split(" ");
+            const queue = this._queue;
+            let inTransaction = false;
+            this._queue = [];
+            for (let i = 0; i < queue.length; ++i) {
+                if (errv[0] === "ASK" &&
+                    !inTransaction &&
+                    queue[i].name !== "asking" &&
+                    (!queue[i - 1] || queue[i - 1].name !== "asking")) {
+                    const asking = new command_1$1.default("asking");
+                    asking.ignore = true;
+                    this.sendCommand(asking);
+                }
+                queue[i].initPromise();
+                this.sendCommand(queue[i]);
+                inTransaction = queue[i].inTransaction;
+            }
+            let matched = true;
+            if (typeof this.leftRedirections === "undefined") {
+                this.leftRedirections = {};
+            }
+            const exec = function () {
+                _this.exec();
+            };
+            this.redis.handleError(commonError, this.leftRedirections, {
+                moved: function (slot, key) {
+                    _this.preferKey = key;
+                    _this.redis.slots[errv[1]] = [key];
+                    _this.redis._groupsBySlot[errv[1]] =
+                        _this.redis._groupsIds[_this.redis.slots[errv[1]].join(";")];
+                    _this.redis.refreshSlotsCache();
+                    _this.exec();
+                },
+                ask: function (slot, key) {
+                    _this.preferKey = key;
+                    _this.exec();
+                },
+                tryagain: exec,
+                clusterDown: exec,
+                connectionClosed: exec,
+                maxRedirections: () => {
+                    matched = false;
+                },
+                defaults: () => {
+                    matched = false;
+                },
+            });
+            if (matched) {
+                return;
+            }
+        }
+    }
+    let ignoredCount = 0;
+    for (let i = 0; i < this._queue.length - ignoredCount; ++i) {
+        if (this._queue[i + ignoredCount].ignore) {
+            ignoredCount += 1;
+        }
+        this._result[i] = this._result[i + ignoredCount];
+    }
+    this.resolve(this._result.slice(0, this._result.length - ignoredCount));
+};
+Pipeline.prototype.sendCommand = function (command) {
+    if (this._transactions > 0) {
+        command.inTransaction = true;
+    }
+    const position = this._queue.length;
+    command.pipelineIndex = position;
+    command.promise
+        .then((result) => {
+        this.fillResult([null, result], position);
+    })
+        .catch((error) => {
+        this.fillResult([error], position);
+    });
+    this._queue.push(command);
+    return this;
+};
+Pipeline.prototype.addBatch = function (commands) {
+    let command, commandName, args;
+    for (let i = 0; i < commands.length; ++i) {
+        command = commands[i];
+        commandName = command[0];
+        args = command.slice(1);
+        this[commandName].apply(this, args);
+    }
+    return this;
+};
+const multi = Pipeline.prototype.multi;
+Pipeline.prototype.multi = function () {
+    this._transactions += 1;
+    return multi.apply(this, arguments);
+};
+const execBuffer = Pipeline.prototype.execBuffer;
+const exec = Pipeline.prototype.exec;
+Pipeline.prototype.execBuffer = util_1$4.deprecate(function () {
+    if (this._transactions > 0) {
+        this._transactions -= 1;
+    }
+    return execBuffer.apply(this, arguments);
+}, "Pipeline#execBuffer: Use Pipeline#exec instead");
+// NOTE: To avoid an unhandled promise rejection, this will unconditionally always return this.promise,
+// which always has the rejection handled by standard-as-callback
+// adding the provided rejection callback.
+//
+// If a different promise instance were returned, that promise would cause its own unhandled promise rejection
+// errors, even if that promise unconditionally resolved to **the resolved value of** this.promise.
+Pipeline.prototype.exec = function (callback) {
+    // Wait for the cluster to be connected, since we need nodes information before continuing
+    if (this.isCluster && !this.redis.slots.length) {
+        if (this.redis.status === "wait")
+            this.redis.connect().catch(utils_1$8.noop);
+        this.redis.delayUntilReady((err) => {
+            if (err) {
+                callback(err);
+                return;
+            }
+            this.exec(callback);
+        });
+        return this.promise;
+    }
+    if (this._transactions > 0) {
+        this._transactions -= 1;
+        return (this.options.dropBufferSupport ? exec : execBuffer).apply(this, arguments);
+    }
+    if (!this.nodeifiedPromise) {
+        this.nodeifiedPromise = true;
+        standard_as_callback_1$2.default(this.promise, callback);
+    }
+    if (!this._queue.length) {
+        this.resolve([]);
+    }
+    let pipelineSlot;
+    if (this.isCluster) {
+        // List of the first key for each command
+        const sampleKeys = [];
+        for (let i = 0; i < this._queue.length; i++) {
+            const keys = this._queue[i].getKeys();
+            if (keys.length) {
+                sampleKeys.push(keys[0]);
+            }
+            // For each command, check that the keys belong to the same slot
+            if (keys.length && calculateSlot.generateMulti(keys) < 0) {
+                this.reject(new Error("All the keys in a pipeline command should belong to the same slot"));
+                return this.promise;
+            }
+        }
+        if (sampleKeys.length) {
+            pipelineSlot = generateMultiWithNodes(this.redis, sampleKeys);
+            if (pipelineSlot < 0) {
+                this.reject(new Error("All keys in the pipeline should belong to the same slots allocation group"));
+                return this.promise;
+            }
+        }
+        else {
+            // Send the pipeline to a random node
+            pipelineSlot = (Math.random() * 16384) | 0;
+        }
+    }
+    // Check whether scripts exists
+    const scripts = [];
+    for (let i = 0; i < this._queue.length; ++i) {
+        const item = this._queue[i];
+        if (item.name !== "evalsha") {
+            continue;
+        }
+        const script = this._shaToScript[item.args[0]];
+        if (!script ||
+            this.redis._addedScriptHashes[script.sha] ||
+            scripts.includes(script)) {
+            continue;
+        }
+        scripts.push(script);
+    }
+    const _this = this;
+    if (!scripts.length) {
+        return execPipeline();
+    }
+    // In cluster mode, always load scripts before running the pipeline
+    if (this.isCluster) {
+        pMap(scripts, (script) => _this.redis.script("load", script.lua), {
+            concurrency: 10,
+        })
+            .then(function () {
+            for (let i = 0; i < scripts.length; i++) {
+                _this.redis._addedScriptHashes[scripts[i].sha] = true;
+            }
+        })
+            .then(execPipeline, this.reject);
+        return this.promise;
+    }
+    this.redis
+        .script("exists", scripts.map(({ sha }) => sha))
+        .then(function (results) {
+        const pending = [];
+        for (let i = 0; i < results.length; ++i) {
+            if (!results[i]) {
+                pending.push(scripts[i]);
+            }
+        }
+        const Promise = PromiseContainer$1.get();
+        return Promise.all(pending.map(function (script) {
+            return _this.redis.script("load", script.lua);
+        }));
+    })
+        .then(function () {
+        for (let i = 0; i < scripts.length; i++) {
+            _this.redis._addedScriptHashes[scripts[i].sha] = true;
+        }
+    })
+        .then(execPipeline, this.reject);
+    return this.promise;
+    function execPipeline() {
+        let data = "";
+        let buffers;
+        let writePending = (_this.replyPending = _this._queue.length);
+        let node;
+        if (_this.isCluster) {
+            node = {
+                slot: pipelineSlot,
+                redis: _this.redis.connectionPool.nodes.all[_this.preferKey],
+            };
+        }
+        let bufferMode = false;
+        const stream = {
+            write: function (writable) {
+                if (writable instanceof Buffer) {
+                    bufferMode = true;
+                }
+                if (bufferMode) {
+                    if (!buffers) {
+                        buffers = [];
+                    }
+                    if (typeof data === "string") {
+                        buffers.push(Buffer.from(data, "utf8"));
+                        data = undefined;
+                    }
+                    buffers.push(typeof writable === "string"
+                        ? Buffer.from(writable, "utf8")
+                        : writable);
+                }
+                else {
+                    data += writable;
+                }
+                if (!--writePending) {
+                    let sendData;
+                    if (buffers) {
+                        sendData = Buffer.concat(buffers);
+                    }
+                    else {
+                        sendData = data;
+                    }
+                    if (_this.isCluster) {
+                        node.redis.stream.write(sendData);
+                    }
+                    else {
+                        _this.redis.stream.write(sendData);
+                    }
+                    // Reset writePending for resending
+                    writePending = _this._queue.length;
+                    data = "";
+                    buffers = undefined;
+                    bufferMode = false;
+                }
+            },
+        };
+        for (let i = 0; i < _this._queue.length; ++i) {
+            _this.redis.sendCommand(_this._queue[i], stream, node);
+        }
+        return _this.promise;
+    }
+};
+
+Object.defineProperty(transaction, "__esModule", { value: true });
+const utils_1$7 = utils$8;
+const standard_as_callback_1$1 = built;
+const pipeline_1 = pipeline$1;
+function addTransactionSupport(redis) {
+    redis.pipeline = function (commands) {
+        const pipeline = new pipeline_1.default(this);
+        if (Array.isArray(commands)) {
+            pipeline.addBatch(commands);
+        }
+        return pipeline;
+    };
+    const { multi } = redis;
+    redis.multi = function (commands, options) {
+        if (typeof options === "undefined" && !Array.isArray(commands)) {
+            options = commands;
+            commands = null;
+        }
+        if (options && options.pipeline === false) {
+            return multi.call(this);
+        }
+        const pipeline = new pipeline_1.default(this);
+        pipeline.multi();
+        if (Array.isArray(commands)) {
+            pipeline.addBatch(commands);
+        }
+        const exec = pipeline.exec;
+        pipeline.exec = function (callback) {
+            // Wait for the cluster to be connected, since we need nodes information before continuing
+            if (this.isCluster && !this.redis.slots.length) {
+                if (this.redis.status === "wait")
+                    this.redis.connect().catch(utils_1$7.noop);
+                return standard_as_callback_1$1.default(new Promise((resolve, reject) => {
+                    this.redis.delayUntilReady((err) => {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+                        this.exec(pipeline).then(resolve, reject);
+                    });
+                }), callback);
+            }
+            if (this._transactions > 0) {
+                exec.call(pipeline);
+            }
+            // Returns directly when the pipeline
+            // has been called multiple times (retries).
+            if (this.nodeifiedPromise) {
+                return exec.call(pipeline);
+            }
+            const promise = exec.call(pipeline);
+            return standard_as_callback_1$1.default(promise.then(function (result) {
+                const execResult = result[result.length - 1];
+                if (typeof execResult === "undefined") {
+                    throw new Error("Pipeline cannot be used to send any commands when the `exec()` has been called on it.");
+                }
+                if (execResult[0]) {
+                    execResult[0].previousErrors = [];
+                    for (let i = 0; i < result.length - 1; ++i) {
+                        if (result[i][0]) {
+                            execResult[0].previousErrors.push(result[i][0]);
+                        }
+                    }
+                    throw execResult[0];
+                }
+                return utils_1$7.wrapMultiResult(execResult[1]);
+            }), callback);
+        };
+        const { execBuffer } = pipeline;
+        pipeline.execBuffer = function (callback) {
+            if (this._transactions > 0) {
+                execBuffer.call(pipeline);
+            }
+            return pipeline.exec(callback);
+        };
+        return pipeline;
+    };
+    const { exec } = redis;
+    redis.exec = function (callback) {
+        return standard_as_callback_1$1.default(exec.call(this).then(function (results) {
+            if (Array.isArray(results)) {
+                results = utils_1$7.wrapMultiResult(results);
+            }
+            return results;
+        }), callback);
+    };
+}
+transaction.addTransactionSupport = addTransactionSupport;
+
+var RedisOptions = {};
+
+Object.defineProperty(RedisOptions, "__esModule", { value: true });
+RedisOptions.DEFAULT_REDIS_OPTIONS = {
+    // Connection
+    port: 6379,
+    host: "localhost",
+    family: 4,
+    connectTimeout: 10000,
+    disconnectTimeout: 2000,
+    retryStrategy: function (times) {
+        return Math.min(times * 50, 2000);
+    },
+    keepAlive: 0,
+    noDelay: true,
+    connectionName: null,
+    // Sentinel
+    sentinels: null,
+    name: null,
+    role: "master",
+    sentinelRetryStrategy: function (times) {
+        return Math.min(times * 10, 1000);
+    },
+    sentinelReconnectStrategy: function () {
+        // This strategy only applies when sentinels are used for detecting
+        // a failover, not during initial master resolution.
+        // The deployment can still function when some of the sentinels are down
+        // for a long period of time, so we may not want to attempt reconnection
+        // very often. Therefore the default interval is fairly long (1 minute).
+        return 60000;
+    },
+    natMap: null,
+    enableTLSForSentinelMode: false,
+    updateSentinels: true,
+    failoverDetector: false,
+    // Status
+    username: null,
+    password: null,
+    db: 0,
+    // Others
+    dropBufferSupport: false,
+    enableOfflineQueue: true,
+    enableReadyCheck: true,
+    autoResubscribe: true,
+    autoResendUnfulfilledCommands: true,
+    lazyConnect: false,
+    keyPrefix: "",
+    reconnectOnError: null,
+    readOnly: false,
+    stringNumbers: false,
+    maxRetriesPerRequest: 20,
+    maxLoadingRetryTime: 10000,
+    enableAutoPipelining: false,
+    autoPipeliningIgnoredCommands: [],
+    maxScriptsCachingTime: 60000,
+    sentinelMaxConnections: 10,
+};
+
+var hasRequiredRedis;
+
+function requireRedis () {
+	if (hasRequiredRedis) return redis;
+	hasRequiredRedis = 1;
+	Object.defineProperty(redis, "__esModule", { value: true });
+	const lodash_1 = lodash;
+	const util_1 = require$$1$7;
+	const events_1 = require$$0$f;
+	const Deque = denque;
+	const command_1 = command$2;
+	const commander_1 = commander$1;
+	const utils_1 = utils$8;
+	const standard_as_callback_1 = built;
+	const eventHandler = event_handler;
+	const connectors_1 = requireConnectors();
+	const ScanStream_1 = ScanStream$1;
+	const commands = redisCommands;
+	const PromiseContainer = promiseContainer;
+	const transaction_1 = transaction;
+	const RedisOptions_1 = RedisOptions;
+	const debug = utils_1.Debug("redis");
+	/**
+	 * Creates a Redis instance
+	 *
+	 * @constructor
+	 * @param {(number|string|Object)} [port=6379] - Port of the Redis server,
+	 * or a URL string(see the examples below),
+	 * or the `options` object(see the third argument).
+	 * @param {string|Object} [host=localhost] - Host of the Redis server,
+	 * when the first argument is a URL string,
+	 * this argument is an object represents the options.
+	 * @param {Object} [options] - Other options.
+	 * @param {number} [options.port=6379] - Port of the Redis server.
+	 * @param {string} [options.host=localhost] - Host of the Redis server.
+	 * @param {string} [options.family=4] - Version of IP stack. Defaults to 4.
+	 * @param {string} [options.path=null] - Local domain socket path. If set the `port`,
+	 * `host` and `family` will be ignored.
+	 * @param {number} [options.keepAlive=0] - TCP KeepAlive on the socket with a X ms delay before start.
+	 * Set to a non-number value to disable keepAlive.
+	 * @param {boolean} [options.noDelay=true] - Whether to disable the Nagle's Algorithm. By default we disable
+	 * it to reduce the latency.
+	 * @param {string} [options.connectionName=null] - Connection name.
+	 * @param {number} [options.db=0] - Database index to use.
+	 * @param {string} [options.password=null] - If set, client will send AUTH command
+	 * with the value of this option when connected.
+	 * @param {string} [options.username=null] - Similar to `password`, Provide this for Redis ACL support.
+	 * @param {boolean} [options.dropBufferSupport=false] - Drop the buffer support for better performance.
+	 * This option is recommended to be enabled when
+	 * handling large array response and you don't need the buffer support.
+	 * @param {boolean} [options.enableReadyCheck=true] - When a connection is established to
+	 * the Redis server, the server might still be loading the database from disk.
+	 * While loading, the server not respond to any commands.
+	 * To work around this, when this option is `true`,
+	 * ioredis will check the status of the Redis server,
+	 * and when the Redis server is able to process commands,
+	 * a `ready` event will be emitted.
+	 * @param {boolean} [options.enableOfflineQueue=true] - By default,
+	 * if there is no active connection to the Redis server,
+	 * commands are added to a queue and are executed once the connection is "ready"
+	 * (when `enableReadyCheck` is `true`,
+	 * "ready" means the Redis server has loaded the database from disk, otherwise means the connection
+	 * to the Redis server has been established). If this option is false,
+	 * when execute the command when the connection isn't ready, an error will be returned.
+	 * @param {number} [options.connectTimeout=10000] - The milliseconds before a timeout occurs during the initial
+	 * connection to the Redis server.
+	 * @param {boolean} [options.autoResubscribe=true] - After reconnected, if the previous connection was in the
+	 * subscriber mode, client will auto re-subscribe these channels.
+	 * @param {boolean} [options.autoResendUnfulfilledCommands=true] - If true, client will resend unfulfilled
+	 * commands(e.g. block commands) in the previous connection when reconnected.
+	 * @param {boolean} [options.lazyConnect=false] - By default,
+	 * When a new `Redis` instance is created, it will connect to Redis server automatically.
+	 * If you want to keep the instance disconnected until a command is called, you can pass the `lazyConnect` option to
+	 * the constructor:
+	 *
+	 * ```javascript
+	 * var redis = new Redis({ lazyConnect: true });
+	 * // No attempting to connect to the Redis server here.
+
+	 * // Now let's connect to the Redis server
+	 * redis.get('foo', function () {
+	 * });
+	 * ```
+	 * @param {Object} [options.tls] - TLS connection support. See https://github.com/luin/ioredis#tls-options
+	 * @param {string} [options.keyPrefix=''] - The prefix to prepend to all keys in a command.
+	 * @param {function} [options.retryStrategy] - See "Quick Start" section
+	 * @param {number} [options.maxRetriesPerRequest] - See "Quick Start" section
+	 * @param {number} [options.maxLoadingRetryTime=10000] - when redis server is not ready, we will wait for
+	 * `loading_eta_seconds` from `info` command or maxLoadingRetryTime (milliseconds), whichever is smaller.
+	 * @param {function} [options.reconnectOnError] - See "Quick Start" section
+	 * @param {boolean} [options.readOnly=false] - Enable READONLY mode for the connection.
+	 * Only available for cluster mode.
+	 * @param {boolean} [options.stringNumbers=false] - Force numbers to be always returned as JavaScript
+	 * strings. This option is necessary when dealing with big numbers (exceed the [-2^53, +2^53] range).
+	 * @param {boolean} [options.enableTLSForSentinelMode=false] - Whether to support the `tls` option
+	 * when connecting to Redis via sentinel mode.
+	 * @param {NatMap} [options.natMap=null] NAT map for sentinel connector.
+	 * @param {boolean} [options.updateSentinels=true] - Update the given `sentinels` list with new IP
+	 * addresses when communicating with existing sentinels.
+	 * @param {boolean} [options.failoverDetector=false] - Detect failover actively by subscribing to the
+	 * related channels. With this option disabled, ioredis is still able to detect failovers because Redis
+	 * Sentinel will disconnect all clients whenever a failover happens, so ioredis will reconnect to the new
+	 * master. This option is useful when you want to detect failover quicker, but it will create more TCP
+	 * connections to Redis servers in order to subscribe to related channels.
+	* @param {boolean} [options.enableAutoPipelining=false] - When enabled, all commands issued during an event loop
+	 * iteration are automatically wrapped in a pipeline and sent to the server at the same time.
+	 * This can dramatically improve performance.
+	 * @param {string[]} [options.autoPipeliningIgnoredCommands=[]] - The list of commands which must not be automatically wrapped in pipelines.
+	 * @param {number} [options.maxScriptsCachingTime=60000] Default script definition caching time.
+	  * @extends [EventEmitter](http://nodejs.org/api/events.html#events_class_events_eventemitter)
+	 * @extends Commander
+	 * @example
+	 * ```js
+	 * var Redis = require('ioredis');
+	 *
+	 * var redis = new Redis();
+	 *
+	 * var redisOnPort6380 = new Redis(6380);
+	 * var anotherRedis = new Redis(6380, '192.168.100.1');
+	 * var unixSocketRedis = new Redis({ path: '/tmp/echo.sock' });
+	 * var unixSocketRedis2 = new Redis('/tmp/echo.sock');
+	 * var urlRedis = new Redis('redis://user:password@redis-service.com:6379/');
+	 * var urlRedis2 = new Redis('//localhost:6379');
+	 * var urlRedisTls = new Redis('rediss://user:password@redis-service.com:6379/');
+	 * var authedRedis = new Redis(6380, '192.168.100.1', { password: 'password' });
+	 * ```
+	 */
+	redis.default = Redis;
+	function Redis() {
+	    if (!(this instanceof Redis)) {
+	        console.error(new Error("Calling `Redis()` like a function is deprecated. Using `new Redis()` instead.").stack.replace("Error", "Warning"));
+	        return new Redis(arguments[0], arguments[1], arguments[2]);
+	    }
+	    this.parseOptions(arguments[0], arguments[1], arguments[2]);
+	    events_1.EventEmitter.call(this);
+	    commander_1.default.call(this);
+	    this.resetCommandQueue();
+	    this.resetOfflineQueue();
+	    this.connectionEpoch = 0;
+	    if (this.options.Connector) {
+	        this.connector = new this.options.Connector(this.options);
+	    }
+	    else if (this.options.sentinels) {
+	        const sentinelConnector = new connectors_1.SentinelConnector(this.options);
+	        sentinelConnector.emitter = this;
+	        this.connector = sentinelConnector;
+	    }
+	    else {
+	        this.connector = new connectors_1.StandaloneConnector(this.options);
+	    }
+	    this.retryAttempts = 0;
+	    // Prepare a cache of scripts and setup a interval which regularly clears it
+	    this._addedScriptHashes = {};
+	    // Prepare autopipelines structures
+	    this._autoPipelines = new Map();
+	    this._runningAutoPipelines = new Set();
+	    Object.defineProperty(this, "autoPipelineQueueSize", {
+	        get() {
+	            let queued = 0;
+	            for (const pipeline of this._autoPipelines.values()) {
+	                queued += pipeline.length;
+	            }
+	            return queued;
+	        },
+	    });
+	    // end(or wait) -> connecting -> connect -> ready -> end
+	    if (this.options.lazyConnect) {
+	        this.setStatus("wait");
+	    }
+	    else {
+	        this.connect().catch(lodash_1.noop);
+	    }
+	}
+	util_1.inherits(Redis, events_1.EventEmitter);
+	Object.assign(Redis.prototype, commander_1.default.prototype);
+	/**
+	 * Create a Redis instance
+	 *
+	 * @deprecated
+	 */
+	// @ts-ignore
+	Redis.createClient = function (...args) {
+	    // @ts-ignore
+	    return new Redis(...args);
+	};
+	/**
+	 * Default options
+	 *
+	 * @var defaultOptions
+	 * @private
+	 */
+	Redis.defaultOptions = RedisOptions_1.DEFAULT_REDIS_OPTIONS;
+	Redis.prototype.resetCommandQueue = function () {
+	    this.commandQueue = new Deque();
+	};
+	Redis.prototype.resetOfflineQueue = function () {
+	    this.offlineQueue = new Deque();
+	};
+	Redis.prototype.parseOptions = function () {
+	    this.options = {};
+	    let isTls = false;
+	    for (let i = 0; i < arguments.length; ++i) {
+	        const arg = arguments[i];
+	        if (arg === null || typeof arg === "undefined") {
+	            continue;
+	        }
+	        if (typeof arg === "object") {
+	            lodash_1.defaults(this.options, arg);
+	        }
+	        else if (typeof arg === "string") {
+	            lodash_1.defaults(this.options, utils_1.parseURL(arg));
+	            if (arg.startsWith("rediss://")) {
+	                isTls = true;
+	            }
+	        }
+	        else if (typeof arg === "number") {
+	            this.options.port = arg;
+	        }
+	        else {
+	            throw new Error("Invalid argument " + arg);
+	        }
+	    }
+	    if (isTls) {
+	        lodash_1.defaults(this.options, { tls: true });
+	    }
+	    lodash_1.defaults(this.options, Redis.defaultOptions);
+	    if (typeof this.options.port === "string") {
+	        this.options.port = parseInt(this.options.port, 10);
+	    }
+	    if (typeof this.options.db === "string") {
+	        this.options.db = parseInt(this.options.db, 10);
+	    }
+	    if (this.options.parser === "hiredis") {
+	        console.warn("Hiredis parser is abandoned since ioredis v3.0, and JavaScript parser will be used");
+	    }
+	    this.options = utils_1.resolveTLSProfile(this.options);
+	};
+	/**
+	 * Change instance's status
+	 * @private
+	 */
+	Redis.prototype.setStatus = function (status, arg) {
+	    // @ts-ignore
+	    if (debug.enabled) {
+	        debug("status[%s]: %s -> %s", this._getDescription(), this.status || "[empty]", status);
+	    }
+	    this.status = status;
+	    process.nextTick(this.emit.bind(this, status, arg));
+	};
+	Redis.prototype.clearAddedScriptHashesCleanInterval = function () {
+	    if (this._addedScriptHashesCleanInterval) {
+	        clearInterval(this._addedScriptHashesCleanInterval);
+	        this._addedScriptHashesCleanInterval = null;
+	    }
+	};
+	/**
+	 * Create a connection to Redis.
+	 * This method will be invoked automatically when creating a new Redis instance
+	 * unless `lazyConnect: true` is passed.
+	 *
+	 * When calling this method manually, a Promise is returned, which will
+	 * be resolved when the connection status is ready.
+	 * @param {function} [callback]
+	 * @return {Promise<void>}
+	 * @public
+	 */
+	Redis.prototype.connect = function (callback) {
+	    const _Promise = PromiseContainer.get();
+	    const promise = new _Promise((resolve, reject) => {
+	        if (this.status === "connecting" ||
+	            this.status === "connect" ||
+	            this.status === "ready") {
+	            reject(new Error("Redis is already connecting/connected"));
+	            return;
+	        }
+	        // Make sure only one timer is active at a time
+	        this.clearAddedScriptHashesCleanInterval();
+	        // Scripts need to get reset on reconnect as redis
+	        // might have been restarted or some failover happened
+	        this._addedScriptHashes = {};
+	        // Start the script cache cleaning
+	        this._addedScriptHashesCleanInterval = setInterval(() => {
+	            this._addedScriptHashes = {};
+	        }, this.options.maxScriptsCachingTime);
+	        this.connectionEpoch += 1;
+	        this.setStatus("connecting");
+	        const { options } = this;
+	        this.condition = {
+	            select: options.db,
+	            auth: options.username
+	                ? [options.username, options.password]
+	                : options.password,
+	            subscriber: false,
+	        };
+	        const _this = this;
+	        standard_as_callback_1.default(this.connector.connect(function (type, err) {
+	            _this.silentEmit(type, err);
+	        }), function (err, stream) {
+	            if (err) {
+	                _this.flushQueue(err);
+	                _this.silentEmit("error", err);
+	                reject(err);
+	                _this.setStatus("end");
+	                return;
+	            }
+	            let CONNECT_EVENT = options.tls ? "secureConnect" : "connect";
+	            if (options.sentinels && !options.enableTLSForSentinelMode) {
+	                CONNECT_EVENT = "connect";
+	            }
+	            _this.stream = stream;
+	            if (typeof options.keepAlive === "number") {
+	                stream.setKeepAlive(true, options.keepAlive);
+	            }
+	            if (stream.connecting) {
+	                stream.once(CONNECT_EVENT, eventHandler.connectHandler(_this));
+	                if (options.connectTimeout) {
+	                    /*
+	                     * Typically, Socket#setTimeout(0) will clear the timer
+	                     * set before. However, in some platforms (Electron 3.x~4.x),
+	                     * the timer will not be cleared. So we introduce a variable here.
+	                     *
+	                     * See https://github.com/electron/electron/issues/14915
+	                     */
+	                    let connectTimeoutCleared = false;
+	                    stream.setTimeout(options.connectTimeout, function () {
+	                        if (connectTimeoutCleared) {
+	                            return;
+	                        }
+	                        stream.setTimeout(0);
+	                        stream.destroy();
+	                        const err = new Error("connect ETIMEDOUT");
+	                        // @ts-ignore
+	                        err.errorno = "ETIMEDOUT";
+	                        // @ts-ignore
+	                        err.code = "ETIMEDOUT";
+	                        // @ts-ignore
+	                        err.syscall = "connect";
+	                        eventHandler.errorHandler(_this)(err);
+	                    });
+	                    stream.once(CONNECT_EVENT, function () {
+	                        connectTimeoutCleared = true;
+	                        stream.setTimeout(0);
+	                    });
+	                }
+	            }
+	            else if (stream.destroyed) {
+	                const firstError = _this.connector.firstError;
+	                if (firstError) {
+	                    process.nextTick(() => {
+	                        eventHandler.errorHandler(_this)(firstError);
+	                    });
+	                }
+	                process.nextTick(eventHandler.closeHandler(_this));
+	            }
+	            else {
+	                process.nextTick(eventHandler.connectHandler(_this));
+	            }
+	            if (!stream.destroyed) {
+	                stream.once("error", eventHandler.errorHandler(_this));
+	                stream.once("close", eventHandler.closeHandler(_this));
+	            }
+	            if (options.noDelay) {
+	                stream.setNoDelay(true);
+	            }
+	            const connectionReadyHandler = function () {
+	                _this.removeListener("close", connectionCloseHandler);
+	                resolve();
+	            };
+	            var connectionCloseHandler = function () {
+	                _this.removeListener("ready", connectionReadyHandler);
+	                reject(new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG));
+	            };
+	            _this.once("ready", connectionReadyHandler);
+	            _this.once("close", connectionCloseHandler);
+	        });
+	    });
+	    return standard_as_callback_1.default(promise, callback);
+	};
+	/**
+	 * Disconnect from Redis.
+	 *
+	 * This method closes the connection immediately,
+	 * and may lose some pending replies that haven't written to client.
+	 * If you want to wait for the pending replies, use Redis#quit instead.
+	 * @public
+	 */
+	Redis.prototype.disconnect = function (reconnect) {
+	    this.clearAddedScriptHashesCleanInterval();
+	    if (!reconnect) {
+	        this.manuallyClosing = true;
+	    }
+	    if (this.reconnectTimeout && !reconnect) {
+	        clearTimeout(this.reconnectTimeout);
+	        this.reconnectTimeout = null;
+	    }
+	    if (this.status === "wait") {
+	        eventHandler.closeHandler(this)();
+	    }
+	    else {
+	        this.connector.disconnect();
+	    }
+	};
+	/**
+	 * Disconnect from Redis.
+	 *
+	 * @deprecated
+	 */
+	Redis.prototype.end = function () {
+	    this.disconnect();
+	};
+	/**
+	 * Create a new instance with the same options as the current one.
+	 *
+	 * @example
+	 * ```js
+	 * var redis = new Redis(6380);
+	 * var anotherRedis = redis.duplicate();
+	 * ```
+	 *
+	 * @public
+	 */
+	Redis.prototype.duplicate = function (override) {
+	    return new Redis(Object.assign({}, this.options, override || {}));
+	};
+	Redis.prototype.recoverFromFatalError = function (commandError, err, options) {
+	    this.flushQueue(err, options);
+	    this.silentEmit("error", err);
+	    this.disconnect(true);
+	};
+	Redis.prototype.handleReconnection = function handleReconnection(err, item) {
+	    let needReconnect = false;
+	    if (this.options.reconnectOnError) {
+	        needReconnect = this.options.reconnectOnError(err);
+	    }
+	    switch (needReconnect) {
+	        case 1:
+	        case true:
+	            if (this.status !== "reconnecting") {
+	                this.disconnect(true);
+	            }
+	            item.command.reject(err);
+	            break;
+	        case 2:
+	            if (this.status !== "reconnecting") {
+	                this.disconnect(true);
+	            }
+	            if (this.condition.select !== item.select &&
+	                item.command.name !== "select") {
+	                this.select(item.select);
+	            }
+	            this.sendCommand(item.command);
+	            break;
+	        default:
+	            item.command.reject(err);
+	    }
+	};
+	/**
+	 * Flush offline queue and command queue with error.
+	 *
+	 * @param {Error} error - The error object to send to the commands
+	 * @param {object} options
+	 * @private
+	 */
+	Redis.prototype.flushQueue = function (error, options) {
+	    options = lodash_1.defaults({}, options, {
+	        offlineQueue: true,
+	        commandQueue: true,
+	    });
+	    let item;
+	    if (options.offlineQueue) {
+	        while (this.offlineQueue.length > 0) {
+	            item = this.offlineQueue.shift();
+	            item.command.reject(error);
+	        }
+	    }
+	    if (options.commandQueue) {
+	        if (this.commandQueue.length > 0) {
+	            if (this.stream) {
+	                this.stream.removeAllListeners("data");
+	            }
+	            while (this.commandQueue.length > 0) {
+	                item = this.commandQueue.shift();
+	                item.command.reject(error);
+	            }
+	        }
+	    }
+	};
+	/**
+	 * Check whether Redis has finished loading the persistent data and is able to
+	 * process commands.
+	 *
+	 * @param {Function} callback
+	 * @private
+	 */
+	Redis.prototype._readyCheck = function (callback) {
+	    const _this = this;
+	    this.info(function (err, res) {
+	        if (err) {
+	            return callback(err);
+	        }
+	        if (typeof res !== "string") {
+	            return callback(null, res);
+	        }
+	        const info = {};
+	        const lines = res.split("\r\n");
+	        for (let i = 0; i < lines.length; ++i) {
+	            const [fieldName, ...fieldValueParts] = lines[i].split(":");
+	            const fieldValue = fieldValueParts.join(":");
+	            if (fieldValue) {
+	                info[fieldName] = fieldValue;
+	            }
+	        }
+	        if (!info.loading || info.loading === "0") {
+	            callback(null, info);
+	        }
+	        else {
+	            const loadingEtaMs = (info.loading_eta_seconds || 1) * 1000;
+	            const retryTime = _this.options.maxLoadingRetryTime &&
+	                _this.options.maxLoadingRetryTime < loadingEtaMs
+	                ? _this.options.maxLoadingRetryTime
+	                : loadingEtaMs;
+	            debug("Redis server still loading, trying again in " + retryTime + "ms");
+	            setTimeout(function () {
+	                _this._readyCheck(callback);
+	            }, retryTime);
+	        }
+	    });
+	};
+	/**
+	 * Emit only when there's at least one listener.
+	 *
+	 * @param {string} eventName - Event to emit
+	 * @param {...*} arguments - Arguments
+	 * @return {boolean} Returns true if event had listeners, false otherwise.
+	 * @private
+	 */
+	Redis.prototype.silentEmit = function (eventName) {
+	    let error;
+	    if (eventName === "error") {
+	        error = arguments[1];
+	        if (this.status === "end") {
+	            return;
+	        }
+	        if (this.manuallyClosing) {
+	            // ignore connection related errors when manually disconnecting
+	            if (error instanceof Error &&
+	                (error.message === utils_1.CONNECTION_CLOSED_ERROR_MSG ||
+	                    // @ts-ignore
+	                    error.syscall === "connect" ||
+	                    // @ts-ignore
+	                    error.syscall === "read")) {
+	                return;
+	            }
+	        }
+	    }
+	    if (this.listeners(eventName).length > 0) {
+	        return this.emit.apply(this, arguments);
+	    }
+	    if (error && error instanceof Error) {
+	        console.error("[ioredis] Unhandled error event:", error.stack);
+	    }
+	    return false;
+	};
+	/**
+	 * Listen for all requests received by the server in real time.
+	 *
+	 * This command will create a new connection to Redis and send a
+	 * MONITOR command via the new connection in order to avoid disturbing
+	 * the current connection.
+	 *
+	 * @param {function} [callback] The callback function. If omit, a promise will be returned.
+	 * @example
+	 * ```js
+	 * var redis = new Redis();
+	 * redis.monitor(function (err, monitor) {
+	 *   // Entering monitoring mode.
+	 *   monitor.on('monitor', function (time, args, source, database) {
+	 *     console.log(time + ": " + util.inspect(args));
+	 *   });
+	 * });
+	 *
+	 * // supports promise as well as other commands
+	 * redis.monitor().then(function (monitor) {
+	 *   monitor.on('monitor', function (time, args, source, database) {
+	 *     console.log(time + ": " + util.inspect(args));
+	 *   });
+	 * });
+	 * ```
+	 * @public
+	 */
+	Redis.prototype.monitor = function (callback) {
+	    const monitorInstance = this.duplicate({
+	        monitor: true,
+	        lazyConnect: false,
+	    });
+	    const Promise = PromiseContainer.get();
+	    return standard_as_callback_1.default(new Promise(function (resolve) {
+	        monitorInstance.once("monitoring", function () {
+	            resolve(monitorInstance);
+	        });
+	    }), callback);
+	};
+	transaction_1.addTransactionSupport(Redis.prototype);
+	/**
+	 * Send a command to Redis
+	 *
+	 * This method is used internally by the `Redis#set`, `Redis#lpush` etc.
+	 * Most of the time you won't invoke this method directly.
+	 * However when you want to send a command that is not supported by ioredis yet,
+	 * this command will be useful.
+	 *
+	 * @method sendCommand
+	 * @memberOf Redis#
+	 * @param {Command} command - The Command instance to send.
+	 * @see {@link Command}
+	 * @example
+	 * ```js
+	 * var redis = new Redis();
+	 *
+	 * // Use callback
+	 * var get = new Command('get', ['foo'], 'utf8', function (err, result) {
+	 *   console.log(result);
+	 * });
+	 * redis.sendCommand(get);
+	 *
+	 * // Use promise
+	 * var set = new Command('set', ['foo', 'bar'], 'utf8');
+	 * set.promise.then(function (result) {
+	 *   console.log(result);
+	 * });
+	 * redis.sendCommand(set);
+	 * ```
+	 * @private
+	 */
+	Redis.prototype.sendCommand = function (command, stream) {
+	    if (this.status === "wait") {
+	        this.connect().catch(lodash_1.noop);
+	    }
+	    if (this.status === "end") {
+	        command.reject(new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG));
+	        return command.promise;
+	    }
+	    if (this.condition.subscriber &&
+	        !command_1.default.checkFlag("VALID_IN_SUBSCRIBER_MODE", command.name)) {
+	        command.reject(new Error("Connection in subscriber mode, only subscriber commands may be used"));
+	        return command.promise;
+	    }
+	    if (typeof this.options.commandTimeout === "number") {
+	        command.setTimeout(this.options.commandTimeout);
+	    }
+	    if (command.name === "quit") {
+	        this.clearAddedScriptHashesCleanInterval();
+	    }
+	    let writable = this.status === "ready" ||
+	        (!stream &&
+	            this.status === "connect" &&
+	            commands.exists(command.name) &&
+	            commands.hasFlag(command.name, "loading"));
+	    if (!this.stream) {
+	        writable = false;
+	    }
+	    else if (!this.stream.writable) {
+	        writable = false;
+	    }
+	    else if (this.stream._writableState && this.stream._writableState.ended) {
+	        // https://github.com/iojs/io.js/pull/1217
+	        writable = false;
+	    }
+	    if (!writable && !this.options.enableOfflineQueue) {
+	        command.reject(new Error("Stream isn't writeable and enableOfflineQueue options is false"));
+	        return command.promise;
+	    }
+	    if (!writable && command.name === "quit" && this.offlineQueue.length === 0) {
+	        this.disconnect();
+	        command.resolve(Buffer.from("OK"));
+	        return command.promise;
+	    }
+	    if (writable) {
+	        // @ts-ignore
+	        if (debug.enabled) {
+	            debug("write command[%s]: %d -> %s(%o)", this._getDescription(), this.condition.select, command.name, command.args);
+	        }
+	        (stream || this.stream).write(command.toWritable());
+	        this.commandQueue.push({
+	            command: command,
+	            stream: stream,
+	            select: this.condition.select,
+	        });
+	        if (command_1.default.checkFlag("WILL_DISCONNECT", command.name)) {
+	            this.manuallyClosing = true;
+	        }
+	    }
+	    else if (this.options.enableOfflineQueue) {
+	        // @ts-ignore
+	        if (debug.enabled) {
+	            debug("queue command[%s]: %d -> %s(%o)", this._getDescription(), this.condition.select, command.name, command.args);
+	        }
+	        this.offlineQueue.push({
+	            command: command,
+	            stream: stream,
+	            select: this.condition.select,
+	        });
+	    }
+	    if (command.name === "select" && utils_1.isInt(command.args[0])) {
+	        const db = parseInt(command.args[0], 10);
+	        if (this.condition.select !== db) {
+	            this.condition.select = db;
+	            this.emit("select", db);
+	            debug("switch to db [%d]", this.condition.select);
+	        }
+	    }
+	    return command.promise;
+	};
+	/**
+	 * Get description of the connection. Used for debugging.
+	 * @private
+	 */
+	Redis.prototype._getDescription = function () {
+	    let description;
+	    if (this.options.path) {
+	        description = this.options.path;
+	    }
+	    else if (this.stream &&
+	        this.stream.remoteAddress &&
+	        this.stream.remotePort) {
+	        description = this.stream.remoteAddress + ":" + this.stream.remotePort;
+	    }
+	    else {
+	        description = this.options.host + ":" + this.options.port;
+	    }
+	    if (this.options.connectionName) {
+	        description += ` (${this.options.connectionName})`;
+	    }
+	    return description;
+	};
+	[
+	    "scan",
+	    "sscan",
+	    "hscan",
+	    "zscan",
+	    "scanBuffer",
+	    "sscanBuffer",
+	    "hscanBuffer",
+	    "zscanBuffer",
+	].forEach(function (command) {
+	    Redis.prototype[command + "Stream"] = function (key, options) {
+	        if (command === "scan" || command === "scanBuffer") {
+	            options = key;
+	            key = null;
+	        }
+	        return new ScanStream_1.default(lodash_1.defaults({
+	            objectMode: true,
+	            key: key,
+	            redis: this,
+	            command: command,
+	        }, options));
+	    };
+	});
+	return redis;
+}
+
+var cluster$2 = {};
+
+var ClusterAllFailedError$1 = {};
+
+Object.defineProperty(ClusterAllFailedError$1, "__esModule", { value: true });
+const redis_errors_1$1 = redisErrors;
+class ClusterAllFailedError extends redis_errors_1$1.RedisError {
+    constructor(message, lastNodeError) {
+        super(message);
+        this.lastNodeError = lastNodeError;
+        Error.captureStackTrace(this, this.constructor);
+    }
+    get name() {
+        return this.constructor.name;
+    }
+}
+ClusterAllFailedError$1.default = ClusterAllFailedError;
+
+var ConnectionPool$1 = {};
+
+var util$7 = {};
+
+Object.defineProperty(util$7, "__esModule", { value: true });
+const utils_1$6 = utils$8;
+const net_1 = require$$4$2;
+function getNodeKey(node) {
+    node.port = node.port || 6379;
+    node.host = node.host || "127.0.0.1";
+    return node.host + ":" + node.port;
+}
+util$7.getNodeKey = getNodeKey;
+function nodeKeyToRedisOptions(nodeKey) {
+    const portIndex = nodeKey.lastIndexOf(":");
+    if (portIndex === -1) {
+        throw new Error(`Invalid node key ${nodeKey}`);
+    }
+    return {
+        host: nodeKey.slice(0, portIndex),
+        port: Number(nodeKey.slice(portIndex + 1)),
+    };
+}
+util$7.nodeKeyToRedisOptions = nodeKeyToRedisOptions;
+function normalizeNodeOptions(nodes) {
+    return nodes.map((node) => {
+        const options = {};
+        if (typeof node === "object") {
+            Object.assign(options, node);
+        }
+        else if (typeof node === "string") {
+            Object.assign(options, utils_1$6.parseURL(node));
+        }
+        else if (typeof node === "number") {
+            options.port = node;
+        }
+        else {
+            throw new Error("Invalid argument " + node);
+        }
+        if (typeof options.port === "string") {
+            options.port = parseInt(options.port, 10);
+        }
+        // Cluster mode only support db 0
+        delete options.db;
+        if (!options.port) {
+            options.port = 6379;
+        }
+        if (!options.host) {
+            options.host = "127.0.0.1";
+        }
+        return utils_1$6.resolveTLSProfile(options);
+    });
+}
+util$7.normalizeNodeOptions = normalizeNodeOptions;
+function getUniqueHostnamesFromOptions(nodes) {
+    const uniqueHostsMap = {};
+    nodes.forEach((node) => {
+        uniqueHostsMap[node.host] = true;
+    });
+    return Object.keys(uniqueHostsMap).filter((host) => !net_1.isIP(host));
+}
+util$7.getUniqueHostnamesFromOptions = getUniqueHostnamesFromOptions;
+function groupSrvRecords(records) {
+    const recordsByPriority = {};
+    for (const record of records) {
+        if (!recordsByPriority.hasOwnProperty(record.priority)) {
+            recordsByPriority[record.priority] = {
+                totalWeight: record.weight,
+                records: [record],
+            };
+        }
+        else {
+            recordsByPriority[record.priority].totalWeight += record.weight;
+            recordsByPriority[record.priority].records.push(record);
+        }
+    }
+    return recordsByPriority;
+}
+util$7.groupSrvRecords = groupSrvRecords;
+function weightSrvRecords(recordsGroup) {
+    if (recordsGroup.records.length === 1) {
+        recordsGroup.totalWeight = 0;
+        return recordsGroup.records.shift();
+    }
+    // + `recordsGroup.records.length` to support `weight` 0
+    const random = Math.floor(Math.random() * (recordsGroup.totalWeight + recordsGroup.records.length));
+    let total = 0;
+    for (const [i, record] of recordsGroup.records.entries()) {
+        total += 1 + record.weight;
+        if (total > random) {
+            recordsGroup.totalWeight -= record.weight;
+            recordsGroup.records.splice(i, 1);
+            return record;
+        }
+    }
+}
+util$7.weightSrvRecords = weightSrvRecords;
+function getConnectionName(component, nodeConnectionName) {
+    const prefix = `ioredis-cluster(${component})`;
+    return nodeConnectionName ? `${prefix}:${nodeConnectionName}` : prefix;
+}
+util$7.getConnectionName = getConnectionName;
+
+Object.defineProperty(ConnectionPool$1, "__esModule", { value: true });
+const events_1$1 = require$$0$f;
+const utils_1$5 = utils$8;
+const util_1$3 = util$7;
+const redis_1$2 = requireRedis();
+const debug$f = utils_1$5.Debug("cluster:connectionPool");
+class ConnectionPool extends events_1$1.EventEmitter {
+    constructor(redisOptions) {
+        super();
+        this.redisOptions = redisOptions;
+        // master + slave = all
+        this.nodes = {
+            all: {},
+            master: {},
+            slave: {},
+        };
+        this.specifiedOptions = {};
+    }
+    getNodes(role = "all") {
+        const nodes = this.nodes[role];
+        return Object.keys(nodes).map((key) => nodes[key]);
+    }
+    getInstanceByKey(key) {
+        return this.nodes.all[key];
+    }
+    getSampleInstance(role) {
+        const keys = Object.keys(this.nodes[role]);
+        const sampleKey = utils_1$5.sample(keys);
+        return this.nodes[role][sampleKey];
+    }
+    /**
+     * Find or create a connection to the node
+     *
+     * @param {IRedisOptions} node
+     * @param {boolean} [readOnly=false]
+     * @returns {*}
+     * @memberof ConnectionPool
+     */
+    findOrCreate(node, readOnly = false) {
+        const key = util_1$3.getNodeKey(node);
+        readOnly = Boolean(readOnly);
+        if (this.specifiedOptions[key]) {
+            Object.assign(node, this.specifiedOptions[key]);
+        }
+        else {
+            this.specifiedOptions[key] = node;
+        }
+        let redis;
+        if (this.nodes.all[key]) {
+            redis = this.nodes.all[key];
+            if (redis.options.readOnly !== readOnly) {
+                redis.options.readOnly = readOnly;
+                debug$f("Change role of %s to %s", key, readOnly ? "slave" : "master");
+                redis[readOnly ? "readonly" : "readwrite"]().catch(utils_1$5.noop);
+                if (readOnly) {
+                    delete this.nodes.master[key];
+                    this.nodes.slave[key] = redis;
+                }
+                else {
+                    delete this.nodes.slave[key];
+                    this.nodes.master[key] = redis;
+                }
+            }
+        }
+        else {
+            debug$f("Connecting to %s as %s", key, readOnly ? "slave" : "master");
+            redis = new redis_1$2.default(utils_1$5.defaults({
+                // Never try to reconnect when a node is lose,
+                // instead, waiting for a `MOVED` error and
+                // fetch the slots again.
+                retryStrategy: null,
+                // Offline queue should be enabled so that
+                // we don't need to wait for the `ready` event
+                // before sending commands to the node.
+                enableOfflineQueue: true,
+                readOnly: readOnly,
+            }, node, this.redisOptions, { lazyConnect: true }));
+            this.nodes.all[key] = redis;
+            this.nodes[readOnly ? "slave" : "master"][key] = redis;
+            redis.once("end", () => {
+                this.removeNode(key);
+                this.emit("-node", redis, key);
+                if (!Object.keys(this.nodes.all).length) {
+                    this.emit("drain");
+                }
+            });
+            this.emit("+node", redis, key);
+            redis.on("error", function (error) {
+                this.emit("nodeError", error, key);
+            });
+        }
+        return redis;
+    }
+    /**
+     * Remove a node from the pool.
+     */
+    removeNode(key) {
+        const { nodes } = this;
+        if (nodes.all[key]) {
+            debug$f("Remove %s from the pool", key);
+            delete nodes.all[key];
+        }
+        delete nodes.master[key];
+        delete nodes.slave[key];
+    }
+    /**
+     * Reset the pool with a set of nodes.
+     * The old node will be removed.
+     *
+     * @param {(Array<string | number | object>)} nodes
+     * @memberof ConnectionPool
+     */
+    reset(nodes) {
+        debug$f("Reset with %O", nodes);
+        const newNodes = {};
+        nodes.forEach((node) => {
+            const key = util_1$3.getNodeKey(node);
+            // Don't override the existing (master) node
+            // when the current one is slave.
+            if (!(node.readOnly && newNodes[key])) {
+                newNodes[key] = node;
+            }
+        });
+        Object.keys(this.nodes.all).forEach((key) => {
+            if (!newNodes[key]) {
+                debug$f("Disconnect %s because the node does not hold any slot", key);
+                this.nodes.all[key].disconnect();
+                this.removeNode(key);
+            }
+        });
+        Object.keys(newNodes).forEach((key) => {
+            const node = newNodes[key];
+            this.findOrCreate(node, node.readOnly);
+        });
+    }
+}
+ConnectionPool$1.default = ConnectionPool;
+
+var ClusterSubscriber$1 = {};
+
+Object.defineProperty(ClusterSubscriber$1, "__esModule", { value: true });
+const util_1$2 = util$7;
+const utils_1$4 = utils$8;
+const redis_1$1 = requireRedis();
+const debug$e = utils_1$4.Debug("cluster:subscriber");
+class ClusterSubscriber {
+    constructor(connectionPool, emitter) {
+        this.connectionPool = connectionPool;
+        this.emitter = emitter;
+        this.started = false;
+        this.subscriber = null;
+        this.connectionPool.on("-node", (_, key) => {
+            if (!this.started || !this.subscriber) {
+                return;
+            }
+            if (util_1$2.getNodeKey(this.subscriber.options) === key) {
+                debug$e("subscriber has left, selecting a new one...");
+                this.selectSubscriber();
+            }
+        });
+        this.connectionPool.on("+node", () => {
+            if (!this.started || this.subscriber) {
+                return;
+            }
+            debug$e("a new node is discovered and there is no subscriber, selecting a new one...");
+            this.selectSubscriber();
+        });
+    }
+    getInstance() {
+        return this.subscriber;
+    }
+    selectSubscriber() {
+        const lastActiveSubscriber = this.lastActiveSubscriber;
+        // Disconnect the previous subscriber even if there
+        // will not be a new one.
+        if (lastActiveSubscriber) {
+            lastActiveSubscriber.disconnect();
+        }
+        if (this.subscriber) {
+            this.subscriber.disconnect();
+        }
+        const sampleNode = utils_1$4.sample(this.connectionPool.getNodes());
+        if (!sampleNode) {
+            debug$e("selecting subscriber failed since there is no node discovered in the cluster yet");
+            this.subscriber = null;
+            return;
+        }
+        const { options } = sampleNode;
+        debug$e("selected a subscriber %s:%s", options.host, options.port);
+        /*
+         * Create a specialized Redis connection for the subscription.
+         * Note that auto reconnection is enabled here.
+         *
+         * `enableReadyCheck` is also enabled because although subscription is allowed
+         * while redis is loading data from the disk, we can check if the password
+         * provided for the subscriber is correct, and if not, the current subscriber
+         * will be disconnected and a new subscriber will be selected.
+         */
+        this.subscriber = new redis_1$1.default({
+            port: options.port,
+            host: options.host,
+            username: options.username,
+            password: options.password,
+            enableReadyCheck: true,
+            connectionName: util_1$2.getConnectionName("subscriber", options.connectionName),
+            lazyConnect: true,
+            tls: options.tls,
+        });
+        // Ignore the errors since they're handled in the connection pool.
+        this.subscriber.on("error", utils_1$4.noop);
+        // Re-subscribe previous channels
+        const previousChannels = { subscribe: [], psubscribe: [] };
+        if (lastActiveSubscriber) {
+            const condition = lastActiveSubscriber.condition || lastActiveSubscriber.prevCondition;
+            if (condition && condition.subscriber) {
+                previousChannels.subscribe = condition.subscriber.channels("subscribe");
+                previousChannels.psubscribe = condition.subscriber.channels("psubscribe");
+            }
+        }
+        if (previousChannels.subscribe.length ||
+            previousChannels.psubscribe.length) {
+            let pending = 0;
+            for (const type of ["subscribe", "psubscribe"]) {
+                const channels = previousChannels[type];
+                if (channels.length) {
+                    pending += 1;
+                    debug$e("%s %d channels", type, channels.length);
+                    this.subscriber[type](channels)
+                        .then(() => {
+                        if (!--pending) {
+                            this.lastActiveSubscriber = this.subscriber;
+                        }
+                    })
+                        .catch(() => {
+                        // TODO: should probably disconnect the subscriber and try again.
+                        debug$e("failed to %s %d channels", type, channels.length);
+                    });
+                }
+            }
+        }
+        else {
+            this.lastActiveSubscriber = this.subscriber;
+        }
+        for (const event of ["message", "messageBuffer"]) {
+            this.subscriber.on(event, (arg1, arg2) => {
+                this.emitter.emit(event, arg1, arg2);
+            });
+        }
+        for (const event of ["pmessage", "pmessageBuffer"]) {
+            this.subscriber.on(event, (arg1, arg2, arg3) => {
+                this.emitter.emit(event, arg1, arg2, arg3);
+            });
+        }
+    }
+    start() {
+        this.started = true;
+        this.selectSubscriber();
+        debug$e("started");
+    }
+    stop() {
+        this.started = false;
+        if (this.subscriber) {
+            this.subscriber.disconnect();
+            this.subscriber = null;
+        }
+        debug$e("stopped");
+    }
+}
+ClusterSubscriber$1.default = ClusterSubscriber;
+
+var DelayQueue$1 = {};
+
+Object.defineProperty(DelayQueue$1, "__esModule", { value: true });
+const utils_1$3 = utils$8;
+const Deque$1 = denque;
+const debug$d = utils_1$3.Debug("delayqueue");
+/**
+ * Queue that runs items after specified duration
+ *
+ * @export
+ * @class DelayQueue
+ */
+class DelayQueue {
+    constructor() {
+        this.queues = {};
+        this.timeouts = {};
+    }
+    /**
+     * Add a new item to the queue
+     *
+     * @param {string} bucket bucket name
+     * @param {Function} item function that will run later
+     * @param {IDelayQueueOptions} options
+     * @memberof DelayQueue
+     */
+    push(bucket, item, options) {
+        const callback = options.callback || process.nextTick;
+        if (!this.queues[bucket]) {
+            this.queues[bucket] = new Deque$1();
+        }
+        const queue = this.queues[bucket];
+        queue.push(item);
+        if (!this.timeouts[bucket]) {
+            this.timeouts[bucket] = setTimeout(() => {
+                callback(() => {
+                    this.timeouts[bucket] = null;
+                    this.execute(bucket);
+                });
+            }, options.timeout);
+        }
+    }
+    execute(bucket) {
+        const queue = this.queues[bucket];
+        if (!queue) {
+            return;
+        }
+        const { length } = queue;
+        if (!length) {
+            return;
+        }
+        debug$d("send %d commands in %s queue", length, bucket);
+        this.queues[bucket] = null;
+        while (queue.length > 0) {
+            queue.shift()();
+        }
+    }
+}
+DelayQueue$1.default = DelayQueue;
+
+var ClusterOptions = {};
+
+Object.defineProperty(ClusterOptions, "__esModule", { value: true });
+const dns_1 = require$$0$k;
+ClusterOptions.DEFAULT_CLUSTER_OPTIONS = {
+    clusterRetryStrategy: (times) => Math.min(100 + times * 2, 2000),
+    enableOfflineQueue: true,
+    enableReadyCheck: true,
+    scaleReads: "master",
+    maxRedirections: 16,
+    retryDelayOnMoved: 0,
+    retryDelayOnFailover: 100,
+    retryDelayOnClusterDown: 100,
+    retryDelayOnTryAgain: 100,
+    slotsRefreshTimeout: 1000,
+    slotsRefreshInterval: 5000,
+    useSRVRecords: false,
+    resolveSrv: dns_1.resolveSrv,
+    dnsLookup: dns_1.lookup,
+    enableAutoPipelining: false,
+    autoPipeliningIgnoredCommands: [],
+    maxScriptsCachingTime: 60000,
+};
+
+Object.defineProperty(cluster$2, "__esModule", { value: true });
+const events_1 = require$$0$f;
+const ClusterAllFailedError_1 = ClusterAllFailedError$1;
+const utils_1$2 = utils$8;
+const ConnectionPool_1 = ConnectionPool$1;
+const util_1$1 = util$7;
+const ClusterSubscriber_1 = ClusterSubscriber$1;
+const DelayQueue_1 = DelayQueue$1;
+const ScanStream_1 = ScanStream$1;
+const redis_errors_1 = redisErrors;
+const standard_as_callback_1 = built;
+const PromiseContainer = promiseContainer;
+const ClusterOptions_1 = ClusterOptions;
+const utils_2 = utils$8;
+const commands = redisCommands;
+const command_1 = command$2;
+const redis_1 = requireRedis();
+const commander_1$1 = commander$1;
+const Deque = denque;
+const debug$c = utils_1$2.Debug("cluster");
+/**
+ * Client for the official Redis Cluster
+ *
+ * @class Cluster
+ * @extends {EventEmitter}
+ */
+class Cluster extends events_1.EventEmitter {
+    /**
+     * Creates an instance of Cluster.
+     *
+     * @param {((string | number | object)[])} startupNodes
+     * @param {IClusterOptions} [options={}]
+     * @memberof Cluster
+     */
+    constructor(startupNodes, options = {}) {
+        super();
+        this.slots = [];
+        this.retryAttempts = 0;
+        this.delayQueue = new DelayQueue_1.default();
+        this.offlineQueue = new Deque();
+        this.isRefreshing = false;
+        this.isCluster = true;
+        this._autoPipelines = new Map();
+        this._groupsIds = {};
+        this._groupsBySlot = Array(16384);
+        this._runningAutoPipelines = new Set();
+        this._readyDelayedCallbacks = [];
+        this._addedScriptHashes = {};
+        /**
+         * Every time Cluster#connect() is called, this value will be
+         * auto-incrementing. The purpose of this value is used for
+         * discarding previous connect attampts when creating a new
+         * connection.
+         *
+         * @private
+         * @type {number}
+         * @memberof Cluster
+         */
+        this.connectionEpoch = 0;
+        commander_1$1.default.call(this);
+        this.startupNodes = startupNodes;
+        this.options = utils_1$2.defaults({}, options, ClusterOptions_1.DEFAULT_CLUSTER_OPTIONS, this.options);
+        // validate options
+        if (typeof this.options.scaleReads !== "function" &&
+            ["all", "master", "slave"].indexOf(this.options.scaleReads) === -1) {
+            throw new Error('Invalid option scaleReads "' +
+                this.options.scaleReads +
+                '". Expected "all", "master", "slave" or a custom function');
+        }
+        this.connectionPool = new ConnectionPool_1.default(this.options.redisOptions);
+        this.connectionPool.on("-node", (redis, key) => {
+            this.emit("-node", redis);
+        });
+        this.connectionPool.on("+node", (redis) => {
+            this.emit("+node", redis);
+        });
+        this.connectionPool.on("drain", () => {
+            this.setStatus("close");
+        });
+        this.connectionPool.on("nodeError", (error, key) => {
+            this.emit("node error", error, key);
+        });
+        this.subscriber = new ClusterSubscriber_1.default(this.connectionPool, this);
+        if (this.options.lazyConnect) {
+            this.setStatus("wait");
+        }
+        else {
+            this.connect().catch((err) => {
+                debug$c("connecting failed: %s", err);
+            });
+        }
+    }
+    resetOfflineQueue() {
+        this.offlineQueue = new Deque();
+    }
+    clearNodesRefreshInterval() {
+        if (this.slotsTimer) {
+            clearTimeout(this.slotsTimer);
+            this.slotsTimer = null;
+        }
+    }
+    clearAddedScriptHashesCleanInterval() {
+        if (this._addedScriptHashesCleanInterval) {
+            clearInterval(this._addedScriptHashesCleanInterval);
+            this._addedScriptHashesCleanInterval = null;
+        }
+    }
+    resetNodesRefreshInterval() {
+        if (this.slotsTimer) {
+            return;
+        }
+        const nextRound = () => {
+            this.slotsTimer = setTimeout(() => {
+                debug$c('refreshing slot caches... (triggered by "slotsRefreshInterval" option)');
+                this.refreshSlotsCache(() => {
+                    nextRound();
+                });
+            }, this.options.slotsRefreshInterval);
+        };
+        nextRound();
+    }
+    /**
+     * Connect to a cluster
+     *
+     * @returns {Promise<void>}
+     * @memberof Cluster
+     */
+    connect() {
+        const Promise = PromiseContainer.get();
+        return new Promise((resolve, reject) => {
+            if (this.status === "connecting" ||
+                this.status === "connect" ||
+                this.status === "ready") {
+                reject(new Error("Redis is already connecting/connected"));
+                return;
+            }
+            // Make sure only one timer is active at a time
+            this.clearAddedScriptHashesCleanInterval();
+            // Start the script cache cleaning
+            this._addedScriptHashesCleanInterval = setInterval(() => {
+                this._addedScriptHashes = {};
+            }, this.options.maxScriptsCachingTime);
+            const epoch = ++this.connectionEpoch;
+            this.setStatus("connecting");
+            this.resolveStartupNodeHostnames()
+                .then((nodes) => {
+                if (this.connectionEpoch !== epoch) {
+                    debug$c("discard connecting after resolving startup nodes because epoch not match: %d != %d", epoch, this.connectionEpoch);
+                    reject(new redis_errors_1.RedisError("Connection is discarded because a new connection is made"));
+                    return;
+                }
+                if (this.status !== "connecting") {
+                    debug$c("discard connecting after resolving startup nodes because the status changed to %s", this.status);
+                    reject(new redis_errors_1.RedisError("Connection is aborted"));
+                    return;
+                }
+                this.connectionPool.reset(nodes);
+                function readyHandler() {
+                    this.setStatus("ready");
+                    this.retryAttempts = 0;
+                    this.executeOfflineCommands();
+                    this.resetNodesRefreshInterval();
+                    resolve();
+                }
+                let closeListener = undefined;
+                const refreshListener = () => {
+                    this.invokeReadyDelayedCallbacks(undefined);
+                    this.removeListener("close", closeListener);
+                    this.manuallyClosing = false;
+                    this.setStatus("connect");
+                    if (this.options.enableReadyCheck) {
+                        this.readyCheck((err, fail) => {
+                            if (err || fail) {
+                                debug$c("Ready check failed (%s). Reconnecting...", err || fail);
+                                if (this.status === "connect") {
+                                    this.disconnect(true);
+                                }
+                            }
+                            else {
+                                readyHandler.call(this);
+                            }
+                        });
+                    }
+                    else {
+                        readyHandler.call(this);
+                    }
+                };
+                closeListener = function () {
+                    const error = new Error("None of startup nodes is available");
+                    this.removeListener("refresh", refreshListener);
+                    this.invokeReadyDelayedCallbacks(error);
+                    reject(error);
+                };
+                this.once("refresh", refreshListener);
+                this.once("close", closeListener);
+                this.once("close", this.handleCloseEvent.bind(this));
+                this.refreshSlotsCache(function (err) {
+                    if (err && err.message === "Failed to refresh slots cache.") {
+                        redis_1.default.prototype.silentEmit.call(this, "error", err);
+                        this.connectionPool.reset([]);
+                    }
+                }.bind(this));
+                this.subscriber.start();
+            })
+                .catch((err) => {
+                this.setStatus("close");
+                this.handleCloseEvent(err);
+                this.invokeReadyDelayedCallbacks(err);
+                reject(err);
+            });
+        });
+    }
+    /**
+     * Called when closed to check whether a reconnection should be made
+     *
+     * @private
+     * @memberof Cluster
+     */
+    handleCloseEvent(reason) {
+        if (reason) {
+            debug$c("closed because %s", reason);
+        }
+        this.clearAddedScriptHashesCleanInterval();
+        let retryDelay;
+        if (!this.manuallyClosing &&
+            typeof this.options.clusterRetryStrategy === "function") {
+            retryDelay = this.options.clusterRetryStrategy.call(this, ++this.retryAttempts, reason);
+        }
+        if (typeof retryDelay === "number") {
+            this.setStatus("reconnecting");
+            this.reconnectTimeout = setTimeout(function () {
+                this.reconnectTimeout = null;
+                debug$c("Cluster is disconnected. Retrying after %dms", retryDelay);
+                this.connect().catch(function (err) {
+                    debug$c("Got error %s when reconnecting. Ignoring...", err);
+                });
+            }.bind(this), retryDelay);
+        }
+        else {
+            this.setStatus("end");
+            this.flushQueue(new Error("None of startup nodes is available"));
+        }
+    }
+    /**
+     * Disconnect from every node in the cluster.
+     *
+     * @param {boolean} [reconnect=false]
+     * @memberof Cluster
+     */
+    disconnect(reconnect = false) {
+        const status = this.status;
+        this.setStatus("disconnecting");
+        this.clearAddedScriptHashesCleanInterval();
+        if (!reconnect) {
+            this.manuallyClosing = true;
+        }
+        if (this.reconnectTimeout && !reconnect) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+            debug$c("Canceled reconnecting attempts");
+        }
+        this.clearNodesRefreshInterval();
+        this.subscriber.stop();
+        if (status === "wait") {
+            this.setStatus("close");
+            this.handleCloseEvent();
+        }
+        else {
+            this.connectionPool.reset([]);
+        }
+    }
+    /**
+     * Quit the cluster gracefully.
+     *
+     * @param {CallbackFunction<'OK'>} [callback]
+     * @returns {Promise<'OK'>}
+     * @memberof Cluster
+     */
+    quit(callback) {
+        const status = this.status;
+        this.setStatus("disconnecting");
+        this.clearAddedScriptHashesCleanInterval();
+        this.manuallyClosing = true;
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+        this.clearNodesRefreshInterval();
+        this.subscriber.stop();
+        const Promise = PromiseContainer.get();
+        if (status === "wait") {
+            const ret = standard_as_callback_1.default(Promise.resolve("OK"), callback);
+            // use setImmediate to make sure "close" event
+            // being emitted after quit() is returned
+            setImmediate(function () {
+                this.setStatus("close");
+                this.handleCloseEvent();
+            }.bind(this));
+            return ret;
+        }
+        return standard_as_callback_1.default(Promise.all(this.nodes().map((node) => node.quit().catch((err) => {
+            // Ignore the error caused by disconnecting since
+            // we're disconnecting...
+            if (err.message === utils_2.CONNECTION_CLOSED_ERROR_MSG) {
+                return "OK";
+            }
+            throw err;
+        }))).then(() => "OK"), callback);
+    }
+    /**
+     * Create a new instance with the same startup nodes and options as the current one.
+     *
+     * @example
+     * ```js
+     * var cluster = new Redis.Cluster([{ host: "127.0.0.1", port: "30001" }]);
+     * var anotherCluster = cluster.duplicate();
+     * ```
+     *
+     * @public
+     * @param {((string | number | object)[])} [overrideStartupNodes=[]]
+     * @param {IClusterOptions} [overrideOptions={}]
+     * @memberof Cluster
+     */
+    duplicate(overrideStartupNodes = [], overrideOptions = {}) {
+        const startupNodes = overrideStartupNodes.length > 0
+            ? overrideStartupNodes
+            : this.startupNodes.slice(0);
+        const options = Object.assign({}, this.options, overrideOptions);
+        return new Cluster(startupNodes, options);
+    }
+    /**
+     * Get nodes with the specified role
+     *
+     * @param {NodeRole} [role='all']
+     * @returns {any[]}
+     * @memberof Cluster
+     */
+    nodes(role = "all") {
+        if (role !== "all" && role !== "master" && role !== "slave") {
+            throw new Error('Invalid role "' + role + '". Expected "all", "master" or "slave"');
+        }
+        return this.connectionPool.getNodes(role);
+    }
+    // This is needed in order not to install a listener for each auto pipeline
+    delayUntilReady(callback) {
+        this._readyDelayedCallbacks.push(callback);
+    }
+    /**
+     * Get the number of commands queued in automatic pipelines.
+     *
+     * This is not available (and returns 0) until the cluster is connected and slots information have been received.
+     */
+    get autoPipelineQueueSize() {
+        let queued = 0;
+        for (const pipeline of this._autoPipelines.values()) {
+            queued += pipeline.length;
+        }
+        return queued;
+    }
+    /**
+     * Change cluster instance's status
+     *
+     * @private
+     * @param {ClusterStatus} status
+     * @memberof Cluster
+     */
+    setStatus(status) {
+        debug$c("status: %s -> %s", this.status || "[empty]", status);
+        this.status = status;
+        process.nextTick(() => {
+            this.emit(status);
+        });
+    }
+    /**
+     * Refresh the slot cache
+     *
+     * @private
+     * @param {CallbackFunction} [callback]
+     * @memberof Cluster
+     */
+    refreshSlotsCache(callback) {
+        if (this.isRefreshing) {
+            if (typeof callback === "function") {
+                process.nextTick(callback);
+            }
+            return;
+        }
+        this.isRefreshing = true;
+        const _this = this;
+        const wrapper = function (error) {
+            _this.isRefreshing = false;
+            if (typeof callback === "function") {
+                callback(error);
+            }
+        };
+        const nodes = utils_2.shuffle(this.connectionPool.getNodes());
+        let lastNodeError = null;
+        function tryNode(index) {
+            if (index === nodes.length) {
+                const error = new ClusterAllFailedError_1.default("Failed to refresh slots cache.", lastNodeError);
+                return wrapper(error);
+            }
+            const node = nodes[index];
+            const key = `${node.options.host}:${node.options.port}`;
+            debug$c("getting slot cache from %s", key);
+            _this.getInfoFromNode(node, function (err) {
+                switch (_this.status) {
+                    case "close":
+                    case "end":
+                        return wrapper(new Error("Cluster is disconnected."));
+                    case "disconnecting":
+                        return wrapper(new Error("Cluster is disconnecting."));
+                }
+                if (err) {
+                    _this.emit("node error", err, key);
+                    lastNodeError = err;
+                    tryNode(index + 1);
+                }
+                else {
+                    _this.emit("refresh");
+                    wrapper();
+                }
+            });
+        }
+        tryNode(0);
+    }
+    /**
+     * Flush offline queue with error.
+     *
+     * @param {Error} error
+     * @memberof Cluster
+     */
+    flushQueue(error) {
+        let item;
+        while (this.offlineQueue.length > 0) {
+            item = this.offlineQueue.shift();
+            item.command.reject(error);
