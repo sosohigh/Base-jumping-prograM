@@ -122880,3 +122880,2202 @@ function readBlockMapping$1(state, nodeIndent, flowIndent) {
       } else {
         throwError$1(state, 'incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line');
       }
+
+      state.position += 1;
+      ch = following;
+
+    //
+    // Implicit notation case. Flow-style node as the key first, then ":", and the value.
+    //
+    } else {
+      _keyLine = state.line;
+      _keyLineStart = state.lineStart;
+      _keyPos = state.position;
+
+      if (!composeNode$1(state, flowIndent, CONTEXT_FLOW_OUT$1, false, true)) {
+        // Neither implicit nor explicit notation.
+        // Reading is done. Go to the epilogue.
+        break;
+      }
+
+      if (state.line === _line) {
+        ch = state.input.charCodeAt(state.position);
+
+        while (is_WHITE_SPACE$1(ch)) {
+          ch = state.input.charCodeAt(++state.position);
+        }
+
+        if (ch === 0x3A/* : */) {
+          ch = state.input.charCodeAt(++state.position);
+
+          if (!is_WS_OR_EOL$1(ch)) {
+            throwError$1(state, 'a whitespace character is expected after the key-value separator within a block mapping');
+          }
+
+          if (atExplicitKey) {
+            storeMappingPair$1(state, _result, overridableKeys, keyTag, keyNode, null, _keyLine, _keyLineStart, _keyPos);
+            keyTag = keyNode = valueNode = null;
+          }
+
+          detected = true;
+          atExplicitKey = false;
+          allowCompact = false;
+          keyTag = state.tag;
+          keyNode = state.result;
+
+        } else if (detected) {
+          throwError$1(state, 'can not read an implicit mapping pair; a colon is missed');
+
+        } else {
+          state.tag = _tag;
+          state.anchor = _anchor;
+          return true; // Keep the result of `composeNode`.
+        }
+
+      } else if (detected) {
+        throwError$1(state, 'can not read a block mapping entry; a multiline key may not be an implicit key');
+
+      } else {
+        state.tag = _tag;
+        state.anchor = _anchor;
+        return true; // Keep the result of `composeNode`.
+      }
+    }
+
+    //
+    // Common reading code for both explicit and implicit notations.
+    //
+    if (state.line === _line || state.lineIndent > nodeIndent) {
+      if (atExplicitKey) {
+        _keyLine = state.line;
+        _keyLineStart = state.lineStart;
+        _keyPos = state.position;
+      }
+
+      if (composeNode$1(state, nodeIndent, CONTEXT_BLOCK_OUT$1, true, allowCompact)) {
+        if (atExplicitKey) {
+          keyNode = state.result;
+        } else {
+          valueNode = state.result;
+        }
+      }
+
+      if (!atExplicitKey) {
+        storeMappingPair$1(state, _result, overridableKeys, keyTag, keyNode, valueNode, _keyLine, _keyLineStart, _keyPos);
+        keyTag = keyNode = valueNode = null;
+      }
+
+      skipSeparationSpace$1(state, true, -1);
+      ch = state.input.charCodeAt(state.position);
+    }
+
+    if ((state.line === _line || state.lineIndent > nodeIndent) && (ch !== 0)) {
+      throwError$1(state, 'bad indentation of a mapping entry');
+    } else if (state.lineIndent < nodeIndent) {
+      break;
+    }
+  }
+
+  //
+  // Epilogue.
+  //
+
+  // Special case: last mapping's node contains only the key in explicit notation.
+  if (atExplicitKey) {
+    storeMappingPair$1(state, _result, overridableKeys, keyTag, keyNode, null, _keyLine, _keyLineStart, _keyPos);
+  }
+
+  // Expose the resulting mapping.
+  if (detected) {
+    state.tag = _tag;
+    state.anchor = _anchor;
+    state.kind = 'mapping';
+    state.result = _result;
+  }
+
+  return detected;
+}
+
+function readTagProperty$1(state) {
+  var _position,
+      isVerbatim = false,
+      isNamed    = false,
+      tagHandle,
+      tagName,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x21/* ! */) return false;
+
+  if (state.tag !== null) {
+    throwError$1(state, 'duplication of a tag property');
+  }
+
+  ch = state.input.charCodeAt(++state.position);
+
+  if (ch === 0x3C/* < */) {
+    isVerbatim = true;
+    ch = state.input.charCodeAt(++state.position);
+
+  } else if (ch === 0x21/* ! */) {
+    isNamed = true;
+    tagHandle = '!!';
+    ch = state.input.charCodeAt(++state.position);
+
+  } else {
+    tagHandle = '!';
+  }
+
+  _position = state.position;
+
+  if (isVerbatim) {
+    do { ch = state.input.charCodeAt(++state.position); }
+    while (ch !== 0 && ch !== 0x3E/* > */);
+
+    if (state.position < state.length) {
+      tagName = state.input.slice(_position, state.position);
+      ch = state.input.charCodeAt(++state.position);
+    } else {
+      throwError$1(state, 'unexpected end of the stream within a verbatim tag');
+    }
+  } else {
+    while (ch !== 0 && !is_WS_OR_EOL$1(ch)) {
+
+      if (ch === 0x21/* ! */) {
+        if (!isNamed) {
+          tagHandle = state.input.slice(_position - 1, state.position + 1);
+
+          if (!PATTERN_TAG_HANDLE$1.test(tagHandle)) {
+            throwError$1(state, 'named tag handle cannot contain such characters');
+          }
+
+          isNamed = true;
+          _position = state.position + 1;
+        } else {
+          throwError$1(state, 'tag suffix cannot contain exclamation marks');
+        }
+      }
+
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    tagName = state.input.slice(_position, state.position);
+
+    if (PATTERN_FLOW_INDICATORS$1.test(tagName)) {
+      throwError$1(state, 'tag suffix cannot contain flow indicator characters');
+    }
+  }
+
+  if (tagName && !PATTERN_TAG_URI$1.test(tagName)) {
+    throwError$1(state, 'tag name cannot contain such characters: ' + tagName);
+  }
+
+  try {
+    tagName = decodeURIComponent(tagName);
+  } catch (err) {
+    throwError$1(state, 'tag name is malformed: ' + tagName);
+  }
+
+  if (isVerbatim) {
+    state.tag = tagName;
+
+  } else if (_hasOwnProperty$1$1.call(state.tagMap, tagHandle)) {
+    state.tag = state.tagMap[tagHandle] + tagName;
+
+  } else if (tagHandle === '!') {
+    state.tag = '!' + tagName;
+
+  } else if (tagHandle === '!!') {
+    state.tag = 'tag:yaml.org,2002:' + tagName;
+
+  } else {
+    throwError$1(state, 'undeclared tag handle "' + tagHandle + '"');
+  }
+
+  return true;
+}
+
+function readAnchorProperty$1(state) {
+  var _position,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x26/* & */) return false;
+
+  if (state.anchor !== null) {
+    throwError$1(state, 'duplication of an anchor property');
+  }
+
+  ch = state.input.charCodeAt(++state.position);
+  _position = state.position;
+
+  while (ch !== 0 && !is_WS_OR_EOL$1(ch) && !is_FLOW_INDICATOR$1(ch)) {
+    ch = state.input.charCodeAt(++state.position);
+  }
+
+  if (state.position === _position) {
+    throwError$1(state, 'name of an anchor node must contain at least one character');
+  }
+
+  state.anchor = state.input.slice(_position, state.position);
+  return true;
+}
+
+function readAlias$1(state) {
+  var _position, alias,
+      ch;
+
+  ch = state.input.charCodeAt(state.position);
+
+  if (ch !== 0x2A/* * */) return false;
+
+  ch = state.input.charCodeAt(++state.position);
+  _position = state.position;
+
+  while (ch !== 0 && !is_WS_OR_EOL$1(ch) && !is_FLOW_INDICATOR$1(ch)) {
+    ch = state.input.charCodeAt(++state.position);
+  }
+
+  if (state.position === _position) {
+    throwError$1(state, 'name of an alias node must contain at least one character');
+  }
+
+  alias = state.input.slice(_position, state.position);
+
+  if (!_hasOwnProperty$1$1.call(state.anchorMap, alias)) {
+    throwError$1(state, 'unidentified alias "' + alias + '"');
+  }
+
+  state.result = state.anchorMap[alias];
+  skipSeparationSpace$1(state, true, -1);
+  return true;
+}
+
+function composeNode$1(state, parentIndent, nodeContext, allowToSeek, allowCompact) {
+  var allowBlockStyles,
+      allowBlockScalars,
+      allowBlockCollections,
+      indentStatus = 1, // 1: this>parent, 0: this=parent, -1: this<parent
+      atNewLine  = false,
+      hasContent = false,
+      typeIndex,
+      typeQuantity,
+      typeList,
+      type,
+      flowIndent,
+      blockIndent;
+
+  if (state.listener !== null) {
+    state.listener('open', state);
+  }
+
+  state.tag    = null;
+  state.anchor = null;
+  state.kind   = null;
+  state.result = null;
+
+  allowBlockStyles = allowBlockScalars = allowBlockCollections =
+    CONTEXT_BLOCK_OUT$1 === nodeContext ||
+    CONTEXT_BLOCK_IN$1  === nodeContext;
+
+  if (allowToSeek) {
+    if (skipSeparationSpace$1(state, true, -1)) {
+      atNewLine = true;
+
+      if (state.lineIndent > parentIndent) {
+        indentStatus = 1;
+      } else if (state.lineIndent === parentIndent) {
+        indentStatus = 0;
+      } else if (state.lineIndent < parentIndent) {
+        indentStatus = -1;
+      }
+    }
+  }
+
+  if (indentStatus === 1) {
+    while (readTagProperty$1(state) || readAnchorProperty$1(state)) {
+      if (skipSeparationSpace$1(state, true, -1)) {
+        atNewLine = true;
+        allowBlockCollections = allowBlockStyles;
+
+        if (state.lineIndent > parentIndent) {
+          indentStatus = 1;
+        } else if (state.lineIndent === parentIndent) {
+          indentStatus = 0;
+        } else if (state.lineIndent < parentIndent) {
+          indentStatus = -1;
+        }
+      } else {
+        allowBlockCollections = false;
+      }
+    }
+  }
+
+  if (allowBlockCollections) {
+    allowBlockCollections = atNewLine || allowCompact;
+  }
+
+  if (indentStatus === 1 || CONTEXT_BLOCK_OUT$1 === nodeContext) {
+    if (CONTEXT_FLOW_IN$1 === nodeContext || CONTEXT_FLOW_OUT$1 === nodeContext) {
+      flowIndent = parentIndent;
+    } else {
+      flowIndent = parentIndent + 1;
+    }
+
+    blockIndent = state.position - state.lineStart;
+
+    if (indentStatus === 1) {
+      if (allowBlockCollections &&
+          (readBlockSequence$1(state, blockIndent) ||
+           readBlockMapping$1(state, blockIndent, flowIndent)) ||
+          readFlowCollection$1(state, flowIndent)) {
+        hasContent = true;
+      } else {
+        if ((allowBlockScalars && readBlockScalar$1(state, flowIndent)) ||
+            readSingleQuotedScalar$1(state, flowIndent) ||
+            readDoubleQuotedScalar$1(state, flowIndent)) {
+          hasContent = true;
+
+        } else if (readAlias$1(state)) {
+          hasContent = true;
+
+          if (state.tag !== null || state.anchor !== null) {
+            throwError$1(state, 'alias node should not have any properties');
+          }
+
+        } else if (readPlainScalar$1(state, flowIndent, CONTEXT_FLOW_IN$1 === nodeContext)) {
+          hasContent = true;
+
+          if (state.tag === null) {
+            state.tag = '?';
+          }
+        }
+
+        if (state.anchor !== null) {
+          state.anchorMap[state.anchor] = state.result;
+        }
+      }
+    } else if (indentStatus === 0) {
+      // Special case: block sequences are allowed to have same indentation level as the parent.
+      // http://www.yaml.org/spec/1.2/spec.html#id2799784
+      hasContent = allowBlockCollections && readBlockSequence$1(state, blockIndent);
+    }
+  }
+
+  if (state.tag === null) {
+    if (state.anchor !== null) {
+      state.anchorMap[state.anchor] = state.result;
+    }
+
+  } else if (state.tag === '?') {
+    // Implicit resolving is not allowed for non-scalar types, and '?'
+    // non-specific tag is only automatically assigned to plain scalars.
+    //
+    // We only need to check kind conformity in case user explicitly assigns '?'
+    // tag, for example like this: "!<?> [0]"
+    //
+    if (state.result !== null && state.kind !== 'scalar') {
+      throwError$1(state, 'unacceptable node kind for !<?> tag; it should be "scalar", not "' + state.kind + '"');
+    }
+
+    for (typeIndex = 0, typeQuantity = state.implicitTypes.length; typeIndex < typeQuantity; typeIndex += 1) {
+      type = state.implicitTypes[typeIndex];
+
+      if (type.resolve(state.result)) { // `state.result` updated in resolver if matched
+        state.result = type.construct(state.result);
+        state.tag = type.tag;
+        if (state.anchor !== null) {
+          state.anchorMap[state.anchor] = state.result;
+        }
+        break;
+      }
+    }
+  } else if (state.tag !== '!') {
+    if (_hasOwnProperty$1$1.call(state.typeMap[state.kind || 'fallback'], state.tag)) {
+      type = state.typeMap[state.kind || 'fallback'][state.tag];
+    } else {
+      // looking for multi type
+      type = null;
+      typeList = state.typeMap.multi[state.kind || 'fallback'];
+
+      for (typeIndex = 0, typeQuantity = typeList.length; typeIndex < typeQuantity; typeIndex += 1) {
+        if (state.tag.slice(0, typeList[typeIndex].tag.length) === typeList[typeIndex].tag) {
+          type = typeList[typeIndex];
+          break;
+        }
+      }
+    }
+
+    if (!type) {
+      throwError$1(state, 'unknown tag !<' + state.tag + '>');
+    }
+
+    if (state.result !== null && type.kind !== state.kind) {
+      throwError$1(state, 'unacceptable node kind for !<' + state.tag + '> tag; it should be "' + type.kind + '", not "' + state.kind + '"');
+    }
+
+    if (!type.resolve(state.result, state.tag)) { // `state.result` updated in resolver if matched
+      throwError$1(state, 'cannot resolve a node with !<' + state.tag + '> explicit tag');
+    } else {
+      state.result = type.construct(state.result, state.tag);
+      if (state.anchor !== null) {
+        state.anchorMap[state.anchor] = state.result;
+      }
+    }
+  }
+
+  if (state.listener !== null) {
+    state.listener('close', state);
+  }
+  return state.tag !== null ||  state.anchor !== null || hasContent;
+}
+
+function readDocument$1(state) {
+  var documentStart = state.position,
+      _position,
+      directiveName,
+      directiveArgs,
+      hasDirectives = false,
+      ch;
+
+  state.version = null;
+  state.checkLineBreaks = state.legacy;
+  state.tagMap = Object.create(null);
+  state.anchorMap = Object.create(null);
+
+  while ((ch = state.input.charCodeAt(state.position)) !== 0) {
+    skipSeparationSpace$1(state, true, -1);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if (state.lineIndent > 0 || ch !== 0x25/* % */) {
+      break;
+    }
+
+    hasDirectives = true;
+    ch = state.input.charCodeAt(++state.position);
+    _position = state.position;
+
+    while (ch !== 0 && !is_WS_OR_EOL$1(ch)) {
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    directiveName = state.input.slice(_position, state.position);
+    directiveArgs = [];
+
+    if (directiveName.length < 1) {
+      throwError$1(state, 'directive name must not be less than one character in length');
+    }
+
+    while (ch !== 0) {
+      while (is_WHITE_SPACE$1(ch)) {
+        ch = state.input.charCodeAt(++state.position);
+      }
+
+      if (ch === 0x23/* # */) {
+        do { ch = state.input.charCodeAt(++state.position); }
+        while (ch !== 0 && !is_EOL$1(ch));
+        break;
+      }
+
+      if (is_EOL$1(ch)) break;
+
+      _position = state.position;
+
+      while (ch !== 0 && !is_WS_OR_EOL$1(ch)) {
+        ch = state.input.charCodeAt(++state.position);
+      }
+
+      directiveArgs.push(state.input.slice(_position, state.position));
+    }
+
+    if (ch !== 0) readLineBreak$1(state);
+
+    if (_hasOwnProperty$1$1.call(directiveHandlers$1, directiveName)) {
+      directiveHandlers$1[directiveName](state, directiveName, directiveArgs);
+    } else {
+      throwWarning$1(state, 'unknown document directive "' + directiveName + '"');
+    }
+  }
+
+  skipSeparationSpace$1(state, true, -1);
+
+  if (state.lineIndent === 0 &&
+      state.input.charCodeAt(state.position)     === 0x2D/* - */ &&
+      state.input.charCodeAt(state.position + 1) === 0x2D/* - */ &&
+      state.input.charCodeAt(state.position + 2) === 0x2D/* - */) {
+    state.position += 3;
+    skipSeparationSpace$1(state, true, -1);
+
+  } else if (hasDirectives) {
+    throwError$1(state, 'directives end mark is expected');
+  }
+
+  composeNode$1(state, state.lineIndent - 1, CONTEXT_BLOCK_OUT$1, false, true);
+  skipSeparationSpace$1(state, true, -1);
+
+  if (state.checkLineBreaks &&
+      PATTERN_NON_ASCII_LINE_BREAKS$1.test(state.input.slice(documentStart, state.position))) {
+    throwWarning$1(state, 'non-ASCII line breaks are interpreted as content');
+  }
+
+  state.documents.push(state.result);
+
+  if (state.position === state.lineStart && testDocumentSeparator$1(state)) {
+
+    if (state.input.charCodeAt(state.position) === 0x2E/* . */) {
+      state.position += 3;
+      skipSeparationSpace$1(state, true, -1);
+    }
+    return;
+  }
+
+  if (state.position < (state.length - 1)) {
+    throwError$1(state, 'end of the stream or a document separator is expected');
+  } else {
+    return;
+  }
+}
+
+
+function loadDocuments$1(input, options) {
+  input = String(input);
+  options = options || {};
+
+  if (input.length !== 0) {
+
+    // Add tailing `\n` if not exists
+    if (input.charCodeAt(input.length - 1) !== 0x0A/* LF */ &&
+        input.charCodeAt(input.length - 1) !== 0x0D/* CR */) {
+      input += '\n';
+    }
+
+    // Strip BOM
+    if (input.charCodeAt(0) === 0xFEFF) {
+      input = input.slice(1);
+    }
+  }
+
+  var state = new State$1$1(input, options);
+
+  var nullpos = input.indexOf('\0');
+
+  if (nullpos !== -1) {
+    state.position = nullpos;
+    throwError$1(state, 'null byte is not allowed in input');
+  }
+
+  // Use 0 as string terminator. That significantly simplifies bounds check.
+  state.input += '\0';
+
+  while (state.input.charCodeAt(state.position) === 0x20/* Space */) {
+    state.lineIndent += 1;
+    state.position += 1;
+  }
+
+  while (state.position < (state.length - 1)) {
+    readDocument$1(state);
+  }
+
+  return state.documents;
+}
+
+
+function loadAll$1(input, iterator, options) {
+  if (iterator !== null && typeof iterator === 'object' && typeof options === 'undefined') {
+    options = iterator;
+    iterator = null;
+  }
+
+  var documents = loadDocuments$1(input, options);
+
+  if (typeof iterator !== 'function') {
+    return documents;
+  }
+
+  for (var index = 0, length = documents.length; index < length; index += 1) {
+    iterator(documents[index]);
+  }
+}
+
+
+function load$1(input, options) {
+  var documents = loadDocuments$1(input, options);
+
+  if (documents.length === 0) {
+    /*eslint-disable no-undefined*/
+    return undefined;
+  } else if (documents.length === 1) {
+    return documents[0];
+  }
+  throw new exception$2('expected a single document in the stream, but found more');
+}
+
+
+var loadAll_1 = loadAll$1;
+var load_1    = load$1;
+
+var loader$2 = {
+	loadAll: loadAll_1,
+	load: load_1
+};
+
+/*eslint-disable no-use-before-define*/
+
+
+
+
+
+var _toString$3       = Object.prototype.toString;
+var _hasOwnProperty$4 = Object.prototype.hasOwnProperty;
+
+var CHAR_BOM                  = 0xFEFF;
+var CHAR_TAB$1                  = 0x09; /* Tab */
+var CHAR_LINE_FEED$1            = 0x0A; /* LF */
+var CHAR_CARRIAGE_RETURN$1      = 0x0D; /* CR */
+var CHAR_SPACE$1                = 0x20; /* Space */
+var CHAR_EXCLAMATION$1          = 0x21; /* ! */
+var CHAR_DOUBLE_QUOTE$1         = 0x22; /* " */
+var CHAR_SHARP$1                = 0x23; /* # */
+var CHAR_PERCENT$1              = 0x25; /* % */
+var CHAR_AMPERSAND$1            = 0x26; /* & */
+var CHAR_SINGLE_QUOTE$1         = 0x27; /* ' */
+var CHAR_ASTERISK$1             = 0x2A; /* * */
+var CHAR_COMMA$1                = 0x2C; /* , */
+var CHAR_MINUS$1                = 0x2D; /* - */
+var CHAR_COLON$1                = 0x3A; /* : */
+var CHAR_EQUALS$1               = 0x3D; /* = */
+var CHAR_GREATER_THAN$1         = 0x3E; /* > */
+var CHAR_QUESTION$1             = 0x3F; /* ? */
+var CHAR_COMMERCIAL_AT$1        = 0x40; /* @ */
+var CHAR_LEFT_SQUARE_BRACKET$1  = 0x5B; /* [ */
+var CHAR_RIGHT_SQUARE_BRACKET$1 = 0x5D; /* ] */
+var CHAR_GRAVE_ACCENT$1         = 0x60; /* ` */
+var CHAR_LEFT_CURLY_BRACKET$1   = 0x7B; /* { */
+var CHAR_VERTICAL_LINE$1        = 0x7C; /* | */
+var CHAR_RIGHT_CURLY_BRACKET$1  = 0x7D; /* } */
+
+var ESCAPE_SEQUENCES$1 = {};
+
+ESCAPE_SEQUENCES$1[0x00]   = '\\0';
+ESCAPE_SEQUENCES$1[0x07]   = '\\a';
+ESCAPE_SEQUENCES$1[0x08]   = '\\b';
+ESCAPE_SEQUENCES$1[0x09]   = '\\t';
+ESCAPE_SEQUENCES$1[0x0A]   = '\\n';
+ESCAPE_SEQUENCES$1[0x0B]   = '\\v';
+ESCAPE_SEQUENCES$1[0x0C]   = '\\f';
+ESCAPE_SEQUENCES$1[0x0D]   = '\\r';
+ESCAPE_SEQUENCES$1[0x1B]   = '\\e';
+ESCAPE_SEQUENCES$1[0x22]   = '\\"';
+ESCAPE_SEQUENCES$1[0x5C]   = '\\\\';
+ESCAPE_SEQUENCES$1[0x85]   = '\\N';
+ESCAPE_SEQUENCES$1[0xA0]   = '\\_';
+ESCAPE_SEQUENCES$1[0x2028] = '\\L';
+ESCAPE_SEQUENCES$1[0x2029] = '\\P';
+
+var DEPRECATED_BOOLEANS_SYNTAX$1 = [
+  'y', 'Y', 'yes', 'Yes', 'YES', 'on', 'On', 'ON',
+  'n', 'N', 'no', 'No', 'NO', 'off', 'Off', 'OFF'
+];
+
+var DEPRECATED_BASE60_SYNTAX = /^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;
+
+function compileStyleMap$1(schema, map) {
+  var result, keys, index, length, tag, style, type;
+
+  if (map === null) return {};
+
+  result = {};
+  keys = Object.keys(map);
+
+  for (index = 0, length = keys.length; index < length; index += 1) {
+    tag = keys[index];
+    style = String(map[tag]);
+
+    if (tag.slice(0, 2) === '!!') {
+      tag = 'tag:yaml.org,2002:' + tag.slice(2);
+    }
+    type = schema.compiledTypeMap['fallback'][tag];
+
+    if (type && _hasOwnProperty$4.call(type.styleAliases, style)) {
+      style = type.styleAliases[style];
+    }
+
+    result[tag] = style;
+  }
+
+  return result;
+}
+
+function encodeHex$1(character) {
+  var string, handle, length;
+
+  string = character.toString(16).toUpperCase();
+
+  if (character <= 0xFF) {
+    handle = 'x';
+    length = 2;
+  } else if (character <= 0xFFFF) {
+    handle = 'u';
+    length = 4;
+  } else if (character <= 0xFFFFFFFF) {
+    handle = 'U';
+    length = 8;
+  } else {
+    throw new exception$2('code point within a string may not be greater than 0xFFFFFFFF');
+  }
+
+  return '\\' + handle + common$8.repeat('0', length - string.length) + string;
+}
+
+
+var QUOTING_TYPE_SINGLE = 1,
+    QUOTING_TYPE_DOUBLE = 2;
+
+function State$2(options) {
+  this.schema        = options['schema'] || _default$1;
+  this.indent        = Math.max(1, (options['indent'] || 2));
+  this.noArrayIndent = options['noArrayIndent'] || false;
+  this.skipInvalid   = options['skipInvalid'] || false;
+  this.flowLevel     = (common$8.isNothing(options['flowLevel']) ? -1 : options['flowLevel']);
+  this.styleMap      = compileStyleMap$1(this.schema, options['styles'] || null);
+  this.sortKeys      = options['sortKeys'] || false;
+  this.lineWidth     = options['lineWidth'] || 80;
+  this.noRefs        = options['noRefs'] || false;
+  this.noCompatMode  = options['noCompatMode'] || false;
+  this.condenseFlow  = options['condenseFlow'] || false;
+  this.quotingType   = options['quotingType'] === '"' ? QUOTING_TYPE_DOUBLE : QUOTING_TYPE_SINGLE;
+  this.forceQuotes   = options['forceQuotes'] || false;
+  this.replacer      = typeof options['replacer'] === 'function' ? options['replacer'] : null;
+
+  this.implicitTypes = this.schema.compiledImplicit;
+  this.explicitTypes = this.schema.compiledExplicit;
+
+  this.tag = null;
+  this.result = '';
+
+  this.duplicates = [];
+  this.usedDuplicates = null;
+}
+
+// Indents every line in a string. Empty lines (\n only) are not indented.
+function indentString$1(string, spaces) {
+  var ind = common$8.repeat(' ', spaces),
+      position = 0,
+      next = -1,
+      result = '',
+      line,
+      length = string.length;
+
+  while (position < length) {
+    next = string.indexOf('\n', position);
+    if (next === -1) {
+      line = string.slice(position);
+      position = length;
+    } else {
+      line = string.slice(position, next + 1);
+      position = next + 1;
+    }
+
+    if (line.length && line !== '\n') result += ind;
+
+    result += line;
+  }
+
+  return result;
+}
+
+function generateNextLine$1(state, level) {
+  return '\n' + common$8.repeat(' ', state.indent * level);
+}
+
+function testImplicitResolving$1(state, str) {
+  var index, length, type;
+
+  for (index = 0, length = state.implicitTypes.length; index < length; index += 1) {
+    type = state.implicitTypes[index];
+
+    if (type.resolve(str)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// [33] s-white ::= s-space | s-tab
+function isWhitespace$1(c) {
+  return c === CHAR_SPACE$1 || c === CHAR_TAB$1;
+}
+
+// Returns true if the character can be printed without escaping.
+// From YAML 1.2: "any allowed characters known to be non-printable
+// should also be escaped. [However,] This isn’t mandatory"
+// Derived from nb-char - \t - #x85 - #xA0 - #x2028 - #x2029.
+function isPrintable$1(c) {
+  return  (0x00020 <= c && c <= 0x00007E)
+      || ((0x000A1 <= c && c <= 0x00D7FF) && c !== 0x2028 && c !== 0x2029)
+      || ((0x0E000 <= c && c <= 0x00FFFD) && c !== CHAR_BOM)
+      ||  (0x10000 <= c && c <= 0x10FFFF);
+}
+
+// [34] ns-char ::= nb-char - s-white
+// [27] nb-char ::= c-printable - b-char - c-byte-order-mark
+// [26] b-char  ::= b-line-feed | b-carriage-return
+// Including s-white (for some reason, examples doesn't match specs in this aspect)
+// ns-char ::= c-printable - b-line-feed - b-carriage-return - c-byte-order-mark
+function isNsCharOrWhitespace(c) {
+  return isPrintable$1(c)
+    && c !== CHAR_BOM
+    // - b-char
+    && c !== CHAR_CARRIAGE_RETURN$1
+    && c !== CHAR_LINE_FEED$1;
+}
+
+// [127]  ns-plain-safe(c) ::= c = flow-out  ⇒ ns-plain-safe-out
+//                             c = flow-in   ⇒ ns-plain-safe-in
+//                             c = block-key ⇒ ns-plain-safe-out
+//                             c = flow-key  ⇒ ns-plain-safe-in
+// [128] ns-plain-safe-out ::= ns-char
+// [129]  ns-plain-safe-in ::= ns-char - c-flow-indicator
+// [130]  ns-plain-char(c) ::=  ( ns-plain-safe(c) - “:” - “#” )
+//                            | ( /* An ns-char preceding */ “#” )
+//                            | ( “:” /* Followed by an ns-plain-safe(c) */ )
+function isPlainSafe$1(c, prev, inblock) {
+  var cIsNsCharOrWhitespace = isNsCharOrWhitespace(c);
+  var cIsNsChar = cIsNsCharOrWhitespace && !isWhitespace$1(c);
+  return (
+    // ns-plain-safe
+    inblock ? // c = flow-in
+      cIsNsCharOrWhitespace
+      : cIsNsCharOrWhitespace
+        // - c-flow-indicator
+        && c !== CHAR_COMMA$1
+        && c !== CHAR_LEFT_SQUARE_BRACKET$1
+        && c !== CHAR_RIGHT_SQUARE_BRACKET$1
+        && c !== CHAR_LEFT_CURLY_BRACKET$1
+        && c !== CHAR_RIGHT_CURLY_BRACKET$1
+  )
+    // ns-plain-char
+    && c !== CHAR_SHARP$1 // false on '#'
+    && !(prev === CHAR_COLON$1 && !cIsNsChar) // false on ': '
+    || (isNsCharOrWhitespace(prev) && !isWhitespace$1(prev) && c === CHAR_SHARP$1) // change to true on '[^ ]#'
+    || (prev === CHAR_COLON$1 && cIsNsChar); // change to true on ':[^ ]'
+}
+
+// Simplified test for values allowed as the first character in plain style.
+function isPlainSafeFirst$1(c) {
+  // Uses a subset of ns-char - c-indicator
+  // where ns-char = nb-char - s-white.
+  // No support of ( ( “?” | “:” | “-” ) /* Followed by an ns-plain-safe(c)) */ ) part
+  return isPrintable$1(c) && c !== CHAR_BOM
+    && !isWhitespace$1(c) // - s-white
+    // - (c-indicator ::=
+    // “-” | “?” | “:” | “,” | “[” | “]” | “{” | “}”
+    && c !== CHAR_MINUS$1
+    && c !== CHAR_QUESTION$1
+    && c !== CHAR_COLON$1
+    && c !== CHAR_COMMA$1
+    && c !== CHAR_LEFT_SQUARE_BRACKET$1
+    && c !== CHAR_RIGHT_SQUARE_BRACKET$1
+    && c !== CHAR_LEFT_CURLY_BRACKET$1
+    && c !== CHAR_RIGHT_CURLY_BRACKET$1
+    // | “#” | “&” | “*” | “!” | “|” | “=” | “>” | “'” | “"”
+    && c !== CHAR_SHARP$1
+    && c !== CHAR_AMPERSAND$1
+    && c !== CHAR_ASTERISK$1
+    && c !== CHAR_EXCLAMATION$1
+    && c !== CHAR_VERTICAL_LINE$1
+    && c !== CHAR_EQUALS$1
+    && c !== CHAR_GREATER_THAN$1
+    && c !== CHAR_SINGLE_QUOTE$1
+    && c !== CHAR_DOUBLE_QUOTE$1
+    // | “%” | “@” | “`”)
+    && c !== CHAR_PERCENT$1
+    && c !== CHAR_COMMERCIAL_AT$1
+    && c !== CHAR_GRAVE_ACCENT$1;
+}
+
+// Simplified test for values allowed as the last character in plain style.
+function isPlainSafeLast(c) {
+  // just not whitespace or colon, it will be checked to be plain character later
+  return !isWhitespace$1(c) && c !== CHAR_COLON$1;
+}
+
+// Same as 'string'.codePointAt(pos), but works in older browsers.
+function codePointAt(string, pos) {
+  var first = string.charCodeAt(pos), second;
+  if (first >= 0xD800 && first <= 0xDBFF && pos + 1 < string.length) {
+    second = string.charCodeAt(pos + 1);
+    if (second >= 0xDC00 && second <= 0xDFFF) {
+      // https://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+      return (first - 0xD800) * 0x400 + second - 0xDC00 + 0x10000;
+    }
+  }
+  return first;
+}
+
+// Determines whether block indentation indicator is required.
+function needIndentIndicator$1(string) {
+  var leadingSpaceRe = /^\n* /;
+  return leadingSpaceRe.test(string);
+}
+
+var STYLE_PLAIN$1   = 1,
+    STYLE_SINGLE$1  = 2,
+    STYLE_LITERAL$1 = 3,
+    STYLE_FOLDED$1  = 4,
+    STYLE_DOUBLE$1  = 5;
+
+// Determines which scalar styles are possible and returns the preferred style.
+// lineWidth = -1 => no limit.
+// Pre-conditions: str.length > 0.
+// Post-conditions:
+//    STYLE_PLAIN or STYLE_SINGLE => no \n are in the string.
+//    STYLE_LITERAL => no lines are suitable for folding (or lineWidth is -1).
+//    STYLE_FOLDED => a line > lineWidth and can be folded (and lineWidth != -1).
+function chooseScalarStyle$1(string, singleLineOnly, indentPerLevel, lineWidth,
+  testAmbiguousType, quotingType, forceQuotes, inblock) {
+
+  var i;
+  var char = 0;
+  var prevChar = null;
+  var hasLineBreak = false;
+  var hasFoldableLine = false; // only checked if shouldTrackWidth
+  var shouldTrackWidth = lineWidth !== -1;
+  var previousLineBreak = -1; // count the first line correctly
+  var plain = isPlainSafeFirst$1(codePointAt(string, 0))
+          && isPlainSafeLast(codePointAt(string, string.length - 1));
+
+  if (singleLineOnly || forceQuotes) {
+    // Case: no block styles.
+    // Check for disallowed characters to rule out plain and single.
+    for (i = 0; i < string.length; char >= 0x10000 ? i += 2 : i++) {
+      char = codePointAt(string, i);
+      if (!isPrintable$1(char)) {
+        return STYLE_DOUBLE$1;
+      }
+      plain = plain && isPlainSafe$1(char, prevChar, inblock);
+      prevChar = char;
+    }
+  } else {
+    // Case: block styles permitted.
+    for (i = 0; i < string.length; char >= 0x10000 ? i += 2 : i++) {
+      char = codePointAt(string, i);
+      if (char === CHAR_LINE_FEED$1) {
+        hasLineBreak = true;
+        // Check if any line can be folded.
+        if (shouldTrackWidth) {
+          hasFoldableLine = hasFoldableLine ||
+            // Foldable line = too long, and not more-indented.
+            (i - previousLineBreak - 1 > lineWidth &&
+             string[previousLineBreak + 1] !== ' ');
+          previousLineBreak = i;
+        }
+      } else if (!isPrintable$1(char)) {
+        return STYLE_DOUBLE$1;
+      }
+      plain = plain && isPlainSafe$1(char, prevChar, inblock);
+      prevChar = char;
+    }
+    // in case the end is missing a \n
+    hasFoldableLine = hasFoldableLine || (shouldTrackWidth &&
+      (i - previousLineBreak - 1 > lineWidth &&
+       string[previousLineBreak + 1] !== ' '));
+  }
+  // Although every style can represent \n without escaping, prefer block styles
+  // for multiline, since they're more readable and they don't add empty lines.
+  // Also prefer folding a super-long line.
+  if (!hasLineBreak && !hasFoldableLine) {
+    // Strings interpretable as another type have to be quoted;
+    // e.g. the string 'true' vs. the boolean true.
+    if (plain && !forceQuotes && !testAmbiguousType(string)) {
+      return STYLE_PLAIN$1;
+    }
+    return quotingType === QUOTING_TYPE_DOUBLE ? STYLE_DOUBLE$1 : STYLE_SINGLE$1;
+  }
+  // Edge case: block indentation indicator can only have one digit.
+  if (indentPerLevel > 9 && needIndentIndicator$1(string)) {
+    return STYLE_DOUBLE$1;
+  }
+  // At this point we know block styles are valid.
+  // Prefer literal style unless we want to fold.
+  if (!forceQuotes) {
+    return hasFoldableLine ? STYLE_FOLDED$1 : STYLE_LITERAL$1;
+  }
+  return quotingType === QUOTING_TYPE_DOUBLE ? STYLE_DOUBLE$1 : STYLE_SINGLE$1;
+}
+
+// Note: line breaking/folding is implemented for only the folded style.
+// NB. We drop the last trailing newline (if any) of a returned block scalar
+//  since the dumper adds its own newline. This always works:
+//    • No ending newline => unaffected; already using strip "-" chomping.
+//    • Ending newline    => removed then restored.
+//  Importantly, this keeps the "+" chomp indicator from gaining an extra line.
+function writeScalar$1(state, string, level, iskey, inblock) {
+  state.dump = (function () {
+    if (string.length === 0) {
+      return state.quotingType === QUOTING_TYPE_DOUBLE ? '""' : "''";
+    }
+    if (!state.noCompatMode) {
+      if (DEPRECATED_BOOLEANS_SYNTAX$1.indexOf(string) !== -1 || DEPRECATED_BASE60_SYNTAX.test(string)) {
+        return state.quotingType === QUOTING_TYPE_DOUBLE ? ('"' + string + '"') : ("'" + string + "'");
+      }
+    }
+
+    var indent = state.indent * Math.max(1, level); // no 0-indent scalars
+    // As indentation gets deeper, let the width decrease monotonically
+    // to the lower bound min(state.lineWidth, 40).
+    // Note that this implies
+    //  state.lineWidth ≤ 40 + state.indent: width is fixed at the lower bound.
+    //  state.lineWidth > 40 + state.indent: width decreases until the lower bound.
+    // This behaves better than a constant minimum width which disallows narrower options,
+    // or an indent threshold which causes the width to suddenly increase.
+    var lineWidth = state.lineWidth === -1
+      ? -1 : Math.max(Math.min(state.lineWidth, 40), state.lineWidth - indent);
+
+    // Without knowing if keys are implicit/explicit, assume implicit for safety.
+    var singleLineOnly = iskey
+      // No block styles in flow mode.
+      || (state.flowLevel > -1 && level >= state.flowLevel);
+    function testAmbiguity(string) {
+      return testImplicitResolving$1(state, string);
+    }
+
+    switch (chooseScalarStyle$1(string, singleLineOnly, state.indent, lineWidth,
+      testAmbiguity, state.quotingType, state.forceQuotes && !iskey, inblock)) {
+
+      case STYLE_PLAIN$1:
+        return string;
+      case STYLE_SINGLE$1:
+        return "'" + string.replace(/'/g, "''") + "'";
+      case STYLE_LITERAL$1:
+        return '|' + blockHeader$1(string, state.indent)
+          + dropEndingNewline$1(indentString$1(string, indent));
+      case STYLE_FOLDED$1:
+        return '>' + blockHeader$1(string, state.indent)
+          + dropEndingNewline$1(indentString$1(foldString$1(string, lineWidth), indent));
+      case STYLE_DOUBLE$1:
+        return '"' + escapeString$1(string) + '"';
+      default:
+        throw new exception$2('impossible error: invalid scalar style');
+    }
+  }());
+}
+
+// Pre-conditions: string is valid for a block scalar, 1 <= indentPerLevel <= 9.
+function blockHeader$1(string, indentPerLevel) {
+  var indentIndicator = needIndentIndicator$1(string) ? String(indentPerLevel) : '';
+
+  // note the special case: the string '\n' counts as a "trailing" empty line.
+  var clip =          string[string.length - 1] === '\n';
+  var keep = clip && (string[string.length - 2] === '\n' || string === '\n');
+  var chomp = keep ? '+' : (clip ? '' : '-');
+
+  return indentIndicator + chomp + '\n';
+}
+
+// (See the note for writeScalar.)
+function dropEndingNewline$1(string) {
+  return string[string.length - 1] === '\n' ? string.slice(0, -1) : string;
+}
+
+// Note: a long line without a suitable break point will exceed the width limit.
+// Pre-conditions: every char in str isPrintable, str.length > 0, width > 0.
+function foldString$1(string, width) {
+  // In folded style, $k$ consecutive newlines output as $k+1$ newlines—
+  // unless they're before or after a more-indented line, or at the very
+  // beginning or end, in which case $k$ maps to $k$.
+  // Therefore, parse each chunk as newline(s) followed by a content line.
+  var lineRe = /(\n+)([^\n]*)/g;
+
+  // first line (possibly an empty line)
+  var result = (function () {
+    var nextLF = string.indexOf('\n');
+    nextLF = nextLF !== -1 ? nextLF : string.length;
+    lineRe.lastIndex = nextLF;
+    return foldLine$1(string.slice(0, nextLF), width);
+  }());
+  // If we haven't reached the first content line yet, don't add an extra \n.
+  var prevMoreIndented = string[0] === '\n' || string[0] === ' ';
+  var moreIndented;
+
+  // rest of the lines
+  var match;
+  while ((match = lineRe.exec(string))) {
+    var prefix = match[1], line = match[2];
+    moreIndented = (line[0] === ' ');
+    result += prefix
+      + (!prevMoreIndented && !moreIndented && line !== ''
+        ? '\n' : '')
+      + foldLine$1(line, width);
+    prevMoreIndented = moreIndented;
+  }
+
+  return result;
+}
+
+// Greedy line breaking.
+// Picks the longest line under the limit each time,
+// otherwise settles for the shortest line over the limit.
+// NB. More-indented lines *cannot* be folded, as that would add an extra \n.
+function foldLine$1(line, width) {
+  if (line === '' || line[0] === ' ') return line;
+
+  // Since a more-indented line adds a \n, breaks can't be followed by a space.
+  var breakRe = / [^ ]/g; // note: the match index will always be <= length-2.
+  var match;
+  // start is an inclusive index. end, curr, and next are exclusive.
+  var start = 0, end, curr = 0, next = 0;
+  var result = '';
+
+  // Invariants: 0 <= start <= length-1.
+  //   0 <= curr <= next <= max(0, length-2). curr - start <= width.
+  // Inside the loop:
+  //   A match implies length >= 2, so curr and next are <= length-2.
+  while ((match = breakRe.exec(line))) {
+    next = match.index;
+    // maintain invariant: curr - start <= width
+    if (next - start > width) {
+      end = (curr > start) ? curr : next; // derive end <= length-2
+      result += '\n' + line.slice(start, end);
+      // skip the space that was output as \n
+      start = end + 1;                    // derive start <= length-1
+    }
+    curr = next;
+  }
+
+  // By the invariants, start <= length-1, so there is something left over.
+  // It is either the whole string or a part starting from non-whitespace.
+  result += '\n';
+  // Insert a break if the remainder is too long and there is a break available.
+  if (line.length - start > width && curr > start) {
+    result += line.slice(start, curr) + '\n' + line.slice(curr + 1);
+  } else {
+    result += line.slice(start);
+  }
+
+  return result.slice(1); // drop extra \n joiner
+}
+
+// Escapes a double-quoted string.
+function escapeString$1(string) {
+  var result = '';
+  var char = 0;
+  var escapeSeq;
+
+  for (var i = 0; i < string.length; char >= 0x10000 ? i += 2 : i++) {
+    char = codePointAt(string, i);
+    escapeSeq = ESCAPE_SEQUENCES$1[char];
+
+    if (!escapeSeq && isPrintable$1(char)) {
+      result += string[i];
+      if (char >= 0x10000) result += string[i + 1];
+    } else {
+      result += escapeSeq || encodeHex$1(char);
+    }
+  }
+
+  return result;
+}
+
+function writeFlowSequence$1(state, level, object) {
+  var _result = '',
+      _tag    = state.tag,
+      index,
+      length,
+      value;
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    value = object[index];
+
+    if (state.replacer) {
+      value = state.replacer.call(object, String(index), value);
+    }
+
+    // Write only valid elements, put null instead of invalid elements.
+    if (writeNode$1(state, level, value, false, false) ||
+        (typeof value === 'undefined' &&
+         writeNode$1(state, level, null, false, false))) {
+
+      if (_result !== '') _result += ',' + (!state.condenseFlow ? ' ' : '');
+      _result += state.dump;
+    }
+  }
+
+  state.tag = _tag;
+  state.dump = '[' + _result + ']';
+}
+
+function writeBlockSequence$1(state, level, object, compact) {
+  var _result = '',
+      _tag    = state.tag,
+      index,
+      length,
+      value;
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    value = object[index];
+
+    if (state.replacer) {
+      value = state.replacer.call(object, String(index), value);
+    }
+
+    // Write only valid elements, put null instead of invalid elements.
+    if (writeNode$1(state, level + 1, value, true, true, false, true) ||
+        (typeof value === 'undefined' &&
+         writeNode$1(state, level + 1, null, true, true, false, true))) {
+
+      if (!compact || _result !== '') {
+        _result += generateNextLine$1(state, level);
+      }
+
+      if (state.dump && CHAR_LINE_FEED$1 === state.dump.charCodeAt(0)) {
+        _result += '-';
+      } else {
+        _result += '- ';
+      }
+
+      _result += state.dump;
+    }
+  }
+
+  state.tag = _tag;
+  state.dump = _result || '[]'; // Empty sequence if no valid values.
+}
+
+function writeFlowMapping$1(state, level, object) {
+  var _result       = '',
+      _tag          = state.tag,
+      objectKeyList = Object.keys(object),
+      index,
+      length,
+      objectKey,
+      objectValue,
+      pairBuffer;
+
+  for (index = 0, length = objectKeyList.length; index < length; index += 1) {
+
+    pairBuffer = '';
+    if (_result !== '') pairBuffer += ', ';
+
+    if (state.condenseFlow) pairBuffer += '"';
+
+    objectKey = objectKeyList[index];
+    objectValue = object[objectKey];
+
+    if (state.replacer) {
+      objectValue = state.replacer.call(object, objectKey, objectValue);
+    }
+
+    if (!writeNode$1(state, level, objectKey, false, false)) {
+      continue; // Skip this pair because of invalid key;
+    }
+
+    if (state.dump.length > 1024) pairBuffer += '? ';
+
+    pairBuffer += state.dump + (state.condenseFlow ? '"' : '') + ':' + (state.condenseFlow ? '' : ' ');
+
+    if (!writeNode$1(state, level, objectValue, false, false)) {
+      continue; // Skip this pair because of invalid value.
+    }
+
+    pairBuffer += state.dump;
+
+    // Both key and value are valid.
+    _result += pairBuffer;
+  }
+
+  state.tag = _tag;
+  state.dump = '{' + _result + '}';
+}
+
+function writeBlockMapping$1(state, level, object, compact) {
+  var _result       = '',
+      _tag          = state.tag,
+      objectKeyList = Object.keys(object),
+      index,
+      length,
+      objectKey,
+      objectValue,
+      explicitPair,
+      pairBuffer;
+
+  // Allow sorting keys so that the output file is deterministic
+  if (state.sortKeys === true) {
+    // Default sorting
+    objectKeyList.sort();
+  } else if (typeof state.sortKeys === 'function') {
+    // Custom sort function
+    objectKeyList.sort(state.sortKeys);
+  } else if (state.sortKeys) {
+    // Something is wrong
+    throw new exception$2('sortKeys must be a boolean or a function');
+  }
+
+  for (index = 0, length = objectKeyList.length; index < length; index += 1) {
+    pairBuffer = '';
+
+    if (!compact || _result !== '') {
+      pairBuffer += generateNextLine$1(state, level);
+    }
+
+    objectKey = objectKeyList[index];
+    objectValue = object[objectKey];
+
+    if (state.replacer) {
+      objectValue = state.replacer.call(object, objectKey, objectValue);
+    }
+
+    if (!writeNode$1(state, level + 1, objectKey, true, true, true)) {
+      continue; // Skip this pair because of invalid key.
+    }
+
+    explicitPair = (state.tag !== null && state.tag !== '?') ||
+                   (state.dump && state.dump.length > 1024);
+
+    if (explicitPair) {
+      if (state.dump && CHAR_LINE_FEED$1 === state.dump.charCodeAt(0)) {
+        pairBuffer += '?';
+      } else {
+        pairBuffer += '? ';
+      }
+    }
+
+    pairBuffer += state.dump;
+
+    if (explicitPair) {
+      pairBuffer += generateNextLine$1(state, level);
+    }
+
+    if (!writeNode$1(state, level + 1, objectValue, true, explicitPair)) {
+      continue; // Skip this pair because of invalid value.
+    }
+
+    if (state.dump && CHAR_LINE_FEED$1 === state.dump.charCodeAt(0)) {
+      pairBuffer += ':';
+    } else {
+      pairBuffer += ': ';
+    }
+
+    pairBuffer += state.dump;
+
+    // Both key and value are valid.
+    _result += pairBuffer;
+  }
+
+  state.tag = _tag;
+  state.dump = _result || '{}'; // Empty mapping if no valid pairs.
+}
+
+function detectType$1(state, object, explicit) {
+  var _result, typeList, index, length, type, style;
+
+  typeList = explicit ? state.explicitTypes : state.implicitTypes;
+
+  for (index = 0, length = typeList.length; index < length; index += 1) {
+    type = typeList[index];
+
+    if ((type.instanceOf  || type.predicate) &&
+        (!type.instanceOf || ((typeof object === 'object') && (object instanceof type.instanceOf))) &&
+        (!type.predicate  || type.predicate(object))) {
+
+      if (explicit) {
+        if (type.multi && type.representName) {
+          state.tag = type.representName(object);
+        } else {
+          state.tag = type.tag;
+        }
+      } else {
+        state.tag = '?';
+      }
+
+      if (type.represent) {
+        style = state.styleMap[type.tag] || type.defaultStyle;
+
+        if (_toString$3.call(type.represent) === '[object Function]') {
+          _result = type.represent(object, style);
+        } else if (_hasOwnProperty$4.call(type.represent, style)) {
+          _result = type.represent[style](object, style);
+        } else {
+          throw new exception$2('!<' + type.tag + '> tag resolver accepts not "' + style + '" style');
+        }
+
+        state.dump = _result;
+      }
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Serializes `object` and writes it to global `result`.
+// Returns true on success, or false on invalid object.
+//
+function writeNode$1(state, level, object, block, compact, iskey, isblockseq) {
+  state.tag = null;
+  state.dump = object;
+
+  if (!detectType$1(state, object, false)) {
+    detectType$1(state, object, true);
+  }
+
+  var type = _toString$3.call(state.dump);
+  var inblock = block;
+  var tagStr;
+
+  if (block) {
+    block = (state.flowLevel < 0 || state.flowLevel > level);
+  }
+
+  var objectOrArray = type === '[object Object]' || type === '[object Array]',
+      duplicateIndex,
+      duplicate;
+
+  if (objectOrArray) {
+    duplicateIndex = state.duplicates.indexOf(object);
+    duplicate = duplicateIndex !== -1;
+  }
+
+  if ((state.tag !== null && state.tag !== '?') || duplicate || (state.indent !== 2 && level > 0)) {
+    compact = false;
+  }
+
+  if (duplicate && state.usedDuplicates[duplicateIndex]) {
+    state.dump = '*ref_' + duplicateIndex;
+  } else {
+    if (objectOrArray && duplicate && !state.usedDuplicates[duplicateIndex]) {
+      state.usedDuplicates[duplicateIndex] = true;
+    }
+    if (type === '[object Object]') {
+      if (block && (Object.keys(state.dump).length !== 0)) {
+        writeBlockMapping$1(state, level, state.dump, compact);
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + state.dump;
+        }
+      } else {
+        writeFlowMapping$1(state, level, state.dump);
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + ' ' + state.dump;
+        }
+      }
+    } else if (type === '[object Array]') {
+      if (block && (state.dump.length !== 0)) {
+        if (state.noArrayIndent && !isblockseq && level > 0) {
+          writeBlockSequence$1(state, level - 1, state.dump, compact);
+        } else {
+          writeBlockSequence$1(state, level, state.dump, compact);
+        }
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + state.dump;
+        }
+      } else {
+        writeFlowSequence$1(state, level, state.dump);
+        if (duplicate) {
+          state.dump = '&ref_' + duplicateIndex + ' ' + state.dump;
+        }
+      }
+    } else if (type === '[object String]') {
+      if (state.tag !== '?') {
+        writeScalar$1(state, state.dump, level, iskey, inblock);
+      }
+    } else if (type === '[object Undefined]') {
+      return false;
+    } else {
+      if (state.skipInvalid) return false;
+      throw new exception$2('unacceptable kind of an object to dump ' + type);
+    }
+
+    if (state.tag !== null && state.tag !== '?') {
+      // Need to encode all characters except those allowed by the spec:
+      //
+      // [35] ns-dec-digit    ::=  [#x30-#x39] /* 0-9 */
+      // [36] ns-hex-digit    ::=  ns-dec-digit
+      //                         | [#x41-#x46] /* A-F */ | [#x61-#x66] /* a-f */
+      // [37] ns-ascii-letter ::=  [#x41-#x5A] /* A-Z */ | [#x61-#x7A] /* a-z */
+      // [38] ns-word-char    ::=  ns-dec-digit | ns-ascii-letter | “-”
+      // [39] ns-uri-char     ::=  “%” ns-hex-digit ns-hex-digit | ns-word-char | “#”
+      //                         | “;” | “/” | “?” | “:” | “@” | “&” | “=” | “+” | “$” | “,”
+      //                         | “_” | “.” | “!” | “~” | “*” | “'” | “(” | “)” | “[” | “]”
+      //
+      // Also need to encode '!' because it has special meaning (end of tag prefix).
+      //
+      tagStr = encodeURI(
+        state.tag[0] === '!' ? state.tag.slice(1) : state.tag
+      ).replace(/!/g, '%21');
+
+      if (state.tag[0] === '!') {
+        tagStr = '!' + tagStr;
+      } else if (tagStr.slice(0, 18) === 'tag:yaml.org,2002:') {
+        tagStr = '!!' + tagStr.slice(18);
+      } else {
+        tagStr = '!<' + tagStr + '>';
+      }
+
+      state.dump = tagStr + ' ' + state.dump;
+    }
+  }
+
+  return true;
+}
+
+function getDuplicateReferences$1(object, state) {
+  var objects = [],
+      duplicatesIndexes = [],
+      index,
+      length;
+
+  inspectNode$1(object, objects, duplicatesIndexes);
+
+  for (index = 0, length = duplicatesIndexes.length; index < length; index += 1) {
+    state.duplicates.push(objects[duplicatesIndexes[index]]);
+  }
+  state.usedDuplicates = new Array(length);
+}
+
+function inspectNode$1(object, objects, duplicatesIndexes) {
+  var objectKeyList,
+      index,
+      length;
+
+  if (object !== null && typeof object === 'object') {
+    index = objects.indexOf(object);
+    if (index !== -1) {
+      if (duplicatesIndexes.indexOf(index) === -1) {
+        duplicatesIndexes.push(index);
+      }
+    } else {
+      objects.push(object);
+
+      if (Array.isArray(object)) {
+        for (index = 0, length = object.length; index < length; index += 1) {
+          inspectNode$1(object[index], objects, duplicatesIndexes);
+        }
+      } else {
+        objectKeyList = Object.keys(object);
+
+        for (index = 0, length = objectKeyList.length; index < length; index += 1) {
+          inspectNode$1(object[objectKeyList[index]], objects, duplicatesIndexes);
+        }
+      }
+    }
+  }
+}
+
+function dump$1(input, options) {
+  options = options || {};
+
+  var state = new State$2(options);
+
+  if (!state.noRefs) getDuplicateReferences$1(input, state);
+
+  var value = input;
+
+  if (state.replacer) {
+    value = state.replacer.call({ '': value }, '', value);
+  }
+
+  if (writeNode$1(state, 0, value, true, true)) return state.dump + '\n';
+
+  return '';
+}
+
+var dump_1 = dump$1;
+
+var dumper$2 = {
+	dump: dump_1
+};
+
+function renamed(from, to) {
+  return function () {
+    throw new Error('Function yaml.' + from + ' is removed in js-yaml 4. ' +
+      'Use yaml.' + to + ' instead, which is now safe by default.');
+  };
+}
+
+
+var Type$i                = type$1;
+var Schema$6              = schema$1;
+var FAILSAFE_SCHEMA     = failsafe$1;
+var JSON_SCHEMA         = json$3;
+var CORE_SCHEMA         = core$4;
+var DEFAULT_SCHEMA      = _default$1;
+var load$2                = loader$2.load;
+var loadAll$2             = loader$2.loadAll;
+var dump$2                = dumper$2.dump;
+var YAMLException$5       = exception$2;
+
+// Re-export all types in case user wants to create custom schema
+var types$2 = {
+  binary:    binary$1,
+  float:     float$1,
+  map:       map$1,
+  null:      _null$1,
+  pairs:     pairs$1,
+  set:       set$2,
+  timestamp: timestamp$1,
+  bool:      bool$1,
+  int:       int$1,
+  merge:     merge$b,
+  omap:      omap$1,
+  seq:       seq$1,
+  str:       str$1
+};
+
+// Removed functions from JS-YAML 3.0.x
+var safeLoad$1            = renamed('safeLoad', 'load');
+var safeLoadAll$1         = renamed('safeLoadAll', 'loadAll');
+var safeDump$1            = renamed('safeDump', 'dump');
+
+var jsYaml$2 = {
+	Type: Type$i,
+	Schema: Schema$6,
+	FAILSAFE_SCHEMA: FAILSAFE_SCHEMA,
+	JSON_SCHEMA: JSON_SCHEMA,
+	CORE_SCHEMA: CORE_SCHEMA,
+	DEFAULT_SCHEMA: DEFAULT_SCHEMA,
+	load: load$2,
+	loadAll: loadAll$2,
+	dump: dump$2,
+	YAMLException: YAMLException$5,
+	types: types$2,
+	safeLoad: safeLoad$1,
+	safeLoadAll: safeLoadAll$1,
+	safeDump: safeDump$1
+};
+
+const VERSION$i = "1.1.6";
+
+const SUPPORTED_FILE_EXTENSIONS = ["json", "yml", "yaml"];
+/**
+ * Load configuration from a given repository and path.
+ *
+ * @param octokit Octokit instance
+ * @param options
+ */
+async function getConfigFile(octokit, { owner, repo, path, ref }) {
+    const fileExtension = path.split(".").pop().toLowerCase();
+    if (!SUPPORTED_FILE_EXTENSIONS.includes(fileExtension)) {
+        throw new Error(`[@probot/octokit-plugin-config] .${fileExtension} extension is not support for configuration (path: "${path}")`);
+    }
+    // https://docs.github.com/en/rest/reference/repos#get-repository-content
+    const endpoint = {
+        method: "GET",
+        url: "/repos/{owner}/{repo}/contents/{path}",
+        owner,
+        repo,
+        path,
+        mediaType: {
+            format: "raw",
+        },
+        // this can be just `ref` once https://github.com/octokit/endpoint.js/issues/206 is resolved
+        ...(ref ? { ref } : {}),
+    };
+    const { url } = await octokit.request.endpoint(endpoint);
+    const emptyConfigResult = {
+        owner,
+        repo,
+        path,
+        url,
+        config: null,
+    };
+    try {
+        const { data, headers } = await octokit.request(endpoint);
+        // If path is a submodule, or a folder, then a JSON string is returned with
+        // the "Content-Type" header set to "application/json; charset=utf-8".
+        //
+        // - https://docs.github.com/en/rest/reference/repos#if-the-content-is-a-submodule
+        // - https://docs.github.com/en/rest/reference/repos#if-the-content-is-a-directory
+        //
+        // symlinks just return the content of the linked file when requesting the raw formt,
+        // so we are fine
+        if (headers["content-type"] === "application/json; charset=utf-8") {
+            throw new Error(`[@probot/octokit-plugin-config] ${url} exists, but is either a directory or a submodule. Ignoring.`);
+        }
+        if (fileExtension === "json") {
+            if (typeof data === "string") {
+                throw new Error(`[@probot/octokit-plugin-config] Configuration could not be parsed from ${url} (invalid JSON)`);
+            }
+            return {
+                ...emptyConfigResult,
+                config: data,
+            };
+        }
+        const config = (jsYaml$2.load(data) || {});
+        if (typeof config === "string") {
+            throw new Error(`[@probot/octokit-plugin-config] Configuration could not be parsed from ${url} (YAML is not an object)`);
+        }
+        return {
+            ...emptyConfigResult,
+            config,
+        };
+    }
+    catch (error) {
+        if (error.status === 404) {
+            return emptyConfigResult;
+        }
+        if (error.name === "YAMLException") {
+            const reason = /unknown tag/.test(error.message)
+                ? "unsafe YAML"
+                : "invalid YAML";
+            throw new Error(`[@probot/octokit-plugin-config] Configuration could not be parsed from ${url} (${reason})`);
+        }
+        throw error;
+    }
+}
+
+const EXTENDS_REGEX = new RegExp("^" +
+    "(?:([a-z\\d](?:[a-z\\d]|-(?=[a-z\\d])){0,38})/)?" + // org
+    "([-_.\\w\\d]+)" + // project
+    "(?::([-_./\\w\\d]+\\.ya?ml))?" + // filename
+    "$", "i");
+/**
+ * Computes parameters to retrieve the configuration file specified in _extends
+ *
+ * Base can either be the name of a repository in the same organization or
+ * a full slug "organization/repo".
+ *
+ * @param options
+ * @return The params needed to retrieve a configuration file
+ */
+function extendsToGetContentParams({ owner, path, url, extendsValue, }) {
+    if (typeof extendsValue !== "string") {
+        throw new Error(`[@probot/octokit-plugin-config] Invalid value ${JSON.stringify(extendsValue)} for _extends in ${url}`);
+    }
+    const match = extendsValue.match(EXTENDS_REGEX);
+    if (match === null) {
+        throw new Error(`[@probot/octokit-plugin-config] Invalid value "${extendsValue}" for _extends in ${url}`);
+    }
+    return {
+        owner: match[1] || owner,
+        repo: match[2],
+        path: match[3] || path,
+    };
+}
+
+/**
+ * Load configuration from selected repository file. If the file does not exist
+ * it loads configuration from the owners `.github` repository.
+ *
+ * If the repository file configuration includes an `_extends` key, that file
+ * is loaded. Same with the target file until no `_extends` key is present.
+ *
+ * @param octokit Octokit instance
+ * @param options
+ */
+async function getConfigFiles(octokit, { owner, repo, path, branch }) {
+    const requestedRepoFile = await getConfigFile(octokit, {
+        owner,
+        repo,
+        path,
+        ref: branch,
+    });
+    const files = [requestedRepoFile];
+    // if no configuration file present in selected repository,
+    // try to load it from the `.github` repository
+    if (!requestedRepoFile.config) {
+        if (repo === ".github") {
+            return files;
+        }
+        const defaultRepoConfig = await getConfigFile(octokit, {
+            owner,
+            repo: ".github",
+            path,
+        });
+        files.push(defaultRepoConfig);
+    }
+    const file = files[files.length - 1];
+    // if the configuration has no `_extends` key, we are done here.
+    if (!file.config || !file.config._extends) {
+        return files;
+    }
+    // parse the value of `_extends` into request parameters to
+    // retrieve the new configuration file
+    let extendConfigOptions = extendsToGetContentParams({
+        owner,
+        path,
+        url: file.url,
+        extendsValue: file.config._extends,
+    });
+    // remove the `_extends` key from the configuration that is returned
+    delete file.config._extends;
+    // now load the configuration linked from the `_extends` key. If that
+    // configuration also includes an `_extends` key, then load that configuration
+    // as well, until the target configuration has no `_extends` key
+    do {
+        const extendRepoConfig = await getConfigFile(octokit, extendConfigOptions);
+        files.push(extendRepoConfig);
+        if (!extendRepoConfig.config || !extendRepoConfig.config._extends) {
+            return files;
+        }
+        extendConfigOptions = extendsToGetContentParams({
+            owner,
+            path,
+            url: extendRepoConfig.url,
+            extendsValue: extendRepoConfig.config._extends,
+        });
+        delete extendRepoConfig.config._extends;
+        // Avoid loops
+        const alreadyLoaded = files.find((file) => file.owner === extendConfigOptions.owner &&
+            file.repo === extendConfigOptions.repo &&
+            file.path === extendConfigOptions.path);
+        if (alreadyLoaded) {
+            throw new Error(`[@probot/octokit-plugin-config] Recursion detected. Ignoring  "_extends: ${extendRepoConfig.config._extends}" from ${extendRepoConfig.url} because ${alreadyLoaded.url} was already loaded.`);
+        }
+    } while (true);
+}
+
+/**
+ * Loads configuration from one or multiple files and resolves with
+ * the combined configuration as well as the list of files the configuration
+ * was loaded from
+ *
+ * @param octokit Octokit instance
+ * @param options
+ */
+async function composeConfigGet(octokit, { owner, repo, defaults, path, branch }) {
+    const files = await getConfigFiles(octokit, {
+        owner,
+        repo,
+        path,
+        branch,
+    });
+    const configs = files
+        .map((file) => file.config)
+        .reverse()
+        .filter(Boolean);
+    return {
+        files,
+        config: typeof defaults === "function"
+            ? defaults(configs)
+            : Object.assign({}, defaults, ...configs),
+    };
+}
+
+/**
+ * @param octokit Octokit instance
+ */
+function config$1(octokit) {
+    return {
+        config: {
+            async get(options) {
+                return composeConfigGet(octokit, options);
+            },
+        },
+    };
+}
+config$1.VERSION = VERSION$i;
+
+var distWeb$6 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	composeConfigGet: composeConfigGet,
+	config: config$1
+});
+
+var require$$6$1 = /*@__PURE__*/getAugmentedNamespace(distWeb$6);
+
+var distNode$2 = {};
+
+async function auth$7(reason) {
+    return {
+        type: "unauthenticated",
+        reason,
+    };
+}
+
+function isRateLimitError(error) {
+    if (error.status !== 403) {
+        return false;
+    }
+    /* istanbul ignore if */
+    if (!error.response) {
+        return false;
+    }
+    return error.response.headers["x-ratelimit-remaining"] === "0";
+}
+
+const REGEX_ABUSE_LIMIT_MESSAGE = /\babuse\b/i;
+function isAbuseLimitError(error) {
+    if (error.status !== 403) {
+        return false;
+    }
+    return REGEX_ABUSE_LIMIT_MESSAGE.test(error.message);
+}
+
+async function hook$5(reason, request, route, parameters) {
+    const endpoint = request.endpoint.merge(route, parameters);
+    return request(endpoint).catch((error) => {
+        if (error.status === 404) {
+            error.message = `Not found. May be due to lack of authentication. Reason: ${reason}`;
+            throw error;
+        }
+        if (isRateLimitError(error)) {
+            error.message = `API rate limit exceeded. This maybe caused by the lack of authentication. Reason: ${reason}`;
+            throw error;
+        }
+        if (isAbuseLimitError(error)) {
+            error.message = `You have triggered an abuse detection mechanism. This maybe caused by the lack of authentication. Reason: ${reason}`;
+            throw error;
+        }
+        if (error.status === 401) {
+            error.message = `Unauthorized. "${endpoint.method} ${endpoint.url}" failed most likely due to lack of authentication. Reason: ${reason}`;
+            throw error;
+        }
+        if (error.status >= 400 && error.status < 500) {
+            error.message = error.message.replace(/\.?$/, `. May be caused by lack of authentication (${reason}).`);
+        }
+        throw error;
+    });
+}
+
+const createUnauthenticatedAuth = function createUnauthenticatedAuth(options) {
+    if (!options || !options.reason) {
+        throw new Error("[@octokit/auth-unauthenticated] No reason passed to createUnauthenticatedAuth");
+    }
+    return Object.assign(auth$7.bind(null, options.reason), {
+        hook: hook$5.bind(null, options.reason),
+    });
+};
+
+var distWeb$5 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	createUnauthenticatedAuth: createUnauthenticatedAuth
+});
+
+var require$$0$6 = /*@__PURE__*/getAugmentedNamespace(distWeb$5);
+
+const REGEX_IS_INSTALLATION_LEGACY = /^v1\./;
+const REGEX_IS_INSTALLATION = /^ghs_/;
+const REGEX_IS_USER_TO_SERVER = /^ghu_/;
+async function auth$6(token) {
+    const isApp = token.split(/\./).length === 3;
+    const isInstallation = REGEX_IS_INSTALLATION_LEGACY.test(token) ||
+        REGEX_IS_INSTALLATION.test(token);
+    const isUserToServer = REGEX_IS_USER_TO_SERVER.test(token);
+    const tokenType = isApp
+        ? "app"
+        : isInstallation
+            ? "installation"
+            : isUserToServer
+                ? "user-to-server"
+                : "oauth";
+    return {
+        type: "token",
+        token: token,
+        tokenType,
+    };
+}
+
+/**
+ * Prefix token for usage in the Authorization header
+ *
+ * @param token OAuth token or JSON Web Token
+ */
+function withAuthorizationPrefix(token) {
+    if (token.split(/\./).length === 3) {
+        return `bearer ${token}`;
+    }
+    return `token ${token}`;
+}
+
+async function hook$4(token, request, route, parameters) {
+    const endpoint = request.endpoint.merge(route, parameters);
+    endpoint.headers.authorization = withAuthorizationPrefix(token);
+    return request(endpoint);
+}
+
+const createTokenAuth = function createTokenAuth(token) {
+    if (!token) {
+        throw new Error("[@octokit/auth-token] No token passed to createTokenAuth");
+    }
+    if (typeof token !== "string") {
+        throw new Error("[@octokit/auth-token] Token passed to createTokenAuth is not a string");
+    }
+    token = token.replace(/^(token|bearer) +/i, "");
+    return Object.assign(auth$6.bind(null, token), {
+        hook: hook$4.bind(null, token),
+    });
+};
+
+var distWeb$4 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	createTokenAuth: createTokenAuth
+});
+
+var require$$1$4 = /*@__PURE__*/getAugmentedNamespace(distWeb$4);
+
+function lowercaseKeys$4(object) {
+    if (!object) {
+        return {};
+    }
+    return Object.keys(object).reduce((newObj, key) => {
+        newObj[key.toLowerCase()] = object[key];
+        return newObj;
+    }, {});
+}
+
+function mergeDeep$4(defaults, options) {
+    const result = Object.assign({}, defaults);
+    Object.keys(options).forEach((key) => {
+        if (isPlainObject(options[key])) {
+            if (!(key in defaults))
+                Object.assign(result, { [key]: options[key] });
+            else
+                result[key] = mergeDeep$4(defaults[key], options[key]);
+        }
+        else {
+            Object.assign(result, { [key]: options[key] });
+        }
+    });
+    return result;
+}
+
+function removeUndefinedProperties$4(obj) {
+    for (const key in obj) {
+        if (obj[key] === undefined) {
+            delete obj[key];
+        }
+    }
+    return obj;
+}
+
+function merge$a(defaults, route, options) {
+    if (typeof route === "string") {
+        let [method, url] = route.split(" ");
+        options = Object.assign(url ? { method, url } : { url: method }, options);
+    }
+    else {
+        options = Object.assign({}, route);
+    }
+    // lowercase header names before merging with defaults to avoid duplicates
+    options.headers = lowercaseKeys$4(options.headers);
+    // remove properties with undefined values before merging
+    removeUndefinedProperties$4(options);
+    removeUndefinedProperties$4(options.headers);
+    const mergedOptions = mergeDeep$4(defaults || {}, options);
+    // mediaType.previews arrays are merged, instead of overwritten
+    if (defaults && defaults.mediaType.previews.length) {
+        mergedOptions.mediaType.previews = defaults.mediaType.previews
+            .filter((preview) => !mergedOptions.mediaType.previews.includes(preview))
+            .concat(mergedOptions.mediaType.previews);
+    }
+    mergedOptions.mediaType.previews = mergedOptions.mediaType.previews.map((preview) => preview.replace(/-preview/, ""));
+    return mergedOptions;
+}
+
+function addQueryParameters$4(url, parameters) {
+    const separator = /\?/.test(url) ? "&" : "?";
+    const names = Object.keys(parameters);
+    if (names.length === 0) {
+        return url;
+    }
+    return (url +
+        separator +
+        names
+            .map((name) => {
+            if (name === "q") {
+                return ("q=" + parameters.q.split("+").map(encodeURIComponent).join("+"));
+            }
+            return `${name}=${encodeURIComponent(parameters[name])}`;
+        })
+            .join("&"));
+}
+
+const urlVariableRegex$4 = /\{[^}]+\}/g;
+function removeNonChars$4(variableName) {
+    return variableName.replace(/^\W+|\W+$/g, "").split(/,/);
+}
+function extractUrlVariableNames$4(url) {
+    const matches = url.match(urlVariableRegex$4);
+    if (!matches) {
+        return [];
+    }
+    return matches.map(removeNonChars$4).reduce((a, b) => a.concat(b), []);
+}
+
+function omit$4(object, keysToOmit) {
+    return Object.keys(object)
+        .filter((option) => !keysToOmit.includes(option))
+        .reduce((obj, key) => {
+        obj[key] = object[key];
+        return obj;
+    }, {});
+}
+
+// Based on https://github.com/bramstein/url-template, licensed under BSD
+// TODO: create separate package.
+//
+// Copyright (c) 2012-2014, Bram Stein
+// All rights reserved.
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  1. Redistributions of source code must retain the above copyright
+//     notice, this list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright
+//     notice, this list of conditions and the following disclaimer in the
+//     documentation and/or other materials provided with the distribution.
+//  3. The name of the author may not be used to endorse or promote products
+//     derived from this software without specific prior written permission.
+// THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
+// WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+// EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+// INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+// BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+// EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+/* istanbul ignore file */
+function encodeReserved$4(str) {
+    return str
+        .split(/(%[0-9A-Fa-f]{2})/g)
+        .map(function (part) {
+        if (!/%[0-9A-Fa-f]/.test(part)) {
+            part = encodeURI(part).replace(/%5B/g, "[").replace(/%5D/g, "]");
+        }
+        return part;
+    })
+        .join("");
+}
+function encodeUnreserved$4(str) {
+    return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
+        return "%" + c.charCodeAt(0).toString(16).toUpperCase();
+    });
+}
+function encodeValue$4(operator, value, key) {
+    value =
+        operator === "+" || operator === "#"
+            ? encodeReserved$4(value)
+            : encodeUnreserved$4(value);
+    if (key) {
+        return encodeUnreserved$4(key) + "=" + value;
+    }
+    else {
+        return value;
+    }
+}
+function isDefined$4(value) {
+    return value !== undefined && value !== null;
+}
+function isKeyOperator$4(operator) {
+    return operator === ";" || operator === "&" || operator === "?";
+}
+function getValues$4(context, operator, key, modifier) {
+    var value = context[key], result = [];
+    if (isDefined$4(value) && value !== "") {
+        if (typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean") {
+            value = value.toString();
+            if (modifier && modifier !== "*") {
+                value = value.substring(0, parseInt(modifier, 10));
+            }
+            result.push(encodeValue$4(operator, value, isKeyOperator$4(operator) ? key : ""));
+        }
+        else {
