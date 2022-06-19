@@ -136054,3 +136054,2243 @@ function getNodeRequestOptions$1(request) {
 	// Basic fetch
 	if (!parsedURL.protocol || !parsedURL.hostname) {
 		throw new TypeError('Only absolute URLs are supported');
+	}
+
+	if (!/^https?:$/.test(parsedURL.protocol)) {
+		throw new TypeError('Only HTTP(S) protocols are supported');
+	}
+
+	if (request.signal && request.body instanceof Stream$2.Readable && !streamDestructionSupported) {
+		throw new Error('Cancellation of streamed requests with AbortSignal is not supported in node < 8');
+	}
+
+	// HTTP-network-or-cache fetch steps 2.4-2.7
+	let contentLengthValue = null;
+	if (request.body == null && /^(POST|PUT)$/i.test(request.method)) {
+		contentLengthValue = '0';
+	}
+	if (request.body != null) {
+		const totalBytes = getTotalBytes$1(request);
+		if (typeof totalBytes === 'number') {
+			contentLengthValue = String(totalBytes);
+		}
+	}
+	if (contentLengthValue) {
+		headers.set('Content-Length', contentLengthValue);
+	}
+
+	// HTTP-network-or-cache fetch step 2.11
+	if (!headers.has('User-Agent')) {
+		headers.set('User-Agent', 'node-fetch/1.0 (+https://github.com/bitinn/node-fetch)');
+	}
+
+	// HTTP-network-or-cache fetch step 2.15
+	if (request.compress && !headers.has('Accept-Encoding')) {
+		headers.set('Accept-Encoding', 'gzip,deflate');
+	}
+
+	let agent = request.agent;
+	if (typeof agent === 'function') {
+		agent = agent(parsedURL);
+	}
+
+	if (!headers.has('Connection') && !agent) {
+		headers.set('Connection', 'close');
+	}
+
+	// HTTP-network fetch step 4.2
+	// chunked encoding is handled by Node.js
+
+	return Object.assign({}, parsedURL, {
+		method: request.method,
+		headers: exportNodeCompatibleHeaders(headers),
+		agent
+	});
+}
+
+/**
+ * abort-error.js
+ *
+ * AbortError interface for cancelled requests
+ */
+
+/**
+ * Create AbortError instance
+ *
+ * @param   String      message      Error message for human
+ * @return  AbortError
+ */
+function AbortError$2(message) {
+  Error.call(this, message);
+
+  this.type = 'aborted';
+  this.message = message;
+
+  // hide custom error implementation details from end-users
+  Error.captureStackTrace(this, this.constructor);
+}
+
+AbortError$2.prototype = Object.create(Error.prototype);
+AbortError$2.prototype.constructor = AbortError$2;
+AbortError$2.prototype.name = 'AbortError';
+
+const URL$1$1 = Url$2.URL || publicApi.URL;
+
+// fix an issue where "PassThrough", "resolve" aren't a named export for node <10
+const PassThrough$1 = Stream$2.PassThrough;
+
+const isDomainOrSubdomain$1 = function isDomainOrSubdomain(destination, original) {
+	const orig = new URL$1$1(original).hostname;
+	const dest = new URL$1$1(destination).hostname;
+
+	return orig === dest || orig[orig.length - dest.length - 1] === '.' && orig.endsWith(dest);
+};
+
+/**
+ * isSameProtocol reports whether the two provided URLs use the same protocol.
+ *
+ * Both domains must already be in canonical form.
+ * @param {string|URL} original
+ * @param {string|URL} destination
+ */
+const isSameProtocol$1 = function isSameProtocol(destination, original) {
+	const orig = new URL$1$1(original).protocol;
+	const dest = new URL$1$1(destination).protocol;
+
+	return orig === dest;
+};
+
+/**
+ * Fetch function
+ *
+ * @param   Mixed    url   Absolute url or Request instance
+ * @param   Object   opts  Fetch options
+ * @return  Promise
+ */
+function fetch$2(url, opts) {
+
+	// allow custom promise
+	if (!fetch$2.Promise) {
+		throw new Error('native promise missing, set fetch.Promise to your favorite alternative');
+	}
+
+	Body$1.Promise = fetch$2.Promise;
+
+	// wrap http.request into fetch
+	return new fetch$2.Promise(function (resolve, reject) {
+		// build request object
+		const request = new Request$1(url, opts);
+		const options = getNodeRequestOptions$1(request);
+
+		const send = (options.protocol === 'https:' ? https$3 : http$6).request;
+		const signal = request.signal;
+
+		let response = null;
+
+		const abort = function abort() {
+			let error = new AbortError$2('The user aborted a request.');
+			reject(error);
+			if (request.body && request.body instanceof Stream$2.Readable) {
+				destroyStream(request.body, error);
+			}
+			if (!response || !response.body) return;
+			response.body.emit('error', error);
+		};
+
+		if (signal && signal.aborted) {
+			abort();
+			return;
+		}
+
+		const abortAndFinalize = function abortAndFinalize() {
+			abort();
+			finalize();
+		};
+
+		// send request
+		const req = send(options);
+		let reqTimeout;
+
+		if (signal) {
+			signal.addEventListener('abort', abortAndFinalize);
+		}
+
+		function finalize() {
+			req.abort();
+			if (signal) signal.removeEventListener('abort', abortAndFinalize);
+			clearTimeout(reqTimeout);
+		}
+
+		if (request.timeout) {
+			req.once('socket', function (socket) {
+				reqTimeout = setTimeout(function () {
+					reject(new FetchError$1(`network timeout at: ${request.url}`, 'request-timeout'));
+					finalize();
+				}, request.timeout);
+			});
+		}
+
+		req.on('error', function (err) {
+			reject(new FetchError$1(`request to ${request.url} failed, reason: ${err.message}`, 'system', err));
+
+			if (response && response.body) {
+				destroyStream(response.body, err);
+			}
+
+			finalize();
+		});
+
+		fixResponseChunkedTransferBadEnding$1(req, function (err) {
+			if (signal && signal.aborted) {
+				return;
+			}
+
+			if (response && response.body) {
+				destroyStream(response.body, err);
+			}
+		});
+
+		/* c8 ignore next 18 */
+		if (parseInt(process.version.substring(1)) < 14) {
+			// Before Node.js 14, pipeline() does not fully support async iterators and does not always
+			// properly handle when the socket close/end events are out of order.
+			req.on('socket', function (s) {
+				s.addListener('close', function (hadError) {
+					// if a data listener is still present we didn't end cleanly
+					const hasDataListener = s.listenerCount('data') > 0;
+
+					// if end happened before close but the socket didn't emit an error, do it now
+					if (response && hasDataListener && !hadError && !(signal && signal.aborted)) {
+						const err = new Error('Premature close');
+						err.code = 'ERR_STREAM_PREMATURE_CLOSE';
+						response.body.emit('error', err);
+					}
+				});
+			});
+		}
+
+		req.on('response', function (res) {
+			clearTimeout(reqTimeout);
+
+			const headers = createHeadersLenient(res.headers);
+
+			// HTTP fetch step 5
+			if (fetch$2.isRedirect(res.statusCode)) {
+				// HTTP fetch step 5.2
+				const location = headers.get('Location');
+
+				// HTTP fetch step 5.3
+				let locationURL = null;
+				try {
+					locationURL = location === null ? null : new URL$1$1(location, request.url).toString();
+				} catch (err) {
+					// error here can only be invalid URL in Location: header
+					// do not throw when options.redirect == manual
+					// let the user extract the errorneous redirect URL
+					if (request.redirect !== 'manual') {
+						reject(new FetchError$1(`uri requested responds with an invalid redirect URL: ${location}`, 'invalid-redirect'));
+						finalize();
+						return;
+					}
+				}
+
+				// HTTP fetch step 5.5
+				switch (request.redirect) {
+					case 'error':
+						reject(new FetchError$1(`uri requested responds with a redirect, redirect mode is set to error: ${request.url}`, 'no-redirect'));
+						finalize();
+						return;
+					case 'manual':
+						// node-fetch-specific step: make manual redirect a bit easier to use by setting the Location header value to the resolved URL.
+						if (locationURL !== null) {
+							// handle corrupted header
+							try {
+								headers.set('Location', locationURL);
+							} catch (err) {
+								// istanbul ignore next: nodejs server prevent invalid response headers, we can't test this through normal request
+								reject(err);
+							}
+						}
+						break;
+					case 'follow':
+						// HTTP-redirect fetch step 2
+						if (locationURL === null) {
+							break;
+						}
+
+						// HTTP-redirect fetch step 5
+						if (request.counter >= request.follow) {
+							reject(new FetchError$1(`maximum redirect reached at: ${request.url}`, 'max-redirect'));
+							finalize();
+							return;
+						}
+
+						// HTTP-redirect fetch step 6 (counter increment)
+						// Create a new Request object.
+						const requestOpts = {
+							headers: new Headers$1(request.headers),
+							follow: request.follow,
+							counter: request.counter + 1,
+							agent: request.agent,
+							compress: request.compress,
+							method: request.method,
+							body: request.body,
+							signal: request.signal,
+							timeout: request.timeout,
+							size: request.size
+						};
+
+						if (!isDomainOrSubdomain$1(request.url, locationURL) || !isSameProtocol$1(request.url, locationURL)) {
+							for (const name of ['authorization', 'www-authenticate', 'cookie', 'cookie2']) {
+								requestOpts.headers.delete(name);
+							}
+						}
+
+						// HTTP-redirect fetch step 9
+						if (res.statusCode !== 303 && request.body && getTotalBytes$1(request) === null) {
+							reject(new FetchError$1('Cannot follow redirect with body being a readable stream', 'unsupported-redirect'));
+							finalize();
+							return;
+						}
+
+						// HTTP-redirect fetch step 11
+						if (res.statusCode === 303 || (res.statusCode === 301 || res.statusCode === 302) && request.method === 'POST') {
+							requestOpts.method = 'GET';
+							requestOpts.body = undefined;
+							requestOpts.headers.delete('content-length');
+						}
+
+						// HTTP-redirect fetch step 15
+						resolve(fetch$2(new Request$1(locationURL, requestOpts)));
+						finalize();
+						return;
+				}
+			}
+
+			// prepare response
+			res.once('end', function () {
+				if (signal) signal.removeEventListener('abort', abortAndFinalize);
+			});
+			let body = res.pipe(new PassThrough$1());
+
+			const response_options = {
+				url: request.url,
+				status: res.statusCode,
+				statusText: res.statusMessage,
+				headers: headers,
+				size: request.size,
+				timeout: request.timeout,
+				counter: request.counter
+			};
+
+			// HTTP-network fetch step 12.1.1.3
+			const codings = headers.get('Content-Encoding');
+
+			// HTTP-network fetch step 12.1.1.4: handle content codings
+
+			// in following scenarios we ignore compression support
+			// 1. compression support is disabled
+			// 2. HEAD request
+			// 3. no Content-Encoding header
+			// 4. no content response (204)
+			// 5. content not modified response (304)
+			if (!request.compress || request.method === 'HEAD' || codings === null || res.statusCode === 204 || res.statusCode === 304) {
+				response = new Response$1(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// For Node v6+
+			// Be less strict when decoding compressed responses, since sometimes
+			// servers send slightly invalid responses that are still accepted
+			// by common browsers.
+			// Always using Z_SYNC_FLUSH is what cURL does.
+			const zlibOptions = {
+				flush: zlib$2.Z_SYNC_FLUSH,
+				finishFlush: zlib$2.Z_SYNC_FLUSH
+			};
+
+			// for gzip
+			if (codings == 'gzip' || codings == 'x-gzip') {
+				body = body.pipe(zlib$2.createGunzip(zlibOptions));
+				response = new Response$1(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// for deflate
+			if (codings == 'deflate' || codings == 'x-deflate') {
+				// handle the infamous raw deflate response from old servers
+				// a hack for old IIS and Apache servers
+				const raw = res.pipe(new PassThrough$1());
+				raw.once('data', function (chunk) {
+					// see http://stackoverflow.com/questions/37519828
+					if ((chunk[0] & 0x0F) === 0x08) {
+						body = body.pipe(zlib$2.createInflate());
+					} else {
+						body = body.pipe(zlib$2.createInflateRaw());
+					}
+					response = new Response$1(body, response_options);
+					resolve(response);
+				});
+				raw.on('end', function () {
+					// some old IIS servers return zero-length OK deflate responses, so 'data' is never emitted.
+					if (!response) {
+						response = new Response$1(body, response_options);
+						resolve(response);
+					}
+				});
+				return;
+			}
+
+			// for br
+			if (codings == 'br' && typeof zlib$2.createBrotliDecompress === 'function') {
+				body = body.pipe(zlib$2.createBrotliDecompress());
+				response = new Response$1(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// otherwise, use response as-is
+			response = new Response$1(body, response_options);
+			resolve(response);
+		});
+
+		writeToStream$1(req, request);
+	});
+}
+function fixResponseChunkedTransferBadEnding$1(request, errorCallback) {
+	let socket;
+
+	request.on('socket', function (s) {
+		socket = s;
+	});
+
+	request.on('response', function (response) {
+		const headers = response.headers;
+
+		if (headers['transfer-encoding'] === 'chunked' && !headers['content-length']) {
+			response.once('close', function (hadError) {
+				// if a data listener is still present we didn't end cleanly
+				const hasDataListener = socket.listenerCount('data') > 0;
+
+				if (hasDataListener && !hadError) {
+					const err = new Error('Premature close');
+					err.code = 'ERR_STREAM_PREMATURE_CLOSE';
+					errorCallback(err);
+				}
+			});
+		}
+	});
+}
+
+function destroyStream(stream, err) {
+	if (stream.destroy) {
+		stream.destroy(err);
+	} else {
+		// node < 8
+		stream.emit('error', err);
+		stream.end();
+	}
+}
+
+/**
+ * Redirect code matching
+ *
+ * @param   Number   code  Status code
+ * @return  Boolean
+ */
+fetch$2.isRedirect = function (code) {
+	return code === 301 || code === 302 || code === 303 || code === 307 || code === 308;
+};
+
+// expose Promise
+fetch$2.Promise = global.Promise;
+
+const logOnceCode = onceExports((deprecation) => console.warn(deprecation));
+const logOnceHeaders = onceExports((deprecation) => console.warn(deprecation));
+/**
+ * Error with extra properties to help with debugging
+ */
+class RequestError extends Error {
+    constructor(message, statusCode, options) {
+        super(message);
+        // Maintains proper stack trace (only available on V8)
+        /* istanbul ignore next */
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, this.constructor);
+        }
+        this.name = "HttpError";
+        this.status = statusCode;
+        let headers;
+        if ("headers" in options && typeof options.headers !== "undefined") {
+            headers = options.headers;
+        }
+        if ("response" in options) {
+            this.response = options.response;
+            headers = options.response.headers;
+        }
+        // redact request credentials without mutating original request options
+        const requestCopy = Object.assign({}, options.request);
+        if (options.request.headers.authorization) {
+            requestCopy.headers = Object.assign({}, options.request.headers, {
+                authorization: options.request.headers.authorization.replace(/ .*$/, " [REDACTED]"),
+            });
+        }
+        requestCopy.url = requestCopy.url
+            // client_id & client_secret can be passed as URL query parameters to increase rate limit
+            // see https://developer.github.com/v3/#increasing-the-unauthenticated-rate-limit-for-oauth-applications
+            .replace(/\bclient_secret=\w+/g, "client_secret=[REDACTED]")
+            // OAuth tokens can be passed as URL query parameters, although it is not recommended
+            // see https://developer.github.com/v3/#oauth2-token-sent-in-a-header
+            .replace(/\baccess_token=\w+/g, "access_token=[REDACTED]");
+        this.request = requestCopy;
+        // deprecations
+        Object.defineProperty(this, "code", {
+            get() {
+                logOnceCode(new Deprecation("[@octokit/request-error] `error.code` is deprecated, use `error.status`."));
+                return statusCode;
+            },
+        });
+        Object.defineProperty(this, "headers", {
+            get() {
+                logOnceHeaders(new Deprecation("[@octokit/request-error] `error.headers` is deprecated, use `error.response.headers`."));
+                return headers || {};
+            },
+        });
+    }
+}
+
+var distWeb$2 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	RequestError: RequestError
+});
+
+const VERSION$8 = "6.2.3";
+
+function getBufferResponse(response) {
+    return response.arrayBuffer();
+}
+
+function fetchWrapper(requestOptions) {
+    const log = requestOptions.request && requestOptions.request.log
+        ? requestOptions.request.log
+        : console;
+    if (isPlainObject(requestOptions.body) ||
+        Array.isArray(requestOptions.body)) {
+        requestOptions.body = JSON.stringify(requestOptions.body);
+    }
+    let headers = {};
+    let status;
+    let url;
+    const fetch = (requestOptions.request && requestOptions.request.fetch) ||
+        globalThis.fetch ||
+        /* istanbul ignore next */ fetch$2;
+    return fetch(requestOptions.url, Object.assign({
+        method: requestOptions.method,
+        body: requestOptions.body,
+        headers: requestOptions.headers,
+        redirect: requestOptions.redirect,
+    }, 
+    // `requestOptions.request.agent` type is incompatible
+    // see https://github.com/octokit/types.ts/pull/264
+    requestOptions.request))
+        .then(async (response) => {
+        url = response.url;
+        status = response.status;
+        for (const keyAndValue of response.headers) {
+            headers[keyAndValue[0]] = keyAndValue[1];
+        }
+        if ("deprecation" in headers) {
+            const matches = headers.link && headers.link.match(/<([^>]+)>; rel="deprecation"/);
+            const deprecationLink = matches && matches.pop();
+            log.warn(`[@octokit/request] "${requestOptions.method} ${requestOptions.url}" is deprecated. It is scheduled to be removed on ${headers.sunset}${deprecationLink ? `. See ${deprecationLink}` : ""}`);
+        }
+        if (status === 204 || status === 205) {
+            return;
+        }
+        // GitHub API returns 200 for HEAD requests
+        if (requestOptions.method === "HEAD") {
+            if (status < 400) {
+                return;
+            }
+            throw new RequestError(response.statusText, status, {
+                response: {
+                    url,
+                    status,
+                    headers,
+                    data: undefined,
+                },
+                request: requestOptions,
+            });
+        }
+        if (status === 304) {
+            throw new RequestError("Not modified", status, {
+                response: {
+                    url,
+                    status,
+                    headers,
+                    data: await getResponseData(response),
+                },
+                request: requestOptions,
+            });
+        }
+        if (status >= 400) {
+            const data = await getResponseData(response);
+            const error = new RequestError(toErrorMessage(data), status, {
+                response: {
+                    url,
+                    status,
+                    headers,
+                    data,
+                },
+                request: requestOptions,
+            });
+            throw error;
+        }
+        return getResponseData(response);
+    })
+        .then((data) => {
+        return {
+            status,
+            url,
+            headers,
+            data,
+        };
+    })
+        .catch((error) => {
+        if (error instanceof RequestError)
+            throw error;
+        else if (error.name === "AbortError")
+            throw error;
+        throw new RequestError(error.message, 500, {
+            request: requestOptions,
+        });
+    });
+}
+async function getResponseData(response) {
+    const contentType = response.headers.get("content-type");
+    if (/application\/json/.test(contentType)) {
+        return response.json();
+    }
+    if (!contentType || /^text\/|charset=utf-8$/.test(contentType)) {
+        return response.text();
+    }
+    return getBufferResponse(response);
+}
+function toErrorMessage(data) {
+    if (typeof data === "string")
+        return data;
+    // istanbul ignore else - just in case
+    if ("message" in data) {
+        if (Array.isArray(data.errors)) {
+            return `${data.message}: ${data.errors.map(JSON.stringify).join(", ")}`;
+        }
+        return data.message;
+    }
+    // istanbul ignore next - just in case
+    return `Unknown error: ${JSON.stringify(data)}`;
+}
+
+function withDefaults(oldEndpoint, newDefaults) {
+    const endpoint = oldEndpoint.defaults(newDefaults);
+    const newApi = function (route, parameters) {
+        const endpointOptions = endpoint.merge(route, parameters);
+        if (!endpointOptions.request || !endpointOptions.request.hook) {
+            return fetchWrapper(endpoint.parse(endpointOptions));
+        }
+        const request = (route, parameters) => {
+            return fetchWrapper(endpoint.parse(endpoint.merge(route, parameters)));
+        };
+        Object.assign(request, {
+            endpoint,
+            defaults: withDefaults.bind(null, endpoint),
+        });
+        return endpointOptions.request.hook(request, endpointOptions);
+    };
+    return Object.assign(newApi, {
+        endpoint,
+        defaults: withDefaults.bind(null, endpoint),
+    });
+}
+
+const request$2 = withDefaults(endpoint, {
+    headers: {
+        "user-agent": `octokit-request.js/${VERSION$8} ${getUserAgent()}`,
+    },
+});
+
+var distWeb$1 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	request: request$2
+});
+
+var require$$1$3 = /*@__PURE__*/getAugmentedNamespace(distWeb$1);
+
+var require$$2$5 = /*@__PURE__*/getAugmentedNamespace(distWeb$2);
+
+Object.defineProperty(distNode$1, '__esModule', { value: true });
+
+function _interopDefault$2 (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var oauthAuthorizationUrl = require$$0$5;
+var request$1 = require$$1$3;
+var requestError = require$$2$5;
+var btoa$1 = _interopDefault$2(btoaNode);
+
+const VERSION$7 = "2.0.5";
+
+function requestToOAuthBaseUrl(request) {
+  const endpointDefaults = request.endpoint.DEFAULTS;
+  return /^https:\/\/(api\.)?github\.com$/.test(endpointDefaults.baseUrl) ? "https://github.com" : endpointDefaults.baseUrl.replace("/api/v3", "");
+}
+async function oauthRequest(request, route, parameters) {
+  const withOAuthParameters = {
+    baseUrl: requestToOAuthBaseUrl(request),
+    headers: {
+      accept: "application/json"
+    },
+    ...parameters
+  };
+  const response = await request(route, withOAuthParameters);
+  if ("error" in response.data) {
+    const error = new requestError.RequestError(`${response.data.error_description} (${response.data.error}, ${response.data.error_uri})`, 400, {
+      request: request.endpoint.merge(route, withOAuthParameters),
+      headers: response.headers
+    });
+    // @ts-ignore add custom response property until https://github.com/octokit/request-error.js/issues/169 is resolved
+    error.response = response;
+    throw error;
+  }
+  return response;
+}
+
+function getWebFlowAuthorizationUrl({
+  request: request$1$1 = request$1.request,
+  ...options
+}) {
+  const baseUrl = requestToOAuthBaseUrl(request$1$1);
+  // @ts-expect-error TypeScript wants `clientType` to be set explicitly ¯\_(ツ)_/¯
+  return oauthAuthorizationUrl.oauthAuthorizationUrl({
+    ...options,
+    baseUrl
+  });
+}
+
+async function exchangeWebFlowCode(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const response = await oauthRequest(request$1$1, "POST /login/oauth/access_token", {
+    client_id: options.clientId,
+    client_secret: options.clientSecret,
+    code: options.code,
+    redirect_uri: options.redirectUrl
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: response.data.access_token,
+    scopes: response.data.scope.split(/\s+/).filter(Boolean)
+  };
+  if (options.clientType === "github-app") {
+    if ("refresh_token" in response.data) {
+      const apiTimeInMs = new Date(response.headers.date).getTime();
+      authentication.refreshToken = response.data.refresh_token, authentication.expiresAt = toTimestamp(apiTimeInMs, response.data.expires_in), authentication.refreshTokenExpiresAt = toTimestamp(apiTimeInMs, response.data.refresh_token_expires_in);
+    }
+    delete authentication.scopes;
+  }
+  return {
+    ...response,
+    authentication
+  };
+}
+function toTimestamp(apiTimeInMs, expirationInSeconds) {
+  return new Date(apiTimeInMs + expirationInSeconds * 1000).toISOString();
+}
+
+async function createDeviceCode(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const parameters = {
+    client_id: options.clientId
+  };
+  if ("scopes" in options && Array.isArray(options.scopes)) {
+    parameters.scope = options.scopes.join(" ");
+  }
+  return oauthRequest(request$1$1, "POST /login/device/code", parameters);
+}
+
+async function exchangeDeviceCode(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const response = await oauthRequest(request$1$1, "POST /login/oauth/access_token", {
+    client_id: options.clientId,
+    device_code: options.code,
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    token: response.data.access_token,
+    scopes: response.data.scope.split(/\s+/).filter(Boolean)
+  };
+  if ("clientSecret" in options) {
+    authentication.clientSecret = options.clientSecret;
+  }
+  if (options.clientType === "github-app") {
+    if ("refresh_token" in response.data) {
+      const apiTimeInMs = new Date(response.headers.date).getTime();
+      authentication.refreshToken = response.data.refresh_token, authentication.expiresAt = toTimestamp$1(apiTimeInMs, response.data.expires_in), authentication.refreshTokenExpiresAt = toTimestamp$1(apiTimeInMs, response.data.refresh_token_expires_in);
+    }
+    delete authentication.scopes;
+  }
+  return {
+    ...response,
+    authentication
+  };
+}
+function toTimestamp$1(apiTimeInMs, expirationInSeconds) {
+  return new Date(apiTimeInMs + expirationInSeconds * 1000).toISOString();
+}
+
+async function checkToken(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const response = await request$1$1("POST /applications/{client_id}/token", {
+    headers: {
+      authorization: `basic ${btoa$1(`${options.clientId}:${options.clientSecret}`)}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: options.token,
+    scopes: response.data.scopes
+  };
+  if (response.data.expires_at) authentication.expiresAt = response.data.expires_at;
+  if (options.clientType === "github-app") {
+    delete authentication.scopes;
+  }
+  return {
+    ...response,
+    authentication
+  };
+}
+
+async function refreshToken(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const response = await oauthRequest(request$1$1, "POST /login/oauth/access_token", {
+    client_id: options.clientId,
+    client_secret: options.clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: options.refreshToken
+  });
+  const apiTimeInMs = new Date(response.headers.date).getTime();
+  const authentication = {
+    clientType: "github-app",
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: response.data.access_token,
+    refreshToken: response.data.refresh_token,
+    expiresAt: toTimestamp$2(apiTimeInMs, response.data.expires_in),
+    refreshTokenExpiresAt: toTimestamp$2(apiTimeInMs, response.data.refresh_token_expires_in)
+  };
+  return {
+    ...response,
+    authentication
+  };
+}
+function toTimestamp$2(apiTimeInMs, expirationInSeconds) {
+  return new Date(apiTimeInMs + expirationInSeconds * 1000).toISOString();
+}
+
+async function scopeToken(options) {
+  const {
+    request: optionsRequest,
+    clientType,
+    clientId,
+    clientSecret,
+    token,
+    ...requestOptions
+  } = options;
+  const request$1$1 = optionsRequest || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const response = await request$1$1("POST /applications/{client_id}/token/scoped", {
+    headers: {
+      authorization: `basic ${btoa$1(`${clientId}:${clientSecret}`)}`
+    },
+    client_id: clientId,
+    access_token: token,
+    ...requestOptions
+  });
+  const authentication = Object.assign({
+    clientType,
+    clientId,
+    clientSecret,
+    token: response.data.token
+  }, response.data.expires_at ? {
+    expiresAt: response.data.expires_at
+  } : {});
+  return {
+    ...response,
+    authentication
+  };
+}
+
+async function resetToken(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const auth = btoa$1(`${options.clientId}:${options.clientSecret}`);
+  const response = await request$1$1("PATCH /applications/{client_id}/token", {
+    headers: {
+      authorization: `basic ${auth}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+  const authentication = {
+    clientType: options.clientType,
+    clientId: options.clientId,
+    clientSecret: options.clientSecret,
+    token: response.data.token,
+    scopes: response.data.scopes
+  };
+  if (response.data.expires_at) authentication.expiresAt = response.data.expires_at;
+  if (options.clientType === "github-app") {
+    delete authentication.scopes;
+  }
+  return {
+    ...response,
+    authentication
+  };
+}
+
+async function deleteToken(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const auth = btoa$1(`${options.clientId}:${options.clientSecret}`);
+  return request$1$1("DELETE /applications/{client_id}/token", {
+    headers: {
+      authorization: `basic ${auth}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+}
+
+async function deleteAuthorization(options) {
+  const request$1$1 = options.request || /* istanbul ignore next: we always pass a custom request in tests */
+  request$1.request;
+  const auth = btoa$1(`${options.clientId}:${options.clientSecret}`);
+  return request$1$1("DELETE /applications/{client_id}/grant", {
+    headers: {
+      authorization: `basic ${auth}`
+    },
+    client_id: options.clientId,
+    access_token: options.token
+  });
+}
+
+distNode$1.VERSION = VERSION$7;
+var checkToken_1 = distNode$1.checkToken = checkToken;
+var createDeviceCode_1 = distNode$1.createDeviceCode = createDeviceCode;
+var deleteAuthorization_1 = distNode$1.deleteAuthorization = deleteAuthorization;
+var deleteToken_1 = distNode$1.deleteToken = deleteToken;
+var exchangeDeviceCode_1 = distNode$1.exchangeDeviceCode = exchangeDeviceCode;
+var exchangeWebFlowCode_1 = distNode$1.exchangeWebFlowCode = exchangeWebFlowCode;
+distNode$1.getWebFlowAuthorizationUrl = getWebFlowAuthorizationUrl;
+var refreshToken_1 = distNode$1.refreshToken = refreshToken;
+var resetToken_1 = distNode$1.resetToken = resetToken;
+distNode$1.scopeToken = scopeToken;
+
+async function getOAuthAccessToken(state, options) {
+    const cachedAuthentication = getCachedAuthentication(state, options.auth);
+    if (cachedAuthentication)
+        return cachedAuthentication;
+    // Step 1: Request device and user codes
+    // https://docs.github.com/en/developers/apps/authorizing-oauth-apps#step-1-app-requests-the-device-and-user-verification-codes-from-github
+    const { data: verification } = await createDeviceCode_1({
+        clientType: state.clientType,
+        clientId: state.clientId,
+        request: options.request || state.request,
+        // @ts-expect-error the extra code to make TS happy is not worth it
+        scopes: options.auth.scopes || state.scopes,
+    });
+    // Step 2: User must enter the user code on https://github.com/login/device
+    // See https://docs.github.com/en/developers/apps/authorizing-oauth-apps#step-2-prompt-the-user-to-enter-the-user-code-in-a-browser
+    await state.onVerification(verification);
+    // Step 3: Exchange device code for access token
+    // See https://docs.github.com/en/developers/apps/authorizing-oauth-apps#step-3-app-polls-github-to-check-if-the-user-authorized-the-device
+    const authentication = await waitForAccessToken(options.request || state.request, state.clientId, state.clientType, verification);
+    state.authentication = authentication;
+    return authentication;
+}
+function getCachedAuthentication(state, auth) {
+    if (auth.refresh === true)
+        return false;
+    if (!state.authentication)
+        return false;
+    if (state.clientType === "github-app") {
+        return state.authentication;
+    }
+    const authentication = state.authentication;
+    const newScope = (("scopes" in auth && auth.scopes) || state.scopes).join(" ");
+    const currentScope = authentication.scopes.join(" ");
+    return newScope === currentScope ? authentication : false;
+}
+async function wait$2(seconds) {
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+}
+async function waitForAccessToken(request, clientId, clientType, verification) {
+    try {
+        const options = {
+            clientId,
+            request,
+            code: verification.device_code,
+        };
+        // WHY TYPESCRIPT WHY ARE YOU DOING THIS TO ME
+        const { authentication } = clientType === "oauth-app"
+            ? await exchangeDeviceCode_1({
+                ...options,
+                clientType: "oauth-app",
+            })
+            : await exchangeDeviceCode_1({
+                ...options,
+                clientType: "github-app",
+            });
+        return {
+            type: "token",
+            tokenType: "oauth",
+            ...authentication,
+        };
+    }
+    catch (error) {
+        // istanbul ignore if
+        // @ts-ignore
+        if (!error.response)
+            throw error;
+        // @ts-ignore
+        const errorType = error.response.data.error;
+        if (errorType === "authorization_pending") {
+            await wait$2(verification.interval);
+            return waitForAccessToken(request, clientId, clientType, verification);
+        }
+        if (errorType === "slow_down") {
+            await wait$2(verification.interval + 5);
+            return waitForAccessToken(request, clientId, clientType, verification);
+        }
+        throw error;
+    }
+}
+
+async function auth$5(state, authOptions) {
+    return getOAuthAccessToken(state, {
+        auth: authOptions,
+    });
+}
+
+async function hook$3(state, request, route, parameters) {
+    let endpoint = request.endpoint.merge(route, parameters);
+    // Do not intercept request to retrieve codes or token
+    if (/\/login\/(oauth\/access_token|device\/code)$/.test(endpoint.url)) {
+        return request(endpoint);
+    }
+    const { token } = await getOAuthAccessToken(state, {
+        request,
+        auth: { type: "oauth" },
+    });
+    endpoint.headers.authorization = `token ${token}`;
+    return request(endpoint);
+}
+
+const VERSION$6 = "4.0.4";
+
+function createOAuthDeviceAuth(options) {
+    const requestWithDefaults = options.request ||
+        request$3.defaults({
+            headers: {
+                "user-agent": `octokit-auth-oauth-device.js/${VERSION$6} ${getUserAgent()}`,
+            },
+        });
+    const { request: request$1 = requestWithDefaults, ...otherOptions } = options;
+    const state = options.clientType === "github-app"
+        ? {
+            ...otherOptions,
+            clientType: "github-app",
+            request: request$1,
+        }
+        : {
+            ...otherOptions,
+            clientType: "oauth-app",
+            request: request$1,
+            scopes: options.scopes || [],
+        };
+    if (!options.clientId) {
+        throw new Error('[@octokit/auth-oauth-device] "clientId" option must be set (https://github.com/octokit/auth-oauth-device.js#usage)');
+    }
+    if (!options.onVerification) {
+        throw new Error('[@octokit/auth-oauth-device] "onVerification" option must be a function (https://github.com/octokit/auth-oauth-device.js#usage)');
+    }
+    // @ts-ignore too much for tsc / ts-jest ¯\_(ツ)_/¯
+    return Object.assign(auth$5.bind(null, state), {
+        hook: hook$3.bind(null, state),
+    });
+}
+
+const VERSION$5 = "2.1.1";
+
+// @ts-nocheck there is only place for one of us in this file. And it's not you, TS
+async function getAuthentication(state) {
+    // handle code exchange form OAuth Web Flow
+    if ("code" in state.strategyOptions) {
+        const { authentication } = await exchangeWebFlowCode_1({
+            clientId: state.clientId,
+            clientSecret: state.clientSecret,
+            clientType: state.clientType,
+            onTokenCreated: state.onTokenCreated,
+            ...state.strategyOptions,
+            request: state.request,
+        });
+        return {
+            type: "token",
+            tokenType: "oauth",
+            ...authentication,
+        };
+    }
+    // handle OAuth device flow
+    if ("onVerification" in state.strategyOptions) {
+        const deviceAuth = createOAuthDeviceAuth({
+            clientType: state.clientType,
+            clientId: state.clientId,
+            onTokenCreated: state.onTokenCreated,
+            ...state.strategyOptions,
+            request: state.request,
+        });
+        const authentication = await deviceAuth({
+            type: "oauth",
+        });
+        return {
+            clientSecret: state.clientSecret,
+            ...authentication,
+        };
+    }
+    // use existing authentication
+    if ("token" in state.strategyOptions) {
+        return {
+            type: "token",
+            tokenType: "oauth",
+            clientId: state.clientId,
+            clientSecret: state.clientSecret,
+            clientType: state.clientType,
+            onTokenCreated: state.onTokenCreated,
+            ...state.strategyOptions,
+        };
+    }
+    throw new Error("[@octokit/auth-oauth-user] Invalid strategy options");
+}
+
+async function auth$4(state, options = {}) {
+    if (!state.authentication) {
+        // This is what TS makes us do ¯\_(ツ)_/¯
+        state.authentication =
+            state.clientType === "oauth-app"
+                ? await getAuthentication(state)
+                : await getAuthentication(state);
+    }
+    if (state.authentication.invalid) {
+        throw new Error("[@octokit/auth-oauth-user] Token is invalid");
+    }
+    const currentAuthentication = state.authentication;
+    // (auto) refresh for user-to-server tokens
+    if ("expiresAt" in currentAuthentication) {
+        if (options.type === "refresh" ||
+            new Date(currentAuthentication.expiresAt) < new Date()) {
+            const { authentication } = await refreshToken_1({
+                clientType: "github-app",
+                clientId: state.clientId,
+                clientSecret: state.clientSecret,
+                refreshToken: currentAuthentication.refreshToken,
+                request: state.request,
+            });
+            state.authentication = {
+                tokenType: "oauth",
+                type: "token",
+                ...authentication,
+            };
+        }
+    }
+    // throw error for invalid refresh call
+    if (options.type === "refresh") {
+        if (state.clientType === "oauth-app") {
+            throw new Error("[@octokit/auth-oauth-user] OAuth Apps do not support expiring tokens");
+        }
+        if (!currentAuthentication.hasOwnProperty("expiresAt")) {
+            throw new Error("[@octokit/auth-oauth-user] Refresh token missing");
+        }
+        await state.onTokenCreated?.(state.authentication, {
+            type: options.type,
+        });
+    }
+    // check or reset token
+    if (options.type === "check" || options.type === "reset") {
+        const method = options.type === "check" ? checkToken_1 : resetToken_1;
+        try {
+            const { authentication } = await method({
+                // @ts-expect-error making TS happy would require unnecessary code so no
+                clientType: state.clientType,
+                clientId: state.clientId,
+                clientSecret: state.clientSecret,
+                token: state.authentication.token,
+                request: state.request,
+            });
+            state.authentication = {
+                tokenType: "oauth",
+                type: "token",
+                // @ts-expect-error TBD
+                ...authentication,
+            };
+            if (options.type === "reset") {
+                await state.onTokenCreated?.(state.authentication, {
+                    type: options.type,
+                });
+            }
+            return state.authentication;
+        }
+        catch (error) {
+            // istanbul ignore else
+            if (error.status === 404) {
+                error.message = "[@octokit/auth-oauth-user] Token is invalid";
+                // @ts-expect-error TBD
+                state.authentication.invalid = true;
+            }
+            throw error;
+        }
+    }
+    // invalidate
+    if (options.type === "delete" || options.type === "deleteAuthorization") {
+        const method = options.type === "delete" ? deleteToken_1 : deleteAuthorization_1;
+        try {
+            await method({
+                // @ts-expect-error making TS happy would require unnecessary code so no
+                clientType: state.clientType,
+                clientId: state.clientId,
+                clientSecret: state.clientSecret,
+                token: state.authentication.token,
+                request: state.request,
+            });
+        }
+        catch (error) {
+            // istanbul ignore if
+            if (error.status !== 404)
+                throw error;
+        }
+        state.authentication.invalid = true;
+        return state.authentication;
+    }
+    return state.authentication;
+}
+
+/**
+ * The following endpoints require an OAuth App to authenticate using its client_id and client_secret.
+ *
+ * - [`POST /applications/{client_id}/token`](https://docs.github.com/en/rest/reference/apps#check-a-token) - Check a token
+ * - [`PATCH /applications/{client_id}/token`](https://docs.github.com/en/rest/reference/apps#reset-a-token) - Reset a token
+ * - [`POST /applications/{client_id}/token/scoped`](https://docs.github.com/en/rest/reference/apps#create-a-scoped-access-token) - Create a scoped access token
+ * - [`DELETE /applications/{client_id}/token`](https://docs.github.com/en/rest/reference/apps#delete-an-app-token) - Delete an app token
+ * - [`DELETE /applications/{client_id}/grant`](https://docs.github.com/en/rest/reference/apps#delete-an-app-authorization) - Delete an app authorization
+ *
+ * deprecated:
+ *
+ * - [`GET /applications/{client_id}/tokens/{access_token}`](https://docs.github.com/en/rest/reference/apps#check-an-authorization) - Check an authorization
+ * - [`POST /applications/{client_id}/tokens/{access_token}`](https://docs.github.com/en/rest/reference/apps#reset-an-authorization) - Reset an authorization
+ * - [`DELETE /applications/{client_id}/tokens/{access_token}`](https://docs.github.com/en/rest/reference/apps#revoke-an-authorization-for-an-application) - Revoke an authorization for an application
+ * - [`DELETE /applications/{client_id}/grants/{access_token}`](https://docs.github.com/en/rest/reference/apps#revoke-a-grant-for-an-application) - Revoke a grant for an application
+ */
+const ROUTES_REQUIRING_BASIC_AUTH = /\/applications\/[^/]+\/(token|grant)s?/;
+function requiresBasicAuth(url) {
+    return url && ROUTES_REQUIRING_BASIC_AUTH.test(url);
+}
+
+async function hook$2(state, request, route, parameters = {}) {
+    const endpoint = request.endpoint.merge(route, parameters);
+    // Do not intercept OAuth Web/Device flow request
+    if (/\/login\/(oauth\/access_token|device\/code)$/.test(endpoint.url)) {
+        return request(endpoint);
+    }
+    if (requiresBasicAuth(endpoint.url)) {
+        const credentials = btoaNode(`${state.clientId}:${state.clientSecret}`);
+        endpoint.headers.authorization = `basic ${credentials}`;
+        return request(endpoint);
+    }
+    // TS makes us do this ¯\_(ツ)_/¯
+    const { token } = state.clientType === "oauth-app"
+        ? await auth$4({ ...state, request })
+        : await auth$4({ ...state, request });
+    endpoint.headers.authorization = "token " + token;
+    return request(endpoint);
+}
+
+function createOAuthUserAuth({ clientId, clientSecret, clientType = "oauth-app", request: request$1 = request$4.defaults({
+    headers: {
+        "user-agent": `octokit-auth-oauth-app.js/${VERSION$5} ${getUserAgent()}`,
+    },
+}), onTokenCreated, ...strategyOptions }) {
+    const state = Object.assign({
+        clientType,
+        clientId,
+        clientSecret,
+        onTokenCreated,
+        strategyOptions,
+        request: request$1,
+    });
+    // @ts-expect-error not worth the extra code needed to appease TS
+    return Object.assign(auth$4.bind(null, state), {
+        // @ts-expect-error not worth the extra code needed to appease TS
+        hook: hook$2.bind(null, state),
+    });
+}
+createOAuthUserAuth.VERSION = VERSION$5;
+
+async function auth$3(state, authOptions) {
+    if (authOptions.type === "oauth-app") {
+        return {
+            type: "oauth-app",
+            clientId: state.clientId,
+            clientSecret: state.clientSecret,
+            clientType: state.clientType,
+            headers: {
+                authorization: `basic ${btoaNode(`${state.clientId}:${state.clientSecret}`)}`,
+            },
+        };
+    }
+    if ("factory" in authOptions) {
+        const { type, ...options } = {
+            ...authOptions,
+            ...state,
+        };
+        // @ts-expect-error TODO: `option` cannot be never, is this a bug?
+        return authOptions.factory(options);
+    }
+    const common = {
+        clientId: state.clientId,
+        clientSecret: state.clientSecret,
+        request: state.request,
+        ...authOptions,
+    };
+    // TS: Look what you made me do
+    const userAuth = state.clientType === "oauth-app"
+        ? await createOAuthUserAuth({
+            ...common,
+            clientType: state.clientType,
+        })
+        : await createOAuthUserAuth({
+            ...common,
+            clientType: state.clientType,
+        });
+    return userAuth();
+}
+
+async function hook$1(state, request, route, parameters) {
+    let endpoint = request.endpoint.merge(route, parameters);
+    // Do not intercept OAuth Web/Device flow request
+    if (/\/login\/(oauth\/access_token|device\/code)$/.test(endpoint.url)) {
+        return request(endpoint);
+    }
+    if (state.clientType === "github-app" && !requiresBasicAuth(endpoint.url)) {
+        throw new Error(`[@octokit/auth-oauth-app] GitHub Apps cannot use their client ID/secret for basic authentication for endpoints other than "/applications/{client_id}/**". "${endpoint.method} ${endpoint.url}" is not supported.`);
+    }
+    const credentials = btoaNode(`${state.clientId}:${state.clientSecret}`);
+    endpoint.headers.authorization = `basic ${credentials}`;
+    try {
+        return await request(endpoint);
+    }
+    catch (error) {
+        /* istanbul ignore if */
+        if (error.status !== 401)
+            throw error;
+        error.message = `[@octokit/auth-oauth-app] "${endpoint.method} ${endpoint.url}" does not support clientId/clientSecret basic authentication.`;
+        throw error;
+    }
+}
+
+const VERSION$4 = "5.0.5";
+
+function createOAuthAppAuth(options) {
+    const state = Object.assign({
+        request: request$5.defaults({
+            headers: {
+                "user-agent": `octokit-auth-oauth-app.js/${VERSION$4} ${getUserAgent()}`,
+            },
+        }),
+        clientType: "oauth-app",
+    }, options);
+    // @ts-expect-error not worth the extra code to appease TS
+    return Object.assign(auth$3.bind(null, state), {
+        hook: hook$1.bind(null, state),
+    });
+}
+
+function string2ArrayBuffer(str) {
+    const buf = new ArrayBuffer(str.length);
+    const bufView = new Uint8Array(buf);
+    for (let i = 0, strLen = str.length; i < strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
+    }
+    return buf;
+}
+function getDERfromPEM(pem) {
+    const pemB64 = pem
+        .trim()
+        .split("\n")
+        .slice(1, -1) // Remove the --- BEGIN / END PRIVATE KEY ---
+        .join("");
+    const decoded = atob(pemB64);
+    return string2ArrayBuffer(decoded);
+}
+function getEncodedMessage(header, payload) {
+    return `${base64encodeJSON(header)}.${base64encodeJSON(payload)}`;
+}
+function base64encode(buffer) {
+    var binary = "";
+    var bytes = new Uint8Array(buffer);
+    var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return fromBase64(btoa(binary));
+}
+function fromBase64(base64) {
+    return base64.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+function base64encodeJSON(obj) {
+    return fromBase64(btoa(JSON.stringify(obj)));
+}
+
+const getToken = async ({ privateKey, payload, }) => {
+    // WebCrypto only supports PKCS#8, unfortunately
+    if (/BEGIN RSA PRIVATE KEY/.test(privateKey)) {
+        throw new Error("[universal-github-app-jwt] Private Key is in PKCS#1 format, but only PKCS#8 is supported. See https://github.com/gr2m/universal-github-app-jwt#readme");
+    }
+    const algorithm = {
+        name: "RSASSA-PKCS1-v1_5",
+        hash: { name: "SHA-256" },
+    };
+    const header = { alg: "RS256", typ: "JWT" };
+    const privateKeyDER = getDERfromPEM(privateKey);
+    const importedKey = await crypto.subtle.importKey("pkcs8", privateKeyDER, algorithm, false, ["sign"]);
+    const encodedMessage = getEncodedMessage(header, payload);
+    const encodedMessageArrBuf = string2ArrayBuffer(encodedMessage);
+    const signatureArrBuf = await crypto.subtle.sign(algorithm.name, importedKey, encodedMessageArrBuf);
+    const encodedSignature = base64encode(signatureArrBuf);
+    return `${encodedMessage}.${encodedSignature}`;
+};
+
+async function githubAppJwt({ id, privateKey, now = Math.floor(Date.now() / 1000), }) {
+    // When creating a JSON Web Token, it sets the "issued at time" (iat) to 30s
+    // in the past as we have seen people running situations where the GitHub API
+    // claimed the iat would be in future. It turned out the clocks on the
+    // different machine were not in sync.
+    const nowWithSafetyMargin = now - 30;
+    const expiration = nowWithSafetyMargin + 60 * 10; // JWT expiration time (10 minute maximum)
+    const payload = {
+        iat: nowWithSafetyMargin,
+        exp: expiration,
+        iss: id,
+    };
+    const token = await getToken({
+        privateKey,
+        payload,
+    });
+    return {
+        appId: id,
+        expiration,
+        token,
+    };
+}
+
+var iterator$1;
+var hasRequiredIterator$1;
+
+function requireIterator$1 () {
+	if (hasRequiredIterator$1) return iterator$1;
+	hasRequiredIterator$1 = 1;
+	iterator$1 = function (Yallist) {
+	  Yallist.prototype[Symbol.iterator] = function* () {
+	    for (let walker = this.head; walker; walker = walker.next) {
+	      yield walker.value;
+	    }
+	  };
+	};
+	return iterator$1;
+}
+
+var yallist$1 = Yallist$1;
+
+Yallist$1.Node = Node;
+Yallist$1.create = Yallist$1;
+
+function Yallist$1 (list) {
+  var self = this;
+  if (!(self instanceof Yallist$1)) {
+    self = new Yallist$1();
+  }
+
+  self.tail = null;
+  self.head = null;
+  self.length = 0;
+
+  if (list && typeof list.forEach === 'function') {
+    list.forEach(function (item) {
+      self.push(item);
+    });
+  } else if (arguments.length > 0) {
+    for (var i = 0, l = arguments.length; i < l; i++) {
+      self.push(arguments[i]);
+    }
+  }
+
+  return self
+}
+
+Yallist$1.prototype.removeNode = function (node) {
+  if (node.list !== this) {
+    throw new Error('removing node which does not belong to this list')
+  }
+
+  var next = node.next;
+  var prev = node.prev;
+
+  if (next) {
+    next.prev = prev;
+  }
+
+  if (prev) {
+    prev.next = next;
+  }
+
+  if (node === this.head) {
+    this.head = next;
+  }
+  if (node === this.tail) {
+    this.tail = prev;
+  }
+
+  node.list.length--;
+  node.next = null;
+  node.prev = null;
+  node.list = null;
+
+  return next
+};
+
+Yallist$1.prototype.unshiftNode = function (node) {
+  if (node === this.head) {
+    return
+  }
+
+  if (node.list) {
+    node.list.removeNode(node);
+  }
+
+  var head = this.head;
+  node.list = this;
+  node.next = head;
+  if (head) {
+    head.prev = node;
+  }
+
+  this.head = node;
+  if (!this.tail) {
+    this.tail = node;
+  }
+  this.length++;
+};
+
+Yallist$1.prototype.pushNode = function (node) {
+  if (node === this.tail) {
+    return
+  }
+
+  if (node.list) {
+    node.list.removeNode(node);
+  }
+
+  var tail = this.tail;
+  node.list = this;
+  node.prev = tail;
+  if (tail) {
+    tail.next = node;
+  }
+
+  this.tail = node;
+  if (!this.head) {
+    this.head = node;
+  }
+  this.length++;
+};
+
+Yallist$1.prototype.push = function () {
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    push$1(this, arguments[i]);
+  }
+  return this.length
+};
+
+Yallist$1.prototype.unshift = function () {
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    unshift(this, arguments[i]);
+  }
+  return this.length
+};
+
+Yallist$1.prototype.pop = function () {
+  if (!this.tail) {
+    return undefined
+  }
+
+  var res = this.tail.value;
+  this.tail = this.tail.prev;
+  if (this.tail) {
+    this.tail.next = null;
+  } else {
+    this.head = null;
+  }
+  this.length--;
+  return res
+};
+
+Yallist$1.prototype.shift = function () {
+  if (!this.head) {
+    return undefined
+  }
+
+  var res = this.head.value;
+  this.head = this.head.next;
+  if (this.head) {
+    this.head.prev = null;
+  } else {
+    this.tail = null;
+  }
+  this.length--;
+  return res
+};
+
+Yallist$1.prototype.forEach = function (fn, thisp) {
+  thisp = thisp || this;
+  for (var walker = this.head, i = 0; walker !== null; i++) {
+    fn.call(thisp, walker.value, i, this);
+    walker = walker.next;
+  }
+};
+
+Yallist$1.prototype.forEachReverse = function (fn, thisp) {
+  thisp = thisp || this;
+  for (var walker = this.tail, i = this.length - 1; walker !== null; i--) {
+    fn.call(thisp, walker.value, i, this);
+    walker = walker.prev;
+  }
+};
+
+Yallist$1.prototype.get = function (n) {
+  for (var i = 0, walker = this.head; walker !== null && i < n; i++) {
+    // abort out of the list early if we hit a cycle
+    walker = walker.next;
+  }
+  if (i === n && walker !== null) {
+    return walker.value
+  }
+};
+
+Yallist$1.prototype.getReverse = function (n) {
+  for (var i = 0, walker = this.tail; walker !== null && i < n; i++) {
+    // abort out of the list early if we hit a cycle
+    walker = walker.prev;
+  }
+  if (i === n && walker !== null) {
+    return walker.value
+  }
+};
+
+Yallist$1.prototype.map = function (fn, thisp) {
+  thisp = thisp || this;
+  var res = new Yallist$1();
+  for (var walker = this.head; walker !== null;) {
+    res.push(fn.call(thisp, walker.value, this));
+    walker = walker.next;
+  }
+  return res
+};
+
+Yallist$1.prototype.mapReverse = function (fn, thisp) {
+  thisp = thisp || this;
+  var res = new Yallist$1();
+  for (var walker = this.tail; walker !== null;) {
+    res.push(fn.call(thisp, walker.value, this));
+    walker = walker.prev;
+  }
+  return res
+};
+
+Yallist$1.prototype.reduce = function (fn, initial) {
+  var acc;
+  var walker = this.head;
+  if (arguments.length > 1) {
+    acc = initial;
+  } else if (this.head) {
+    walker = this.head.next;
+    acc = this.head.value;
+  } else {
+    throw new TypeError('Reduce of empty list with no initial value')
+  }
+
+  for (var i = 0; walker !== null; i++) {
+    acc = fn(acc, walker.value, i);
+    walker = walker.next;
+  }
+
+  return acc
+};
+
+Yallist$1.prototype.reduceReverse = function (fn, initial) {
+  var acc;
+  var walker = this.tail;
+  if (arguments.length > 1) {
+    acc = initial;
+  } else if (this.tail) {
+    walker = this.tail.prev;
+    acc = this.tail.value;
+  } else {
+    throw new TypeError('Reduce of empty list with no initial value')
+  }
+
+  for (var i = this.length - 1; walker !== null; i--) {
+    acc = fn(acc, walker.value, i);
+    walker = walker.prev;
+  }
+
+  return acc
+};
+
+Yallist$1.prototype.toArray = function () {
+  var arr = new Array(this.length);
+  for (var i = 0, walker = this.head; walker !== null; i++) {
+    arr[i] = walker.value;
+    walker = walker.next;
+  }
+  return arr
+};
+
+Yallist$1.prototype.toArrayReverse = function () {
+  var arr = new Array(this.length);
+  for (var i = 0, walker = this.tail; walker !== null; i++) {
+    arr[i] = walker.value;
+    walker = walker.prev;
+  }
+  return arr
+};
+
+Yallist$1.prototype.slice = function (from, to) {
+  to = to || this.length;
+  if (to < 0) {
+    to += this.length;
+  }
+  from = from || 0;
+  if (from < 0) {
+    from += this.length;
+  }
+  var ret = new Yallist$1();
+  if (to < from || to < 0) {
+    return ret
+  }
+  if (from < 0) {
+    from = 0;
+  }
+  if (to > this.length) {
+    to = this.length;
+  }
+  for (var i = 0, walker = this.head; walker !== null && i < from; i++) {
+    walker = walker.next;
+  }
+  for (; walker !== null && i < to; i++, walker = walker.next) {
+    ret.push(walker.value);
+  }
+  return ret
+};
+
+Yallist$1.prototype.sliceReverse = function (from, to) {
+  to = to || this.length;
+  if (to < 0) {
+    to += this.length;
+  }
+  from = from || 0;
+  if (from < 0) {
+    from += this.length;
+  }
+  var ret = new Yallist$1();
+  if (to < from || to < 0) {
+    return ret
+  }
+  if (from < 0) {
+    from = 0;
+  }
+  if (to > this.length) {
+    to = this.length;
+  }
+  for (var i = this.length, walker = this.tail; walker !== null && i > to; i--) {
+    walker = walker.prev;
+  }
+  for (; walker !== null && i > from; i--, walker = walker.prev) {
+    ret.push(walker.value);
+  }
+  return ret
+};
+
+Yallist$1.prototype.splice = function (start, deleteCount, ...nodes) {
+  if (start > this.length) {
+    start = this.length - 1;
+  }
+  if (start < 0) {
+    start = this.length + start;
+  }
+
+  for (var i = 0, walker = this.head; walker !== null && i < start; i++) {
+    walker = walker.next;
+  }
+
+  var ret = [];
+  for (var i = 0; walker && i < deleteCount; i++) {
+    ret.push(walker.value);
+    walker = this.removeNode(walker);
+  }
+  if (walker === null) {
+    walker = this.tail;
+  }
+
+  if (walker !== this.head && walker !== this.tail) {
+    walker = walker.prev;
+  }
+
+  for (var i = 0; i < nodes.length; i++) {
+    walker = insert(this, walker, nodes[i]);
+  }
+  return ret;
+};
+
+Yallist$1.prototype.reverse = function () {
+  var head = this.head;
+  var tail = this.tail;
+  for (var walker = head; walker !== null; walker = walker.prev) {
+    var p = walker.prev;
+    walker.prev = walker.next;
+    walker.next = p;
+  }
+  this.head = tail;
+  this.tail = head;
+  return this
+};
+
+function insert (self, node, value) {
+  var inserted = node === self.head ?
+    new Node(value, null, node, self) :
+    new Node(value, node, node.next, self);
+
+  if (inserted.next === null) {
+    self.tail = inserted;
+  }
+  if (inserted.prev === null) {
+    self.head = inserted;
+  }
+
+  self.length++;
+
+  return inserted
+}
+
+function push$1 (self, item) {
+  self.tail = new Node(item, self.tail, null, self);
+  if (!self.head) {
+    self.head = self.tail;
+  }
+  self.length++;
+}
+
+function unshift (self, item) {
+  self.head = new Node(item, null, self.head, self);
+  if (!self.tail) {
+    self.tail = self.head;
+  }
+  self.length++;
+}
+
+function Node (value, prev, next, list) {
+  if (!(this instanceof Node)) {
+    return new Node(value, prev, next, list)
+  }
+
+  this.list = list;
+  this.value = value;
+
+  if (prev) {
+    prev.next = this;
+    this.prev = prev;
+  } else {
+    this.prev = null;
+  }
+
+  if (next) {
+    next.prev = this;
+    this.next = next;
+  } else {
+    this.next = null;
+  }
+}
+
+try {
+  // add if support for Symbol.iterator is present
+  requireIterator$1()(Yallist$1);
+} catch (er) {}
+
+// A linked list to keep track of recently-used-ness
+const Yallist = yallist$1;
+
+const MAX = Symbol('max');
+const LENGTH = Symbol('length');
+const LENGTH_CALCULATOR = Symbol('lengthCalculator');
+const ALLOW_STALE = Symbol('allowStale');
+const MAX_AGE = Symbol('maxAge');
+const DISPOSE = Symbol('dispose');
+const NO_DISPOSE_ON_SET = Symbol('noDisposeOnSet');
+const LRU_LIST = Symbol('lruList');
+const CACHE = Symbol('cache');
+const UPDATE_AGE_ON_GET = Symbol('updateAgeOnGet');
+
+const naiveLength = () => 1;
+
+// lruList is a yallist where the head is the youngest
+// item, and the tail is the oldest.  the list contains the Hit
+// objects as the entries.
+// Each Hit object has a reference to its Yallist.Node.  This
+// never changes.
+//
+// cache is a Map (or PseudoMap) that matches the keys to
+// the Yallist.Node object.
+class LRUCache {
+  constructor (options) {
+    if (typeof options === 'number')
+      options = { max: options };
+
+    if (!options)
+      options = {};
+
+    if (options.max && (typeof options.max !== 'number' || options.max < 0))
+      throw new TypeError('max must be a non-negative number')
+    // Kind of weird to have a default max of Infinity, but oh well.
+    this[MAX] = options.max || Infinity;
+
+    const lc = options.length || naiveLength;
+    this[LENGTH_CALCULATOR] = (typeof lc !== 'function') ? naiveLength : lc;
+    this[ALLOW_STALE] = options.stale || false;
+    if (options.maxAge && typeof options.maxAge !== 'number')
+      throw new TypeError('maxAge must be a number')
+    this[MAX_AGE] = options.maxAge || 0;
+    this[DISPOSE] = options.dispose;
+    this[NO_DISPOSE_ON_SET] = options.noDisposeOnSet || false;
+    this[UPDATE_AGE_ON_GET] = options.updateAgeOnGet || false;
+    this.reset();
+  }
+
+  // resize the cache when the max changes.
+  set max (mL) {
+    if (typeof mL !== 'number' || mL < 0)
+      throw new TypeError('max must be a non-negative number')
+
+    this[MAX] = mL || Infinity;
+    trim$1(this);
+  }
+  get max () {
+    return this[MAX]
+  }
+
+  set allowStale (allowStale) {
+    this[ALLOW_STALE] = !!allowStale;
+  }
+  get allowStale () {
+    return this[ALLOW_STALE]
+  }
+
+  set maxAge (mA) {
+    if (typeof mA !== 'number')
+      throw new TypeError('maxAge must be a non-negative number')
+
+    this[MAX_AGE] = mA;
+    trim$1(this);
+  }
+  get maxAge () {
+    return this[MAX_AGE]
+  }
+
+  // resize the cache when the lengthCalculator changes.
+  set lengthCalculator (lC) {
+    if (typeof lC !== 'function')
+      lC = naiveLength;
+
+    if (lC !== this[LENGTH_CALCULATOR]) {
+      this[LENGTH_CALCULATOR] = lC;
+      this[LENGTH] = 0;
+      this[LRU_LIST].forEach(hit => {
+        hit.length = this[LENGTH_CALCULATOR](hit.value, hit.key);
+        this[LENGTH] += hit.length;
+      });
+    }
+    trim$1(this);
+  }
+  get lengthCalculator () { return this[LENGTH_CALCULATOR] }
+
+  get length () { return this[LENGTH] }
+  get itemCount () { return this[LRU_LIST].length }
+
+  rforEach (fn, thisp) {
+    thisp = thisp || this;
+    for (let walker = this[LRU_LIST].tail; walker !== null;) {
+      const prev = walker.prev;
+      forEachStep(this, fn, walker, thisp);
+      walker = prev;
+    }
+  }
+
+  forEach (fn, thisp) {
+    thisp = thisp || this;
+    for (let walker = this[LRU_LIST].head; walker !== null;) {
+      const next = walker.next;
+      forEachStep(this, fn, walker, thisp);
+      walker = next;
+    }
+  }
+
+  keys () {
+    return this[LRU_LIST].toArray().map(k => k.key)
+  }
+
+  values () {
+    return this[LRU_LIST].toArray().map(k => k.value)
+  }
+
+  reset () {
+    if (this[DISPOSE] &&
+        this[LRU_LIST] &&
+        this[LRU_LIST].length) {
+      this[LRU_LIST].forEach(hit => this[DISPOSE](hit.key, hit.value));
+    }
+
+    this[CACHE] = new Map(); // hash of items by key
+    this[LRU_LIST] = new Yallist(); // list of items in order of use recency
+    this[LENGTH] = 0; // length of items in the list
+  }
+
+  dump () {
+    return this[LRU_LIST].map(hit =>
+      isStale(this, hit) ? false : {
+        k: hit.key,
+        v: hit.value,
+        e: hit.now + (hit.maxAge || 0)
+      }).toArray().filter(h => h)
+  }
+
+  dumpLru () {
+    return this[LRU_LIST]
+  }
+
+  set (key, value, maxAge) {
+    maxAge = maxAge || this[MAX_AGE];
+
+    if (maxAge && typeof maxAge !== 'number')
+      throw new TypeError('maxAge must be a number')
+
+    const now = maxAge ? Date.now() : 0;
+    const len = this[LENGTH_CALCULATOR](value, key);
+
+    if (this[CACHE].has(key)) {
+      if (len > this[MAX]) {
+        del(this, this[CACHE].get(key));
+        return false
+      }
+
+      const node = this[CACHE].get(key);
+      const item = node.value;
+
+      // dispose of the old one before overwriting
+      // split out into 2 ifs for better coverage tracking
+      if (this[DISPOSE]) {
+        if (!this[NO_DISPOSE_ON_SET])
+          this[DISPOSE](key, item.value);
+      }
+
+      item.now = now;
+      item.maxAge = maxAge;
+      item.value = value;
+      this[LENGTH] += len - item.length;
+      item.length = len;
+      this.get(key);
+      trim$1(this);
+      return true
+    }
+
+    const hit = new Entry(key, value, len, now, maxAge);
+
+    // oversized objects fall out of cache automatically.
+    if (hit.length > this[MAX]) {
+      if (this[DISPOSE])
+        this[DISPOSE](key, value);
+
+      return false
+    }
+
+    this[LENGTH] += hit.length;
+    this[LRU_LIST].unshift(hit);
+    this[CACHE].set(key, this[LRU_LIST].head);
+    trim$1(this);
+    return true
+  }
+
+  has (key) {
+    if (!this[CACHE].has(key)) return false
+    const hit = this[CACHE].get(key).value;
+    return !isStale(this, hit)
+  }
+
+  get (key) {
+    return get$1(this, key, true)
+  }
+
+  peek (key) {
+    return get$1(this, key, false)
+  }
+
+  pop () {
+    const node = this[LRU_LIST].tail;
+    if (!node)
+      return null
+
+    del(this, node);
+    return node.value
+  }
+
+  del (key) {
+    del(this, this[CACHE].get(key));
+  }
+
+  load (arr) {
+    // reset the cache
+    this.reset();
+
+    const now = Date.now();
+    // A previous serialized cache has the most recent items first
+    for (let l = arr.length - 1; l >= 0; l--) {
+      const hit = arr[l];
+      const expiresAt = hit.e || 0;
+      if (expiresAt === 0)
+        // the item was created without expiration in a non aged cache
+        this.set(hit.k, hit.v);
+      else {
+        const maxAge = expiresAt - now;
+        // dont add already expired items
+        if (maxAge > 0) {
+          this.set(hit.k, hit.v, maxAge);
+        }
+      }
+    }
+  }
+
+  prune () {
+    this[CACHE].forEach((value, key) => get$1(this, key, false));
+  }
+}
+
+const get$1 = (self, key, doUse) => {
+  const node = self[CACHE].get(key);
+  if (node) {
+    const hit = node.value;
+    if (isStale(self, hit)) {
+      del(self, node);
+      if (!self[ALLOW_STALE])
+        return undefined
+    } else {
+      if (doUse) {
+        if (self[UPDATE_AGE_ON_GET])
+          node.value.now = Date.now();
+        self[LRU_LIST].unshiftNode(node);
+      }
+    }
+    return hit.value
+  }
+};
+
+const isStale = (self, hit) => {
+  if (!hit || (!hit.maxAge && !self[MAX_AGE]))
+    return false
+
+  const diff = Date.now() - hit.now;
+  return hit.maxAge ? diff > hit.maxAge
+    : self[MAX_AGE] && (diff > self[MAX_AGE])
+};
+
+const trim$1 = self => {
+  if (self[LENGTH] > self[MAX]) {
+    for (let walker = self[LRU_LIST].tail;
+      self[LENGTH] > self[MAX] && walker !== null;) {
+      // We know that we're about to delete this one, and also
+      // what the next least recently used key will be, so just
+      // go ahead and set it now.
+      const prev = walker.prev;
+      del(self, walker);
+      walker = prev;
+    }
+  }
+};
+
+const del = (self, node) => {
+  if (node) {
+    const hit = node.value;
+    if (self[DISPOSE])
+      self[DISPOSE](hit.key, hit.value);
+
+    self[LENGTH] -= hit.length;
+    self[CACHE].delete(hit.key);
+    self[LRU_LIST].removeNode(node);
+  }
+};
+
+class Entry {
+  constructor (key, value, length, now, maxAge) {
+    this.key = key;
+    this.value = value;
+    this.length = length;
+    this.now = now;
+    this.maxAge = maxAge || 0;
+  }
+}
+
+const forEachStep = (self, fn, node, thisp) => {
+  let hit = node.value;
+  if (isStale(self, hit)) {
+    del(self, node);
+    if (!self[ALLOW_STALE])
+      hit = undefined;
+  }
+  if (hit)
+    fn.call(thisp, hit.value, hit.key, self);
+};
+
+var lruCache$1 = LRUCache;
+
+async function getAppAuthentication({ appId, privateKey, timeDifference, }) {
+    try {
+        const appAuthentication = await githubAppJwt({
+            id: +appId,
+            privateKey,
+            now: timeDifference && Math.floor(Date.now() / 1000) + timeDifference,
