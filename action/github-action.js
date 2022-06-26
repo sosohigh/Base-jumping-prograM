@@ -140410,3 +140410,2225 @@ function toIdentifier (str) {
 
 	    // adjust the [[Prototype]]
 	    setPrototypeOf(err, ClientError.prototype);
+
+	    // redefine the error message
+	    Object.defineProperty(err, 'message', {
+	      enumerable: true,
+	      configurable: true,
+	      value: msg,
+	      writable: true
+	    });
+
+	    // redefine the error name
+	    Object.defineProperty(err, 'name', {
+	      enumerable: false,
+	      configurable: true,
+	      value: className,
+	      writable: true
+	    });
+
+	    return err
+	  }
+
+	  inherits(ClientError, HttpError);
+	  nameFunc(ClientError, className);
+
+	  ClientError.prototype.status = code;
+	  ClientError.prototype.statusCode = code;
+	  ClientError.prototype.expose = true;
+
+	  return ClientError
+	}
+
+	/**
+	 * Create function to test is a value is a HttpError.
+	 * @private
+	 */
+
+	function createIsHttpErrorFunction (HttpError) {
+	  return function isHttpError (val) {
+	    if (!val || typeof val !== 'object') {
+	      return false
+	    }
+
+	    if (val instanceof HttpError) {
+	      return true
+	    }
+
+	    return val instanceof Error &&
+	      typeof val.expose === 'boolean' &&
+	      typeof val.statusCode === 'number' && val.status === val.statusCode
+	  }
+	}
+
+	/**
+	 * Create a constructor for a server error.
+	 * @private
+	 */
+
+	function createServerErrorConstructor (HttpError, name, code) {
+	  var className = toClassName(name);
+
+	  function ServerError (message) {
+	    // create the error object
+	    var msg = message != null ? message : statuses.message[code];
+	    var err = new Error(msg);
+
+	    // capture a stack trace to the construction point
+	    Error.captureStackTrace(err, ServerError);
+
+	    // adjust the [[Prototype]]
+	    setPrototypeOf(err, ServerError.prototype);
+
+	    // redefine the error message
+	    Object.defineProperty(err, 'message', {
+	      enumerable: true,
+	      configurable: true,
+	      value: msg,
+	      writable: true
+	    });
+
+	    // redefine the error name
+	    Object.defineProperty(err, 'name', {
+	      enumerable: false,
+	      configurable: true,
+	      value: className,
+	      writable: true
+	    });
+
+	    return err
+	  }
+
+	  inherits(ServerError, HttpError);
+	  nameFunc(ServerError, className);
+
+	  ServerError.prototype.status = code;
+	  ServerError.prototype.statusCode = code;
+	  ServerError.prototype.expose = false;
+
+	  return ServerError
+	}
+
+	/**
+	 * Set the name of a function, if possible.
+	 * @private
+	 */
+
+	function nameFunc (func, name) {
+	  var desc = Object.getOwnPropertyDescriptor(func, 'name');
+
+	  if (desc && desc.configurable) {
+	    desc.value = name;
+	    Object.defineProperty(func, 'name', desc);
+	  }
+	}
+
+	/**
+	 * Populate the exports object with constructors for every error class.
+	 * @private
+	 */
+
+	function populateConstructorExports (exports, codes, HttpError) {
+	  codes.forEach(function forEachCode (code) {
+	    var CodeError;
+	    var name = toIdentifier(statuses.message[code]);
+
+	    switch (codeClass(code)) {
+	      case 400:
+	        CodeError = createClientErrorConstructor(HttpError, name, code);
+	        break
+	      case 500:
+	        CodeError = createServerErrorConstructor(HttpError, name, code);
+	        break
+	    }
+
+	    if (CodeError) {
+	      // export the constructor
+	      exports[code] = CodeError;
+	      exports[name] = CodeError;
+	    }
+	  });
+	}
+
+	/**
+	 * Get a class name from a name identifier.
+	 * @private
+	 */
+
+	function toClassName (name) {
+	  return name.substr(-5) !== 'Error'
+	    ? name + 'Error'
+	    : name
+	}
+} (httpErrors));
+
+var srcExports$3 = {};
+var src$6 = {
+  get exports(){ return srcExports$3; },
+  set exports(v){ srcExports$3 = v; },
+};
+
+var browserExports$3 = {};
+var browser$3 = {
+  get exports(){ return browserExports$3; },
+  set exports(v){ browserExports$3 = v; },
+};
+
+var debugExports$3 = {};
+var debug$b = {
+  get exports(){ return debugExports$3; },
+  set exports(v){ debugExports$3 = v; },
+};
+
+/**
+ * Helpers.
+ */
+
+var ms$5;
+var hasRequiredMs$3;
+
+function requireMs$3 () {
+	if (hasRequiredMs$3) return ms$5;
+	hasRequiredMs$3 = 1;
+	var s = 1000;
+	var m = s * 60;
+	var h = m * 60;
+	var d = h * 24;
+	var y = d * 365.25;
+
+	/**
+	 * Parse or format the given `val`.
+	 *
+	 * Options:
+	 *
+	 *  - `long` verbose formatting [false]
+	 *
+	 * @param {String|Number} val
+	 * @param {Object} [options]
+	 * @throws {Error} throw an error if val is not a non-empty string or a number
+	 * @return {String|Number}
+	 * @api public
+	 */
+
+	ms$5 = function(val, options) {
+	  options = options || {};
+	  var type = typeof val;
+	  if (type === 'string' && val.length > 0) {
+	    return parse(val);
+	  } else if (type === 'number' && isNaN(val) === false) {
+	    return options.long ? fmtLong(val) : fmtShort(val);
+	  }
+	  throw new Error(
+	    'val is not a non-empty string or a valid number. val=' +
+	      JSON.stringify(val)
+	  );
+	};
+
+	/**
+	 * Parse the given `str` and return milliseconds.
+	 *
+	 * @param {String} str
+	 * @return {Number}
+	 * @api private
+	 */
+
+	function parse(str) {
+	  str = String(str);
+	  if (str.length > 100) {
+	    return;
+	  }
+	  var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
+	    str
+	  );
+	  if (!match) {
+	    return;
+	  }
+	  var n = parseFloat(match[1]);
+	  var type = (match[2] || 'ms').toLowerCase();
+	  switch (type) {
+	    case 'years':
+	    case 'year':
+	    case 'yrs':
+	    case 'yr':
+	    case 'y':
+	      return n * y;
+	    case 'days':
+	    case 'day':
+	    case 'd':
+	      return n * d;
+	    case 'hours':
+	    case 'hour':
+	    case 'hrs':
+	    case 'hr':
+	    case 'h':
+	      return n * h;
+	    case 'minutes':
+	    case 'minute':
+	    case 'mins':
+	    case 'min':
+	    case 'm':
+	      return n * m;
+	    case 'seconds':
+	    case 'second':
+	    case 'secs':
+	    case 'sec':
+	    case 's':
+	      return n * s;
+	    case 'milliseconds':
+	    case 'millisecond':
+	    case 'msecs':
+	    case 'msec':
+	    case 'ms':
+	      return n;
+	    default:
+	      return undefined;
+	  }
+	}
+
+	/**
+	 * Short format for `ms`.
+	 *
+	 * @param {Number} ms
+	 * @return {String}
+	 * @api private
+	 */
+
+	function fmtShort(ms) {
+	  if (ms >= d) {
+	    return Math.round(ms / d) + 'd';
+	  }
+	  if (ms >= h) {
+	    return Math.round(ms / h) + 'h';
+	  }
+	  if (ms >= m) {
+	    return Math.round(ms / m) + 'm';
+	  }
+	  if (ms >= s) {
+	    return Math.round(ms / s) + 's';
+	  }
+	  return ms + 'ms';
+	}
+
+	/**
+	 * Long format for `ms`.
+	 *
+	 * @param {Number} ms
+	 * @return {String}
+	 * @api private
+	 */
+
+	function fmtLong(ms) {
+	  return plural(ms, d, 'day') ||
+	    plural(ms, h, 'hour') ||
+	    plural(ms, m, 'minute') ||
+	    plural(ms, s, 'second') ||
+	    ms + ' ms';
+	}
+
+	/**
+	 * Pluralization helper.
+	 */
+
+	function plural(ms, n, name) {
+	  if (ms < n) {
+	    return;
+	  }
+	  if (ms < n * 1.5) {
+	    return Math.floor(ms / n) + ' ' + name;
+	  }
+	  return Math.ceil(ms / n) + ' ' + name + 's';
+	}
+	return ms$5;
+}
+
+var hasRequiredDebug$4;
+
+function requireDebug$4 () {
+	if (hasRequiredDebug$4) return debugExports$3;
+	hasRequiredDebug$4 = 1;
+	(function (module, exports) {
+		/**
+		 * This is the common logic for both the Node.js and web browser
+		 * implementations of `debug()`.
+		 *
+		 * Expose `debug()` as the module.
+		 */
+
+		exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+		exports.coerce = coerce;
+		exports.disable = disable;
+		exports.enable = enable;
+		exports.enabled = enabled;
+		exports.humanize = requireMs$3();
+
+		/**
+		 * The currently active debug mode names, and names to skip.
+		 */
+
+		exports.names = [];
+		exports.skips = [];
+
+		/**
+		 * Map of special "%n" handling functions, for the debug "format" argument.
+		 *
+		 * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
+		 */
+
+		exports.formatters = {};
+
+		/**
+		 * Previous log timestamp.
+		 */
+
+		var prevTime;
+
+		/**
+		 * Select a color.
+		 * @param {String} namespace
+		 * @return {Number}
+		 * @api private
+		 */
+
+		function selectColor(namespace) {
+		  var hash = 0, i;
+
+		  for (i in namespace) {
+		    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
+		    hash |= 0; // Convert to 32bit integer
+		  }
+
+		  return exports.colors[Math.abs(hash) % exports.colors.length];
+		}
+
+		/**
+		 * Create a debugger with the given `namespace`.
+		 *
+		 * @param {String} namespace
+		 * @return {Function}
+		 * @api public
+		 */
+
+		function createDebug(namespace) {
+
+		  function debug() {
+		    // disabled?
+		    if (!debug.enabled) return;
+
+		    var self = debug;
+
+		    // set `diff` timestamp
+		    var curr = +new Date();
+		    var ms = curr - (prevTime || curr);
+		    self.diff = ms;
+		    self.prev = prevTime;
+		    self.curr = curr;
+		    prevTime = curr;
+
+		    // turn the `arguments` into a proper Array
+		    var args = new Array(arguments.length);
+		    for (var i = 0; i < args.length; i++) {
+		      args[i] = arguments[i];
+		    }
+
+		    args[0] = exports.coerce(args[0]);
+
+		    if ('string' !== typeof args[0]) {
+		      // anything else let's inspect with %O
+		      args.unshift('%O');
+		    }
+
+		    // apply any `formatters` transformations
+		    var index = 0;
+		    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+		      // if we encounter an escaped % then don't increase the array index
+		      if (match === '%%') return match;
+		      index++;
+		      var formatter = exports.formatters[format];
+		      if ('function' === typeof formatter) {
+		        var val = args[index];
+		        match = formatter.call(self, val);
+
+		        // now we need to remove `args[index]` since it's inlined in the `format`
+		        args.splice(index, 1);
+		        index--;
+		      }
+		      return match;
+		    });
+
+		    // apply env-specific formatting (colors, etc.)
+		    exports.formatArgs.call(self, args);
+
+		    var logFn = debug.log || exports.log || console.log.bind(console);
+		    logFn.apply(self, args);
+		  }
+
+		  debug.namespace = namespace;
+		  debug.enabled = exports.enabled(namespace);
+		  debug.useColors = exports.useColors();
+		  debug.color = selectColor(namespace);
+
+		  // env-specific initialization logic for debug instances
+		  if ('function' === typeof exports.init) {
+		    exports.init(debug);
+		  }
+
+		  return debug;
+		}
+
+		/**
+		 * Enables a debug mode by namespaces. This can include modes
+		 * separated by a colon and wildcards.
+		 *
+		 * @param {String} namespaces
+		 * @api public
+		 */
+
+		function enable(namespaces) {
+		  exports.save(namespaces);
+
+		  exports.names = [];
+		  exports.skips = [];
+
+		  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
+		  var len = split.length;
+
+		  for (var i = 0; i < len; i++) {
+		    if (!split[i]) continue; // ignore empty strings
+		    namespaces = split[i].replace(/\*/g, '.*?');
+		    if (namespaces[0] === '-') {
+		      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+		    } else {
+		      exports.names.push(new RegExp('^' + namespaces + '$'));
+		    }
+		  }
+		}
+
+		/**
+		 * Disable debug output.
+		 *
+		 * @api public
+		 */
+
+		function disable() {
+		  exports.enable('');
+		}
+
+		/**
+		 * Returns true if the given mode name is enabled, false otherwise.
+		 *
+		 * @param {String} name
+		 * @return {Boolean}
+		 * @api public
+		 */
+
+		function enabled(name) {
+		  var i, len;
+		  for (i = 0, len = exports.skips.length; i < len; i++) {
+		    if (exports.skips[i].test(name)) {
+		      return false;
+		    }
+		  }
+		  for (i = 0, len = exports.names.length; i < len; i++) {
+		    if (exports.names[i].test(name)) {
+		      return true;
+		    }
+		  }
+		  return false;
+		}
+
+		/**
+		 * Coerce `val`.
+		 *
+		 * @param {Mixed} val
+		 * @return {Mixed}
+		 * @api private
+		 */
+
+		function coerce(val) {
+		  if (val instanceof Error) return val.stack || val.message;
+		  return val;
+		}
+} (debug$b, debugExports$3));
+	return debugExports$3;
+}
+
+/**
+ * This is the web browser implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+var hasRequiredBrowser$3;
+
+function requireBrowser$3 () {
+	if (hasRequiredBrowser$3) return browserExports$3;
+	hasRequiredBrowser$3 = 1;
+	(function (module, exports) {
+		exports = module.exports = requireDebug$4();
+		exports.log = log;
+		exports.formatArgs = formatArgs;
+		exports.save = save;
+		exports.load = load;
+		exports.useColors = useColors;
+		exports.storage = 'undefined' != typeof chrome
+		               && 'undefined' != typeof chrome.storage
+		                  ? chrome.storage.local
+		                  : localstorage();
+
+		/**
+		 * Colors.
+		 */
+
+		exports.colors = [
+		  'lightseagreen',
+		  'forestgreen',
+		  'goldenrod',
+		  'dodgerblue',
+		  'darkorchid',
+		  'crimson'
+		];
+
+		/**
+		 * Currently only WebKit-based Web Inspectors, Firefox >= v31,
+		 * and the Firebug extension (any Firefox version) are known
+		 * to support "%c" CSS customizations.
+		 *
+		 * TODO: add a `localStorage` variable to explicitly enable/disable colors
+		 */
+
+		function useColors() {
+		  // NB: In an Electron preload script, document will be defined but not fully
+		  // initialized. Since we know we're in Chrome, we'll just detect this case
+		  // explicitly
+		  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+		    return true;
+		  }
+
+		  // is webkit? http://stackoverflow.com/a/16459606/376773
+		  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+		  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
+		    // is firebug? http://stackoverflow.com/a/398120/376773
+		    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
+		    // is firefox >= v31?
+		    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+		    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
+		    // double check webkit in userAgent just in case we are in a worker
+		    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
+		}
+
+		/**
+		 * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
+		 */
+
+		exports.formatters.j = function(v) {
+		  try {
+		    return JSON.stringify(v);
+		  } catch (err) {
+		    return '[UnexpectedJSONParseError]: ' + err.message;
+		  }
+		};
+
+
+		/**
+		 * Colorize log arguments if enabled.
+		 *
+		 * @api public
+		 */
+
+		function formatArgs(args) {
+		  var useColors = this.useColors;
+
+		  args[0] = (useColors ? '%c' : '')
+		    + this.namespace
+		    + (useColors ? ' %c' : ' ')
+		    + args[0]
+		    + (useColors ? '%c ' : ' ')
+		    + '+' + exports.humanize(this.diff);
+
+		  if (!useColors) return;
+
+		  var c = 'color: ' + this.color;
+		  args.splice(1, 0, c, 'color: inherit');
+
+		  // the final "%c" is somewhat tricky, because there could be other
+		  // arguments passed either before or after the %c, so we need to
+		  // figure out the correct index to insert the CSS into
+		  var index = 0;
+		  var lastC = 0;
+		  args[0].replace(/%[a-zA-Z%]/g, function(match) {
+		    if ('%%' === match) return;
+		    index++;
+		    if ('%c' === match) {
+		      // we only are interested in the *last* %c
+		      // (the user may have provided their own)
+		      lastC = index;
+		    }
+		  });
+
+		  args.splice(lastC, 0, c);
+		}
+
+		/**
+		 * Invokes `console.log()` when available.
+		 * No-op when `console.log` is not a "function".
+		 *
+		 * @api public
+		 */
+
+		function log() {
+		  // this hackery is required for IE8/9, where
+		  // the `console.log` function doesn't have 'apply'
+		  return 'object' === typeof console
+		    && console.log
+		    && Function.prototype.apply.call(console.log, console, arguments);
+		}
+
+		/**
+		 * Save `namespaces`.
+		 *
+		 * @param {String} namespaces
+		 * @api private
+		 */
+
+		function save(namespaces) {
+		  try {
+		    if (null == namespaces) {
+		      exports.storage.removeItem('debug');
+		    } else {
+		      exports.storage.debug = namespaces;
+		    }
+		  } catch(e) {}
+		}
+
+		/**
+		 * Load `namespaces`.
+		 *
+		 * @return {String} returns the previously persisted debug modes
+		 * @api private
+		 */
+
+		function load() {
+		  var r;
+		  try {
+		    r = exports.storage.debug;
+		  } catch(e) {}
+
+		  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
+		  if (!r && typeof process !== 'undefined' && 'env' in process) {
+		    r = process.env.DEBUG;
+		  }
+
+		  return r;
+		}
+
+		/**
+		 * Enable namespaces listed in `localStorage.debug` initially.
+		 */
+
+		exports.enable(load());
+
+		/**
+		 * Localstorage attempts to return the localstorage.
+		 *
+		 * This is necessary because safari throws
+		 * when a user disables cookies/localstorage
+		 * and you attempt to access it.
+		 *
+		 * @return {LocalStorage}
+		 * @api private
+		 */
+
+		function localstorage() {
+		  try {
+		    return window.localStorage;
+		  } catch (e) {}
+		}
+} (browser$3, browserExports$3));
+	return browserExports$3;
+}
+
+var nodeExports$4 = {};
+var node$4 = {
+  get exports(){ return nodeExports$4; },
+  set exports(v){ nodeExports$4 = v; },
+};
+
+/**
+ * Module dependencies.
+ */
+
+var hasRequiredNode$4;
+
+function requireNode$4 () {
+	if (hasRequiredNode$4) return nodeExports$4;
+	hasRequiredNode$4 = 1;
+	(function (module, exports) {
+		var tty = require$$0$g;
+		var util = require$$1$7;
+
+		/**
+		 * This is the Node.js implementation of `debug()`.
+		 *
+		 * Expose `debug()` as the module.
+		 */
+
+		exports = module.exports = requireDebug$4();
+		exports.init = init;
+		exports.log = log;
+		exports.formatArgs = formatArgs;
+		exports.save = save;
+		exports.load = load;
+		exports.useColors = useColors;
+
+		/**
+		 * Colors.
+		 */
+
+		exports.colors = [6, 2, 3, 4, 5, 1];
+
+		/**
+		 * Build up the default `inspectOpts` object from the environment variables.
+		 *
+		 *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+		 */
+
+		exports.inspectOpts = Object.keys(process.env).filter(function (key) {
+		  return /^debug_/i.test(key);
+		}).reduce(function (obj, key) {
+		  // camel-case
+		  var prop = key
+		    .substring(6)
+		    .toLowerCase()
+		    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
+
+		  // coerce string value into JS value
+		  var val = process.env[key];
+		  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+		  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+		  else if (val === 'null') val = null;
+		  else val = Number(val);
+
+		  obj[prop] = val;
+		  return obj;
+		}, {});
+
+		/**
+		 * The file descriptor to write the `debug()` calls to.
+		 * Set the `DEBUG_FD` env variable to override with another value. i.e.:
+		 *
+		 *   $ DEBUG_FD=3 node script.js 3>debug.log
+		 */
+
+		var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+
+		if (1 !== fd && 2 !== fd) {
+		  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')();
+		}
+
+		var stream = 1 === fd ? process.stdout :
+		             2 === fd ? process.stderr :
+		             createWritableStdioStream(fd);
+
+		/**
+		 * Is stdout a TTY? Colored output is enabled when `true`.
+		 */
+
+		function useColors() {
+		  return 'colors' in exports.inspectOpts
+		    ? Boolean(exports.inspectOpts.colors)
+		    : tty.isatty(fd);
+		}
+
+		/**
+		 * Map %o to `util.inspect()`, all on a single line.
+		 */
+
+		exports.formatters.o = function(v) {
+		  this.inspectOpts.colors = this.useColors;
+		  return util.inspect(v, this.inspectOpts)
+		    .split('\n').map(function(str) {
+		      return str.trim()
+		    }).join(' ');
+		};
+
+		/**
+		 * Map %o to `util.inspect()`, allowing multiple lines if needed.
+		 */
+
+		exports.formatters.O = function(v) {
+		  this.inspectOpts.colors = this.useColors;
+		  return util.inspect(v, this.inspectOpts);
+		};
+
+		/**
+		 * Adds ANSI color escape codes if enabled.
+		 *
+		 * @api public
+		 */
+
+		function formatArgs(args) {
+		  var name = this.namespace;
+		  var useColors = this.useColors;
+
+		  if (useColors) {
+		    var c = this.color;
+		    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
+
+		    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+		    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
+		  } else {
+		    args[0] = new Date().toUTCString()
+		      + ' ' + name + ' ' + args[0];
+		  }
+		}
+
+		/**
+		 * Invokes `util.format()` with the specified arguments and writes to `stream`.
+		 */
+
+		function log() {
+		  return stream.write(util.format.apply(util, arguments) + '\n');
+		}
+
+		/**
+		 * Save `namespaces`.
+		 *
+		 * @param {String} namespaces
+		 * @api private
+		 */
+
+		function save(namespaces) {
+		  if (null == namespaces) {
+		    // If you set a process.env field to null or undefined, it gets cast to the
+		    // string 'null' or 'undefined'. Just delete instead.
+		    delete process.env.DEBUG;
+		  } else {
+		    process.env.DEBUG = namespaces;
+		  }
+		}
+
+		/**
+		 * Load `namespaces`.
+		 *
+		 * @return {String} returns the previously persisted debug modes
+		 * @api private
+		 */
+
+		function load() {
+		  return process.env.DEBUG;
+		}
+
+		/**
+		 * Copied from `node/src/node.js`.
+		 *
+		 * XXX: It's lame that node doesn't expose this API out-of-the-box. It also
+		 * relies on the undocumented `tty_wrap.guessHandleType()` which is also lame.
+		 */
+
+		function createWritableStdioStream (fd) {
+		  var stream;
+		  var tty_wrap = process.binding('tty_wrap');
+
+		  // Note stream._type is used for test-module-load-list.js
+
+		  switch (tty_wrap.guessHandleType(fd)) {
+		    case 'TTY':
+		      stream = new tty.WriteStream(fd);
+		      stream._type = 'tty';
+
+		      // Hack to have stream not keep the event loop alive.
+		      // See https://github.com/joyent/node/issues/1726
+		      if (stream._handle && stream._handle.unref) {
+		        stream._handle.unref();
+		      }
+		      break;
+
+		    case 'FILE':
+		      var fs = require$$0$e;
+		      stream = new fs.SyncWriteStream(fd, { autoClose: false });
+		      stream._type = 'fs';
+		      break;
+
+		    case 'PIPE':
+		    case 'TCP':
+		      var net = require$$4$2;
+		      stream = new net.Socket({
+		        fd: fd,
+		        readable: false,
+		        writable: true
+		      });
+
+		      // FIXME Should probably have an option in net.Socket to create a
+		      // stream from an existing fd which is writable only. But for now
+		      // we'll just add this hack and set the `readable` member to false.
+		      // Test: ./node test/fixtures/echo.js < /etc/passwd
+		      stream.readable = false;
+		      stream.read = null;
+		      stream._type = 'pipe';
+
+		      // FIXME Hack to have stream not keep the event loop alive.
+		      // See https://github.com/joyent/node/issues/1726
+		      if (stream._handle && stream._handle.unref) {
+		        stream._handle.unref();
+		      }
+		      break;
+
+		    default:
+		      // Probably an error on in uv_guess_handle()
+		      throw new Error('Implement me. Unknown stream file type!');
+		  }
+
+		  // For supporting legacy API we put the FD here.
+		  stream.fd = fd;
+
+		  stream._isStdio = true;
+
+		  return stream;
+		}
+
+		/**
+		 * Init logic for `debug` instances.
+		 *
+		 * Create a new `inspectOpts` object in case `useColors` is set
+		 * differently for a particular `debug` instance.
+		 */
+
+		function init (debug) {
+		  debug.inspectOpts = {};
+
+		  var keys = Object.keys(exports.inspectOpts);
+		  for (var i = 0; i < keys.length; i++) {
+		    debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+		  }
+		}
+
+		/**
+		 * Enable namespaces listed in `process.env.DEBUG` initially.
+		 */
+
+		exports.enable(load());
+} (node$4, nodeExports$4));
+	return nodeExports$4;
+}
+
+/**
+ * Detect Electron renderer process, which is node, but we should
+ * treat as a browser.
+ */
+
+var hasRequiredSrc$1;
+
+function requireSrc$1 () {
+	if (hasRequiredSrc$1) return srcExports$3;
+	hasRequiredSrc$1 = 1;
+	(function (module) {
+		if (typeof process !== 'undefined' && process.type === 'renderer') {
+		  module.exports = requireBrowser$3();
+		} else {
+		  module.exports = requireNode$4();
+		}
+} (src$6));
+	return srcExports$3;
+}
+
+/*!
+ * destroy
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2015-2022 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var destroy_1;
+var hasRequiredDestroy;
+
+function requireDestroy () {
+	if (hasRequiredDestroy) return destroy_1;
+	hasRequiredDestroy = 1;
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var EventEmitter = require$$0$f.EventEmitter;
+	var ReadStream = require$$0$e.ReadStream;
+	var Stream = Stream$2;
+	var Zlib = zlib$2;
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	destroy_1 = destroy;
+
+	/**
+	 * Destroy the given stream, and optionally suppress any future `error` events.
+	 *
+	 * @param {object} stream
+	 * @param {boolean} suppress
+	 * @public
+	 */
+
+	function destroy (stream, suppress) {
+	  if (isFsReadStream(stream)) {
+	    destroyReadStream(stream);
+	  } else if (isZlibStream(stream)) {
+	    destroyZlibStream(stream);
+	  } else if (hasDestroy(stream)) {
+	    stream.destroy();
+	  }
+
+	  if (isEventEmitter(stream) && suppress) {
+	    stream.removeAllListeners('error');
+	    stream.addListener('error', noop);
+	  }
+
+	  return stream
+	}
+
+	/**
+	 * Destroy a ReadStream.
+	 *
+	 * @param {object} stream
+	 * @private
+	 */
+
+	function destroyReadStream (stream) {
+	  stream.destroy();
+
+	  if (typeof stream.close === 'function') {
+	    // node.js core bug work-around
+	    stream.on('open', onOpenClose);
+	  }
+	}
+
+	/**
+	 * Close a Zlib stream.
+	 *
+	 * Zlib streams below Node.js 4.5.5 have a buggy implementation
+	 * of .close() when zlib encountered an error.
+	 *
+	 * @param {object} stream
+	 * @private
+	 */
+
+	function closeZlibStream (stream) {
+	  if (stream._hadError === true) {
+	    var prop = stream._binding === null
+	      ? '_binding'
+	      : '_handle';
+
+	    stream[prop] = {
+	      close: function () { this[prop] = null; }
+	    };
+	  }
+
+	  stream.close();
+	}
+
+	/**
+	 * Destroy a Zlib stream.
+	 *
+	 * Zlib streams don't have a destroy function in Node.js 6. On top of that
+	 * simply calling destroy on a zlib stream in Node.js 8+ will result in a
+	 * memory leak. So until that is fixed, we need to call both close AND destroy.
+	 *
+	 * PR to fix memory leak: https://github.com/nodejs/node/pull/23734
+	 *
+	 * In Node.js 6+8, it's important that destroy is called before close as the
+	 * stream would otherwise emit the error 'zlib binding closed'.
+	 *
+	 * @param {object} stream
+	 * @private
+	 */
+
+	function destroyZlibStream (stream) {
+	  if (typeof stream.destroy === 'function') {
+	    // node.js core bug work-around
+	    // istanbul ignore if: node.js 0.8
+	    if (stream._binding) {
+	      // node.js < 0.10.0
+	      stream.destroy();
+	      if (stream._processing) {
+	        stream._needDrain = true;
+	        stream.once('drain', onDrainClearBinding);
+	      } else {
+	        stream._binding.clear();
+	      }
+	    } else if (stream._destroy && stream._destroy !== Stream.Transform.prototype._destroy) {
+	      // node.js >= 12, ^11.1.0, ^10.15.1
+	      stream.destroy();
+	    } else if (stream._destroy && typeof stream.close === 'function') {
+	      // node.js 7, 8
+	      stream.destroyed = true;
+	      stream.close();
+	    } else {
+	      // fallback
+	      // istanbul ignore next
+	      stream.destroy();
+	    }
+	  } else if (typeof stream.close === 'function') {
+	    // node.js < 8 fallback
+	    closeZlibStream(stream);
+	  }
+	}
+
+	/**
+	 * Determine if stream has destroy.
+	 * @private
+	 */
+
+	function hasDestroy (stream) {
+	  return stream instanceof Stream &&
+	    typeof stream.destroy === 'function'
+	}
+
+	/**
+	 * Determine if val is EventEmitter.
+	 * @private
+	 */
+
+	function isEventEmitter (val) {
+	  return val instanceof EventEmitter
+	}
+
+	/**
+	 * Determine if stream is fs.ReadStream stream.
+	 * @private
+	 */
+
+	function isFsReadStream (stream) {
+	  return stream instanceof ReadStream
+	}
+
+	/**
+	 * Determine if stream is Zlib stream.
+	 * @private
+	 */
+
+	function isZlibStream (stream) {
+	  return stream instanceof Zlib.Gzip ||
+	    stream instanceof Zlib.Gunzip ||
+	    stream instanceof Zlib.Deflate ||
+	    stream instanceof Zlib.DeflateRaw ||
+	    stream instanceof Zlib.Inflate ||
+	    stream instanceof Zlib.InflateRaw ||
+	    stream instanceof Zlib.Unzip
+	}
+
+	/**
+	 * No-op function.
+	 * @private
+	 */
+
+	function noop () {}
+
+	/**
+	 * On drain handler to clear binding.
+	 * @private
+	 */
+
+	// istanbul ignore next: node.js 0.8
+	function onDrainClearBinding () {
+	  this._binding.clear();
+	}
+
+	/**
+	 * On open handler to close stream.
+	 * @private
+	 */
+
+	function onOpenClose () {
+	  if (typeof this.fd === 'number') {
+	    // actually close down the fd
+	    this.close();
+	  }
+	}
+	return destroy_1;
+}
+
+var libExports = {};
+var lib$3 = {
+  get exports(){ return libExports; },
+  set exports(v){ libExports = v; },
+};
+
+/* eslint-disable node/no-deprecated-api */
+
+var safer_1;
+var hasRequiredSafer;
+
+function requireSafer () {
+	if (hasRequiredSafer) return safer_1;
+	hasRequiredSafer = 1;
+
+	var buffer = require$$0$i;
+	var Buffer = buffer.Buffer;
+
+	var safer = {};
+
+	var key;
+
+	for (key in buffer) {
+	  if (!buffer.hasOwnProperty(key)) continue
+	  if (key === 'SlowBuffer' || key === 'Buffer') continue
+	  safer[key] = buffer[key];
+	}
+
+	var Safer = safer.Buffer = {};
+	for (key in Buffer) {
+	  if (!Buffer.hasOwnProperty(key)) continue
+	  if (key === 'allocUnsafe' || key === 'allocUnsafeSlow') continue
+	  Safer[key] = Buffer[key];
+	}
+
+	safer.Buffer.prototype = Buffer.prototype;
+
+	if (!Safer.from || Safer.from === Uint8Array.from) {
+	  Safer.from = function (value, encodingOrOffset, length) {
+	    if (typeof value === 'number') {
+	      throw new TypeError('The "value" argument must not be of type number. Received type ' + typeof value)
+	    }
+	    if (value && typeof value.length === 'undefined') {
+	      throw new TypeError('The first argument must be one of type string, Buffer, ArrayBuffer, Array, or Array-like Object. Received type ' + typeof value)
+	    }
+	    return Buffer(value, encodingOrOffset, length)
+	  };
+	}
+
+	if (!Safer.alloc) {
+	  Safer.alloc = function (size, fill, encoding) {
+	    if (typeof size !== 'number') {
+	      throw new TypeError('The "size" argument must be of type number. Received type ' + typeof size)
+	    }
+	    if (size < 0 || size >= 2 * (1 << 30)) {
+	      throw new RangeError('The value "' + size + '" is invalid for option "size"')
+	    }
+	    var buf = Buffer(size);
+	    if (!fill || fill.length === 0) {
+	      buf.fill(0);
+	    } else if (typeof encoding === 'string') {
+	      buf.fill(fill, encoding);
+	    } else {
+	      buf.fill(fill);
+	    }
+	    return buf
+	  };
+	}
+
+	if (!safer.kStringMaxLength) {
+	  try {
+	    safer.kStringMaxLength = process.binding('buffer').kStringMaxLength;
+	  } catch (e) {
+	    // we can't determine kStringMaxLength in environments where process.binding
+	    // is unsupported, so let's not set it
+	  }
+	}
+
+	if (!safer.constants) {
+	  safer.constants = {
+	    MAX_LENGTH: safer.kMaxLength
+	  };
+	  if (safer.kStringMaxLength) {
+	    safer.constants.MAX_STRING_LENGTH = safer.kStringMaxLength;
+	  }
+	}
+
+	safer_1 = safer;
+	return safer_1;
+}
+
+var bomHandling = {};
+
+var hasRequiredBomHandling;
+
+function requireBomHandling () {
+	if (hasRequiredBomHandling) return bomHandling;
+	hasRequiredBomHandling = 1;
+
+	var BOMChar = '\uFEFF';
+
+	bomHandling.PrependBOM = PrependBOMWrapper;
+	function PrependBOMWrapper(encoder, options) {
+	    this.encoder = encoder;
+	    this.addBOM = true;
+	}
+
+	PrependBOMWrapper.prototype.write = function(str) {
+	    if (this.addBOM) {
+	        str = BOMChar + str;
+	        this.addBOM = false;
+	    }
+
+	    return this.encoder.write(str);
+	};
+
+	PrependBOMWrapper.prototype.end = function() {
+	    return this.encoder.end();
+	};
+
+
+	//------------------------------------------------------------------------------
+
+	bomHandling.StripBOM = StripBOMWrapper;
+	function StripBOMWrapper(decoder, options) {
+	    this.decoder = decoder;
+	    this.pass = false;
+	    this.options = options || {};
+	}
+
+	StripBOMWrapper.prototype.write = function(buf) {
+	    var res = this.decoder.write(buf);
+	    if (this.pass || !res)
+	        return res;
+
+	    if (res[0] === BOMChar) {
+	        res = res.slice(1);
+	        if (typeof this.options.stripBOM === 'function')
+	            this.options.stripBOM();
+	    }
+
+	    this.pass = true;
+	    return res;
+	};
+
+	StripBOMWrapper.prototype.end = function() {
+	    return this.decoder.end();
+	};
+	return bomHandling;
+}
+
+var encodings = {};
+
+var internal;
+var hasRequiredInternal;
+
+function requireInternal () {
+	if (hasRequiredInternal) return internal;
+	hasRequiredInternal = 1;
+	var Buffer = requireSafer().Buffer;
+
+	// Export Node.js internal encodings.
+
+	internal = {
+	    // Encodings
+	    utf8:   { type: "_internal", bomAware: true},
+	    cesu8:  { type: "_internal", bomAware: true},
+	    unicode11utf8: "utf8",
+
+	    ucs2:   { type: "_internal", bomAware: true},
+	    utf16le: "ucs2",
+
+	    binary: { type: "_internal" },
+	    base64: { type: "_internal" },
+	    hex:    { type: "_internal" },
+
+	    // Codec.
+	    _internal: InternalCodec,
+	};
+
+	//------------------------------------------------------------------------------
+
+	function InternalCodec(codecOptions, iconv) {
+	    this.enc = codecOptions.encodingName;
+	    this.bomAware = codecOptions.bomAware;
+
+	    if (this.enc === "base64")
+	        this.encoder = InternalEncoderBase64;
+	    else if (this.enc === "cesu8") {
+	        this.enc = "utf8"; // Use utf8 for decoding.
+	        this.encoder = InternalEncoderCesu8;
+
+	        // Add decoder for versions of Node not supporting CESU-8
+	        if (Buffer.from('eda0bdedb2a9', 'hex').toString() !== '💩') {
+	            this.decoder = InternalDecoderCesu8;
+	            this.defaultCharUnicode = iconv.defaultCharUnicode;
+	        }
+	    }
+	}
+
+	InternalCodec.prototype.encoder = InternalEncoder;
+	InternalCodec.prototype.decoder = InternalDecoder;
+
+	//------------------------------------------------------------------------------
+
+	// We use node.js internal decoder. Its signature is the same as ours.
+	var StringDecoder = require$$1$8.StringDecoder;
+
+	if (!StringDecoder.prototype.end) // Node v0.8 doesn't have this method.
+	    StringDecoder.prototype.end = function() {};
+
+
+	function InternalDecoder(options, codec) {
+	    StringDecoder.call(this, codec.enc);
+	}
+
+	InternalDecoder.prototype = StringDecoder.prototype;
+
+
+	//------------------------------------------------------------------------------
+	// Encoder is mostly trivial
+
+	function InternalEncoder(options, codec) {
+	    this.enc = codec.enc;
+	}
+
+	InternalEncoder.prototype.write = function(str) {
+	    return Buffer.from(str, this.enc);
+	};
+
+	InternalEncoder.prototype.end = function() {
+	};
+
+
+	//------------------------------------------------------------------------------
+	// Except base64 encoder, which must keep its state.
+
+	function InternalEncoderBase64(options, codec) {
+	    this.prevStr = '';
+	}
+
+	InternalEncoderBase64.prototype.write = function(str) {
+	    str = this.prevStr + str;
+	    var completeQuads = str.length - (str.length % 4);
+	    this.prevStr = str.slice(completeQuads);
+	    str = str.slice(0, completeQuads);
+
+	    return Buffer.from(str, "base64");
+	};
+
+	InternalEncoderBase64.prototype.end = function() {
+	    return Buffer.from(this.prevStr, "base64");
+	};
+
+
+	//------------------------------------------------------------------------------
+	// CESU-8 encoder is also special.
+
+	function InternalEncoderCesu8(options, codec) {
+	}
+
+	InternalEncoderCesu8.prototype.write = function(str) {
+	    var buf = Buffer.alloc(str.length * 3), bufIdx = 0;
+	    for (var i = 0; i < str.length; i++) {
+	        var charCode = str.charCodeAt(i);
+	        // Naive implementation, but it works because CESU-8 is especially easy
+	        // to convert from UTF-16 (which all JS strings are encoded in).
+	        if (charCode < 0x80)
+	            buf[bufIdx++] = charCode;
+	        else if (charCode < 0x800) {
+	            buf[bufIdx++] = 0xC0 + (charCode >>> 6);
+	            buf[bufIdx++] = 0x80 + (charCode & 0x3f);
+	        }
+	        else { // charCode will always be < 0x10000 in javascript.
+	            buf[bufIdx++] = 0xE0 + (charCode >>> 12);
+	            buf[bufIdx++] = 0x80 + ((charCode >>> 6) & 0x3f);
+	            buf[bufIdx++] = 0x80 + (charCode & 0x3f);
+	        }
+	    }
+	    return buf.slice(0, bufIdx);
+	};
+
+	InternalEncoderCesu8.prototype.end = function() {
+	};
+
+	//------------------------------------------------------------------------------
+	// CESU-8 decoder is not implemented in Node v4.0+
+
+	function InternalDecoderCesu8(options, codec) {
+	    this.acc = 0;
+	    this.contBytes = 0;
+	    this.accBytes = 0;
+	    this.defaultCharUnicode = codec.defaultCharUnicode;
+	}
+
+	InternalDecoderCesu8.prototype.write = function(buf) {
+	    var acc = this.acc, contBytes = this.contBytes, accBytes = this.accBytes, 
+	        res = '';
+	    for (var i = 0; i < buf.length; i++) {
+	        var curByte = buf[i];
+	        if ((curByte & 0xC0) !== 0x80) { // Leading byte
+	            if (contBytes > 0) { // Previous code is invalid
+	                res += this.defaultCharUnicode;
+	                contBytes = 0;
+	            }
+
+	            if (curByte < 0x80) { // Single-byte code
+	                res += String.fromCharCode(curByte);
+	            } else if (curByte < 0xE0) { // Two-byte code
+	                acc = curByte & 0x1F;
+	                contBytes = 1; accBytes = 1;
+	            } else if (curByte < 0xF0) { // Three-byte code
+	                acc = curByte & 0x0F;
+	                contBytes = 2; accBytes = 1;
+	            } else { // Four or more are not supported for CESU-8.
+	                res += this.defaultCharUnicode;
+	            }
+	        } else { // Continuation byte
+	            if (contBytes > 0) { // We're waiting for it.
+	                acc = (acc << 6) | (curByte & 0x3f);
+	                contBytes--; accBytes++;
+	                if (contBytes === 0) {
+	                    // Check for overlong encoding, but support Modified UTF-8 (encoding NULL as C0 80)
+	                    if (accBytes === 2 && acc < 0x80 && acc > 0)
+	                        res += this.defaultCharUnicode;
+	                    else if (accBytes === 3 && acc < 0x800)
+	                        res += this.defaultCharUnicode;
+	                    else
+	                        // Actually add character.
+	                        res += String.fromCharCode(acc);
+	                }
+	            } else { // Unexpected continuation byte
+	                res += this.defaultCharUnicode;
+	            }
+	        }
+	    }
+	    this.acc = acc; this.contBytes = contBytes; this.accBytes = accBytes;
+	    return res;
+	};
+
+	InternalDecoderCesu8.prototype.end = function() {
+	    var res = 0;
+	    if (this.contBytes > 0)
+	        res += this.defaultCharUnicode;
+	    return res;
+	};
+	return internal;
+}
+
+var utf16 = {};
+
+var hasRequiredUtf16;
+
+function requireUtf16 () {
+	if (hasRequiredUtf16) return utf16;
+	hasRequiredUtf16 = 1;
+	var Buffer = requireSafer().Buffer;
+
+	// Note: UTF16-LE (or UCS2) codec is Node.js native. See encodings/internal.js
+
+	// == UTF16-BE codec. ==========================================================
+
+	utf16.utf16be = Utf16BECodec;
+	function Utf16BECodec() {
+	}
+
+	Utf16BECodec.prototype.encoder = Utf16BEEncoder;
+	Utf16BECodec.prototype.decoder = Utf16BEDecoder;
+	Utf16BECodec.prototype.bomAware = true;
+
+
+	// -- Encoding
+
+	function Utf16BEEncoder() {
+	}
+
+	Utf16BEEncoder.prototype.write = function(str) {
+	    var buf = Buffer.from(str, 'ucs2');
+	    for (var i = 0; i < buf.length; i += 2) {
+	        var tmp = buf[i]; buf[i] = buf[i+1]; buf[i+1] = tmp;
+	    }
+	    return buf;
+	};
+
+	Utf16BEEncoder.prototype.end = function() {
+	};
+
+
+	// -- Decoding
+
+	function Utf16BEDecoder() {
+	    this.overflowByte = -1;
+	}
+
+	Utf16BEDecoder.prototype.write = function(buf) {
+	    if (buf.length == 0)
+	        return '';
+
+	    var buf2 = Buffer.alloc(buf.length + 1),
+	        i = 0, j = 0;
+
+	    if (this.overflowByte !== -1) {
+	        buf2[0] = buf[0];
+	        buf2[1] = this.overflowByte;
+	        i = 1; j = 2;
+	    }
+
+	    for (; i < buf.length-1; i += 2, j+= 2) {
+	        buf2[j] = buf[i+1];
+	        buf2[j+1] = buf[i];
+	    }
+
+	    this.overflowByte = (i == buf.length-1) ? buf[buf.length-1] : -1;
+
+	    return buf2.slice(0, j).toString('ucs2');
+	};
+
+	Utf16BEDecoder.prototype.end = function() {
+	};
+
+
+	// == UTF-16 codec =============================================================
+	// Decoder chooses automatically from UTF-16LE and UTF-16BE using BOM and space-based heuristic.
+	// Defaults to UTF-16LE, as it's prevalent and default in Node.
+	// http://en.wikipedia.org/wiki/UTF-16 and http://encoding.spec.whatwg.org/#utf-16le
+	// Decoder default can be changed: iconv.decode(buf, 'utf16', {defaultEncoding: 'utf-16be'});
+
+	// Encoder uses UTF-16LE and prepends BOM (which can be overridden with addBOM: false).
+
+	utf16.utf16 = Utf16Codec;
+	function Utf16Codec(codecOptions, iconv) {
+	    this.iconv = iconv;
+	}
+
+	Utf16Codec.prototype.encoder = Utf16Encoder;
+	Utf16Codec.prototype.decoder = Utf16Decoder;
+
+
+	// -- Encoding (pass-through)
+
+	function Utf16Encoder(options, codec) {
+	    options = options || {};
+	    if (options.addBOM === undefined)
+	        options.addBOM = true;
+	    this.encoder = codec.iconv.getEncoder('utf-16le', options);
+	}
+
+	Utf16Encoder.prototype.write = function(str) {
+	    return this.encoder.write(str);
+	};
+
+	Utf16Encoder.prototype.end = function() {
+	    return this.encoder.end();
+	};
+
+
+	// -- Decoding
+
+	function Utf16Decoder(options, codec) {
+	    this.decoder = null;
+	    this.initialBytes = [];
+	    this.initialBytesLen = 0;
+
+	    this.options = options || {};
+	    this.iconv = codec.iconv;
+	}
+
+	Utf16Decoder.prototype.write = function(buf) {
+	    if (!this.decoder) {
+	        // Codec is not chosen yet. Accumulate initial bytes.
+	        this.initialBytes.push(buf);
+	        this.initialBytesLen += buf.length;
+	        
+	        if (this.initialBytesLen < 16) // We need more bytes to use space heuristic (see below)
+	            return '';
+
+	        // We have enough bytes -> detect endianness.
+	        var buf = Buffer.concat(this.initialBytes),
+	            encoding = detectEncoding(buf, this.options.defaultEncoding);
+	        this.decoder = this.iconv.getDecoder(encoding, this.options);
+	        this.initialBytes.length = this.initialBytesLen = 0;
+	    }
+
+	    return this.decoder.write(buf);
+	};
+
+	Utf16Decoder.prototype.end = function() {
+	    if (!this.decoder) {
+	        var buf = Buffer.concat(this.initialBytes),
+	            encoding = detectEncoding(buf, this.options.defaultEncoding);
+	        this.decoder = this.iconv.getDecoder(encoding, this.options);
+
+	        var res = this.decoder.write(buf),
+	            trail = this.decoder.end();
+
+	        return trail ? (res + trail) : res;
+	    }
+	    return this.decoder.end();
+	};
+
+	function detectEncoding(buf, defaultEncoding) {
+	    var enc = defaultEncoding || 'utf-16le';
+
+	    if (buf.length >= 2) {
+	        // Check BOM.
+	        if (buf[0] == 0xFE && buf[1] == 0xFF) // UTF-16BE BOM
+	            enc = 'utf-16be';
+	        else if (buf[0] == 0xFF && buf[1] == 0xFE) // UTF-16LE BOM
+	            enc = 'utf-16le';
+	        else {
+	            // No BOM found. Try to deduce encoding from initial content.
+	            // Most of the time, the content has ASCII chars (U+00**), but the opposite (U+**00) is uncommon.
+	            // So, we count ASCII as if it was LE or BE, and decide from that.
+	            var asciiCharsLE = 0, asciiCharsBE = 0, // Counts of chars in both positions
+	                _len = Math.min(buf.length - (buf.length % 2), 64); // Len is always even.
+
+	            for (var i = 0; i < _len; i += 2) {
+	                if (buf[i] === 0 && buf[i+1] !== 0) asciiCharsBE++;
+	                if (buf[i] !== 0 && buf[i+1] === 0) asciiCharsLE++;
+	            }
+
+	            if (asciiCharsBE > asciiCharsLE)
+	                enc = 'utf-16be';
+	            else if (asciiCharsBE < asciiCharsLE)
+	                enc = 'utf-16le';
+	        }
+	    }
+
+	    return enc;
+	}
+	return utf16;
+}
+
+var utf7 = {};
+
+var hasRequiredUtf7;
+
+function requireUtf7 () {
+	if (hasRequiredUtf7) return utf7;
+	hasRequiredUtf7 = 1;
+	var Buffer = requireSafer().Buffer;
+
+	// UTF-7 codec, according to https://tools.ietf.org/html/rfc2152
+	// See also below a UTF-7-IMAP codec, according to http://tools.ietf.org/html/rfc3501#section-5.1.3
+
+	utf7.utf7 = Utf7Codec;
+	utf7.unicode11utf7 = 'utf7'; // Alias UNICODE-1-1-UTF-7
+	function Utf7Codec(codecOptions, iconv) {
+	    this.iconv = iconv;
+	}
+	Utf7Codec.prototype.encoder = Utf7Encoder;
+	Utf7Codec.prototype.decoder = Utf7Decoder;
+	Utf7Codec.prototype.bomAware = true;
+
+
+	// -- Encoding
+
+	var nonDirectChars = /[^A-Za-z0-9'\(\),-\.\/:\? \n\r\t]+/g;
+
+	function Utf7Encoder(options, codec) {
+	    this.iconv = codec.iconv;
+	}
+
+	Utf7Encoder.prototype.write = function(str) {
+	    // Naive implementation.
+	    // Non-direct chars are encoded as "+<base64>-"; single "+" char is encoded as "+-".
+	    return Buffer.from(str.replace(nonDirectChars, function(chunk) {
+	        return "+" + (chunk === '+' ? '' : 
+	            this.iconv.encode(chunk, 'utf16-be').toString('base64').replace(/=+$/, '')) 
+	            + "-";
+	    }.bind(this)));
+	};
+
+	Utf7Encoder.prototype.end = function() {
+	};
+
+
+	// -- Decoding
+
+	function Utf7Decoder(options, codec) {
+	    this.iconv = codec.iconv;
+	    this.inBase64 = false;
+	    this.base64Accum = '';
+	}
+
+	var base64Regex = /[A-Za-z0-9\/+]/;
+	var base64Chars = [];
+	for (var i = 0; i < 256; i++)
+	    base64Chars[i] = base64Regex.test(String.fromCharCode(i));
+
+	var plusChar = '+'.charCodeAt(0), 
+	    minusChar = '-'.charCodeAt(0),
+	    andChar = '&'.charCodeAt(0);
+
+	Utf7Decoder.prototype.write = function(buf) {
+	    var res = "", lastI = 0,
+	        inBase64 = this.inBase64,
+	        base64Accum = this.base64Accum;
+
+	    // The decoder is more involved as we must handle chunks in stream.
+
+	    for (var i = 0; i < buf.length; i++) {
+	        if (!inBase64) { // We're in direct mode.
+	            // Write direct chars until '+'
+	            if (buf[i] == plusChar) {
+	                res += this.iconv.decode(buf.slice(lastI, i), "ascii"); // Write direct chars.
+	                lastI = i+1;
+	                inBase64 = true;
+	            }
+	        } else { // We decode base64.
+	            if (!base64Chars[buf[i]]) { // Base64 ended.
+	                if (i == lastI && buf[i] == minusChar) {// "+-" -> "+"
+	                    res += "+";
+	                } else {
+	                    var b64str = base64Accum + buf.slice(lastI, i).toString();
+	                    res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+	                }
+
+	                if (buf[i] != minusChar) // Minus is absorbed after base64.
+	                    i--;
+
+	                lastI = i+1;
+	                inBase64 = false;
+	                base64Accum = '';
+	            }
+	        }
+	    }
+
+	    if (!inBase64) {
+	        res += this.iconv.decode(buf.slice(lastI), "ascii"); // Write direct chars.
+	    } else {
+	        var b64str = base64Accum + buf.slice(lastI).toString();
+
+	        var canBeDecoded = b64str.length - (b64str.length % 8); // Minimal chunk: 2 quads -> 2x3 bytes -> 3 chars.
+	        base64Accum = b64str.slice(canBeDecoded); // The rest will be decoded in future.
+	        b64str = b64str.slice(0, canBeDecoded);
+
+	        res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+	    }
+
+	    this.inBase64 = inBase64;
+	    this.base64Accum = base64Accum;
+
+	    return res;
+	};
+
+	Utf7Decoder.prototype.end = function() {
+	    var res = "";
+	    if (this.inBase64 && this.base64Accum.length > 0)
+	        res = this.iconv.decode(Buffer.from(this.base64Accum, 'base64'), "utf16-be");
+
+	    this.inBase64 = false;
+	    this.base64Accum = '';
+	    return res;
+	};
+
+
+	// UTF-7-IMAP codec.
+	// RFC3501 Sec. 5.1.3 Modified UTF-7 (http://tools.ietf.org/html/rfc3501#section-5.1.3)
+	// Differences:
+	//  * Base64 part is started by "&" instead of "+"
+	//  * Direct characters are 0x20-0x7E, except "&" (0x26)
+	//  * In Base64, "," is used instead of "/"
+	//  * Base64 must not be used to represent direct characters.
+	//  * No implicit shift back from Base64 (should always end with '-')
+	//  * String must end in non-shifted position.
+	//  * "-&" while in base64 is not allowed.
+
+
+	utf7.utf7imap = Utf7IMAPCodec;
+	function Utf7IMAPCodec(codecOptions, iconv) {
+	    this.iconv = iconv;
+	}
+	Utf7IMAPCodec.prototype.encoder = Utf7IMAPEncoder;
+	Utf7IMAPCodec.prototype.decoder = Utf7IMAPDecoder;
+	Utf7IMAPCodec.prototype.bomAware = true;
+
+
+	// -- Encoding
+
+	function Utf7IMAPEncoder(options, codec) {
+	    this.iconv = codec.iconv;
+	    this.inBase64 = false;
+	    this.base64Accum = Buffer.alloc(6);
+	    this.base64AccumIdx = 0;
+	}
+
+	Utf7IMAPEncoder.prototype.write = function(str) {
+	    var inBase64 = this.inBase64,
+	        base64Accum = this.base64Accum,
+	        base64AccumIdx = this.base64AccumIdx,
+	        buf = Buffer.alloc(str.length*5 + 10), bufIdx = 0;
+
+	    for (var i = 0; i < str.length; i++) {
+	        var uChar = str.charCodeAt(i);
+	        if (0x20 <= uChar && uChar <= 0x7E) { // Direct character or '&'.
+	            if (inBase64) {
+	                if (base64AccumIdx > 0) {
+	                    bufIdx += buf.write(base64Accum.slice(0, base64AccumIdx).toString('base64').replace(/\//g, ',').replace(/=+$/, ''), bufIdx);
+	                    base64AccumIdx = 0;
+	                }
+
+	                buf[bufIdx++] = minusChar; // Write '-', then go to direct mode.
+	                inBase64 = false;
+	            }
+
+	            if (!inBase64) {
+	                buf[bufIdx++] = uChar; // Write direct character
+
+	                if (uChar === andChar)  // Ampersand -> '&-'
+	                    buf[bufIdx++] = minusChar;
+	            }
+
+	        } else { // Non-direct character
+	            if (!inBase64) {
+	                buf[bufIdx++] = andChar; // Write '&', then go to base64 mode.
+	                inBase64 = true;
+	            }
+	            if (inBase64) {
+	                base64Accum[base64AccumIdx++] = uChar >> 8;
+	                base64Accum[base64AccumIdx++] = uChar & 0xFF;
+
+	                if (base64AccumIdx == base64Accum.length) {
+	                    bufIdx += buf.write(base64Accum.toString('base64').replace(/\//g, ','), bufIdx);
+	                    base64AccumIdx = 0;
+	                }
+	            }
+	        }
+	    }
+
+	    this.inBase64 = inBase64;
+	    this.base64AccumIdx = base64AccumIdx;
+
+	    return buf.slice(0, bufIdx);
+	};
+
+	Utf7IMAPEncoder.prototype.end = function() {
+	    var buf = Buffer.alloc(10), bufIdx = 0;
+	    if (this.inBase64) {
+	        if (this.base64AccumIdx > 0) {
+	            bufIdx += buf.write(this.base64Accum.slice(0, this.base64AccumIdx).toString('base64').replace(/\//g, ',').replace(/=+$/, ''), bufIdx);
+	            this.base64AccumIdx = 0;
+	        }
+
+	        buf[bufIdx++] = minusChar; // Write '-', then go to direct mode.
+	        this.inBase64 = false;
+	    }
+
+	    return buf.slice(0, bufIdx);
+	};
+
+
+	// -- Decoding
+
+	function Utf7IMAPDecoder(options, codec) {
+	    this.iconv = codec.iconv;
+	    this.inBase64 = false;
+	    this.base64Accum = '';
+	}
+
+	var base64IMAPChars = base64Chars.slice();
+	base64IMAPChars[','.charCodeAt(0)] = true;
+
+	Utf7IMAPDecoder.prototype.write = function(buf) {
+	    var res = "", lastI = 0,
+	        inBase64 = this.inBase64,
+	        base64Accum = this.base64Accum;
+
+	    // The decoder is more involved as we must handle chunks in stream.
+	    // It is forgiving, closer to standard UTF-7 (for example, '-' is optional at the end).
+
+	    for (var i = 0; i < buf.length; i++) {
+	        if (!inBase64) { // We're in direct mode.
+	            // Write direct chars until '&'
+	            if (buf[i] == andChar) {
+	                res += this.iconv.decode(buf.slice(lastI, i), "ascii"); // Write direct chars.
+	                lastI = i+1;
+	                inBase64 = true;
+	            }
+	        } else { // We decode base64.
+	            if (!base64IMAPChars[buf[i]]) { // Base64 ended.
+	                if (i == lastI && buf[i] == minusChar) { // "&-" -> "&"
+	                    res += "&";
+	                } else {
+	                    var b64str = base64Accum + buf.slice(lastI, i).toString().replace(/,/g, '/');
+	                    res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+	                }
+
+	                if (buf[i] != minusChar) // Minus may be absorbed after base64.
+	                    i--;
+
+	                lastI = i+1;
+	                inBase64 = false;
+	                base64Accum = '';
+	            }
+	        }
+	    }
+
+	    if (!inBase64) {
+	        res += this.iconv.decode(buf.slice(lastI), "ascii"); // Write direct chars.
+	    } else {
+	        var b64str = base64Accum + buf.slice(lastI).toString().replace(/,/g, '/');
+
+	        var canBeDecoded = b64str.length - (b64str.length % 8); // Minimal chunk: 2 quads -> 2x3 bytes -> 3 chars.
+	        base64Accum = b64str.slice(canBeDecoded); // The rest will be decoded in future.
+	        b64str = b64str.slice(0, canBeDecoded);
+
+	        res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+	    }
+
+	    this.inBase64 = inBase64;
+	    this.base64Accum = base64Accum;
+
+	    return res;
+	};
+
+	Utf7IMAPDecoder.prototype.end = function() {
+	    var res = "";
+	    if (this.inBase64 && this.base64Accum.length > 0)
+	        res = this.iconv.decode(Buffer.from(this.base64Accum, 'base64'), "utf16-be");
+
+	    this.inBase64 = false;
+	    this.base64Accum = '';
+	    return res;
+	};
+	return utf7;
+}
+
+var sbcsCodec = {};
+
+var hasRequiredSbcsCodec;
+
+function requireSbcsCodec () {
+	if (hasRequiredSbcsCodec) return sbcsCodec;
+	hasRequiredSbcsCodec = 1;
+	var Buffer = requireSafer().Buffer;
+
+	// Single-byte codec. Needs a 'chars' string parameter that contains 256 or 128 chars that
+	// correspond to encoded bytes (if 128 - then lower half is ASCII). 
+
+	sbcsCodec._sbcs = SBCSCodec;
+	function SBCSCodec(codecOptions, iconv) {
+	    if (!codecOptions)
+	        throw new Error("SBCS codec is called without the data.")
+	    
+	    // Prepare char buffer for decoding.
+	    if (!codecOptions.chars || (codecOptions.chars.length !== 128 && codecOptions.chars.length !== 256))
+	        throw new Error("Encoding '"+codecOptions.type+"' has incorrect 'chars' (must be of len 128 or 256)");
+	    
+	    if (codecOptions.chars.length === 128) {
+	        var asciiString = "";
+	        for (var i = 0; i < 128; i++)
+	            asciiString += String.fromCharCode(i);
+	        codecOptions.chars = asciiString + codecOptions.chars;
+	    }
+
+	    this.decodeBuf = Buffer.from(codecOptions.chars, 'ucs2');
+	    
+	    // Encoding buffer.
+	    var encodeBuf = Buffer.alloc(65536, iconv.defaultCharSingleByte.charCodeAt(0));
+
+	    for (var i = 0; i < codecOptions.chars.length; i++)
+	        encodeBuf[codecOptions.chars.charCodeAt(i)] = i;
+
+	    this.encodeBuf = encodeBuf;
+	}
+
+	SBCSCodec.prototype.encoder = SBCSEncoder;
+	SBCSCodec.prototype.decoder = SBCSDecoder;
+
+
+	function SBCSEncoder(options, codec) {
+	    this.encodeBuf = codec.encodeBuf;
+	}
+
+	SBCSEncoder.prototype.write = function(str) {
+	    var buf = Buffer.alloc(str.length);
+	    for (var i = 0; i < str.length; i++)
+	        buf[i] = this.encodeBuf[str.charCodeAt(i)];
+	    
+	    return buf;
+	};
+
+	SBCSEncoder.prototype.end = function() {
+	};
+
+
+	function SBCSDecoder(options, codec) {
+	    this.decodeBuf = codec.decodeBuf;
+	}
+
+	SBCSDecoder.prototype.write = function(buf) {
+	    // Strings are immutable in JS -> we use ucs2 buffer to speed up computations.
+	    var decodeBuf = this.decodeBuf;
+	    var newBuf = Buffer.alloc(buf.length*2);
+	    var idx1 = 0, idx2 = 0;
+	    for (var i = 0; i < buf.length; i++) {
+	        idx1 = buf[i]*2; idx2 = i*2;
+	        newBuf[idx2] = decodeBuf[idx1];
+	        newBuf[idx2+1] = decodeBuf[idx1+1];
+	    }
+	    return newBuf.toString('ucs2');
+	};
+
+	SBCSDecoder.prototype.end = function() {
+	};
+	return sbcsCodec;
+}
+
+var sbcsData;
+var hasRequiredSbcsData;
+
+function requireSbcsData () {
+	if (hasRequiredSbcsData) return sbcsData;
+	hasRequiredSbcsData = 1;
+
+	// Manually added data to be used by sbcs codec in addition to generated one.
+
+	sbcsData = {
+	    // Not supported by iconv, not sure why.
+	    "10029": "maccenteuro",
+	    "maccenteuro": {
+	        "type": "_sbcs",
+	        "chars": "ÄĀāÉĄÖÜáąČäčĆćéŹźĎíďĒēĖóėôöõúĚěü†°Ę£§•¶ß®©™ę¨≠ģĮįĪ≤≥īĶ∂∑łĻļĽľĹĺŅņŃ¬√ńŇ∆«»… ňŐÕőŌ–—“”‘’÷◊ōŔŕŘ‹›řŖŗŠ‚„šŚśÁŤťÍŽžŪÓÔūŮÚůŰűŲųÝýķŻŁżĢˇ"
+	    },
+
+	    "808": "cp808",
+	    "ibm808": "cp808",
+	    "cp808": {
+	        "type": "_sbcs",
+	        "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёЄєЇїЎў°∙·√№€■ "
+	    },
+
+	    "mik": {
+	        "type": "_sbcs",
+	        "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя└┴┬├─┼╣║╚╔╩╦╠═╬┐░▒▓│┤№§╗╝┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	    },
+
+	    // Aliases of generated encodings.
+	    "ascii8bit": "ascii",
+	    "usascii": "ascii",
+	    "ansix34": "ascii",
+	    "ansix341968": "ascii",
+	    "ansix341986": "ascii",
+	    "csascii": "ascii",
+	    "cp367": "ascii",
+	    "ibm367": "ascii",
+	    "isoir6": "ascii",
+	    "iso646us": "ascii",
+	    "iso646irv": "ascii",
+	    "us": "ascii",
+
+	    "latin1": "iso88591",
+	    "latin2": "iso88592",
+	    "latin3": "iso88593",
+	    "latin4": "iso88594",
+	    "latin5": "iso88599",
+	    "latin6": "iso885910",
+	    "latin7": "iso885913",
+	    "latin8": "iso885914",
+	    "latin9": "iso885915",
+	    "latin10": "iso885916",
+
+	    "csisolatin1": "iso88591",
+	    "csisolatin2": "iso88592",
+	    "csisolatin3": "iso88593",
+	    "csisolatin4": "iso88594",
+	    "csisolatincyrillic": "iso88595",
+	    "csisolatinarabic": "iso88596",
+	    "csisolatingreek" : "iso88597",
+	    "csisolatinhebrew": "iso88598",
+	    "csisolatin5": "iso88599",
+	    "csisolatin6": "iso885910",
+
+	    "l1": "iso88591",
+	    "l2": "iso88592",
+	    "l3": "iso88593",
+	    "l4": "iso88594",
+	    "l5": "iso88599",
+	    "l6": "iso885910",
+	    "l7": "iso885913",
+	    "l8": "iso885914",
+	    "l9": "iso885915",
+	    "l10": "iso885916",
