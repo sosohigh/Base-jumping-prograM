@@ -138294,3 +138294,2119 @@ async function getAppAuthentication({ appId, privateKey, timeDifference, }) {
             id: +appId,
             privateKey,
             now: timeDifference && Math.floor(Date.now() / 1000) + timeDifference,
+        });
+        return {
+            type: "app",
+            token: appAuthentication.token,
+            appId: appAuthentication.appId,
+            expiresAt: new Date(appAuthentication.expiration * 1000).toISOString(),
+        };
+    }
+    catch (error) {
+        if (privateKey === "-----BEGIN RSA PRIVATE KEY-----") {
+            throw new Error("The 'privateKey` option contains only the first line '-----BEGIN RSA PRIVATE KEY-----'. If you are setting it using a `.env` file, make sure it is set on a single line with newlines replaced by '\n'");
+        }
+        else {
+            throw error;
+        }
+    }
+}
+
+// https://github.com/isaacs/node-lru-cache#readme
+function getCache() {
+    return new lruCache$1({
+        // cache max. 15000 tokens, that will use less than 10mb memory
+        max: 15000,
+        // Cache for 1 minute less than GitHub expiry
+        maxAge: 1000 * 60 * 59,
+    });
+}
+async function get(cache, options) {
+    const cacheKey = optionsToCacheKey(options);
+    const result = await cache.get(cacheKey);
+    if (!result) {
+        return;
+    }
+    const [token, createdAt, expiresAt, repositorySelection, permissionsString, singleFileName,] = result.split("|");
+    const permissions = options.permissions ||
+        permissionsString.split(/,/).reduce((permissions, string) => {
+            if (/!$/.test(string)) {
+                permissions[string.slice(0, -1)] = "write";
+            }
+            else {
+                permissions[string] = "read";
+            }
+            return permissions;
+        }, {});
+    return {
+        token,
+        createdAt,
+        expiresAt,
+        permissions,
+        repositoryIds: options.repositoryIds,
+        repositoryNames: options.repositoryNames,
+        singleFileName,
+        repositorySelection: repositorySelection,
+    };
+}
+async function set$1(cache, options, data) {
+    const key = optionsToCacheKey(options);
+    const permissionsString = options.permissions
+        ? ""
+        : Object.keys(data.permissions)
+            .map((name) => `${name}${data.permissions[name] === "write" ? "!" : ""}`)
+            .join(",");
+    const value = [
+        data.token,
+        data.createdAt,
+        data.expiresAt,
+        data.repositorySelection,
+        permissionsString,
+        data.singleFileName,
+    ].join("|");
+    await cache.set(key, value);
+}
+function optionsToCacheKey({ installationId, permissions = {}, repositoryIds = [], repositoryNames = [], }) {
+    const permissionsString = Object.keys(permissions)
+        .sort()
+        .map((name) => (permissions[name] === "read" ? name : `${name}!`))
+        .join(",");
+    const repositoryIdsString = repositoryIds.sort().join(",");
+    const repositoryNamesString = repositoryNames.join(",");
+    return [
+        installationId,
+        repositoryIdsString,
+        repositoryNamesString,
+        permissionsString,
+    ]
+        .filter(Boolean)
+        .join("|");
+}
+
+function toTokenAuthentication({ installationId, token, createdAt, expiresAt, repositorySelection, permissions, repositoryIds, repositoryNames, singleFileName, }) {
+    return Object.assign({
+        type: "token",
+        tokenType: "installation",
+        token,
+        installationId,
+        permissions,
+        createdAt,
+        expiresAt,
+        repositorySelection,
+    }, repositoryIds ? { repositoryIds } : null, repositoryNames ? { repositoryNames } : null, singleFileName ? { singleFileName } : null);
+}
+
+async function getInstallationAuthentication(state, options, customRequest) {
+    const installationId = Number(options.installationId || state.installationId);
+    if (!installationId) {
+        throw new Error("[@octokit/auth-app] installationId option is required for installation authentication.");
+    }
+    if (options.factory) {
+        const { type, factory, oauthApp, ...factoryAuthOptions } = {
+            ...state,
+            ...options,
+        };
+        // @ts-expect-error if `options.factory` is set, the return type for `auth()` should be `Promise<ReturnType<options.factory>>`
+        return factory(factoryAuthOptions);
+    }
+    const optionsWithInstallationTokenFromState = Object.assign({ installationId }, options);
+    if (!options.refresh) {
+        const result = await get(state.cache, optionsWithInstallationTokenFromState);
+        if (result) {
+            const { token, createdAt, expiresAt, permissions, repositoryIds, repositoryNames, singleFileName, repositorySelection, } = result;
+            return toTokenAuthentication({
+                installationId,
+                token,
+                createdAt,
+                expiresAt,
+                permissions,
+                repositorySelection,
+                repositoryIds,
+                repositoryNames,
+                singleFileName,
+            });
+        }
+    }
+    const appAuthentication = await getAppAuthentication(state);
+    const request = customRequest || state.request;
+    const { data: { token, expires_at: expiresAt, repositories, permissions: permissionsOptional, repository_selection: repositorySelectionOptional, single_file: singleFileName, }, } = await request("POST /app/installations/{installation_id}/access_tokens", {
+        installation_id: installationId,
+        repository_ids: options.repositoryIds,
+        repositories: options.repositoryNames,
+        permissions: options.permissions,
+        mediaType: {
+            previews: ["machine-man"],
+        },
+        headers: {
+            authorization: `bearer ${appAuthentication.token}`,
+        },
+    });
+    /* istanbul ignore next - permissions are optional per OpenAPI spec, but we think that is incorrect */
+    const permissions = permissionsOptional || {};
+    /* istanbul ignore next - repositorySelection are optional per OpenAPI spec, but we think that is incorrect */
+    const repositorySelection = repositorySelectionOptional || "all";
+    const repositoryIds = repositories
+        ? repositories.map((r) => r.id)
+        : void 0;
+    const repositoryNames = repositories
+        ? repositories.map((repo) => repo.name)
+        : void 0;
+    const createdAt = new Date().toISOString();
+    await set$1(state.cache, optionsWithInstallationTokenFromState, {
+        token,
+        createdAt,
+        expiresAt,
+        repositorySelection,
+        permissions,
+        repositoryIds,
+        repositoryNames,
+        singleFileName,
+    });
+    return toTokenAuthentication({
+        installationId,
+        token,
+        createdAt,
+        expiresAt,
+        repositorySelection,
+        permissions,
+        repositoryIds,
+        repositoryNames,
+        singleFileName,
+    });
+}
+
+async function auth$2(state, authOptions) {
+    switch (authOptions.type) {
+        case "app":
+            return getAppAuthentication(state);
+        // @ts-expect-error "oauth" is not supperted in types
+        case "oauth":
+            state.log.warn(
+            // @ts-expect-error `log.warn()` expects string
+            new Deprecation(`[@octokit/auth-app] {type: "oauth"} is deprecated. Use {type: "oauth-app"} instead`));
+        case "oauth-app":
+            return state.oauthApp({ type: "oauth-app" });
+        case "installation":
+            return getInstallationAuthentication(state, {
+                ...authOptions,
+                type: "installation",
+            });
+        case "oauth-user":
+            // @ts-expect-error TODO: infer correct auth options type based on type. authOptions should be typed as "WebFlowAuthOptions | OAuthAppDeviceFlowAuthOptions | GitHubAppDeviceFlowAuthOptions"
+            return state.oauthApp(authOptions);
+        default:
+            // @ts-expect-error type is "never" at this point
+            throw new Error(`Invalid auth type: ${authOptions.type}`);
+    }
+}
+
+const PATHS = [
+    "/app",
+    "/app/hook/config",
+    "/app/hook/deliveries",
+    "/app/hook/deliveries/{delivery_id}",
+    "/app/hook/deliveries/{delivery_id}/attempts",
+    "/app/installations",
+    "/app/installations/{installation_id}",
+    "/app/installations/{installation_id}/access_tokens",
+    "/app/installations/{installation_id}/suspended",
+    "/marketplace_listing/accounts/{account_id}",
+    "/marketplace_listing/plan",
+    "/marketplace_listing/plans",
+    "/marketplace_listing/plans/{plan_id}/accounts",
+    "/marketplace_listing/stubbed/accounts/{account_id}",
+    "/marketplace_listing/stubbed/plan",
+    "/marketplace_listing/stubbed/plans",
+    "/marketplace_listing/stubbed/plans/{plan_id}/accounts",
+    "/orgs/{org}/installation",
+    "/repos/{owner}/{repo}/installation",
+    "/users/{username}/installation",
+];
+// CREDIT: Simon Grondin (https://github.com/SGrondin)
+// https://github.com/octokit/plugin-throttling.js/blob/45c5d7f13b8af448a9dbca468d9c9150a73b3948/lib/route-matcher.js
+function routeMatcher(paths) {
+    // EXAMPLE. For the following paths:
+    /* [
+        "/orgs/{org}/invitations",
+        "/repos/{owner}/{repo}/collaborators/{username}"
+    ] */
+    const regexes = paths.map((p) => p
+        .split("/")
+        .map((c) => (c.startsWith("{") ? "(?:.+?)" : c))
+        .join("/"));
+    // 'regexes' would contain:
+    /* [
+        '/orgs/(?:.+?)/invitations',
+        '/repos/(?:.+?)/(?:.+?)/collaborators/(?:.+?)'
+    ] */
+    const regex = `^(?:${regexes.map((r) => `(?:${r})`).join("|")})[^/]*$`;
+    // 'regex' would contain:
+    /*
+      ^(?:(?:\/orgs\/(?:.+?)\/invitations)|(?:\/repos\/(?:.+?)\/(?:.+?)\/collaborators\/(?:.+?)))[^\/]*$
+  
+      It may look scary, but paste it into https://www.debuggex.com/
+      and it will make a lot more sense!
+    */
+    return new RegExp(regex, "i");
+}
+const REGEX$2 = routeMatcher(PATHS);
+function requiresAppAuth(url) {
+    return !!url && REGEX$2.test(url);
+}
+
+const FIVE_SECONDS_IN_MS = 5 * 1000;
+function isNotTimeSkewError(error) {
+    return !(error.message.match(/'Expiration time' claim \('exp'\) must be a numeric value representing the future time at which the assertion expires/) ||
+        error.message.match(/'Issued at' claim \('iat'\) must be an Integer representing the time that the assertion was issued/));
+}
+async function hook(state, request, route, parameters) {
+    const endpoint = request.endpoint.merge(route, parameters);
+    const url = endpoint.url;
+    // Do not intercept request to retrieve a new token
+    if (/\/login\/oauth\/access_token$/.test(url)) {
+        return request(endpoint);
+    }
+    if (requiresAppAuth(url.replace(request.endpoint.DEFAULTS.baseUrl, ""))) {
+        const { token } = await getAppAuthentication(state);
+        endpoint.headers.authorization = `bearer ${token}`;
+        let response;
+        try {
+            response = await request(endpoint);
+        }
+        catch (error) {
+            // If there's an issue with the expiration, regenerate the token and try again.
+            // Otherwise rethrow the error for upstream handling.
+            if (isNotTimeSkewError(error)) {
+                throw error;
+            }
+            // If the date header is missing, we can't correct the system time skew.
+            // Throw the error to be handled upstream.
+            if (typeof error.response.headers.date === "undefined") {
+                throw error;
+            }
+            const diff = Math.floor((Date.parse(error.response.headers.date) -
+                Date.parse(new Date().toString())) /
+                1000);
+            state.log.warn(error.message);
+            state.log.warn(`[@octokit/auth-app] GitHub API time and system time are different by ${diff} seconds. Retrying request with the difference accounted for.`);
+            const { token } = await getAppAuthentication({
+                ...state,
+                timeDifference: diff,
+            });
+            endpoint.headers.authorization = `bearer ${token}`;
+            return request(endpoint);
+        }
+        return response;
+    }
+    if (requiresBasicAuth(url)) {
+        const authentication = await state.oauthApp({ type: "oauth-app" });
+        endpoint.headers.authorization = authentication.headers.authorization;
+        return request(endpoint);
+    }
+    const { token, createdAt } = await getInstallationAuthentication(state, 
+    // @ts-expect-error TBD
+    {}, request);
+    endpoint.headers.authorization = `token ${token}`;
+    return sendRequestWithRetries(state, request, endpoint, createdAt);
+}
+/**
+ * Newly created tokens might not be accessible immediately after creation.
+ * In case of a 401 response, we retry with an exponential delay until more
+ * than five seconds pass since the creation of the token.
+ *
+ * @see https://github.com/octokit/auth-app.js/issues/65
+ */
+async function sendRequestWithRetries(state, request, options, createdAt, retries = 0) {
+    const timeSinceTokenCreationInMs = +new Date() - +new Date(createdAt);
+    try {
+        return await request(options);
+    }
+    catch (error) {
+        if (error.status !== 401) {
+            throw error;
+        }
+        if (timeSinceTokenCreationInMs >= FIVE_SECONDS_IN_MS) {
+            if (retries > 0) {
+                error.message = `After ${retries} retries within ${timeSinceTokenCreationInMs / 1000}s of creating the installation access token, the response remains 401. At this point, the cause may be an authentication problem or a system outage. Please check https://www.githubstatus.com for status information`;
+            }
+            throw error;
+        }
+        ++retries;
+        const awaitTime = retries * 1000;
+        state.log.warn(`[@octokit/auth-app] Retrying after 401 response to account for token replication delay (retry: ${retries}, wait: ${awaitTime / 1000}s)`);
+        await new Promise((resolve) => setTimeout(resolve, awaitTime));
+        return sendRequestWithRetries(state, request, options, createdAt, retries);
+    }
+}
+
+const VERSION$3 = "4.0.9";
+
+function createAppAuth(options) {
+    if (!options.appId) {
+        throw new Error("[@octokit/auth-app] appId option is required");
+    }
+    if (!Number.isFinite(+options.appId)) {
+        throw new Error("[@octokit/auth-app] appId option must be a number or numeric string");
+    }
+    if (!options.privateKey) {
+        throw new Error("[@octokit/auth-app] privateKey option is required");
+    }
+    if ("installationId" in options && !options.installationId) {
+        throw new Error("[@octokit/auth-app] installationId is set to a falsy value");
+    }
+    const log = Object.assign({
+        warn: console.warn.bind(console),
+    }, options.log);
+    const request$1 = options.request ||
+        request$6.defaults({
+            headers: {
+                "user-agent": `octokit-auth-app.js/${VERSION$3} ${getUserAgent()}`,
+            },
+        });
+    const state = Object.assign({
+        request: request$1,
+        cache: getCache(),
+    }, options, options.installationId
+        ? { installationId: Number(options.installationId) }
+        : {}, {
+        log,
+        oauthApp: createOAuthAppAuth({
+            clientType: "github-app",
+            clientId: options.clientId || "",
+            clientSecret: options.clientSecret || "",
+            request: request$1,
+        }),
+    });
+    // @ts-expect-error not worth the extra code to appease TS
+    return Object.assign(auth$2.bind(null, state), {
+        hook: hook.bind(null, state),
+    });
+}
+
+var distWeb = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	createAppAuth: createAppAuth,
+	createOAuthUserAuth: createOAuthUserAuth
+});
+
+var require$$2$4 = /*@__PURE__*/getAugmentedNamespace(distWeb);
+
+Object.defineProperty(distNode$2, '__esModule', { value: true });
+
+var authUnauthenticated = require$$0$6;
+var authToken = require$$1$4;
+var authApp = require$$2$4;
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+    enumerableOnly && (symbols = symbols.filter(function (sym) {
+      return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+    })), keys.push.apply(keys, symbols);
+  }
+
+  return keys;
+}
+
+function _objectSpread2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = null != arguments[i] ? arguments[i] : {};
+    i % 2 ? ownKeys(Object(source), !0).forEach(function (key) {
+      _defineProperty(target, key, source[key]);
+    }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) {
+      Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+    });
+  }
+
+  return target;
+}
+
+function _defineProperty(obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+
+  return obj;
+}
+
+function _objectWithoutPropertiesLoose(source, excluded) {
+  if (source == null) return {};
+  var target = {};
+  var sourceKeys = Object.keys(source);
+  var key, i;
+
+  for (i = 0; i < sourceKeys.length; i++) {
+    key = sourceKeys[i];
+    if (excluded.indexOf(key) >= 0) continue;
+    target[key] = source[key];
+  }
+
+  return target;
+}
+
+function _objectWithoutProperties(source, excluded) {
+  if (source == null) return {};
+
+  var target = _objectWithoutPropertiesLoose(source, excluded);
+
+  var key, i;
+
+  if (Object.getOwnPropertySymbols) {
+    var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
+
+    for (i = 0; i < sourceSymbolKeys.length; i++) {
+      key = sourceSymbolKeys[i];
+      if (excluded.indexOf(key) >= 0) continue;
+      if (!Object.prototype.propertyIsEnumerable.call(source, key)) continue;
+      target[key] = source[key];
+    }
+  }
+
+  return target;
+}
+
+const _excluded = ["type", "factory"],
+      _excluded2 = ["auth"],
+      _excluded3 = ["auth"];
+async function auth$1(state, options) {
+  // return authentication from internal auth instance unless the event is "event-octokit"
+  if (options.type !== "event-octokit") {
+    if (state.type === "token" && options.type === "installation" && options.factory) {
+      const {
+        type,
+        factory
+      } = options,
+            factoryAuthOptions = _objectWithoutProperties(options, _excluded); // @ts-expect-error - factory is typed as never because the `@octokit/auth-app` types are ... complicated.
+
+
+      return factory(Object.assign({}, factoryAuthOptions, {
+        octokit: state.octokit,
+        octokitOptions: state.octokitOptions
+      }));
+    }
+
+    return state.auth(options);
+  } // unless the internal event type is "app", return the octokit
+  // instance passed as strategy option
+
+
+  if (state.type !== "app") {
+    return state.octokit;
+  }
+
+  const action = options.event.payload.action;
+  const installationId = options.event.payload.installation && options.event.payload.installation.id;
+  const fullEventName = options.event.name + (action ? "." + action : "");
+  const OctokitWithEventAuth = state.octokit.constructor;
+
+  if (!installationId) {
+    const _state$octokitOptions = state.octokitOptions,
+          octokitOptions = _objectWithoutProperties(_state$octokitOptions, _excluded2);
+
+    return new OctokitWithEventAuth(_objectSpread2({
+      authStrategy: authUnauthenticated.createUnauthenticatedAuth,
+      auth: {
+        reason: `Handling a "${fullEventName}" event: an "installation" key is missing. The installation ID cannot be determined`
+      }
+    }, octokitOptions));
+  }
+
+  if (options.event.name === "installation" && ["suspend", "deleted"].includes(String(action))) {
+    const _state$octokitOptions2 = state.octokitOptions,
+          octokitOptions = _objectWithoutProperties(_state$octokitOptions2, _excluded3);
+
+    return new OctokitWithEventAuth(_objectSpread2({
+      authStrategy: authUnauthenticated.createUnauthenticatedAuth,
+      auth: {
+        reason: `Handling a "${fullEventName}" event: The app's access has been revoked from @octokit (id: ${installationId})`
+      }
+    }, octokitOptions));
+  } // otherwise create a pre-authenticated (or unauthenticated) Octokit instance
+  // depending on the event payload
+
+
+  return state.auth({
+    type: "installation",
+    installationId,
+    factory: auth => {
+      const options = Object.assign({}, state.octokitOptions, {
+        auth: Object.assign({}, auth, {
+          installationId
+        })
+      });
+      return new OctokitWithEventAuth(options);
+    }
+  });
+}
+
+function getState(options) {
+  const common = {
+    octokit: options.octokit,
+    octokitOptions: options.octokitOptions
+  };
+
+  if ("token" in options) {
+    return _objectSpread2({
+      type: "token",
+      auth: authToken.createTokenAuth(String(options.token))
+    }, common);
+  }
+
+  if ("appId" in options && "privateKey" in options) {
+    return _objectSpread2({
+      type: "app",
+      auth: authApp.createAppAuth(options)
+    }, common);
+  }
+
+  return _objectSpread2({
+    type: "unauthenticated",
+    auth: authUnauthenticated.createUnauthenticatedAuth({
+      reason: `Neither "appId"/"privateKey" nor "token" have been set as auth options`
+    })
+  }, common);
+}
+
+const VERSION$2 = "0.0.0-development";
+
+function createProbotAuth(options) {
+  const state = getState(options);
+  return Object.assign(auth$1.bind(null, state), {
+    hook: state.auth.hook
+  });
+}
+createProbotAuth.VERSION = VERSION$2;
+
+distNode$2.createProbotAuth = createProbotAuth;
+
+var octokitPluginProbotRequestLogging = {};
+
+Object.defineProperty(octokitPluginProbotRequestLogging, "__esModule", { value: true });
+octokitPluginProbotRequestLogging.probotRequestLogging = void 0;
+function probotRequestLogging(octokit) {
+    octokit.hook.error("request", (error, options) => {
+        if ("status" in error) {
+            const { method, url, request, ...params } = octokit.request.endpoint.parse(options);
+            const msg = `GitHub request: ${method} ${url} - ${error.status}`;
+            // @ts-expect-error log.debug is a pino log method and accepts a fields object
+            octokit.log.debug(params.body || {}, msg);
+        }
+        throw error;
+    });
+    octokit.hook.after("request", (result, options) => {
+        const { method, url, request, ...params } = octokit.request.endpoint.parse(options);
+        const msg = `GitHub request: ${method} ${url} - ${result.status}`;
+        // @ts-ignore log.debug is a pino log method and accepts a fields object
+        octokit.log.debug(params.body || {}, msg);
+    });
+}
+octokitPluginProbotRequestLogging.probotRequestLogging = probotRequestLogging;
+
+var version$9 = {};
+
+Object.defineProperty(version$9, "__esModule", { value: true });
+version$9.VERSION = void 0;
+// The version is set automatically before publish to npm
+version$9.VERSION = "12.3.0";
+
+Object.defineProperty(probotOctokit, "__esModule", { value: true });
+probotOctokit.ProbotOctokit = void 0;
+const core_1$1 = require$$0$7;
+const plugin_enterprise_compatibility_1 = require$$1$5;
+const plugin_paginate_rest_1 = require$$2$6;
+const plugin_rest_endpoint_methods_1 = require$$3$2;
+const plugin_retry_1 = require$$4$1;
+const plugin_throttling_1 = require$$5$1;
+const octokit_plugin_config_1 = require$$6$1;
+const octokit_auth_probot_1 = distNode$2;
+const octokit_plugin_probot_request_logging_1 = octokitPluginProbotRequestLogging;
+const version_1$2 = version$9;
+const defaultOptions$2 = {
+    authStrategy: octokit_auth_probot_1.createProbotAuth,
+    throttle: {
+        onAbuseLimit: (retryAfter, options, octokit) => {
+            octokit.log.warn(`Abuse limit hit with "${options.method} ${options.url}", retrying in ${retryAfter} seconds.`);
+            return true;
+        },
+        onRateLimit: (retryAfter, options, octokit) => {
+            octokit.log.warn(`Rate limit hit with "${options.method} ${options.url}", retrying in ${retryAfter} seconds.`);
+            return true;
+        },
+    },
+    userAgent: `probot/${version_1$2.VERSION}`,
+};
+probotOctokit.ProbotOctokit = core_1$1.Octokit.plugin(plugin_throttling_1.throttling, plugin_retry_1.retry, plugin_paginate_rest_1.paginateRest, plugin_rest_endpoint_methods_1.legacyRestEndpointMethods, plugin_enterprise_compatibility_1.enterpriseCompatibility, octokit_plugin_probot_request_logging_1.probotRequestLogging, octokit_plugin_config_1.config).defaults((instanceOptions) => {
+    // merge throttle options deeply
+    const options = Object.assign({}, defaultOptions$2, instanceOptions, {
+        throttle: instanceOptions.throttle
+            ? Object.assign({}, defaultOptions$2.throttle, instanceOptions.throttle)
+            : defaultOptions$2.throttle,
+    });
+    return options;
+});
+
+var __importDefault$5 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(probot, "__esModule", { value: true });
+probot.Probot = void 0;
+const lru_cache_1 = __importDefault$5(lruCache$2);
+const alias_log_1 = aliasLog$1;
+const auth_1 = auth$b;
+const get_log_1$2 = getLog$1;
+const get_probot_octokit_with_defaults_1 = getProbotOctokitWithDefaults$1;
+const get_webhooks_1 = getWebhooks$1;
+const probot_octokit_1$1 = probotOctokit;
+const version_1$1 = version$9;
+class Probot {
+    constructor(options = {}) {
+        options.secret = options.secret || "development";
+        let level = options.logLevel;
+        const logMessageKey = options.logMessageKey;
+        this.log = (0, alias_log_1.aliasLog)(options.log || (0, get_log_1$2.getLog)({ level, logMessageKey }));
+        // TODO: support redis backend for access token cache if `options.redisConfig`
+        const cache = new lru_cache_1.default({
+            // cache max. 15000 tokens, that will use less than 10mb memory
+            max: 15000,
+            // Cache for 1 minute less than GitHub expiry
+            maxAge: 1000 * 60 * 59,
+        });
+        const Octokit = (0, get_probot_octokit_with_defaults_1.getProbotOctokitWithDefaults)({
+            githubToken: options.githubToken,
+            Octokit: options.Octokit || probot_octokit_1$1.ProbotOctokit,
+            appId: Number(options.appId),
+            privateKey: options.privateKey,
+            cache,
+            log: this.log,
+            redisConfig: options.redisConfig,
+            baseUrl: options.baseUrl,
+        });
+        const octokit = new Octokit();
+        this.state = {
+            cache,
+            githubToken: options.githubToken,
+            log: this.log,
+            Octokit,
+            octokit,
+            webhooks: {
+                secret: options.secret,
+            },
+            appId: Number(options.appId),
+            privateKey: options.privateKey,
+            host: options.host,
+            port: options.port,
+        };
+        this.auth = auth_1.auth.bind(null, this.state);
+        this.webhooks = (0, get_webhooks_1.getWebhooks)(this.state);
+        this.on = this.webhooks.on;
+        this.onAny = this.webhooks.onAny;
+        this.onError = this.webhooks.onError;
+        this.version = version_1$1.VERSION;
+    }
+    static defaults(defaults) {
+        const ProbotWithDefaults = class extends this {
+            constructor(...args) {
+                const options = args[0] || {};
+                super(Object.assign({}, defaults, options));
+            }
+        };
+        return ProbotWithDefaults;
+    }
+    receive(event) {
+        this.log.debug({ event }, "Webhook received");
+        return this.webhooks.receive(event);
+    }
+    async load(appFn, options = {}) {
+        if (Array.isArray(appFn)) {
+            for (const fn of appFn) {
+                await this.load(fn);
+            }
+            return;
+        }
+        return appFn(this, options);
+    }
+}
+probot.Probot = Probot;
+Probot.version = version_1$1.VERSION;
+
+var server = {};
+
+var expressExports$1 = {};
+var express$1 = {
+  get exports(){ return expressExports$1; },
+  set exports(v){ expressExports$1 = v; },
+};
+
+var expressExports = {};
+var express = {
+  get exports(){ return expressExports; },
+  set exports(v){ expressExports = v; },
+};
+
+var bodyParserExports = {};
+var bodyParser = {
+  get exports(){ return bodyParserExports; },
+  set exports(v){ bodyParserExports = v; },
+};
+
+/*!
+ * depd
+ * Copyright(c) 2014-2018 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ */
+
+var relative = require$$0$c.relative;
+
+/**
+ * Module exports.
+ */
+
+var depd_1 = depd;
+
+/**
+ * Get the path to base files on.
+ */
+
+var basePath = process.cwd();
+
+/**
+ * Determine if namespace is contained in the string.
+ */
+
+function containsNamespace (str, namespace) {
+  var vals = str.split(/[ ,]+/);
+  var ns = String(namespace).toLowerCase();
+
+  for (var i = 0; i < vals.length; i++) {
+    var val = vals[i];
+
+    // namespace contained
+    if (val && (val === '*' || val.toLowerCase() === ns)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Convert a data descriptor to accessor descriptor.
+ */
+
+function convertDataDescriptorToAccessor (obj, prop, message) {
+  var descriptor = Object.getOwnPropertyDescriptor(obj, prop);
+  var value = descriptor.value;
+
+  descriptor.get = function getter () { return value };
+
+  if (descriptor.writable) {
+    descriptor.set = function setter (val) { return (value = val) };
+  }
+
+  delete descriptor.value;
+  delete descriptor.writable;
+
+  Object.defineProperty(obj, prop, descriptor);
+
+  return descriptor
+}
+
+/**
+ * Create arguments string to keep arity.
+ */
+
+function createArgumentsString (arity) {
+  var str = '';
+
+  for (var i = 0; i < arity; i++) {
+    str += ', arg' + i;
+  }
+
+  return str.substr(2)
+}
+
+/**
+ * Create stack string from stack.
+ */
+
+function createStackString (stack) {
+  var str = this.name + ': ' + this.namespace;
+
+  if (this.message) {
+    str += ' deprecated ' + this.message;
+  }
+
+  for (var i = 0; i < stack.length; i++) {
+    str += '\n    at ' + stack[i].toString();
+  }
+
+  return str
+}
+
+/**
+ * Create deprecate for namespace in caller.
+ */
+
+function depd (namespace) {
+  if (!namespace) {
+    throw new TypeError('argument namespace is required')
+  }
+
+  var stack = getStack();
+  var site = callSiteLocation(stack[1]);
+  var file = site[0];
+
+  function deprecate (message) {
+    // call to self as log
+    log$2.call(deprecate, message);
+  }
+
+  deprecate._file = file;
+  deprecate._ignored = isignored(namespace);
+  deprecate._namespace = namespace;
+  deprecate._traced = istraced(namespace);
+  deprecate._warned = Object.create(null);
+
+  deprecate.function = wrapfunction;
+  deprecate.property = wrapproperty;
+
+  return deprecate
+}
+
+/**
+ * Determine if event emitter has listeners of a given type.
+ *
+ * The way to do this check is done three different ways in Node.js >= 0.8
+ * so this consolidates them into a minimal set using instance methods.
+ *
+ * @param {EventEmitter} emitter
+ * @param {string} type
+ * @returns {boolean}
+ * @private
+ */
+
+function eehaslisteners (emitter, type) {
+  var count = typeof emitter.listenerCount !== 'function'
+    ? emitter.listeners(type).length
+    : emitter.listenerCount(type);
+
+  return count > 0
+}
+
+/**
+ * Determine if namespace is ignored.
+ */
+
+function isignored (namespace) {
+  if (process.noDeprecation) {
+    // --no-deprecation support
+    return true
+  }
+
+  var str = process.env.NO_DEPRECATION || '';
+
+  // namespace ignored
+  return containsNamespace(str, namespace)
+}
+
+/**
+ * Determine if namespace is traced.
+ */
+
+function istraced (namespace) {
+  if (process.traceDeprecation) {
+    // --trace-deprecation support
+    return true
+  }
+
+  var str = process.env.TRACE_DEPRECATION || '';
+
+  // namespace traced
+  return containsNamespace(str, namespace)
+}
+
+/**
+ * Display deprecation message.
+ */
+
+function log$2 (message, site) {
+  var haslisteners = eehaslisteners(process, 'deprecation');
+
+  // abort early if no destination
+  if (!haslisteners && this._ignored) {
+    return
+  }
+
+  var caller;
+  var callFile;
+  var callSite;
+  var depSite;
+  var i = 0;
+  var seen = false;
+  var stack = getStack();
+  var file = this._file;
+
+  if (site) {
+    // provided site
+    depSite = site;
+    callSite = callSiteLocation(stack[1]);
+    callSite.name = depSite.name;
+    file = callSite[0];
+  } else {
+    // get call site
+    i = 2;
+    depSite = callSiteLocation(stack[i]);
+    callSite = depSite;
+  }
+
+  // get caller of deprecated thing in relation to file
+  for (; i < stack.length; i++) {
+    caller = callSiteLocation(stack[i]);
+    callFile = caller[0];
+
+    if (callFile === file) {
+      seen = true;
+    } else if (callFile === this._file) {
+      file = this._file;
+    } else if (seen) {
+      break
+    }
+  }
+
+  var key = caller
+    ? depSite.join(':') + '__' + caller.join(':')
+    : undefined;
+
+  if (key !== undefined && key in this._warned) {
+    // already warned
+    return
+  }
+
+  this._warned[key] = true;
+
+  // generate automatic message from call site
+  var msg = message;
+  if (!msg) {
+    msg = callSite === depSite || !callSite.name
+      ? defaultMessage(depSite)
+      : defaultMessage(callSite);
+  }
+
+  // emit deprecation if listeners exist
+  if (haslisteners) {
+    var err = DeprecationError(this._namespace, msg, stack.slice(i));
+    process.emit('deprecation', err);
+    return
+  }
+
+  // format and write message
+  var format = process.stderr.isTTY
+    ? formatColor
+    : formatPlain;
+  var output = format.call(this, msg, caller, stack.slice(i));
+  process.stderr.write(output + '\n', 'utf8');
+}
+
+/**
+ * Get call site location as array.
+ */
+
+function callSiteLocation (callSite) {
+  var file = callSite.getFileName() || '<anonymous>';
+  var line = callSite.getLineNumber();
+  var colm = callSite.getColumnNumber();
+
+  if (callSite.isEval()) {
+    file = callSite.getEvalOrigin() + ', ' + file;
+  }
+
+  var site = [file, line, colm];
+
+  site.callSite = callSite;
+  site.name = callSite.getFunctionName();
+
+  return site
+}
+
+/**
+ * Generate a default message from the site.
+ */
+
+function defaultMessage (site) {
+  var callSite = site.callSite;
+  var funcName = site.name;
+
+  // make useful anonymous name
+  if (!funcName) {
+    funcName = '<anonymous@' + formatLocation(site) + '>';
+  }
+
+  var context = callSite.getThis();
+  var typeName = context && callSite.getTypeName();
+
+  // ignore useless type name
+  if (typeName === 'Object') {
+    typeName = undefined;
+  }
+
+  // make useful type name
+  if (typeName === 'Function') {
+    typeName = context.name || typeName;
+  }
+
+  return typeName && callSite.getMethodName()
+    ? typeName + '.' + funcName
+    : funcName
+}
+
+/**
+ * Format deprecation message without color.
+ */
+
+function formatPlain (msg, caller, stack) {
+  var timestamp = new Date().toUTCString();
+
+  var formatted = timestamp +
+    ' ' + this._namespace +
+    ' deprecated ' + msg;
+
+  // add stack trace
+  if (this._traced) {
+    for (var i = 0; i < stack.length; i++) {
+      formatted += '\n    at ' + stack[i].toString();
+    }
+
+    return formatted
+  }
+
+  if (caller) {
+    formatted += ' at ' + formatLocation(caller);
+  }
+
+  return formatted
+}
+
+/**
+ * Format deprecation message with color.
+ */
+
+function formatColor (msg, caller, stack) {
+  var formatted = '\x1b[36;1m' + this._namespace + '\x1b[22;39m' + // bold cyan
+    ' \x1b[33;1mdeprecated\x1b[22;39m' + // bold yellow
+    ' \x1b[0m' + msg + '\x1b[39m'; // reset
+
+  // add stack trace
+  if (this._traced) {
+    for (var i = 0; i < stack.length; i++) {
+      formatted += '\n    \x1b[36mat ' + stack[i].toString() + '\x1b[39m'; // cyan
+    }
+
+    return formatted
+  }
+
+  if (caller) {
+    formatted += ' \x1b[36m' + formatLocation(caller) + '\x1b[39m'; // cyan
+  }
+
+  return formatted
+}
+
+/**
+ * Format call site location.
+ */
+
+function formatLocation (callSite) {
+  return relative(basePath, callSite[0]) +
+    ':' + callSite[1] +
+    ':' + callSite[2]
+}
+
+/**
+ * Get the stack as array of call sites.
+ */
+
+function getStack () {
+  var limit = Error.stackTraceLimit;
+  var obj = {};
+  var prep = Error.prepareStackTrace;
+
+  Error.prepareStackTrace = prepareObjectStackTrace;
+  Error.stackTraceLimit = Math.max(10, limit);
+
+  // capture the stack
+  Error.captureStackTrace(obj);
+
+  // slice this function off the top
+  var stack = obj.stack.slice(1);
+
+  Error.prepareStackTrace = prep;
+  Error.stackTraceLimit = limit;
+
+  return stack
+}
+
+/**
+ * Capture call site stack from v8.
+ */
+
+function prepareObjectStackTrace (obj, stack) {
+  return stack
+}
+
+/**
+ * Return a wrapped function in a deprecation message.
+ */
+
+function wrapfunction (fn, message) {
+  if (typeof fn !== 'function') {
+    throw new TypeError('argument fn must be a function')
+  }
+
+  var args = createArgumentsString(fn.length);
+  var stack = getStack();
+  var site = callSiteLocation(stack[1]);
+
+  site.name = fn.name;
+
+  // eslint-disable-next-line no-new-func
+  var deprecatedfn = new Function('fn', 'log', 'deprecate', 'message', 'site',
+    '"use strict"\n' +
+    'return function (' + args + ') {' +
+    'log.call(deprecate, message, site)\n' +
+    'return fn.apply(this, arguments)\n' +
+    '}')(fn, log$2, this, message, site);
+
+  return deprecatedfn
+}
+
+/**
+ * Wrap property in a deprecation message.
+ */
+
+function wrapproperty (obj, prop, message) {
+  if (!obj || (typeof obj !== 'object' && typeof obj !== 'function')) {
+    throw new TypeError('argument obj must be object')
+  }
+
+  var descriptor = Object.getOwnPropertyDescriptor(obj, prop);
+
+  if (!descriptor) {
+    throw new TypeError('must call property on owner object')
+  }
+
+  if (!descriptor.configurable) {
+    throw new TypeError('property must be configurable')
+  }
+
+  var deprecate = this;
+  var stack = getStack();
+  var site = callSiteLocation(stack[1]);
+
+  // set site name
+  site.name = prop;
+
+  // convert data descriptor
+  if ('value' in descriptor) {
+    descriptor = convertDataDescriptorToAccessor(obj, prop);
+  }
+
+  var get = descriptor.get;
+  var set = descriptor.set;
+
+  // wrap getter
+  if (typeof get === 'function') {
+    descriptor.get = function getter () {
+      log$2.call(deprecate, message, site);
+      return get.apply(this, arguments)
+    };
+  }
+
+  // wrap setter
+  if (typeof set === 'function') {
+    descriptor.set = function setter () {
+      log$2.call(deprecate, message, site);
+      return set.apply(this, arguments)
+    };
+  }
+
+  Object.defineProperty(obj, prop, descriptor);
+}
+
+/**
+ * Create DeprecationError for deprecation
+ */
+
+function DeprecationError (namespace, message, stack) {
+  var error = new Error();
+  var stackString;
+
+  Object.defineProperty(error, 'constructor', {
+    value: DeprecationError
+  });
+
+  Object.defineProperty(error, 'message', {
+    configurable: true,
+    enumerable: false,
+    value: message,
+    writable: true
+  });
+
+  Object.defineProperty(error, 'name', {
+    enumerable: false,
+    configurable: true,
+    value: 'DeprecationError',
+    writable: true
+  });
+
+  Object.defineProperty(error, 'namespace', {
+    configurable: true,
+    enumerable: false,
+    value: namespace,
+    writable: true
+  });
+
+  Object.defineProperty(error, 'stack', {
+    configurable: true,
+    enumerable: false,
+    get: function () {
+      if (stackString !== undefined) {
+        return stackString
+      }
+
+      // prepare stack trace
+      return (stackString = createStackString.call(this, stack))
+    },
+    set: function setter (val) {
+      stackString = val;
+    }
+  });
+
+  return error
+}
+
+var bytesExports = {};
+var bytes = {
+  get exports(){ return bytesExports; },
+  set exports(v){ bytesExports = v; },
+};
+
+/*!
+ * bytes
+ * Copyright(c) 2012-2014 TJ Holowaychuk
+ * Copyright(c) 2015 Jed Watson
+ * MIT Licensed
+ */
+
+var hasRequiredBytes;
+
+function requireBytes () {
+	if (hasRequiredBytes) return bytesExports;
+	hasRequiredBytes = 1;
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	bytes.exports = bytes$1;
+	bytesExports.format = format;
+	bytesExports.parse = parse;
+
+	/**
+	 * Module variables.
+	 * @private
+	 */
+
+	var formatThousandsRegExp = /\B(?=(\d{3})+(?!\d))/g;
+
+	var formatDecimalsRegExp = /(?:\.0*|(\.[^0]+)0+)$/;
+
+	var map = {
+	  b:  1,
+	  kb: 1 << 10,
+	  mb: 1 << 20,
+	  gb: 1 << 30,
+	  tb: Math.pow(1024, 4),
+	  pb: Math.pow(1024, 5),
+	};
+
+	var parseRegExp = /^((-|\+)?(\d+(?:\.\d+)?)) *(kb|mb|gb|tb|pb)$/i;
+
+	/**
+	 * Convert the given value in bytes into a string or parse to string to an integer in bytes.
+	 *
+	 * @param {string|number} value
+	 * @param {{
+	 *  case: [string],
+	 *  decimalPlaces: [number]
+	 *  fixedDecimals: [boolean]
+	 *  thousandsSeparator: [string]
+	 *  unitSeparator: [string]
+	 *  }} [options] bytes options.
+	 *
+	 * @returns {string|number|null}
+	 */
+
+	function bytes$1(value, options) {
+	  if (typeof value === 'string') {
+	    return parse(value);
+	  }
+
+	  if (typeof value === 'number') {
+	    return format(value, options);
+	  }
+
+	  return null;
+	}
+
+	/**
+	 * Format the given value in bytes into a string.
+	 *
+	 * If the value is negative, it is kept as such. If it is a float,
+	 * it is rounded.
+	 *
+	 * @param {number} value
+	 * @param {object} [options]
+	 * @param {number} [options.decimalPlaces=2]
+	 * @param {number} [options.fixedDecimals=false]
+	 * @param {string} [options.thousandsSeparator=]
+	 * @param {string} [options.unit=]
+	 * @param {string} [options.unitSeparator=]
+	 *
+	 * @returns {string|null}
+	 * @public
+	 */
+
+	function format(value, options) {
+	  if (!Number.isFinite(value)) {
+	    return null;
+	  }
+
+	  var mag = Math.abs(value);
+	  var thousandsSeparator = (options && options.thousandsSeparator) || '';
+	  var unitSeparator = (options && options.unitSeparator) || '';
+	  var decimalPlaces = (options && options.decimalPlaces !== undefined) ? options.decimalPlaces : 2;
+	  var fixedDecimals = Boolean(options && options.fixedDecimals);
+	  var unit = (options && options.unit) || '';
+
+	  if (!unit || !map[unit.toLowerCase()]) {
+	    if (mag >= map.pb) {
+	      unit = 'PB';
+	    } else if (mag >= map.tb) {
+	      unit = 'TB';
+	    } else if (mag >= map.gb) {
+	      unit = 'GB';
+	    } else if (mag >= map.mb) {
+	      unit = 'MB';
+	    } else if (mag >= map.kb) {
+	      unit = 'KB';
+	    } else {
+	      unit = 'B';
+	    }
+	  }
+
+	  var val = value / map[unit.toLowerCase()];
+	  var str = val.toFixed(decimalPlaces);
+
+	  if (!fixedDecimals) {
+	    str = str.replace(formatDecimalsRegExp, '$1');
+	  }
+
+	  if (thousandsSeparator) {
+	    str = str.split('.').map(function (s, i) {
+	      return i === 0
+	        ? s.replace(formatThousandsRegExp, thousandsSeparator)
+	        : s
+	    }).join('.');
+	  }
+
+	  return str + unitSeparator + unit;
+	}
+
+	/**
+	 * Parse the string value into an integer in bytes.
+	 *
+	 * If no unit is given, it is assumed the value is in bytes.
+	 *
+	 * @param {number|string} val
+	 *
+	 * @returns {number|null}
+	 * @public
+	 */
+
+	function parse(val) {
+	  if (typeof val === 'number' && !isNaN(val)) {
+	    return val;
+	  }
+
+	  if (typeof val !== 'string') {
+	    return null;
+	  }
+
+	  // Test if the string passed is valid
+	  var results = parseRegExp.exec(val);
+	  var floatValue;
+	  var unit = 'b';
+
+	  if (!results) {
+	    // Nothing could be extracted from the given string
+	    floatValue = parseInt(val, 10);
+	    unit = 'b';
+	  } else {
+	    // Retrieve the value and the unit
+	    floatValue = parseFloat(results[1]);
+	    unit = results[4].toLowerCase();
+	  }
+
+	  if (isNaN(floatValue)) {
+	    return null;
+	  }
+
+	  return Math.floor(map[unit] * floatValue);
+	}
+	return bytesExports;
+}
+
+var contentType = {};
+
+/*!
+ * content-type
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * RegExp to match *( ";" parameter ) in RFC 7231 sec 3.1.1.1
+ *
+ * parameter     = token "=" ( token / quoted-string )
+ * token         = 1*tchar
+ * tchar         = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+ *               / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+ *               / DIGIT / ALPHA
+ *               ; any VCHAR, except delimiters
+ * quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
+ * qdtext        = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text
+ * obs-text      = %x80-FF
+ * quoted-pair   = "\" ( HTAB / SP / VCHAR / obs-text )
+ */
+var PARAM_REGEXP$1 = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g; // eslint-disable-line no-control-regex
+var TEXT_REGEXP$1 = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/; // eslint-disable-line no-control-regex
+var TOKEN_REGEXP$1 = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/**
+ * RegExp to match quoted-pair in RFC 7230 sec 3.2.6
+ *
+ * quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
+ * obs-text    = %x80-FF
+ */
+var QESC_REGEXP$1 = /\\([\u000b\u0020-\u00ff])/g; // eslint-disable-line no-control-regex
+
+/**
+ * RegExp to match chars that must be quoted-pair in RFC 7230 sec 3.2.6
+ */
+var QUOTE_REGEXP$1 = /([\\"])/g;
+
+/**
+ * RegExp to match type in RFC 7231 sec 3.1.1.1
+ *
+ * media-type = type "/" subtype
+ * type       = token
+ * subtype    = token
+ */
+var TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+contentType.format = format$4;
+contentType.parse = parse$g;
+
+/**
+ * Format object to media type.
+ *
+ * @param {object} obj
+ * @return {string}
+ * @public
+ */
+
+function format$4 (obj) {
+  if (!obj || typeof obj !== 'object') {
+    throw new TypeError('argument obj is required')
+  }
+
+  var parameters = obj.parameters;
+  var type = obj.type;
+
+  if (!type || !TYPE_REGEXP.test(type)) {
+    throw new TypeError('invalid type')
+  }
+
+  var string = type;
+
+  // append parameters
+  if (parameters && typeof parameters === 'object') {
+    var param;
+    var params = Object.keys(parameters).sort();
+
+    for (var i = 0; i < params.length; i++) {
+      param = params[i];
+
+      if (!TOKEN_REGEXP$1.test(param)) {
+        throw new TypeError('invalid parameter name')
+      }
+
+      string += '; ' + param + '=' + qstring$2(parameters[param]);
+    }
+  }
+
+  return string
+}
+
+/**
+ * Parse media type to object.
+ *
+ * @param {string|object} string
+ * @return {Object}
+ * @public
+ */
+
+function parse$g (string) {
+  if (!string) {
+    throw new TypeError('argument string is required')
+  }
+
+  // support req/res-like objects as argument
+  var header = typeof string === 'object'
+    ? getcontenttype$1(string)
+    : string;
+
+  if (typeof header !== 'string') {
+    throw new TypeError('argument string is required to be a string')
+  }
+
+  var index = header.indexOf(';');
+  var type = index !== -1
+    ? header.slice(0, index).trim()
+    : header.trim();
+
+  if (!TYPE_REGEXP.test(type)) {
+    throw new TypeError('invalid media type')
+  }
+
+  var obj = new ContentType(type.toLowerCase());
+
+  // parse parameters
+  if (index !== -1) {
+    var key;
+    var match;
+    var value;
+
+    PARAM_REGEXP$1.lastIndex = index;
+
+    while ((match = PARAM_REGEXP$1.exec(header))) {
+      if (match.index !== index) {
+        throw new TypeError('invalid parameter format')
+      }
+
+      index += match[0].length;
+      key = match[1].toLowerCase();
+      value = match[2];
+
+      if (value.charCodeAt(0) === 0x22 /* " */) {
+        // remove quotes
+        value = value.slice(1, -1);
+
+        // remove escapes
+        if (value.indexOf('\\') !== -1) {
+          value = value.replace(QESC_REGEXP$1, '$1');
+        }
+      }
+
+      obj.parameters[key] = value;
+    }
+
+    if (index !== header.length) {
+      throw new TypeError('invalid parameter format')
+    }
+  }
+
+  return obj
+}
+
+/**
+ * Get content-type from req/res objects.
+ *
+ * @param {object}
+ * @return {Object}
+ * @private
+ */
+
+function getcontenttype$1 (obj) {
+  var header;
+
+  if (typeof obj.getHeader === 'function') {
+    // res-like
+    header = obj.getHeader('content-type');
+  } else if (typeof obj.headers === 'object') {
+    // req-like
+    header = obj.headers && obj.headers['content-type'];
+  }
+
+  if (typeof header !== 'string') {
+    throw new TypeError('content-type header is missing from object')
+  }
+
+  return header
+}
+
+/**
+ * Quote a string if necessary.
+ *
+ * @param {string} val
+ * @return {string}
+ * @private
+ */
+
+function qstring$2 (val) {
+  var str = String(val);
+
+  // no need to quote tokens
+  if (TOKEN_REGEXP$1.test(str)) {
+    return str
+  }
+
+  if (str.length > 0 && !TEXT_REGEXP$1.test(str)) {
+    throw new TypeError('invalid parameter value')
+  }
+
+  return '"' + str.replace(QUOTE_REGEXP$1, '\\$1') + '"'
+}
+
+/**
+ * Class to represent a content type.
+ * @private
+ */
+function ContentType (type) {
+  this.parameters = Object.create(null);
+  this.type = type;
+}
+
+var httpErrorsExports = {};
+var httpErrors = {
+  get exports(){ return httpErrorsExports; },
+  set exports(v){ httpErrorsExports = v; },
+};
+
+/* eslint no-proto: 0 */
+var setprototypeof = Object.setPrototypeOf || ({ __proto__: [] } instanceof Array ? setProtoOf : mixinProperties);
+
+function setProtoOf (obj, proto) {
+  obj.__proto__ = proto;
+  return obj
+}
+
+function mixinProperties (obj, proto) {
+  for (var prop in proto) {
+    if (!Object.prototype.hasOwnProperty.call(obj, prop)) {
+      obj[prop] = proto[prop];
+    }
+  }
+  return obj
+}
+
+var require$$0$4 = {
+	"100": "Continue",
+	"101": "Switching Protocols",
+	"102": "Processing",
+	"103": "Early Hints",
+	"200": "OK",
+	"201": "Created",
+	"202": "Accepted",
+	"203": "Non-Authoritative Information",
+	"204": "No Content",
+	"205": "Reset Content",
+	"206": "Partial Content",
+	"207": "Multi-Status",
+	"208": "Already Reported",
+	"226": "IM Used",
+	"300": "Multiple Choices",
+	"301": "Moved Permanently",
+	"302": "Found",
+	"303": "See Other",
+	"304": "Not Modified",
+	"305": "Use Proxy",
+	"307": "Temporary Redirect",
+	"308": "Permanent Redirect",
+	"400": "Bad Request",
+	"401": "Unauthorized",
+	"402": "Payment Required",
+	"403": "Forbidden",
+	"404": "Not Found",
+	"405": "Method Not Allowed",
+	"406": "Not Acceptable",
+	"407": "Proxy Authentication Required",
+	"408": "Request Timeout",
+	"409": "Conflict",
+	"410": "Gone",
+	"411": "Length Required",
+	"412": "Precondition Failed",
+	"413": "Payload Too Large",
+	"414": "URI Too Long",
+	"415": "Unsupported Media Type",
+	"416": "Range Not Satisfiable",
+	"417": "Expectation Failed",
+	"418": "I'm a Teapot",
+	"421": "Misdirected Request",
+	"422": "Unprocessable Entity",
+	"423": "Locked",
+	"424": "Failed Dependency",
+	"425": "Too Early",
+	"426": "Upgrade Required",
+	"428": "Precondition Required",
+	"429": "Too Many Requests",
+	"431": "Request Header Fields Too Large",
+	"451": "Unavailable For Legal Reasons",
+	"500": "Internal Server Error",
+	"501": "Not Implemented",
+	"502": "Bad Gateway",
+	"503": "Service Unavailable",
+	"504": "Gateway Timeout",
+	"505": "HTTP Version Not Supported",
+	"506": "Variant Also Negotiates",
+	"507": "Insufficient Storage",
+	"508": "Loop Detected",
+	"509": "Bandwidth Limit Exceeded",
+	"510": "Not Extended",
+	"511": "Network Authentication Required"
+};
+
+/*!
+ * statuses
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var codes = require$$0$4;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var statuses$3 = status;
+
+// status code to message map
+status.message = codes;
+
+// status message (lower-case) to code map
+status.code = createMessageToStatusCodeMap(codes);
+
+// array of status codes
+status.codes = createStatusCodeList(codes);
+
+// status codes for redirects
+status.redirect = {
+  300: true,
+  301: true,
+  302: true,
+  303: true,
+  305: true,
+  307: true,
+  308: true
+};
+
+// status codes for empty bodies
+status.empty = {
+  204: true,
+  205: true,
+  304: true
+};
+
+// status codes for when you should retry the request
+status.retry = {
+  502: true,
+  503: true,
+  504: true
+};
+
+/**
+ * Create a map of message to status code.
+ * @private
+ */
+
+function createMessageToStatusCodeMap (codes) {
+  var map = {};
+
+  Object.keys(codes).forEach(function forEachCode (code) {
+    var message = codes[code];
+    var status = Number(code);
+
+    // populate map
+    map[message.toLowerCase()] = status;
+  });
+
+  return map
+}
+
+/**
+ * Create a list of all status codes.
+ * @private
+ */
+
+function createStatusCodeList (codes) {
+  return Object.keys(codes).map(function mapCode (code) {
+    return Number(code)
+  })
+}
+
+/**
+ * Get the status code for given message.
+ * @private
+ */
+
+function getStatusCode (message) {
+  var msg = message.toLowerCase();
+
+  if (!Object.prototype.hasOwnProperty.call(status.code, msg)) {
+    throw new Error('invalid status message: "' + message + '"')
+  }
+
+  return status.code[msg]
+}
+
+/**
+ * Get the status message for given code.
+ * @private
+ */
+
+function getStatusMessage (code) {
+  if (!Object.prototype.hasOwnProperty.call(status.message, code)) {
+    throw new Error('invalid status code: ' + code)
+  }
+
+  return status.message[code]
+}
+
+/**
+ * Get the status code.
+ *
+ * Given a number, this will throw if it is not a known status
+ * code, otherwise the code will be returned. Given a string,
+ * the string will be parsed for a number and return the code
+ * if valid, otherwise will lookup the code assuming this is
+ * the status message.
+ *
+ * @param {string|number} code
+ * @returns {number}
+ * @public
+ */
+
+function status (code) {
+  if (typeof code === 'number') {
+    return getStatusMessage(code)
+  }
+
+  if (typeof code !== 'string') {
+    throw new TypeError('code must be a number or string')
+  }
+
+  // '403'
+  var n = parseInt(code, 10);
+  if (!isNaN(n)) {
+    return getStatusMessage(n)
+  }
+
+  return getStatusCode(code)
+}
+
+/*!
+ * toidentifier
+ * Copyright(c) 2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var toidentifier = toIdentifier;
+
+/**
+ * Trasform the given string into a JavaScript identifier
+ *
+ * @param {string} str
+ * @returns {string}
+ * @public
+ */
+
+function toIdentifier (str) {
+  return str
+    .split(' ')
+    .map(function (token) {
+      return token.slice(0, 1).toUpperCase() + token.slice(1)
+    })
+    .join('')
+    .replace(/[^ _0-9a-z]/gi, '')
+}
+
+/*!
+ * http-errors
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (module) {
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var deprecate = depd_1('http-errors');
+	var setPrototypeOf = setprototypeof;
+	var statuses = statuses$3;
+	var inherits = requireInherits();
+	var toIdentifier = toidentifier;
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	module.exports = createError;
+	module.exports.HttpError = createHttpErrorConstructor();
+	module.exports.isHttpError = createIsHttpErrorFunction(module.exports.HttpError);
+
+	// Populate exports for all constructors
+	populateConstructorExports(module.exports, statuses.codes, module.exports.HttpError);
+
+	/**
+	 * Get the code class of a status code.
+	 * @private
+	 */
+
+	function codeClass (status) {
+	  return Number(String(status).charAt(0) + '00')
+	}
+
+	/**
+	 * Create a new HTTP Error.
+	 *
+	 * @returns {Error}
+	 * @public
+	 */
+
+	function createError () {
+	  // so much arity going on ~_~
+	  var err;
+	  var msg;
+	  var status = 500;
+	  var props = {};
+	  for (var i = 0; i < arguments.length; i++) {
+	    var arg = arguments[i];
+	    var type = typeof arg;
+	    if (type === 'object' && arg instanceof Error) {
+	      err = arg;
+	      status = err.status || err.statusCode || status;
+	    } else if (type === 'number' && i === 0) {
+	      status = arg;
+	    } else if (type === 'string') {
+	      msg = arg;
+	    } else if (type === 'object') {
+	      props = arg;
+	    } else {
+	      throw new TypeError('argument #' + (i + 1) + ' unsupported type ' + type)
+	    }
+	  }
+
+	  if (typeof status === 'number' && (status < 400 || status >= 600)) {
+	    deprecate('non-error status code; use only 4xx or 5xx status codes');
+	  }
+
+	  if (typeof status !== 'number' ||
+	    (!statuses.message[status] && (status < 400 || status >= 600))) {
+	    status = 500;
+	  }
+
+	  // constructor
+	  var HttpError = createError[status] || createError[codeClass(status)];
+
+	  if (!err) {
+	    // create error
+	    err = HttpError
+	      ? new HttpError(msg)
+	      : new Error(msg || statuses.message[status]);
+	    Error.captureStackTrace(err, createError);
+	  }
+
+	  if (!HttpError || !(err instanceof HttpError) || err.status !== status) {
+	    // add properties to generic error
+	    err.expose = status < 500;
+	    err.status = err.statusCode = status;
+	  }
+
+	  for (var key in props) {
+	    if (key !== 'status' && key !== 'statusCode') {
+	      err[key] = props[key];
+	    }
+	  }
+
+	  return err
+	}
+
+	/**
+	 * Create HTTP error abstract base class.
+	 * @private
+	 */
+
+	function createHttpErrorConstructor () {
+	  function HttpError () {
+	    throw new TypeError('cannot construct abstract class')
+	  }
+
+	  inherits(HttpError, Error);
+
+	  return HttpError
+	}
+
+	/**
+	 * Create a constructor for a client error.
+	 * @private
+	 */
+
+	function createClientErrorConstructor (HttpError, name, code) {
+	  var className = toClassName(name);
+
+	  function ClientError (message) {
+	    // create the error object
+	    var msg = message != null ? message : statuses.message[code];
+	    var err = new Error(msg);
+
+	    // capture a stack trace to the construction point
+	    Error.captureStackTrace(err, ClientError);
+
+	    // adjust the [[Prototype]]
+	    setPrototypeOf(err, ClientError.prototype);
