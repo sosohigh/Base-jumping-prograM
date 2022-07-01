@@ -142632,3 +142632,2183 @@ function requireSbcsData () {
 	    "l8": "iso885914",
 	    "l9": "iso885915",
 	    "l10": "iso885916",
+
+	    "isoir14": "iso646jp",
+	    "isoir57": "iso646cn",
+	    "isoir100": "iso88591",
+	    "isoir101": "iso88592",
+	    "isoir109": "iso88593",
+	    "isoir110": "iso88594",
+	    "isoir144": "iso88595",
+	    "isoir127": "iso88596",
+	    "isoir126": "iso88597",
+	    "isoir138": "iso88598",
+	    "isoir148": "iso88599",
+	    "isoir157": "iso885910",
+	    "isoir166": "tis620",
+	    "isoir179": "iso885913",
+	    "isoir199": "iso885914",
+	    "isoir203": "iso885915",
+	    "isoir226": "iso885916",
+
+	    "cp819": "iso88591",
+	    "ibm819": "iso88591",
+
+	    "cyrillic": "iso88595",
+
+	    "arabic": "iso88596",
+	    "arabic8": "iso88596",
+	    "ecma114": "iso88596",
+	    "asmo708": "iso88596",
+
+	    "greek" : "iso88597",
+	    "greek8" : "iso88597",
+	    "ecma118" : "iso88597",
+	    "elot928" : "iso88597",
+
+	    "hebrew": "iso88598",
+	    "hebrew8": "iso88598",
+
+	    "turkish": "iso88599",
+	    "turkish8": "iso88599",
+
+	    "thai": "iso885911",
+	    "thai8": "iso885911",
+
+	    "celtic": "iso885914",
+	    "celtic8": "iso885914",
+	    "isoceltic": "iso885914",
+
+	    "tis6200": "tis620",
+	    "tis62025291": "tis620",
+	    "tis62025330": "tis620",
+
+	    "10000": "macroman",
+	    "10006": "macgreek",
+	    "10007": "maccyrillic",
+	    "10079": "maciceland",
+	    "10081": "macturkish",
+
+	    "cspc8codepage437": "cp437",
+	    "cspc775baltic": "cp775",
+	    "cspc850multilingual": "cp850",
+	    "cspcp852": "cp852",
+	    "cspc862latinhebrew": "cp862",
+	    "cpgr": "cp869",
+
+	    "msee": "cp1250",
+	    "mscyrl": "cp1251",
+	    "msansi": "cp1252",
+	    "msgreek": "cp1253",
+	    "msturk": "cp1254",
+	    "mshebr": "cp1255",
+	    "msarab": "cp1256",
+	    "winbaltrim": "cp1257",
+
+	    "cp20866": "koi8r",
+	    "20866": "koi8r",
+	    "ibm878": "koi8r",
+	    "cskoi8r": "koi8r",
+
+	    "cp21866": "koi8u",
+	    "21866": "koi8u",
+	    "ibm1168": "koi8u",
+
+	    "strk10482002": "rk1048",
+
+	    "tcvn5712": "tcvn",
+	    "tcvn57121": "tcvn",
+
+	    "gb198880": "iso646cn",
+	    "cn": "iso646cn",
+
+	    "csiso14jisc6220ro": "iso646jp",
+	    "jisc62201969ro": "iso646jp",
+	    "jp": "iso646jp",
+
+	    "cshproman8": "hproman8",
+	    "r8": "hproman8",
+	    "roman8": "hproman8",
+	    "xroman8": "hproman8",
+	    "ibm1051": "hproman8",
+
+	    "mac": "macintosh",
+	    "csmacintosh": "macintosh",
+	};
+	return sbcsData;
+}
+
+var sbcsDataGenerated;
+var hasRequiredSbcsDataGenerated;
+
+function requireSbcsDataGenerated () {
+	if (hasRequiredSbcsDataGenerated) return sbcsDataGenerated;
+	hasRequiredSbcsDataGenerated = 1;
+
+	// Generated data for sbcs codec. Don't edit manually. Regenerate using generation/gen-sbcs.js script.
+	sbcsDataGenerated = {
+	  "437": "cp437",
+	  "737": "cp737",
+	  "775": "cp775",
+	  "850": "cp850",
+	  "852": "cp852",
+	  "855": "cp855",
+	  "856": "cp856",
+	  "857": "cp857",
+	  "858": "cp858",
+	  "860": "cp860",
+	  "861": "cp861",
+	  "862": "cp862",
+	  "863": "cp863",
+	  "864": "cp864",
+	  "865": "cp865",
+	  "866": "cp866",
+	  "869": "cp869",
+	  "874": "windows874",
+	  "922": "cp922",
+	  "1046": "cp1046",
+	  "1124": "cp1124",
+	  "1125": "cp1125",
+	  "1129": "cp1129",
+	  "1133": "cp1133",
+	  "1161": "cp1161",
+	  "1162": "cp1162",
+	  "1163": "cp1163",
+	  "1250": "windows1250",
+	  "1251": "windows1251",
+	  "1252": "windows1252",
+	  "1253": "windows1253",
+	  "1254": "windows1254",
+	  "1255": "windows1255",
+	  "1256": "windows1256",
+	  "1257": "windows1257",
+	  "1258": "windows1258",
+	  "28591": "iso88591",
+	  "28592": "iso88592",
+	  "28593": "iso88593",
+	  "28594": "iso88594",
+	  "28595": "iso88595",
+	  "28596": "iso88596",
+	  "28597": "iso88597",
+	  "28598": "iso88598",
+	  "28599": "iso88599",
+	  "28600": "iso885910",
+	  "28601": "iso885911",
+	  "28603": "iso885913",
+	  "28604": "iso885914",
+	  "28605": "iso885915",
+	  "28606": "iso885916",
+	  "windows874": {
+	    "type": "_sbcs",
+	    "chars": "€����…�����������‘’“”•–—�������� กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+	  },
+	  "win874": "windows874",
+	  "cp874": "windows874",
+	  "windows1250": {
+	    "type": "_sbcs",
+	    "chars": "€�‚�„…†‡�‰Š‹ŚŤŽŹ�‘’“”•–—�™š›śťžź ˇ˘Ł¤Ą¦§¨©Ş«¬­®Ż°±˛ł´µ¶·¸ąş»Ľ˝ľżŔÁÂĂÄĹĆÇČÉĘËĚÍÎĎĐŃŇÓÔŐÖ×ŘŮÚŰÜÝŢßŕáâăäĺćçčéęëěíîďđńňóôőö÷řůúűüýţ˙"
+	  },
+	  "win1250": "windows1250",
+	  "cp1250": "windows1250",
+	  "windows1251": {
+	    "type": "_sbcs",
+	    "chars": "ЂЃ‚ѓ„…†‡€‰Љ‹ЊЌЋЏђ‘’“”•–—�™љ›њќћџ ЎўЈ¤Ґ¦§Ё©Є«¬­®Ї°±Ііґµ¶·ё№є»јЅѕїАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя"
+	  },
+	  "win1251": "windows1251",
+	  "cp1251": "windows1251",
+	  "windows1252": {
+	    "type": "_sbcs",
+	    "chars": "€�‚ƒ„…†‡ˆ‰Š‹Œ�Ž��‘’“”•–—˜™š›œ�žŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+	  },
+	  "win1252": "windows1252",
+	  "cp1252": "windows1252",
+	  "windows1253": {
+	    "type": "_sbcs",
+	    "chars": "€�‚ƒ„…†‡�‰�‹�����‘’“”•–—�™�›���� ΅Ά£¤¥¦§¨©�«¬­®―°±²³΄µ¶·ΈΉΊ»Ό½ΎΏΐΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡ�ΣΤΥΦΧΨΩΪΫάέήίΰαβγδεζηθικλμνξοπρςστυφχψωϊϋόύώ�"
+	  },
+	  "win1253": "windows1253",
+	  "cp1253": "windows1253",
+	  "windows1254": {
+	    "type": "_sbcs",
+	    "chars": "€�‚ƒ„…†‡ˆ‰Š‹Œ����‘’“”•–—˜™š›œ��Ÿ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞßàáâãäåæçèéêëìíîïğñòóôõö÷øùúûüışÿ"
+	  },
+	  "win1254": "windows1254",
+	  "cp1254": "windows1254",
+	  "windows1255": {
+	    "type": "_sbcs",
+	    "chars": "€�‚ƒ„…†‡ˆ‰�‹�����‘’“”•–—˜™�›���� ¡¢£₪¥¦§¨©×«¬­®¯°±²³´µ¶·¸¹÷»¼½¾¿ְֱֲֳִֵֶַָֹֺֻּֽ־ֿ׀ׁׂ׃װױײ׳״�������אבגדהוזחטיךכלםמןנסעףפץצקרשת��‎‏�"
+	  },
+	  "win1255": "windows1255",
+	  "cp1255": "windows1255",
+	  "windows1256": {
+	    "type": "_sbcs",
+	    "chars": "€پ‚ƒ„…†‡ˆ‰ٹ‹Œچژڈگ‘’“”•–—ک™ڑ›œ‌‍ں ،¢£¤¥¦§¨©ھ«¬­®¯°±²³´µ¶·¸¹؛»¼½¾؟ہءآأؤإئابةتثجحخدذرزسشصض×طظعغـفقكàلâمنهوçèéêëىيîïًٌٍَôُِ÷ّùْûü‎‏ے"
+	  },
+	  "win1256": "windows1256",
+	  "cp1256": "windows1256",
+	  "windows1257": {
+	    "type": "_sbcs",
+	    "chars": "€�‚�„…†‡�‰�‹�¨ˇ¸�‘’“”•–—�™�›�¯˛� �¢£¤�¦§Ø©Ŗ«¬­®Æ°±²³´µ¶·ø¹ŗ»¼½¾æĄĮĀĆÄÅĘĒČÉŹĖĢĶĪĻŠŃŅÓŌÕÖ×ŲŁŚŪÜŻŽßąįāćäåęēčéźėģķīļšńņóōõö÷ųłśūüżž˙"
+	  },
+	  "win1257": "windows1257",
+	  "cp1257": "windows1257",
+	  "windows1258": {
+	    "type": "_sbcs",
+	    "chars": "€�‚ƒ„…†‡ˆ‰�‹Œ����‘’“”•–—˜™�›œ��Ÿ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂĂÄÅÆÇÈÉÊË̀ÍÎÏĐÑ̉ÓÔƠÖ×ØÙÚÛÜỮßàáâăäåæçèéêë́íîïđṇ̃óôơö÷øùúûüư₫ÿ"
+	  },
+	  "win1258": "windows1258",
+	  "cp1258": "windows1258",
+	  "iso88591": {
+	    "type": "_sbcs",
+	    "chars": " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+	  },
+	  "cp28591": "iso88591",
+	  "iso88592": {
+	    "type": "_sbcs",
+	    "chars": " Ą˘Ł¤ĽŚ§¨ŠŞŤŹ­ŽŻ°ą˛ł´ľśˇ¸šşťź˝žżŔÁÂĂÄĹĆÇČÉĘËĚÍÎĎĐŃŇÓÔŐÖ×ŘŮÚŰÜÝŢßŕáâăäĺćçčéęëěíîďđńňóôőö÷řůúűüýţ˙"
+	  },
+	  "cp28592": "iso88592",
+	  "iso88593": {
+	    "type": "_sbcs",
+	    "chars": " Ħ˘£¤�Ĥ§¨İŞĞĴ­�Ż°ħ²³´µĥ·¸ışğĵ½�żÀÁÂ�ÄĊĈÇÈÉÊËÌÍÎÏ�ÑÒÓÔĠÖ×ĜÙÚÛÜŬŜßàáâ�äċĉçèéêëìíîï�ñòóôġö÷ĝùúûüŭŝ˙"
+	  },
+	  "cp28593": "iso88593",
+	  "iso88594": {
+	    "type": "_sbcs",
+	    "chars": " ĄĸŖ¤ĨĻ§¨ŠĒĢŦ­Ž¯°ą˛ŗ´ĩļˇ¸šēģŧŊžŋĀÁÂÃÄÅÆĮČÉĘËĖÍÎĪĐŅŌĶÔÕÖ×ØŲÚÛÜŨŪßāáâãäåæįčéęëėíîīđņōķôõö÷øųúûüũū˙"
+	  },
+	  "cp28594": "iso88594",
+	  "iso88595": {
+	    "type": "_sbcs",
+	    "chars": " ЁЂЃЄЅІЇЈЉЊЋЌ­ЎЏАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя№ёђѓєѕіїјљњћќ§ўџ"
+	  },
+	  "cp28595": "iso88595",
+	  "iso88596": {
+	    "type": "_sbcs",
+	    "chars": " ���¤�������،­�������������؛���؟�ءآأؤإئابةتثجحخدذرزسشصضطظعغ�����ـفقكلمنهوىيًٌٍَُِّْ�������������"
+	  },
+	  "cp28596": "iso88596",
+	  "iso88597": {
+	    "type": "_sbcs",
+	    "chars": " ‘’£€₯¦§¨©ͺ«¬­�―°±²³΄΅Ά·ΈΉΊ»Ό½ΎΏΐΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡ�ΣΤΥΦΧΨΩΪΫάέήίΰαβγδεζηθικλμνξοπρςστυφχψωϊϋόύώ�"
+	  },
+	  "cp28597": "iso88597",
+	  "iso88598": {
+	    "type": "_sbcs",
+	    "chars": " �¢£¤¥¦§¨©×«¬­®¯°±²³´µ¶·¸¹÷»¼½¾��������������������������������‗אבגדהוזחטיךכלםמןנסעףפץצקרשת��‎‏�"
+	  },
+	  "cp28598": "iso88598",
+	  "iso88599": {
+	    "type": "_sbcs",
+	    "chars": " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞßàáâãäåæçèéêëìíîïğñòóôõö÷øùúûüışÿ"
+	  },
+	  "cp28599": "iso88599",
+	  "iso885910": {
+	    "type": "_sbcs",
+	    "chars": " ĄĒĢĪĨĶ§ĻĐŠŦŽ­ŪŊ°ąēģīĩķ·ļđšŧž―ūŋĀÁÂÃÄÅÆĮČÉĘËĖÍÎÏÐŅŌÓÔÕÖŨØŲÚÛÜÝÞßāáâãäåæįčéęëėíîïðņōóôõöũøųúûüýþĸ"
+	  },
+	  "cp28600": "iso885910",
+	  "iso885911": {
+	    "type": "_sbcs",
+	    "chars": " กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+	  },
+	  "cp28601": "iso885911",
+	  "iso885913": {
+	    "type": "_sbcs",
+	    "chars": " ”¢£¤„¦§Ø©Ŗ«¬­®Æ°±²³“µ¶·ø¹ŗ»¼½¾æĄĮĀĆÄÅĘĒČÉŹĖĢĶĪĻŠŃŅÓŌÕÖ×ŲŁŚŪÜŻŽßąįāćäåęēčéźėģķīļšńņóōõö÷ųłśūüżž’"
+	  },
+	  "cp28603": "iso885913",
+	  "iso885914": {
+	    "type": "_sbcs",
+	    "chars": " Ḃḃ£ĊċḊ§Ẁ©ẂḋỲ­®ŸḞḟĠġṀṁ¶ṖẁṗẃṠỳẄẅṡÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏŴÑÒÓÔÕÖṪØÙÚÛÜÝŶßàáâãäåæçèéêëìíîïŵñòóôõöṫøùúûüýŷÿ"
+	  },
+	  "cp28604": "iso885914",
+	  "iso885915": {
+	    "type": "_sbcs",
+	    "chars": " ¡¢£€¥Š§š©ª«¬­®¯°±²³Žµ¶·ž¹º»ŒœŸ¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+	  },
+	  "cp28605": "iso885915",
+	  "iso885916": {
+	    "type": "_sbcs",
+	    "chars": " ĄąŁ€„Š§š©Ș«Ź­źŻ°±ČłŽ”¶·žčș»ŒœŸżÀÁÂĂÄĆÆÇÈÉÊËÌÍÎÏĐŃÒÓÔŐÖŚŰÙÚÛÜĘȚßàáâăäćæçèéêëìíîïđńòóôőöśűùúûüęțÿ"
+	  },
+	  "cp28606": "iso885916",
+	  "cp437": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm437": "cp437",
+	  "csibm437": "cp437",
+	  "cp737": {
+	    "type": "_sbcs",
+	    "chars": "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩαβγδεζηθικλμνξοπρσςτυφχψ░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀ωάέήϊίόύϋώΆΈΉΊΌΎΏ±≥≤ΪΫ÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm737": "cp737",
+	  "csibm737": "cp737",
+	  "cp775": {
+	    "type": "_sbcs",
+	    "chars": "ĆüéāäģåćłēŖŗīŹÄÅÉæÆōöĢ¢ŚśÖÜø£Ø×¤ĀĪóŻżź”¦©®¬½¼Ł«»░▒▓│┤ĄČĘĖ╣║╗╝ĮŠ┐└┴┬├─┼ŲŪ╚╔╩╦╠═╬Žąčęėįšųūž┘┌█▄▌▐▀ÓßŌŃõÕµńĶķĻļņĒŅ’­±“¾¶§÷„°∙·¹³²■ "
+	  },
+	  "ibm775": "cp775",
+	  "csibm775": "cp775",
+	  "cp850": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ "
+	  },
+	  "ibm850": "cp850",
+	  "csibm850": "cp850",
+	  "cp852": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäůćçłëŐőîŹÄĆÉĹĺôöĽľŚśÖÜŤťŁ×čáíóúĄąŽžĘę¬źČş«»░▒▓│┤ÁÂĚŞ╣║╗╝Żż┐└┴┬├─┼Ăă╚╔╩╦╠═╬¤đĐĎËďŇÍÎě┘┌█▄ŢŮ▀ÓßÔŃńňŠšŔÚŕŰýÝţ´­˝˛ˇ˘§÷¸°¨˙űŘř■ "
+	  },
+	  "ibm852": "cp852",
+	  "csibm852": "cp852",
+	  "cp855": {
+	    "type": "_sbcs",
+	    "chars": "ђЂѓЃёЁєЄѕЅіІїЇјЈљЉњЊћЋќЌўЎџЏюЮъЪаАбБцЦдДеЕфФгГ«»░▒▓│┤хХиИ╣║╗╝йЙ┐└┴┬├─┼кК╚╔╩╦╠═╬¤лЛмМнНоОп┘┌█▄Пя▀ЯрРсСтТуУжЖвВьЬ№­ыЫзЗшШэЭщЩчЧ§■ "
+	  },
+	  "ibm855": "cp855",
+	  "csibm855": "cp855",
+	  "cp856": {
+	    "type": "_sbcs",
+	    "chars": "אבגדהוזחטיךכלםמןנסעףפץצקרשת�£�×����������®¬½¼�«»░▒▓│┤���©╣║╗╝¢¥┐└┴┬├─┼��╚╔╩╦╠═╬¤���������┘┌█▄¦�▀������µ�������¯´­±‗¾¶§÷¸°¨·¹³²■ "
+	  },
+	  "ibm856": "cp856",
+	  "csibm856": "cp856",
+	  "cp857": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäàåçêëèïîıÄÅÉæÆôöòûùİÖÜø£ØŞşáíóúñÑĞğ¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ºªÊËÈ�ÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµ�×ÚÛÙìÿ¯´­±�¾¶§÷¸°¨·¹³²■ "
+	  },
+	  "ibm857": "cp857",
+	  "csibm857": "cp857",
+	  "cp858": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈ€ÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ "
+	  },
+	  "ibm858": "cp858",
+	  "csibm858": "cp858",
+	  "cp860": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâãàÁçêÊèÍÔìÃÂÉÀÈôõòÚùÌÕÜ¢£Ù₧ÓáíóúñÑªº¿Ò¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm860": "cp860",
+	  "csibm860": "cp860",
+	  "cp861": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäàåçêëèÐðÞÄÅÉæÆôöþûÝýÖÜø£Ø₧ƒáíóúÁÍÓÚ¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm861": "cp861",
+	  "csibm861": "cp861",
+	  "cp862": {
+	    "type": "_sbcs",
+	    "chars": "אבגדהוזחטיךכלםמןנסעףפץצקרשת¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm862": "cp862",
+	  "csibm862": "cp862",
+	  "cp863": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâÂà¶çêëèïî‗À§ÉÈÊôËÏûù¤ÔÜ¢£ÙÛƒ¦´óú¨¸³¯Î⌐¬½¼¾«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm863": "cp863",
+	  "csibm863": "cp863",
+	  "cp864": {
+	    "type": "_sbcs",
+	    "chars": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$٪&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~°·∙√▒─│┼┤┬├┴┐┌└┘β∞φ±½¼≈«»ﻷﻸ��ﻻﻼ� ­ﺂ£¤ﺄ��ﺎﺏﺕﺙ،ﺝﺡﺥ٠١٢٣٤٥٦٧٨٩ﻑ؛ﺱﺵﺹ؟¢ﺀﺁﺃﺅﻊﺋﺍﺑﺓﺗﺛﺟﺣﺧﺩﺫﺭﺯﺳﺷﺻﺿﻁﻅﻋﻏ¦¬÷×ﻉـﻓﻗﻛﻟﻣﻧﻫﻭﻯﻳﺽﻌﻎﻍﻡﹽّﻥﻩﻬﻰﻲﻐﻕﻵﻶﻝﻙﻱ■�"
+	  },
+	  "ibm864": "cp864",
+	  "csibm864": "cp864",
+	  "cp865": {
+	    "type": "_sbcs",
+	    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø₧ƒáíóúñÑªº¿⌐¬½¼¡«¤░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+	  },
+	  "ibm865": "cp865",
+	  "csibm865": "cp865",
+	  "cp866": {
+	    "type": "_sbcs",
+	    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёЄєЇїЎў°∙·√№¤■ "
+	  },
+	  "ibm866": "cp866",
+	  "csibm866": "cp866",
+	  "cp869": {
+	    "type": "_sbcs",
+	    "chars": "������Ά�·¬¦‘’Έ―ΉΊΪΌ��ΎΫ©Ώ²³ά£έήίϊΐόύΑΒΓΔΕΖΗ½ΘΙ«»░▒▓│┤ΚΛΜΝ╣║╗╝ΞΟ┐└┴┬├─┼ΠΡ╚╔╩╦╠═╬ΣΤΥΦΧΨΩαβγ┘┌█▄δε▀ζηθικλμνξοπρσςτ΄­±υφχ§ψ΅°¨ωϋΰώ■ "
+	  },
+	  "ibm869": "cp869",
+	  "csibm869": "cp869",
+	  "cp922": {
+	    "type": "_sbcs",
+	    "chars": " ¡¢£¤¥¦§¨©ª«¬­®‾°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏŠÑÒÓÔÕÖ×ØÙÚÛÜÝŽßàáâãäåæçèéêëìíîïšñòóôõö÷øùúûüýžÿ"
+	  },
+	  "ibm922": "cp922",
+	  "csibm922": "cp922",
+	  "cp1046": {
+	    "type": "_sbcs",
+	    "chars": "ﺈ×÷ﹱ■│─┐┌└┘ﹹﹻﹽﹿﹷﺊﻰﻳﻲﻎﻏﻐﻶﻸﻺﻼ ¤ﺋﺑﺗﺛﺟﺣ،­ﺧﺳ٠١٢٣٤٥٦٧٨٩ﺷ؛ﺻﺿﻊ؟ﻋءآأؤإئابةتثجحخدذرزسشصضطﻇعغﻌﺂﺄﺎﻓـفقكلمنهوىيًٌٍَُِّْﻗﻛﻟﻵﻷﻹﻻﻣﻧﻬﻩ�"
+	  },
+	  "ibm1046": "cp1046",
+	  "csibm1046": "cp1046",
+	  "cp1124": {
+	    "type": "_sbcs",
+	    "chars": " ЁЂҐЄЅІЇЈЉЊЋЌ­ЎЏАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя№ёђґєѕіїјљњћќ§ўџ"
+	  },
+	  "ibm1124": "cp1124",
+	  "csibm1124": "cp1124",
+	  "cp1125": {
+	    "type": "_sbcs",
+	    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёҐґЄєІіЇї·√№¤■ "
+	  },
+	  "ibm1125": "cp1125",
+	  "csibm1125": "cp1125",
+	  "cp1129": {
+	    "type": "_sbcs",
+	    "chars": " ¡¢£¤¥¦§œ©ª«¬­®¯°±²³Ÿµ¶·Œ¹º»¼½¾¿ÀÁÂĂÄÅÆÇÈÉÊË̀ÍÎÏĐÑ̉ÓÔƠÖ×ØÙÚÛÜỮßàáâăäåæçèéêë́íîïđṇ̃óôơö÷øùúûüư₫ÿ"
+	  },
+	  "ibm1129": "cp1129",
+	  "csibm1129": "cp1129",
+	  "cp1133": {
+	    "type": "_sbcs",
+	    "chars": " ກຂຄງຈສຊຍດຕຖທນບປຜຝພຟມຢຣລວຫອຮ���ຯະາຳິີຶືຸູຼັົຽ���ເແໂໃໄ່້໊໋໌ໍໆ�ໜໝ₭����������������໐໑໒໓໔໕໖໗໘໙��¢¬¦�"
+	  },
+	  "ibm1133": "cp1133",
+	  "csibm1133": "cp1133",
+	  "cp1161": {
+	    "type": "_sbcs",
+	    "chars": "��������������������������������่กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู้๊๋€฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛¢¬¦ "
+	  },
+	  "ibm1161": "cp1161",
+	  "csibm1161": "cp1161",
+	  "cp1162": {
+	    "type": "_sbcs",
+	    "chars": "€…‘’“”•–— กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+	  },
+	  "ibm1162": "cp1162",
+	  "csibm1162": "cp1162",
+	  "cp1163": {
+	    "type": "_sbcs",
+	    "chars": " ¡¢£€¥¦§œ©ª«¬­®¯°±²³Ÿµ¶·Œ¹º»¼½¾¿ÀÁÂĂÄÅÆÇÈÉÊË̀ÍÎÏĐÑ̉ÓÔƠÖ×ØÙÚÛÜỮßàáâăäåæçèéêë́íîïđṇ̃óôơö÷øùúûüư₫ÿ"
+	  },
+	  "ibm1163": "cp1163",
+	  "csibm1163": "cp1163",
+	  "maccroatian": {
+	    "type": "_sbcs",
+	    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®Š™´¨≠ŽØ∞±≤≥∆µ∂∑∏š∫ªºΩžø¿¡¬√ƒ≈Ć«Č… ÀÃÕŒœĐ—“”‘’÷◊�©⁄¤‹›Æ»–·‚„‰ÂćÁčÈÍÎÏÌÓÔđÒÚÛÙıˆ˜¯πË˚¸Êæˇ"
+	  },
+	  "maccyrillic": {
+	    "type": "_sbcs",
+	    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ†°¢£§•¶І®©™Ђђ≠Ѓѓ∞±≤≥іµ∂ЈЄєЇїЉљЊњјЅ¬√ƒ≈∆«»… ЋћЌќѕ–—“”‘’÷„ЎўЏџ№Ёёяабвгдежзийклмнопрстуфхцчшщъыьэю¤"
+	  },
+	  "macgreek": {
+	    "type": "_sbcs",
+	    "chars": "Ä¹²É³ÖÜ΅àâä΄¨çéèêë£™îï•½‰ôö¦­ùûü†ΓΔΘΛΞΠß®©ΣΪ§≠°·Α±≤≥¥ΒΕΖΗΙΚΜΦΫΨΩάΝ¬ΟΡ≈Τ«»… ΥΧΆΈœ–―“”‘’÷ΉΊΌΎέήίόΏύαβψδεφγηιξκλμνοπώρστθωςχυζϊϋΐΰ�"
+	  },
+	  "maciceland": {
+	    "type": "_sbcs",
+	    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûüÝ°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤ÐðÞþý·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+	  },
+	  "macroman": {
+	    "type": "_sbcs",
+	    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤‹›ﬁﬂ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+	  },
+	  "macromania": {
+	    "type": "_sbcs",
+	    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ĂŞ∞±≤≥¥µ∂∑∏π∫ªºΩăş¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤‹›Ţţ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+	  },
+	  "macthai": {
+	    "type": "_sbcs",
+	    "chars": "«»…“”�•‘’� กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู﻿​–—฿เแโใไๅๆ็่้๊๋์ํ™๏๐๑๒๓๔๕๖๗๘๙®©����"
+	  },
+	  "macturkish": {
+	    "type": "_sbcs",
+	    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸĞğİıŞş‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙ�ˆ˜¯˘˙˚¸˝˛ˇ"
+	  },
+	  "macukraine": {
+	    "type": "_sbcs",
+	    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ†°Ґ£§•¶І®©™Ђђ≠Ѓѓ∞±≤≥іµґЈЄєЇїЉљЊњјЅ¬√ƒ≈∆«»… ЋћЌќѕ–—“”‘’÷„ЎўЏџ№Ёёяабвгдежзийклмнопрстуфхцчшщъыьэю¤"
+	  },
+	  "koi8r": {
+	    "type": "_sbcs",
+	    "chars": "─│┌┐└┘├┤┬┴┼▀▄█▌▐░▒▓⌠■∙√≈≤≥ ⌡°²·÷═║╒ё╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡Ё╢╣╤╥╦╧╨╩╪╫╬©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+	  },
+	  "koi8u": {
+	    "type": "_sbcs",
+	    "chars": "─│┌┐└┘├┤┬┴┼▀▄█▌▐░▒▓⌠■∙√≈≤≥ ⌡°²·÷═║╒ёє╔ії╗╘╙╚╛ґ╝╞╟╠╡ЁЄ╣ІЇ╦╧╨╩╪Ґ╬©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+	  },
+	  "koi8ru": {
+	    "type": "_sbcs",
+	    "chars": "─│┌┐└┘├┤┬┴┼▀▄█▌▐░▒▓⌠■∙√≈≤≥ ⌡°²·÷═║╒ёє╔ії╗╘╙╚╛ґў╞╟╠╡ЁЄ╣ІЇ╦╧╨╩╪ҐЎ©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+	  },
+	  "koi8t": {
+	    "type": "_sbcs",
+	    "chars": "қғ‚Ғ„…†‡�‰ҳ‹ҲҷҶ�Қ‘’“”•–—�™�›�����ӯӮё¤ӣ¦§���«¬­®�°±²Ё�Ӣ¶·�№�»���©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+	  },
+	  "armscii8": {
+	    "type": "_sbcs",
+	    "chars": " �և։)(»«—.՝,-֊…՜՛՞ԱաԲբԳգԴդԵեԶզԷէԸըԹթԺժԻիԼլԽխԾծԿկՀհՁձՂղՃճՄմՅյՆնՇշՈոՉչՊպՋջՌռՍսՎվՏտՐրՑցՒւՓփՔքՕօՖֆ՚�"
+	  },
+	  "rk1048": {
+	    "type": "_sbcs",
+	    "chars": "ЂЃ‚ѓ„…†‡€‰Љ‹ЊҚҺЏђ‘’“”•–—�™љ›њқһџ ҰұӘ¤Ө¦§Ё©Ғ«¬­®Ү°±Ііөµ¶·ё№ғ»әҢңүАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя"
+	  },
+	  "tcvn": {
+	    "type": "_sbcs",
+	    "chars": "\u0000ÚỤ\u0003ỪỬỮ\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010ỨỰỲỶỸÝỴ\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ÀẢÃÁẠẶẬÈẺẼÉẸỆÌỈĨÍỊÒỎÕÓỌỘỜỞỠỚỢÙỦŨ ĂÂÊÔƠƯĐăâêôơưđẶ̀̀̉̃́àảãáạẲằẳẵắẴẮẦẨẪẤỀặầẩẫấậèỂẻẽéẹềểễếệìỉỄẾỒĩíịòỔỏõóọồổỗốộờởỡớợùỖủũúụừửữứựỳỷỹýỵỐ"
+	  },
+	  "georgianacademy": {
+	    "type": "_sbcs",
+	    "chars": "‚ƒ„…†‡ˆ‰Š‹Œ‘’“”•–—˜™š›œŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰჱჲჳჴჵჶçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+	  },
+	  "georgianps": {
+	    "type": "_sbcs",
+	    "chars": "‚ƒ„…†‡ˆ‰Š‹Œ‘’“”•–—˜™š›œŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿აბგდევზჱთიკლმნჲოპჟრსტჳუფქღყშჩცძწჭხჴჯჰჵæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+	  },
+	  "pt154": {
+	    "type": "_sbcs",
+	    "chars": "ҖҒӮғ„…ҶҮҲүҠӢҢҚҺҸҗ‘’“”•–—ҳҷҡӣңқһҹ ЎўЈӨҘҰ§Ё©Ә«¬ӯ®Ҝ°ұІіҙө¶·ё№ә»јҪҫҝАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя"
+	  },
+	  "viscii": {
+	    "type": "_sbcs",
+	    "chars": "\u0000\u0001Ẳ\u0003\u0004ẴẪ\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013Ỷ\u0015\u0016\u0017\u0018Ỹ\u001a\u001b\u001c\u001dỴ\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ẠẮẰẶẤẦẨẬẼẸẾỀỂỄỆỐỒỔỖỘỢỚỜỞỊỎỌỈỦŨỤỲÕắằặấầẩậẽẹếềểễệốồổỗỠƠộờởịỰỨỪỬơớƯÀÁÂÃẢĂẳẵÈÉÊẺÌÍĨỳĐứÒÓÔạỷừửÙÚỹỵÝỡưàáâãảăữẫèéêẻìíĩỉđựòóôõỏọụùúũủýợỮ"
+	  },
+	  "iso646cn": {
+	    "type": "_sbcs",
+	    "chars": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#¥%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}‾��������������������������������������������������������������������������������������������������������������������������������"
+	  },
+	  "iso646jp": {
+	    "type": "_sbcs",
+	    "chars": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[¥]^_`abcdefghijklmnopqrstuvwxyz{|}‾��������������������������������������������������������������������������������������������������������������������������������"
+	  },
+	  "hproman8": {
+	    "type": "_sbcs",
+	    "chars": " ÀÂÈÊËÎÏ´ˋˆ¨˜ÙÛ₤¯Ýý°ÇçÑñ¡¿¤£¥§ƒ¢âêôûáéóúàèòùäëöüÅîØÆåíøæÄìÖÜÉïßÔÁÃãÐðÍÌÓÒÕõŠšÚŸÿÞþ·µ¶¾—¼½ªº«■»±�"
+	  },
+	  "macintosh": {
+	    "type": "_sbcs",
+	    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤‹›ﬁﬂ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+	  },
+	  "ascii": {
+	    "type": "_sbcs",
+	    "chars": "��������������������������������������������������������������������������������������������������������������������������������"
+	  },
+	  "tis620": {
+	    "type": "_sbcs",
+	    "chars": "���������������������������������กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+	  }
+	};
+	return sbcsDataGenerated;
+}
+
+var dbcsCodec = {};
+
+var hasRequiredDbcsCodec;
+
+function requireDbcsCodec () {
+	if (hasRequiredDbcsCodec) return dbcsCodec;
+	hasRequiredDbcsCodec = 1;
+	var Buffer = requireSafer().Buffer;
+
+	// Multibyte codec. In this scheme, a character is represented by 1 or more bytes.
+	// Our codec supports UTF-16 surrogates, extensions for GB18030 and unicode sequences.
+	// To save memory and loading time, we read table files only when requested.
+
+	dbcsCodec._dbcs = DBCSCodec;
+
+	var UNASSIGNED = -1,
+	    GB18030_CODE = -2,
+	    SEQ_START  = -10,
+	    NODE_START = -1000,
+	    UNASSIGNED_NODE = new Array(0x100),
+	    DEF_CHAR = -1;
+
+	for (var i = 0; i < 0x100; i++)
+	    UNASSIGNED_NODE[i] = UNASSIGNED;
+
+
+	// Class DBCSCodec reads and initializes mapping tables.
+	function DBCSCodec(codecOptions, iconv) {
+	    this.encodingName = codecOptions.encodingName;
+	    if (!codecOptions)
+	        throw new Error("DBCS codec is called without the data.")
+	    if (!codecOptions.table)
+	        throw new Error("Encoding '" + this.encodingName + "' has no data.");
+
+	    // Load tables.
+	    var mappingTable = codecOptions.table();
+
+
+	    // Decode tables: MBCS -> Unicode.
+
+	    // decodeTables is a trie, encoded as an array of arrays of integers. Internal arrays are trie nodes and all have len = 256.
+	    // Trie root is decodeTables[0].
+	    // Values: >=  0 -> unicode character code. can be > 0xFFFF
+	    //         == UNASSIGNED -> unknown/unassigned sequence.
+	    //         == GB18030_CODE -> this is the end of a GB18030 4-byte sequence.
+	    //         <= NODE_START -> index of the next node in our trie to process next byte.
+	    //         <= SEQ_START  -> index of the start of a character code sequence, in decodeTableSeq.
+	    this.decodeTables = [];
+	    this.decodeTables[0] = UNASSIGNED_NODE.slice(0); // Create root node.
+
+	    // Sometimes a MBCS char corresponds to a sequence of unicode chars. We store them as arrays of integers here. 
+	    this.decodeTableSeq = [];
+
+	    // Actual mapping tables consist of chunks. Use them to fill up decode tables.
+	    for (var i = 0; i < mappingTable.length; i++)
+	        this._addDecodeChunk(mappingTable[i]);
+
+	    this.defaultCharUnicode = iconv.defaultCharUnicode;
+
+	    
+	    // Encode tables: Unicode -> DBCS.
+
+	    // `encodeTable` is array mapping from unicode char to encoded char. All its values are integers for performance.
+	    // Because it can be sparse, it is represented as array of buckets by 256 chars each. Bucket can be null.
+	    // Values: >=  0 -> it is a normal char. Write the value (if <=256 then 1 byte, if <=65536 then 2 bytes, etc.).
+	    //         == UNASSIGNED -> no conversion found. Output a default char.
+	    //         <= SEQ_START  -> it's an index in encodeTableSeq, see below. The character starts a sequence.
+	    this.encodeTable = [];
+	    
+	    // `encodeTableSeq` is used when a sequence of unicode characters is encoded as a single code. We use a tree of
+	    // objects where keys correspond to characters in sequence and leafs are the encoded dbcs values. A special DEF_CHAR key
+	    // means end of sequence (needed when one sequence is a strict subsequence of another).
+	    // Objects are kept separately from encodeTable to increase performance.
+	    this.encodeTableSeq = [];
+
+	    // Some chars can be decoded, but need not be encoded.
+	    var skipEncodeChars = {};
+	    if (codecOptions.encodeSkipVals)
+	        for (var i = 0; i < codecOptions.encodeSkipVals.length; i++) {
+	            var val = codecOptions.encodeSkipVals[i];
+	            if (typeof val === 'number')
+	                skipEncodeChars[val] = true;
+	            else
+	                for (var j = val.from; j <= val.to; j++)
+	                    skipEncodeChars[j] = true;
+	        }
+	        
+	    // Use decode trie to recursively fill out encode tables.
+	    this._fillEncodeTable(0, 0, skipEncodeChars);
+
+	    // Add more encoding pairs when needed.
+	    if (codecOptions.encodeAdd) {
+	        for (var uChar in codecOptions.encodeAdd)
+	            if (Object.prototype.hasOwnProperty.call(codecOptions.encodeAdd, uChar))
+	                this._setEncodeChar(uChar.charCodeAt(0), codecOptions.encodeAdd[uChar]);
+	    }
+
+	    this.defCharSB  = this.encodeTable[0][iconv.defaultCharSingleByte.charCodeAt(0)];
+	    if (this.defCharSB === UNASSIGNED) this.defCharSB = this.encodeTable[0]['?'];
+	    if (this.defCharSB === UNASSIGNED) this.defCharSB = "?".charCodeAt(0);
+
+
+	    // Load & create GB18030 tables when needed.
+	    if (typeof codecOptions.gb18030 === 'function') {
+	        this.gb18030 = codecOptions.gb18030(); // Load GB18030 ranges.
+
+	        // Add GB18030 decode tables.
+	        var thirdByteNodeIdx = this.decodeTables.length;
+	        var thirdByteNode = this.decodeTables[thirdByteNodeIdx] = UNASSIGNED_NODE.slice(0);
+
+	        var fourthByteNodeIdx = this.decodeTables.length;
+	        var fourthByteNode = this.decodeTables[fourthByteNodeIdx] = UNASSIGNED_NODE.slice(0);
+
+	        for (var i = 0x81; i <= 0xFE; i++) {
+	            var secondByteNodeIdx = NODE_START - this.decodeTables[0][i];
+	            var secondByteNode = this.decodeTables[secondByteNodeIdx];
+	            for (var j = 0x30; j <= 0x39; j++)
+	                secondByteNode[j] = NODE_START - thirdByteNodeIdx;
+	        }
+	        for (var i = 0x81; i <= 0xFE; i++)
+	            thirdByteNode[i] = NODE_START - fourthByteNodeIdx;
+	        for (var i = 0x30; i <= 0x39; i++)
+	            fourthByteNode[i] = GB18030_CODE;
+	    }        
+	}
+
+	DBCSCodec.prototype.encoder = DBCSEncoder;
+	DBCSCodec.prototype.decoder = DBCSDecoder;
+
+	// Decoder helpers
+	DBCSCodec.prototype._getDecodeTrieNode = function(addr) {
+	    var bytes = [];
+	    for (; addr > 0; addr >>= 8)
+	        bytes.push(addr & 0xFF);
+	    if (bytes.length == 0)
+	        bytes.push(0);
+
+	    var node = this.decodeTables[0];
+	    for (var i = bytes.length-1; i > 0; i--) { // Traverse nodes deeper into the trie.
+	        var val = node[bytes[i]];
+
+	        if (val == UNASSIGNED) { // Create new node.
+	            node[bytes[i]] = NODE_START - this.decodeTables.length;
+	            this.decodeTables.push(node = UNASSIGNED_NODE.slice(0));
+	        }
+	        else if (val <= NODE_START) { // Existing node.
+	            node = this.decodeTables[NODE_START - val];
+	        }
+	        else
+	            throw new Error("Overwrite byte in " + this.encodingName + ", addr: " + addr.toString(16));
+	    }
+	    return node;
+	};
+
+
+	DBCSCodec.prototype._addDecodeChunk = function(chunk) {
+	    // First element of chunk is the hex mbcs code where we start.
+	    var curAddr = parseInt(chunk[0], 16);
+
+	    // Choose the decoding node where we'll write our chars.
+	    var writeTable = this._getDecodeTrieNode(curAddr);
+	    curAddr = curAddr & 0xFF;
+
+	    // Write all other elements of the chunk to the table.
+	    for (var k = 1; k < chunk.length; k++) {
+	        var part = chunk[k];
+	        if (typeof part === "string") { // String, write as-is.
+	            for (var l = 0; l < part.length;) {
+	                var code = part.charCodeAt(l++);
+	                if (0xD800 <= code && code < 0xDC00) { // Decode surrogate
+	                    var codeTrail = part.charCodeAt(l++);
+	                    if (0xDC00 <= codeTrail && codeTrail < 0xE000)
+	                        writeTable[curAddr++] = 0x10000 + (code - 0xD800) * 0x400 + (codeTrail - 0xDC00);
+	                    else
+	                        throw new Error("Incorrect surrogate pair in "  + this.encodingName + " at chunk " + chunk[0]);
+	                }
+	                else if (0x0FF0 < code && code <= 0x0FFF) { // Character sequence (our own encoding used)
+	                    var len = 0xFFF - code + 2;
+	                    var seq = [];
+	                    for (var m = 0; m < len; m++)
+	                        seq.push(part.charCodeAt(l++)); // Simple variation: don't support surrogates or subsequences in seq.
+
+	                    writeTable[curAddr++] = SEQ_START - this.decodeTableSeq.length;
+	                    this.decodeTableSeq.push(seq);
+	                }
+	                else
+	                    writeTable[curAddr++] = code; // Basic char
+	            }
+	        } 
+	        else if (typeof part === "number") { // Integer, meaning increasing sequence starting with prev character.
+	            var charCode = writeTable[curAddr - 1] + 1;
+	            for (var l = 0; l < part; l++)
+	                writeTable[curAddr++] = charCode++;
+	        }
+	        else
+	            throw new Error("Incorrect type '" + typeof part + "' given in "  + this.encodingName + " at chunk " + chunk[0]);
+	    }
+	    if (curAddr > 0xFF)
+	        throw new Error("Incorrect chunk in "  + this.encodingName + " at addr " + chunk[0] + ": too long" + curAddr);
+	};
+
+	// Encoder helpers
+	DBCSCodec.prototype._getEncodeBucket = function(uCode) {
+	    var high = uCode >> 8; // This could be > 0xFF because of astral characters.
+	    if (this.encodeTable[high] === undefined)
+	        this.encodeTable[high] = UNASSIGNED_NODE.slice(0); // Create bucket on demand.
+	    return this.encodeTable[high];
+	};
+
+	DBCSCodec.prototype._setEncodeChar = function(uCode, dbcsCode) {
+	    var bucket = this._getEncodeBucket(uCode);
+	    var low = uCode & 0xFF;
+	    if (bucket[low] <= SEQ_START)
+	        this.encodeTableSeq[SEQ_START-bucket[low]][DEF_CHAR] = dbcsCode; // There's already a sequence, set a single-char subsequence of it.
+	    else if (bucket[low] == UNASSIGNED)
+	        bucket[low] = dbcsCode;
+	};
+
+	DBCSCodec.prototype._setEncodeSequence = function(seq, dbcsCode) {
+	    
+	    // Get the root of character tree according to first character of the sequence.
+	    var uCode = seq[0];
+	    var bucket = this._getEncodeBucket(uCode);
+	    var low = uCode & 0xFF;
+
+	    var node;
+	    if (bucket[low] <= SEQ_START) {
+	        // There's already a sequence with  - use it.
+	        node = this.encodeTableSeq[SEQ_START-bucket[low]];
+	    }
+	    else {
+	        // There was no sequence object - allocate a new one.
+	        node = {};
+	        if (bucket[low] !== UNASSIGNED) node[DEF_CHAR] = bucket[low]; // If a char was set before - make it a single-char subsequence.
+	        bucket[low] = SEQ_START - this.encodeTableSeq.length;
+	        this.encodeTableSeq.push(node);
+	    }
+
+	    // Traverse the character tree, allocating new nodes as needed.
+	    for (var j = 1; j < seq.length-1; j++) {
+	        var oldVal = node[uCode];
+	        if (typeof oldVal === 'object')
+	            node = oldVal;
+	        else {
+	            node = node[uCode] = {};
+	            if (oldVal !== undefined)
+	                node[DEF_CHAR] = oldVal;
+	        }
+	    }
+
+	    // Set the leaf to given dbcsCode.
+	    uCode = seq[seq.length-1];
+	    node[uCode] = dbcsCode;
+	};
+
+	DBCSCodec.prototype._fillEncodeTable = function(nodeIdx, prefix, skipEncodeChars) {
+	    var node = this.decodeTables[nodeIdx];
+	    for (var i = 0; i < 0x100; i++) {
+	        var uCode = node[i];
+	        var mbCode = prefix + i;
+	        if (skipEncodeChars[mbCode])
+	            continue;
+
+	        if (uCode >= 0)
+	            this._setEncodeChar(uCode, mbCode);
+	        else if (uCode <= NODE_START)
+	            this._fillEncodeTable(NODE_START - uCode, mbCode << 8, skipEncodeChars);
+	        else if (uCode <= SEQ_START)
+	            this._setEncodeSequence(this.decodeTableSeq[SEQ_START - uCode], mbCode);
+	    }
+	};
+
+
+
+	// == Encoder ==================================================================
+
+	function DBCSEncoder(options, codec) {
+	    // Encoder state
+	    this.leadSurrogate = -1;
+	    this.seqObj = undefined;
+	    
+	    // Static data
+	    this.encodeTable = codec.encodeTable;
+	    this.encodeTableSeq = codec.encodeTableSeq;
+	    this.defaultCharSingleByte = codec.defCharSB;
+	    this.gb18030 = codec.gb18030;
+	}
+
+	DBCSEncoder.prototype.write = function(str) {
+	    var newBuf = Buffer.alloc(str.length * (this.gb18030 ? 4 : 3)),
+	        leadSurrogate = this.leadSurrogate,
+	        seqObj = this.seqObj, nextChar = -1,
+	        i = 0, j = 0;
+
+	    while (true) {
+	        // 0. Get next character.
+	        if (nextChar === -1) {
+	            if (i == str.length) break;
+	            var uCode = str.charCodeAt(i++);
+	        }
+	        else {
+	            var uCode = nextChar;
+	            nextChar = -1;    
+	        }
+
+	        // 1. Handle surrogates.
+	        if (0xD800 <= uCode && uCode < 0xE000) { // Char is one of surrogates.
+	            if (uCode < 0xDC00) { // We've got lead surrogate.
+	                if (leadSurrogate === -1) {
+	                    leadSurrogate = uCode;
+	                    continue;
+	                } else {
+	                    leadSurrogate = uCode;
+	                    // Double lead surrogate found.
+	                    uCode = UNASSIGNED;
+	                }
+	            } else { // We've got trail surrogate.
+	                if (leadSurrogate !== -1) {
+	                    uCode = 0x10000 + (leadSurrogate - 0xD800) * 0x400 + (uCode - 0xDC00);
+	                    leadSurrogate = -1;
+	                } else {
+	                    // Incomplete surrogate pair - only trail surrogate found.
+	                    uCode = UNASSIGNED;
+	                }
+	                
+	            }
+	        }
+	        else if (leadSurrogate !== -1) {
+	            // Incomplete surrogate pair - only lead surrogate found.
+	            nextChar = uCode; uCode = UNASSIGNED; // Write an error, then current char.
+	            leadSurrogate = -1;
+	        }
+
+	        // 2. Convert uCode character.
+	        var dbcsCode = UNASSIGNED;
+	        if (seqObj !== undefined && uCode != UNASSIGNED) { // We are in the middle of the sequence
+	            var resCode = seqObj[uCode];
+	            if (typeof resCode === 'object') { // Sequence continues.
+	                seqObj = resCode;
+	                continue;
+
+	            } else if (typeof resCode == 'number') { // Sequence finished. Write it.
+	                dbcsCode = resCode;
+
+	            } else if (resCode == undefined) { // Current character is not part of the sequence.
+
+	                // Try default character for this sequence
+	                resCode = seqObj[DEF_CHAR];
+	                if (resCode !== undefined) {
+	                    dbcsCode = resCode; // Found. Write it.
+	                    nextChar = uCode; // Current character will be written too in the next iteration.
+
+	                }
+	            }
+	            seqObj = undefined;
+	        }
+	        else if (uCode >= 0) {  // Regular character
+	            var subtable = this.encodeTable[uCode >> 8];
+	            if (subtable !== undefined)
+	                dbcsCode = subtable[uCode & 0xFF];
+	            
+	            if (dbcsCode <= SEQ_START) { // Sequence start
+	                seqObj = this.encodeTableSeq[SEQ_START-dbcsCode];
+	                continue;
+	            }
+
+	            if (dbcsCode == UNASSIGNED && this.gb18030) {
+	                // Use GB18030 algorithm to find character(s) to write.
+	                var idx = findIdx(this.gb18030.uChars, uCode);
+	                if (idx != -1) {
+	                    var dbcsCode = this.gb18030.gbChars[idx] + (uCode - this.gb18030.uChars[idx]);
+	                    newBuf[j++] = 0x81 + Math.floor(dbcsCode / 12600); dbcsCode = dbcsCode % 12600;
+	                    newBuf[j++] = 0x30 + Math.floor(dbcsCode / 1260); dbcsCode = dbcsCode % 1260;
+	                    newBuf[j++] = 0x81 + Math.floor(dbcsCode / 10); dbcsCode = dbcsCode % 10;
+	                    newBuf[j++] = 0x30 + dbcsCode;
+	                    continue;
+	                }
+	            }
+	        }
+
+	        // 3. Write dbcsCode character.
+	        if (dbcsCode === UNASSIGNED)
+	            dbcsCode = this.defaultCharSingleByte;
+	        
+	        if (dbcsCode < 0x100) {
+	            newBuf[j++] = dbcsCode;
+	        }
+	        else if (dbcsCode < 0x10000) {
+	            newBuf[j++] = dbcsCode >> 8;   // high byte
+	            newBuf[j++] = dbcsCode & 0xFF; // low byte
+	        }
+	        else {
+	            newBuf[j++] = dbcsCode >> 16;
+	            newBuf[j++] = (dbcsCode >> 8) & 0xFF;
+	            newBuf[j++] = dbcsCode & 0xFF;
+	        }
+	    }
+
+	    this.seqObj = seqObj;
+	    this.leadSurrogate = leadSurrogate;
+	    return newBuf.slice(0, j);
+	};
+
+	DBCSEncoder.prototype.end = function() {
+	    if (this.leadSurrogate === -1 && this.seqObj === undefined)
+	        return; // All clean. Most often case.
+
+	    var newBuf = Buffer.alloc(10), j = 0;
+
+	    if (this.seqObj) { // We're in the sequence.
+	        var dbcsCode = this.seqObj[DEF_CHAR];
+	        if (dbcsCode !== undefined) { // Write beginning of the sequence.
+	            if (dbcsCode < 0x100) {
+	                newBuf[j++] = dbcsCode;
+	            }
+	            else {
+	                newBuf[j++] = dbcsCode >> 8;   // high byte
+	                newBuf[j++] = dbcsCode & 0xFF; // low byte
+	            }
+	        }
+	        this.seqObj = undefined;
+	    }
+
+	    if (this.leadSurrogate !== -1) {
+	        // Incomplete surrogate pair - only lead surrogate found.
+	        newBuf[j++] = this.defaultCharSingleByte;
+	        this.leadSurrogate = -1;
+	    }
+	    
+	    return newBuf.slice(0, j);
+	};
+
+	// Export for testing
+	DBCSEncoder.prototype.findIdx = findIdx;
+
+
+	// == Decoder ==================================================================
+
+	function DBCSDecoder(options, codec) {
+	    // Decoder state
+	    this.nodeIdx = 0;
+	    this.prevBuf = Buffer.alloc(0);
+
+	    // Static data
+	    this.decodeTables = codec.decodeTables;
+	    this.decodeTableSeq = codec.decodeTableSeq;
+	    this.defaultCharUnicode = codec.defaultCharUnicode;
+	    this.gb18030 = codec.gb18030;
+	}
+
+	DBCSDecoder.prototype.write = function(buf) {
+	    var newBuf = Buffer.alloc(buf.length*2),
+	        nodeIdx = this.nodeIdx, 
+	        prevBuf = this.prevBuf, prevBufOffset = this.prevBuf.length,
+	        seqStart = -this.prevBuf.length, // idx of the start of current parsed sequence.
+	        uCode;
+
+	    if (prevBufOffset > 0) // Make prev buf overlap a little to make it easier to slice later.
+	        prevBuf = Buffer.concat([prevBuf, buf.slice(0, 10)]);
+	    
+	    for (var i = 0, j = 0; i < buf.length; i++) {
+	        var curByte = (i >= 0) ? buf[i] : prevBuf[i + prevBufOffset];
+
+	        // Lookup in current trie node.
+	        var uCode = this.decodeTables[nodeIdx][curByte];
+
+	        if (uCode >= 0) ;
+	        else if (uCode === UNASSIGNED) { // Unknown char.
+	            // TODO: Callback with seq.
+	            //var curSeq = (seqStart >= 0) ? buf.slice(seqStart, i+1) : prevBuf.slice(seqStart + prevBufOffset, i+1 + prevBufOffset);
+	            i = seqStart; // Try to parse again, after skipping first byte of the sequence ('i' will be incremented by 'for' cycle).
+	            uCode = this.defaultCharUnicode.charCodeAt(0);
+	        }
+	        else if (uCode === GB18030_CODE) {
+	            var curSeq = (seqStart >= 0) ? buf.slice(seqStart, i+1) : prevBuf.slice(seqStart + prevBufOffset, i+1 + prevBufOffset);
+	            var ptr = (curSeq[0]-0x81)*12600 + (curSeq[1]-0x30)*1260 + (curSeq[2]-0x81)*10 + (curSeq[3]-0x30);
+	            var idx = findIdx(this.gb18030.gbChars, ptr);
+	            uCode = this.gb18030.uChars[idx] + ptr - this.gb18030.gbChars[idx];
+	        }
+	        else if (uCode <= NODE_START) { // Go to next trie node.
+	            nodeIdx = NODE_START - uCode;
+	            continue;
+	        }
+	        else if (uCode <= SEQ_START) { // Output a sequence of chars.
+	            var seq = this.decodeTableSeq[SEQ_START - uCode];
+	            for (var k = 0; k < seq.length - 1; k++) {
+	                uCode = seq[k];
+	                newBuf[j++] = uCode & 0xFF;
+	                newBuf[j++] = uCode >> 8;
+	            }
+	            uCode = seq[seq.length-1];
+	        }
+	        else
+	            throw new Error("iconv-lite internal error: invalid decoding table value " + uCode + " at " + nodeIdx + "/" + curByte);
+
+	        // Write the character to buffer, handling higher planes using surrogate pair.
+	        if (uCode > 0xFFFF) { 
+	            uCode -= 0x10000;
+	            var uCodeLead = 0xD800 + Math.floor(uCode / 0x400);
+	            newBuf[j++] = uCodeLead & 0xFF;
+	            newBuf[j++] = uCodeLead >> 8;
+
+	            uCode = 0xDC00 + uCode % 0x400;
+	        }
+	        newBuf[j++] = uCode & 0xFF;
+	        newBuf[j++] = uCode >> 8;
+
+	        // Reset trie node.
+	        nodeIdx = 0; seqStart = i+1;
+	    }
+
+	    this.nodeIdx = nodeIdx;
+	    this.prevBuf = (seqStart >= 0) ? buf.slice(seqStart) : prevBuf.slice(seqStart + prevBufOffset);
+	    return newBuf.slice(0, j).toString('ucs2');
+	};
+
+	DBCSDecoder.prototype.end = function() {
+	    var ret = '';
+
+	    // Try to parse all remaining chars.
+	    while (this.prevBuf.length > 0) {
+	        // Skip 1 character in the buffer.
+	        ret += this.defaultCharUnicode;
+	        var buf = this.prevBuf.slice(1);
+
+	        // Parse remaining as usual.
+	        this.prevBuf = Buffer.alloc(0);
+	        this.nodeIdx = 0;
+	        if (buf.length > 0)
+	            ret += this.write(buf);
+	    }
+
+	    this.nodeIdx = 0;
+	    return ret;
+	};
+
+	// Binary search for GB18030. Returns largest i such that table[i] <= val.
+	function findIdx(table, val) {
+	    if (table[0] > val)
+	        return -1;
+
+	    var l = 0, r = table.length;
+	    while (l < r-1) { // always table[l] <= val < table[r]
+	        var mid = l + Math.floor((r-l+1)/2);
+	        if (table[mid] <= val)
+	            l = mid;
+	        else
+	            r = mid;
+	    }
+	    return l;
+	}
+	return dbcsCodec;
+}
+
+var require$$0$3 = [
+	[
+		"0",
+		"\u0000",
+		128
+	],
+	[
+		"a1",
+		"｡",
+		62
+	],
+	[
+		"8140",
+		"　、。，．・：；？！゛゜´｀¨＾￣＿ヽヾゝゞ〃仝々〆〇ー―‐／＼～∥｜…‥‘’“”（）〔〕［］｛｝〈",
+		9,
+		"＋－±×"
+	],
+	[
+		"8180",
+		"÷＝≠＜＞≦≧∞∴♂♀°′″℃￥＄￠￡％＃＆＊＠§☆★○●◎◇◆□■△▲▽▼※〒→←↑↓〓"
+	],
+	[
+		"81b8",
+		"∈∋⊆⊇⊂⊃∪∩"
+	],
+	[
+		"81c8",
+		"∧∨￢⇒⇔∀∃"
+	],
+	[
+		"81da",
+		"∠⊥⌒∂∇≡≒≪≫√∽∝∵∫∬"
+	],
+	[
+		"81f0",
+		"Å‰♯♭♪†‡¶"
+	],
+	[
+		"81fc",
+		"◯"
+	],
+	[
+		"824f",
+		"０",
+		9
+	],
+	[
+		"8260",
+		"Ａ",
+		25
+	],
+	[
+		"8281",
+		"ａ",
+		25
+	],
+	[
+		"829f",
+		"ぁ",
+		82
+	],
+	[
+		"8340",
+		"ァ",
+		62
+	],
+	[
+		"8380",
+		"ム",
+		22
+	],
+	[
+		"839f",
+		"Α",
+		16,
+		"Σ",
+		6
+	],
+	[
+		"83bf",
+		"α",
+		16,
+		"σ",
+		6
+	],
+	[
+		"8440",
+		"А",
+		5,
+		"ЁЖ",
+		25
+	],
+	[
+		"8470",
+		"а",
+		5,
+		"ёж",
+		7
+	],
+	[
+		"8480",
+		"о",
+		17
+	],
+	[
+		"849f",
+		"─│┌┐┘└├┬┤┴┼━┃┏┓┛┗┣┳┫┻╋┠┯┨┷┿┝┰┥┸╂"
+	],
+	[
+		"8740",
+		"①",
+		19,
+		"Ⅰ",
+		9
+	],
+	[
+		"875f",
+		"㍉㌔㌢㍍㌘㌧㌃㌶㍑㍗㌍㌦㌣㌫㍊㌻㎜㎝㎞㎎㎏㏄㎡"
+	],
+	[
+		"877e",
+		"㍻"
+	],
+	[
+		"8780",
+		"〝〟№㏍℡㊤",
+		4,
+		"㈱㈲㈹㍾㍽㍼≒≡∫∮∑√⊥∠∟⊿∵∩∪"
+	],
+	[
+		"889f",
+		"亜唖娃阿哀愛挨姶逢葵茜穐悪握渥旭葦芦鯵梓圧斡扱宛姐虻飴絢綾鮎或粟袷安庵按暗案闇鞍杏以伊位依偉囲夷委威尉惟意慰易椅為畏異移維緯胃萎衣謂違遺医井亥域育郁磯一壱溢逸稲茨芋鰯允印咽員因姻引飲淫胤蔭"
+	],
+	[
+		"8940",
+		"院陰隠韻吋右宇烏羽迂雨卯鵜窺丑碓臼渦嘘唄欝蔚鰻姥厩浦瓜閏噂云運雲荏餌叡営嬰影映曳栄永泳洩瑛盈穎頴英衛詠鋭液疫益駅悦謁越閲榎厭円"
+	],
+	[
+		"8980",
+		"園堰奄宴延怨掩援沿演炎焔煙燕猿縁艶苑薗遠鉛鴛塩於汚甥凹央奥往応押旺横欧殴王翁襖鴬鴎黄岡沖荻億屋憶臆桶牡乙俺卸恩温穏音下化仮何伽価佳加可嘉夏嫁家寡科暇果架歌河火珂禍禾稼箇花苛茄荷華菓蝦課嘩貨迦過霞蚊俄峨我牙画臥芽蛾賀雅餓駕介会解回塊壊廻快怪悔恢懐戒拐改"
+	],
+	[
+		"8a40",
+		"魁晦械海灰界皆絵芥蟹開階貝凱劾外咳害崖慨概涯碍蓋街該鎧骸浬馨蛙垣柿蛎鈎劃嚇各廓拡撹格核殻獲確穫覚角赫較郭閣隔革学岳楽額顎掛笠樫"
+	],
+	[
+		"8a80",
+		"橿梶鰍潟割喝恰括活渇滑葛褐轄且鰹叶椛樺鞄株兜竃蒲釜鎌噛鴨栢茅萱粥刈苅瓦乾侃冠寒刊勘勧巻喚堪姦完官寛干幹患感慣憾換敢柑桓棺款歓汗漢澗潅環甘監看竿管簡緩缶翰肝艦莞観諌貫還鑑間閑関陥韓館舘丸含岸巌玩癌眼岩翫贋雁頑顔願企伎危喜器基奇嬉寄岐希幾忌揮机旗既期棋棄"
+	],
+	[
+		"8b40",
+		"機帰毅気汽畿祈季稀紀徽規記貴起軌輝飢騎鬼亀偽儀妓宜戯技擬欺犠疑祇義蟻誼議掬菊鞠吉吃喫桔橘詰砧杵黍却客脚虐逆丘久仇休及吸宮弓急救"
+	],
+	[
+		"8b80",
+		"朽求汲泣灸球究窮笈級糾給旧牛去居巨拒拠挙渠虚許距鋸漁禦魚亨享京供侠僑兇競共凶協匡卿叫喬境峡強彊怯恐恭挟教橋況狂狭矯胸脅興蕎郷鏡響饗驚仰凝尭暁業局曲極玉桐粁僅勤均巾錦斤欣欽琴禁禽筋緊芹菌衿襟謹近金吟銀九倶句区狗玖矩苦躯駆駈駒具愚虞喰空偶寓遇隅串櫛釧屑屈"
+	],
+	[
+		"8c40",
+		"掘窟沓靴轡窪熊隈粂栗繰桑鍬勲君薫訓群軍郡卦袈祁係傾刑兄啓圭珪型契形径恵慶慧憩掲携敬景桂渓畦稽系経継繋罫茎荊蛍計詣警軽頚鶏芸迎鯨"
+	],
+	[
+		"8c80",
+		"劇戟撃激隙桁傑欠決潔穴結血訣月件倹倦健兼券剣喧圏堅嫌建憲懸拳捲検権牽犬献研硯絹県肩見謙賢軒遣鍵険顕験鹸元原厳幻弦減源玄現絃舷言諺限乎個古呼固姑孤己庫弧戸故枯湖狐糊袴股胡菰虎誇跨鈷雇顧鼓五互伍午呉吾娯後御悟梧檎瑚碁語誤護醐乞鯉交佼侯候倖光公功効勾厚口向"
+	],
+	[
+		"8d40",
+		"后喉坑垢好孔孝宏工巧巷幸広庚康弘恒慌抗拘控攻昂晃更杭校梗構江洪浩港溝甲皇硬稿糠紅紘絞綱耕考肯肱腔膏航荒行衡講貢購郊酵鉱砿鋼閤降"
+	],
+	[
+		"8d80",
+		"項香高鴻剛劫号合壕拷濠豪轟麹克刻告国穀酷鵠黒獄漉腰甑忽惚骨狛込此頃今困坤墾婚恨懇昏昆根梱混痕紺艮魂些佐叉唆嵯左差査沙瑳砂詐鎖裟坐座挫債催再最哉塞妻宰彩才採栽歳済災采犀砕砦祭斎細菜裁載際剤在材罪財冴坂阪堺榊肴咲崎埼碕鷺作削咋搾昨朔柵窄策索錯桜鮭笹匙冊刷"
+	],
+	[
+		"8e40",
+		"察拶撮擦札殺薩雑皐鯖捌錆鮫皿晒三傘参山惨撒散桟燦珊産算纂蚕讃賛酸餐斬暫残仕仔伺使刺司史嗣四士始姉姿子屍市師志思指支孜斯施旨枝止"
+	],
+	[
+		"8e80",
+		"死氏獅祉私糸紙紫肢脂至視詞詩試誌諮資賜雌飼歯事似侍児字寺慈持時次滋治爾璽痔磁示而耳自蒔辞汐鹿式識鴫竺軸宍雫七叱執失嫉室悉湿漆疾質実蔀篠偲柴芝屡蕊縞舎写射捨赦斜煮社紗者謝車遮蛇邪借勺尺杓灼爵酌釈錫若寂弱惹主取守手朱殊狩珠種腫趣酒首儒受呪寿授樹綬需囚収周"
+	],
+	[
+		"8f40",
+		"宗就州修愁拾洲秀秋終繍習臭舟蒐衆襲讐蹴輯週酋酬集醜什住充十従戎柔汁渋獣縦重銃叔夙宿淑祝縮粛塾熟出術述俊峻春瞬竣舜駿准循旬楯殉淳"
+	],
+	[
+		"8f80",
+		"準潤盾純巡遵醇順処初所暑曙渚庶緒署書薯藷諸助叙女序徐恕鋤除傷償勝匠升召哨商唱嘗奨妾娼宵将小少尚庄床廠彰承抄招掌捷昇昌昭晶松梢樟樵沼消渉湘焼焦照症省硝礁祥称章笑粧紹肖菖蒋蕉衝裳訟証詔詳象賞醤鉦鍾鐘障鞘上丈丞乗冗剰城場壌嬢常情擾条杖浄状畳穣蒸譲醸錠嘱埴飾"
+	],
+	[
+		"9040",
+		"拭植殖燭織職色触食蝕辱尻伸信侵唇娠寝審心慎振新晋森榛浸深申疹真神秦紳臣芯薪親診身辛進針震人仁刃塵壬尋甚尽腎訊迅陣靭笥諏須酢図厨"
+	],
+	[
+		"9080",
+		"逗吹垂帥推水炊睡粋翠衰遂酔錐錘随瑞髄崇嵩数枢趨雛据杉椙菅頗雀裾澄摺寸世瀬畝是凄制勢姓征性成政整星晴棲栖正清牲生盛精聖声製西誠誓請逝醒青静斉税脆隻席惜戚斥昔析石積籍績脊責赤跡蹟碩切拙接摂折設窃節説雪絶舌蝉仙先千占宣専尖川戦扇撰栓栴泉浅洗染潜煎煽旋穿箭線"
+	],
+	[
+		"9140",
+		"繊羨腺舛船薦詮賎践選遷銭銑閃鮮前善漸然全禅繕膳糎噌塑岨措曾曽楚狙疏疎礎祖租粗素組蘇訴阻遡鼠僧創双叢倉喪壮奏爽宋層匝惣想捜掃挿掻"
+	],
+	[
+		"9180",
+		"操早曹巣槍槽漕燥争痩相窓糟総綜聡草荘葬蒼藻装走送遭鎗霜騒像増憎臓蔵贈造促側則即息捉束測足速俗属賊族続卒袖其揃存孫尊損村遜他多太汰詑唾堕妥惰打柁舵楕陀駄騨体堆対耐岱帯待怠態戴替泰滞胎腿苔袋貸退逮隊黛鯛代台大第醍題鷹滝瀧卓啄宅托択拓沢濯琢託鐸濁諾茸凧蛸只"
+	],
+	[
+		"9240",
+		"叩但達辰奪脱巽竪辿棚谷狸鱈樽誰丹単嘆坦担探旦歎淡湛炭短端箪綻耽胆蛋誕鍛団壇弾断暖檀段男談値知地弛恥智池痴稚置致蜘遅馳築畜竹筑蓄"
+	],
+	[
+		"9280",
+		"逐秩窒茶嫡着中仲宙忠抽昼柱注虫衷註酎鋳駐樗瀦猪苧著貯丁兆凋喋寵帖帳庁弔張彫徴懲挑暢朝潮牒町眺聴脹腸蝶調諜超跳銚長頂鳥勅捗直朕沈珍賃鎮陳津墜椎槌追鎚痛通塚栂掴槻佃漬柘辻蔦綴鍔椿潰坪壷嬬紬爪吊釣鶴亭低停偵剃貞呈堤定帝底庭廷弟悌抵挺提梯汀碇禎程締艇訂諦蹄逓"
+	],
+	[
+		"9340",
+		"邸鄭釘鼎泥摘擢敵滴的笛適鏑溺哲徹撤轍迭鉄典填天展店添纏甜貼転顛点伝殿澱田電兎吐堵塗妬屠徒斗杜渡登菟賭途都鍍砥砺努度土奴怒倒党冬"
+	],
+	[
+		"9380",
+		"凍刀唐塔塘套宕島嶋悼投搭東桃梼棟盗淘湯涛灯燈当痘祷等答筒糖統到董蕩藤討謄豆踏逃透鐙陶頭騰闘働動同堂導憧撞洞瞳童胴萄道銅峠鴇匿得徳涜特督禿篤毒独読栃橡凸突椴届鳶苫寅酉瀞噸屯惇敦沌豚遁頓呑曇鈍奈那内乍凪薙謎灘捺鍋楢馴縄畷南楠軟難汝二尼弐迩匂賑肉虹廿日乳入"
+	],
+	[
+		"9440",
+		"如尿韮任妊忍認濡禰祢寧葱猫熱年念捻撚燃粘乃廼之埜嚢悩濃納能脳膿農覗蚤巴把播覇杷波派琶破婆罵芭馬俳廃拝排敗杯盃牌背肺輩配倍培媒梅"
+	],
+	[
+		"9480",
+		"楳煤狽買売賠陪這蝿秤矧萩伯剥博拍柏泊白箔粕舶薄迫曝漠爆縛莫駁麦函箱硲箸肇筈櫨幡肌畑畠八鉢溌発醗髪伐罰抜筏閥鳩噺塙蛤隼伴判半反叛帆搬斑板氾汎版犯班畔繁般藩販範釆煩頒飯挽晩番盤磐蕃蛮匪卑否妃庇彼悲扉批披斐比泌疲皮碑秘緋罷肥被誹費避非飛樋簸備尾微枇毘琵眉美"
+	],
+	[
+		"9540",
+		"鼻柊稗匹疋髭彦膝菱肘弼必畢筆逼桧姫媛紐百謬俵彪標氷漂瓢票表評豹廟描病秒苗錨鋲蒜蛭鰭品彬斌浜瀕貧賓頻敏瓶不付埠夫婦富冨布府怖扶敷"
+	],
+	[
+		"9580",
+		"斧普浮父符腐膚芙譜負賦赴阜附侮撫武舞葡蕪部封楓風葺蕗伏副復幅服福腹複覆淵弗払沸仏物鮒分吻噴墳憤扮焚奮粉糞紛雰文聞丙併兵塀幣平弊柄並蔽閉陛米頁僻壁癖碧別瞥蔑箆偏変片篇編辺返遍便勉娩弁鞭保舗鋪圃捕歩甫補輔穂募墓慕戊暮母簿菩倣俸包呆報奉宝峰峯崩庖抱捧放方朋"
+	],
+	[
+		"9640",
+		"法泡烹砲縫胞芳萌蓬蜂褒訪豊邦鋒飽鳳鵬乏亡傍剖坊妨帽忘忙房暴望某棒冒紡肪膨謀貌貿鉾防吠頬北僕卜墨撲朴牧睦穆釦勃没殆堀幌奔本翻凡盆"
+	],
+	[
+		"9680",
+		"摩磨魔麻埋妹昧枚毎哩槙幕膜枕鮪柾鱒桝亦俣又抹末沫迄侭繭麿万慢満漫蔓味未魅巳箕岬密蜜湊蓑稔脈妙粍民眠務夢無牟矛霧鵡椋婿娘冥名命明盟迷銘鳴姪牝滅免棉綿緬面麺摸模茂妄孟毛猛盲網耗蒙儲木黙目杢勿餅尤戻籾貰問悶紋門匁也冶夜爺耶野弥矢厄役約薬訳躍靖柳薮鑓愉愈油癒"
+	],
+	[
+		"9740",
+		"諭輸唯佑優勇友宥幽悠憂揖有柚湧涌猶猷由祐裕誘遊邑郵雄融夕予余与誉輿預傭幼妖容庸揚揺擁曜楊様洋溶熔用窯羊耀葉蓉要謡踊遥陽養慾抑欲"
+	],
+	[
+		"9780",
+		"沃浴翌翼淀羅螺裸来莱頼雷洛絡落酪乱卵嵐欄濫藍蘭覧利吏履李梨理璃痢裏裡里離陸律率立葎掠略劉流溜琉留硫粒隆竜龍侶慮旅虜了亮僚両凌寮料梁涼猟療瞭稜糧良諒遼量陵領力緑倫厘林淋燐琳臨輪隣鱗麟瑠塁涙累類令伶例冷励嶺怜玲礼苓鈴隷零霊麗齢暦歴列劣烈裂廉恋憐漣煉簾練聯"
+	],
+	[
+		"9840",
+		"蓮連錬呂魯櫓炉賂路露労婁廊弄朗楼榔浪漏牢狼篭老聾蝋郎六麓禄肋録論倭和話歪賄脇惑枠鷲亙亘鰐詫藁蕨椀湾碗腕"
+	],
+	[
+		"989f",
+		"弌丐丕个丱丶丼丿乂乖乘亂亅豫亊舒弍于亞亟亠亢亰亳亶从仍仄仆仂仗仞仭仟价伉佚估佛佝佗佇佶侈侏侘佻佩佰侑佯來侖儘俔俟俎俘俛俑俚俐俤俥倚倨倔倪倥倅伜俶倡倩倬俾俯們倆偃假會偕偐偈做偖偬偸傀傚傅傴傲"
+	],
+	[
+		"9940",
+		"僉僊傳僂僖僞僥僭僣僮價僵儉儁儂儖儕儔儚儡儺儷儼儻儿兀兒兌兔兢竸兩兪兮冀冂囘册冉冏冑冓冕冖冤冦冢冩冪冫决冱冲冰况冽凅凉凛几處凩凭"
+	],
+	[
+		"9980",
+		"凰凵凾刄刋刔刎刧刪刮刳刹剏剄剋剌剞剔剪剴剩剳剿剽劍劔劒剱劈劑辨辧劬劭劼劵勁勍勗勞勣勦飭勠勳勵勸勹匆匈甸匍匐匏匕匚匣匯匱匳匸區卆卅丗卉卍凖卞卩卮夘卻卷厂厖厠厦厥厮厰厶參簒雙叟曼燮叮叨叭叺吁吽呀听吭吼吮吶吩吝呎咏呵咎呟呱呷呰咒呻咀呶咄咐咆哇咢咸咥咬哄哈咨"
+	],
+	[
+		"9a40",
+		"咫哂咤咾咼哘哥哦唏唔哽哮哭哺哢唹啀啣啌售啜啅啖啗唸唳啝喙喀咯喊喟啻啾喘喞單啼喃喩喇喨嗚嗅嗟嗄嗜嗤嗔嘔嗷嘖嗾嗽嘛嗹噎噐營嘴嘶嘲嘸"
+	],
+	[
+		"9a80",
+		"噫噤嘯噬噪嚆嚀嚊嚠嚔嚏嚥嚮嚶嚴囂嚼囁囃囀囈囎囑囓囗囮囹圀囿圄圉圈國圍圓團圖嗇圜圦圷圸坎圻址坏坩埀垈坡坿垉垓垠垳垤垪垰埃埆埔埒埓堊埖埣堋堙堝塲堡塢塋塰毀塒堽塹墅墹墟墫墺壞墻墸墮壅壓壑壗壙壘壥壜壤壟壯壺壹壻壼壽夂夊夐夛梦夥夬夭夲夸夾竒奕奐奎奚奘奢奠奧奬奩"
+	],
+	[
+		"9b40",
+		"奸妁妝佞侫妣妲姆姨姜妍姙姚娥娟娑娜娉娚婀婬婉娵娶婢婪媚媼媾嫋嫂媽嫣嫗嫦嫩嫖嫺嫻嬌嬋嬖嬲嫐嬪嬶嬾孃孅孀孑孕孚孛孥孩孰孳孵學斈孺宀"
+	],
+	[
+		"9b80",
+		"它宦宸寃寇寉寔寐寤實寢寞寥寫寰寶寳尅將專對尓尠尢尨尸尹屁屆屎屓屐屏孱屬屮乢屶屹岌岑岔妛岫岻岶岼岷峅岾峇峙峩峽峺峭嶌峪崋崕崗嵜崟崛崑崔崢崚崙崘嵌嵒嵎嵋嵬嵳嵶嶇嶄嶂嶢嶝嶬嶮嶽嶐嶷嶼巉巍巓巒巖巛巫已巵帋帚帙帑帛帶帷幄幃幀幎幗幔幟幢幤幇幵并幺麼广庠廁廂廈廐廏"
+	],
+	[
+		"9c40",
+		"廖廣廝廚廛廢廡廨廩廬廱廳廰廴廸廾弃弉彝彜弋弑弖弩弭弸彁彈彌彎弯彑彖彗彙彡彭彳彷徃徂彿徊很徑徇從徙徘徠徨徭徼忖忻忤忸忱忝悳忿怡恠"
+	],
+	[
+		"9c80",
+		"怙怐怩怎怱怛怕怫怦怏怺恚恁恪恷恟恊恆恍恣恃恤恂恬恫恙悁悍惧悃悚悄悛悖悗悒悧悋惡悸惠惓悴忰悽惆悵惘慍愕愆惶惷愀惴惺愃愡惻惱愍愎慇愾愨愧慊愿愼愬愴愽慂慄慳慷慘慙慚慫慴慯慥慱慟慝慓慵憙憖憇憬憔憚憊憑憫憮懌懊應懷懈懃懆憺懋罹懍懦懣懶懺懴懿懽懼懾戀戈戉戍戌戔戛"
+	],
+	[
+		"9d40",
+		"戞戡截戮戰戲戳扁扎扞扣扛扠扨扼抂抉找抒抓抖拔抃抔拗拑抻拏拿拆擔拈拜拌拊拂拇抛拉挌拮拱挧挂挈拯拵捐挾捍搜捏掖掎掀掫捶掣掏掉掟掵捫"
+	],
+	[
+		"9d80",
+		"捩掾揩揀揆揣揉插揶揄搖搴搆搓搦搶攝搗搨搏摧摯摶摎攪撕撓撥撩撈撼據擒擅擇撻擘擂擱擧舉擠擡抬擣擯攬擶擴擲擺攀擽攘攜攅攤攣攫攴攵攷收攸畋效敖敕敍敘敞敝敲數斂斃變斛斟斫斷旃旆旁旄旌旒旛旙无旡旱杲昊昃旻杳昵昶昴昜晏晄晉晁晞晝晤晧晨晟晢晰暃暈暎暉暄暘暝曁暹曉暾暼"
+	],
+	[
+		"9e40",
+		"曄暸曖曚曠昿曦曩曰曵曷朏朖朞朦朧霸朮朿朶杁朸朷杆杞杠杙杣杤枉杰枩杼杪枌枋枦枡枅枷柯枴柬枳柩枸柤柞柝柢柮枹柎柆柧檜栞框栩桀桍栲桎"
+	],
+	[
+		"9e80",
+		"梳栫桙档桷桿梟梏梭梔條梛梃檮梹桴梵梠梺椏梍桾椁棊椈棘椢椦棡椌棍棔棧棕椶椒椄棗棣椥棹棠棯椨椪椚椣椡棆楹楷楜楸楫楔楾楮椹楴椽楙椰楡楞楝榁楪榲榮槐榿槁槓榾槎寨槊槝榻槃榧樮榑榠榜榕榴槞槨樂樛槿權槹槲槧樅榱樞槭樔槫樊樒櫁樣樓橄樌橲樶橸橇橢橙橦橈樸樢檐檍檠檄檢檣"
+	],
+	[
+		"9f40",
+		"檗蘗檻櫃櫂檸檳檬櫞櫑櫟檪櫚櫪櫻欅蘖櫺欒欖鬱欟欸欷盜欹飮歇歃歉歐歙歔歛歟歡歸歹歿殀殄殃殍殘殕殞殤殪殫殯殲殱殳殷殼毆毋毓毟毬毫毳毯"
+	],
+	[
+		"9f80",
+		"麾氈氓气氛氤氣汞汕汢汪沂沍沚沁沛汾汨汳沒沐泄泱泓沽泗泅泝沮沱沾沺泛泯泙泪洟衍洶洫洽洸洙洵洳洒洌浣涓浤浚浹浙涎涕濤涅淹渕渊涵淇淦涸淆淬淞淌淨淒淅淺淙淤淕淪淮渭湮渮渙湲湟渾渣湫渫湶湍渟湃渺湎渤滿渝游溂溪溘滉溷滓溽溯滄溲滔滕溏溥滂溟潁漑灌滬滸滾漿滲漱滯漲滌"
+	],
+	[
+		"e040",
+		"漾漓滷澆潺潸澁澀潯潛濳潭澂潼潘澎澑濂潦澳澣澡澤澹濆澪濟濕濬濔濘濱濮濛瀉瀋濺瀑瀁瀏濾瀛瀚潴瀝瀘瀟瀰瀾瀲灑灣炙炒炯烱炬炸炳炮烟烋烝"
+	],
+	[
+		"e080",
+		"烙焉烽焜焙煥煕熈煦煢煌煖煬熏燻熄熕熨熬燗熹熾燒燉燔燎燠燬燧燵燼燹燿爍爐爛爨爭爬爰爲爻爼爿牀牆牋牘牴牾犂犁犇犒犖犢犧犹犲狃狆狄狎狒狢狠狡狹狷倏猗猊猜猖猝猴猯猩猥猾獎獏默獗獪獨獰獸獵獻獺珈玳珎玻珀珥珮珞璢琅瑯琥珸琲琺瑕琿瑟瑙瑁瑜瑩瑰瑣瑪瑶瑾璋璞璧瓊瓏瓔珱"
+	],
+	[
+		"e140",
+		"瓠瓣瓧瓩瓮瓲瓰瓱瓸瓷甄甃甅甌甎甍甕甓甞甦甬甼畄畍畊畉畛畆畚畩畤畧畫畭畸當疆疇畴疊疉疂疔疚疝疥疣痂疳痃疵疽疸疼疱痍痊痒痙痣痞痾痿"
+	],
+	[
+		"e180",
+		"痼瘁痰痺痲痳瘋瘍瘉瘟瘧瘠瘡瘢瘤瘴瘰瘻癇癈癆癜癘癡癢癨癩癪癧癬癰癲癶癸發皀皃皈皋皎皖皓皙皚皰皴皸皹皺盂盍盖盒盞盡盥盧盪蘯盻眈眇眄眩眤眞眥眦眛眷眸睇睚睨睫睛睥睿睾睹瞎瞋瞑瞠瞞瞰瞶瞹瞿瞼瞽瞻矇矍矗矚矜矣矮矼砌砒礦砠礪硅碎硴碆硼碚碌碣碵碪碯磑磆磋磔碾碼磅磊磬"
+	],
+	[
+		"e240",
+		"磧磚磽磴礇礒礑礙礬礫祀祠祗祟祚祕祓祺祿禊禝禧齋禪禮禳禹禺秉秕秧秬秡秣稈稍稘稙稠稟禀稱稻稾稷穃穗穉穡穢穩龝穰穹穽窈窗窕窘窖窩竈窰"
+	],
+	[
+		"e280",
+		"窶竅竄窿邃竇竊竍竏竕竓站竚竝竡竢竦竭竰笂笏笊笆笳笘笙笞笵笨笶筐筺笄筍笋筌筅筵筥筴筧筰筱筬筮箝箘箟箍箜箚箋箒箏筝箙篋篁篌篏箴篆篝篩簑簔篦篥籠簀簇簓篳篷簗簍篶簣簧簪簟簷簫簽籌籃籔籏籀籐籘籟籤籖籥籬籵粃粐粤粭粢粫粡粨粳粲粱粮粹粽糀糅糂糘糒糜糢鬻糯糲糴糶糺紆"
+	],
+	[
+		"e340",
+		"紂紜紕紊絅絋紮紲紿紵絆絳絖絎絲絨絮絏絣經綉絛綏絽綛綺綮綣綵緇綽綫總綢綯緜綸綟綰緘緝緤緞緻緲緡縅縊縣縡縒縱縟縉縋縢繆繦縻縵縹繃縷"
+	],
+	[
+		"e380",
+		"縲縺繧繝繖繞繙繚繹繪繩繼繻纃緕繽辮繿纈纉續纒纐纓纔纖纎纛纜缸缺罅罌罍罎罐网罕罔罘罟罠罨罩罧罸羂羆羃羈羇羌羔羞羝羚羣羯羲羹羮羶羸譱翅翆翊翕翔翡翦翩翳翹飜耆耄耋耒耘耙耜耡耨耿耻聊聆聒聘聚聟聢聨聳聲聰聶聹聽聿肄肆肅肛肓肚肭冐肬胛胥胙胝胄胚胖脉胯胱脛脩脣脯腋"
+	],
+	[
+		"e440",
+		"隋腆脾腓腑胼腱腮腥腦腴膃膈膊膀膂膠膕膤膣腟膓膩膰膵膾膸膽臀臂膺臉臍臑臙臘臈臚臟臠臧臺臻臾舁舂舅與舊舍舐舖舩舫舸舳艀艙艘艝艚艟艤"
+	],
+	[
+		"e480",
+		"艢艨艪艫舮艱艷艸艾芍芒芫芟芻芬苡苣苟苒苴苳苺莓范苻苹苞茆苜茉苙茵茴茖茲茱荀茹荐荅茯茫茗茘莅莚莪莟莢莖茣莎莇莊荼莵荳荵莠莉莨菴萓菫菎菽萃菘萋菁菷萇菠菲萍萢萠莽萸蔆菻葭萪萼蕚蒄葷葫蒭葮蒂葩葆萬葯葹萵蓊葢蒹蒿蒟蓙蓍蒻蓚蓐蓁蓆蓖蒡蔡蓿蓴蔗蔘蔬蔟蔕蔔蓼蕀蕣蕘蕈"
+	],
+	[
+		"e540",
+		"蕁蘂蕋蕕薀薤薈薑薊薨蕭薔薛藪薇薜蕷蕾薐藉薺藏薹藐藕藝藥藜藹蘊蘓蘋藾藺蘆蘢蘚蘰蘿虍乕虔號虧虱蚓蚣蚩蚪蚋蚌蚶蚯蛄蛆蚰蛉蠣蚫蛔蛞蛩蛬"
+	],
+	[
+		"e580",
+		"蛟蛛蛯蜒蜆蜈蜀蜃蛻蜑蜉蜍蛹蜊蜴蜿蜷蜻蜥蜩蜚蝠蝟蝸蝌蝎蝴蝗蝨蝮蝙蝓蝣蝪蠅螢螟螂螯蟋螽蟀蟐雖螫蟄螳蟇蟆螻蟯蟲蟠蠏蠍蟾蟶蟷蠎蟒蠑蠖蠕蠢蠡蠱蠶蠹蠧蠻衄衂衒衙衞衢衫袁衾袞衵衽袵衲袂袗袒袮袙袢袍袤袰袿袱裃裄裔裘裙裝裹褂裼裴裨裲褄褌褊褓襃褞褥褪褫襁襄褻褶褸襌褝襠襞"
+	],
+	[
+		"e640",
+		"襦襤襭襪襯襴襷襾覃覈覊覓覘覡覩覦覬覯覲覺覽覿觀觚觜觝觧觴觸訃訖訐訌訛訝訥訶詁詛詒詆詈詼詭詬詢誅誂誄誨誡誑誥誦誚誣諄諍諂諚諫諳諧"
+	],
+	[
+		"e680",
+		"諤諱謔諠諢諷諞諛謌謇謚諡謖謐謗謠謳鞫謦謫謾謨譁譌譏譎證譖譛譚譫譟譬譯譴譽讀讌讎讒讓讖讙讚谺豁谿豈豌豎豐豕豢豬豸豺貂貉貅貊貍貎貔豼貘戝貭貪貽貲貳貮貶賈賁賤賣賚賽賺賻贄贅贊贇贏贍贐齎贓賍贔贖赧赭赱赳趁趙跂趾趺跏跚跖跌跛跋跪跫跟跣跼踈踉跿踝踞踐踟蹂踵踰踴蹊"
+	],
+	[
+		"e740",
+		"蹇蹉蹌蹐蹈蹙蹤蹠踪蹣蹕蹶蹲蹼躁躇躅躄躋躊躓躑躔躙躪躡躬躰軆躱躾軅軈軋軛軣軼軻軫軾輊輅輕輒輙輓輜輟輛輌輦輳輻輹轅轂輾轌轉轆轎轗轜"
+	],
+	[
+		"e780",
+		"轢轣轤辜辟辣辭辯辷迚迥迢迪迯邇迴逅迹迺逑逕逡逍逞逖逋逧逶逵逹迸遏遐遑遒逎遉逾遖遘遞遨遯遶隨遲邂遽邁邀邊邉邏邨邯邱邵郢郤扈郛鄂鄒鄙鄲鄰酊酖酘酣酥酩酳酲醋醉醂醢醫醯醪醵醴醺釀釁釉釋釐釖釟釡釛釼釵釶鈞釿鈔鈬鈕鈑鉞鉗鉅鉉鉤鉈銕鈿鉋鉐銜銖銓銛鉚鋏銹銷鋩錏鋺鍄錮"
+	],
+	[
+		"e840",
+		"錙錢錚錣錺錵錻鍜鍠鍼鍮鍖鎰鎬鎭鎔鎹鏖鏗鏨鏥鏘鏃鏝鏐鏈鏤鐚鐔鐓鐃鐇鐐鐶鐫鐵鐡鐺鑁鑒鑄鑛鑠鑢鑞鑪鈩鑰鑵鑷鑽鑚鑼鑾钁鑿閂閇閊閔閖閘閙"
+	],
+	[
+		"e880",
+		"閠閨閧閭閼閻閹閾闊濶闃闍闌闕闔闖關闡闥闢阡阨阮阯陂陌陏陋陷陜陞陝陟陦陲陬隍隘隕隗險隧隱隲隰隴隶隸隹雎雋雉雍襍雜霍雕雹霄霆霈霓霎霑霏霖霙霤霪霰霹霽霾靄靆靈靂靉靜靠靤靦靨勒靫靱靹鞅靼鞁靺鞆鞋鞏鞐鞜鞨鞦鞣鞳鞴韃韆韈韋韜韭齏韲竟韶韵頏頌頸頤頡頷頽顆顏顋顫顯顰"
+	],
+	[
+		"e940",
+		"顱顴顳颪颯颱颶飄飃飆飩飫餃餉餒餔餘餡餝餞餤餠餬餮餽餾饂饉饅饐饋饑饒饌饕馗馘馥馭馮馼駟駛駝駘駑駭駮駱駲駻駸騁騏騅駢騙騫騷驅驂驀驃"
+	],
+	[
+		"e980",
+		"騾驕驍驛驗驟驢驥驤驩驫驪骭骰骼髀髏髑髓體髞髟髢髣髦髯髫髮髴髱髷髻鬆鬘鬚鬟鬢鬣鬥鬧鬨鬩鬪鬮鬯鬲魄魃魏魍魎魑魘魴鮓鮃鮑鮖鮗鮟鮠鮨鮴鯀鯊鮹鯆鯏鯑鯒鯣鯢鯤鯔鯡鰺鯲鯱鯰鰕鰔鰉鰓鰌鰆鰈鰒鰊鰄鰮鰛鰥鰤鰡鰰鱇鰲鱆鰾鱚鱠鱧鱶鱸鳧鳬鳰鴉鴈鳫鴃鴆鴪鴦鶯鴣鴟鵄鴕鴒鵁鴿鴾鵆鵈"
+	],
+	[
+		"ea40",
+		"鵝鵞鵤鵑鵐鵙鵲鶉鶇鶫鵯鵺鶚鶤鶩鶲鷄鷁鶻鶸鶺鷆鷏鷂鷙鷓鷸鷦鷭鷯鷽鸚鸛鸞鹵鹹鹽麁麈麋麌麒麕麑麝麥麩麸麪麭靡黌黎黏黐黔黜點黝黠黥黨黯"
+	],
+	[
+		"ea80",
+		"黴黶黷黹黻黼黽鼇鼈皷鼕鼡鼬鼾齊齒齔齣齟齠齡齦齧齬齪齷齲齶龕龜龠堯槇遙瑤凜熙"
+	],
+	[
+		"ed40",
+		"纊褜鍈銈蓜俉炻昱棈鋹曻彅丨仡仼伀伃伹佖侒侊侚侔俍偀倢俿倞偆偰偂傔僴僘兊兤冝冾凬刕劜劦勀勛匀匇匤卲厓厲叝﨎咜咊咩哿喆坙坥垬埈埇﨏"
+	],
+	[
+		"ed80",
+		"塚增墲夋奓奛奝奣妤妺孖寀甯寘寬尞岦岺峵崧嵓﨑嵂嵭嶸嶹巐弡弴彧德忞恝悅悊惞惕愠惲愑愷愰憘戓抦揵摠撝擎敎昀昕昻昉昮昞昤晥晗晙晴晳暙暠暲暿曺朎朗杦枻桒柀栁桄棏﨓楨﨔榘槢樰橫橆橳橾櫢櫤毖氿汜沆汯泚洄涇浯涖涬淏淸淲淼渹湜渧渼溿澈澵濵瀅瀇瀨炅炫焏焄煜煆煇凞燁燾犱"
+	],
+	[
+		"ee40",
+		"犾猤猪獷玽珉珖珣珒琇珵琦琪琩琮瑢璉璟甁畯皂皜皞皛皦益睆劯砡硎硤硺礰礼神祥禔福禛竑竧靖竫箞精絈絜綷綠緖繒罇羡羽茁荢荿菇菶葈蒴蕓蕙"
+	],
+	[
+		"ee80",
+		"蕫﨟薰蘒﨡蠇裵訒訷詹誧誾諟諸諶譓譿賰賴贒赶﨣軏﨤逸遧郞都鄕鄧釚釗釞釭釮釤釥鈆鈐鈊鈺鉀鈼鉎鉙鉑鈹鉧銧鉷鉸鋧鋗鋙鋐﨧鋕鋠鋓錥錡鋻﨨錞鋿錝錂鍰鍗鎤鏆鏞鏸鐱鑅鑈閒隆﨩隝隯霳霻靃靍靏靑靕顗顥飯飼餧館馞驎髙髜魵魲鮏鮱鮻鰀鵰鵫鶴鸙黑"
+	],
+	[
+		"eeef",
+		"ⅰ",
+		9,
+		"￢￤＇＂"
+	],
+	[
+		"f040",
+		"",
+		62
+	],
+	[
+		"f080",
+		"",
+		124
+	],
+	[
+		"f140",
+		"",
+		62
+	],
+	[
+		"f180",
+		"",
+		124
+	],
+	[
+		"f240",
+		"",
+		62
+	],
+	[
+		"f280",
+		"",
+		124
+	],
+	[
+		"f340",
+		"",
+		62
+	],
+	[
+		"f380",
+		"",
+		124
+	],
+	[
+		"f440",
+		"",
+		62
+	],
+	[
+		"f480",
+		"",
+		124
+	],
+	[
+		"f540",
+		"",
+		62
+	],
+	[
+		"f580",
+		"",
+		124
+	],
+	[
+		"f640",
+		"",
+		62
+	],
+	[
+		"f680",
+		"",
+		124
+	],
+	[
+		"f740",
+		"",
+		62
+	],
+	[
+		"f780",
+		"",
+		124
+	],
+	[
+		"f840",
+		"",
+		62
+	],
+	[
+		"f880",
+		"",
+		124
+	],
+	[
+		"f940",
+		""
+	],
+	[
+		"fa40",
+		"ⅰ",
+		9,
+		"Ⅰ",
+		9,
+		"￢￤＇＂㈱№℡∵纊褜鍈銈蓜俉炻昱棈鋹曻彅丨仡仼伀伃伹佖侒侊侚侔俍偀倢俿倞偆偰偂傔僴僘兊"
+	],
+	[
+		"fa80",
+		"兤冝冾凬刕劜劦勀勛匀匇匤卲厓厲叝﨎咜咊咩哿喆坙坥垬埈埇﨏塚增墲夋奓奛奝奣妤妺孖寀甯寘寬尞岦岺峵崧嵓﨑嵂嵭嶸嶹巐弡弴彧德忞恝悅悊惞惕愠惲愑愷愰憘戓抦揵摠撝擎敎昀昕昻昉昮昞昤晥晗晙晴晳暙暠暲暿曺朎朗杦枻桒柀栁桄棏﨓楨﨔榘槢樰橫橆橳橾櫢櫤毖氿汜沆汯泚洄涇浯"
+	],
+	[
+		"fb40",
+		"涖涬淏淸淲淼渹湜渧渼溿澈澵濵瀅瀇瀨炅炫焏焄煜煆煇凞燁燾犱犾猤猪獷玽珉珖珣珒琇珵琦琪琩琮瑢璉璟甁畯皂皜皞皛皦益睆劯砡硎硤硺礰礼神"
+	],
+	[
+		"fb80",
+		"祥禔福禛竑竧靖竫箞精絈絜綷綠緖繒罇羡羽茁荢荿菇菶葈蒴蕓蕙蕫﨟薰蘒﨡蠇裵訒訷詹誧誾諟諸諶譓譿賰賴贒赶﨣軏﨤逸遧郞都鄕鄧釚釗釞釭釮釤釥鈆鈐鈊鈺鉀鈼鉎鉙鉑鈹鉧銧鉷鉸鋧鋗鋙鋐﨧鋕鋠鋓錥錡鋻﨨錞鋿錝錂鍰鍗鎤鏆鏞鏸鐱鑅鑈閒隆﨩隝隯霳霻靃靍靏靑靕顗顥飯飼餧館馞驎髙"
+	],
+	[
+		"fc40",
+		"髜魵魲鮏鮱鮻鰀鵰鵫鶴鸙黑"
+	]
+];
+
+var require$$1$2 = [
+	[
+		"0",
+		"\u0000",
+		127
+	],
+	[
+		"8ea1",
+		"｡",
+		62
+	],
+	[
+		"a1a1",
+		"　、。，．・：；？！゛゜´｀¨＾￣＿ヽヾゝゞ〃仝々〆〇ー―‐／＼～∥｜…‥‘’“”（）〔〕［］｛｝〈",
+		9,
+		"＋－±×÷＝≠＜＞≦≧∞∴♂♀°′″℃￥＄￠￡％＃＆＊＠§☆★○●◎◇"
+	],
+	[
+		"a2a1",
+		"◆□■△▲▽▼※〒→←↑↓〓"
+	],
+	[
+		"a2ba",
+		"∈∋⊆⊇⊂⊃∪∩"
+	],
+	[
+		"a2ca",
+		"∧∨￢⇒⇔∀∃"
+	],
+	[
+		"a2dc",
+		"∠⊥⌒∂∇≡≒≪≫√∽∝∵∫∬"
+	],
+	[
+		"a2f2",
+		"Å‰♯♭♪†‡¶"
+	],
+	[
+		"a2fe",
+		"◯"
+	],
+	[
+		"a3b0",
+		"０",
+		9
+	],
+	[
+		"a3c1",
+		"Ａ",
+		25
+	],
+	[
+		"a3e1",
+		"ａ",
+		25
+	],
+	[
+		"a4a1",
+		"ぁ",
+		82
+	],
+	[
+		"a5a1",
+		"ァ",
+		85
+	],
+	[
+		"a6a1",
+		"Α",
+		16,
+		"Σ",
+		6
+	],
+	[
+		"a6c1",
+		"α",
+		16,
+		"σ",
+		6
+	],
+	[
+		"a7a1",
+		"А",
+		5,
+		"ЁЖ",
+		25
+	],
+	[
+		"a7d1",
+		"а",
+		5,
+		"ёж",
+		25
+	],
+	[
+		"a8a1",
+		"─│┌┐┘└├┬┤┴┼━┃┏┓┛┗┣┳┫┻╋┠┯┨┷┿┝┰┥┸╂"
+	],
+	[
+		"ada1",
+		"①",
+		19,
+		"Ⅰ",
+		9
+	],
+	[
+		"adc0",
+		"㍉㌔㌢㍍㌘㌧㌃㌶㍑㍗㌍㌦㌣㌫㍊㌻㎜㎝㎞㎎㎏㏄㎡"
+	],
+	[
+		"addf",
+		"㍻〝〟№㏍℡㊤",
+		4,
+		"㈱㈲㈹㍾㍽㍼≒≡∫∮∑√⊥∠∟⊿∵∩∪"
+	],
+	[
+		"b0a1",
+		"亜唖娃阿哀愛挨姶逢葵茜穐悪握渥旭葦芦鯵梓圧斡扱宛姐虻飴絢綾鮎或粟袷安庵按暗案闇鞍杏以伊位依偉囲夷委威尉惟意慰易椅為畏異移維緯胃萎衣謂違遺医井亥域育郁磯一壱溢逸稲茨芋鰯允印咽員因姻引飲淫胤蔭"
+	],
+	[
+		"b1a1",
+		"院陰隠韻吋右宇烏羽迂雨卯鵜窺丑碓臼渦嘘唄欝蔚鰻姥厩浦瓜閏噂云運雲荏餌叡営嬰影映曳栄永泳洩瑛盈穎頴英衛詠鋭液疫益駅悦謁越閲榎厭円園堰奄宴延怨掩援沿演炎焔煙燕猿縁艶苑薗遠鉛鴛塩於汚甥凹央奥往応"
+	],
+	[
+		"b2a1",
+		"押旺横欧殴王翁襖鴬鴎黄岡沖荻億屋憶臆桶牡乙俺卸恩温穏音下化仮何伽価佳加可嘉夏嫁家寡科暇果架歌河火珂禍禾稼箇花苛茄荷華菓蝦課嘩貨迦過霞蚊俄峨我牙画臥芽蛾賀雅餓駕介会解回塊壊廻快怪悔恢懐戒拐改"
+	],
+	[
+		"b3a1",
+		"魁晦械海灰界皆絵芥蟹開階貝凱劾外咳害崖慨概涯碍蓋街該鎧骸浬馨蛙垣柿蛎鈎劃嚇各廓拡撹格核殻獲確穫覚角赫較郭閣隔革学岳楽額顎掛笠樫橿梶鰍潟割喝恰括活渇滑葛褐轄且鰹叶椛樺鞄株兜竃蒲釜鎌噛鴨栢茅萱"
+	],
+	[
+		"b4a1",
+		"粥刈苅瓦乾侃冠寒刊勘勧巻喚堪姦完官寛干幹患感慣憾換敢柑桓棺款歓汗漢澗潅環甘監看竿管簡緩缶翰肝艦莞観諌貫還鑑間閑関陥韓館舘丸含岸巌玩癌眼岩翫贋雁頑顔願企伎危喜器基奇嬉寄岐希幾忌揮机旗既期棋棄"
+	],
+	[
+		"b5a1",
+		"機帰毅気汽畿祈季稀紀徽規記貴起軌輝飢騎鬼亀偽儀妓宜戯技擬欺犠疑祇義蟻誼議掬菊鞠吉吃喫桔橘詰砧杵黍却客脚虐逆丘久仇休及吸宮弓急救朽求汲泣灸球究窮笈級糾給旧牛去居巨拒拠挙渠虚許距鋸漁禦魚亨享京"
+	],
+	[
+		"b6a1",
+		"供侠僑兇競共凶協匡卿叫喬境峡強彊怯恐恭挟教橋況狂狭矯胸脅興蕎郷鏡響饗驚仰凝尭暁業局曲極玉桐粁僅勤均巾錦斤欣欽琴禁禽筋緊芹菌衿襟謹近金吟銀九倶句区狗玖矩苦躯駆駈駒具愚虞喰空偶寓遇隅串櫛釧屑屈"
+	],
+	[
+		"b7a1",
+		"掘窟沓靴轡窪熊隈粂栗繰桑鍬勲君薫訓群軍郡卦袈祁係傾刑兄啓圭珪型契形径恵慶慧憩掲携敬景桂渓畦稽系経継繋罫茎荊蛍計詣警軽頚鶏芸迎鯨劇戟撃激隙桁傑欠決潔穴結血訣月件倹倦健兼券剣喧圏堅嫌建憲懸拳捲"
+	],
+	[
+		"b8a1",
+		"検権牽犬献研硯絹県肩見謙賢軒遣鍵険顕験鹸元原厳幻弦減源玄現絃舷言諺限乎個古呼固姑孤己庫弧戸故枯湖狐糊袴股胡菰虎誇跨鈷雇顧鼓五互伍午呉吾娯後御悟梧檎瑚碁語誤護醐乞鯉交佼侯候倖光公功効勾厚口向"
+	],
+	[
+		"b9a1",
+		"后喉坑垢好孔孝宏工巧巷幸広庚康弘恒慌抗拘控攻昂晃更杭校梗構江洪浩港溝甲皇硬稿糠紅紘絞綱耕考肯肱腔膏航荒行衡講貢購郊酵鉱砿鋼閤降項香高鴻剛劫号合壕拷濠豪轟麹克刻告国穀酷鵠黒獄漉腰甑忽惚骨狛込"
+	],
+	[
+		"baa1",
+		"此頃今困坤墾婚恨懇昏昆根梱混痕紺艮魂些佐叉唆嵯左差査沙瑳砂詐鎖裟坐座挫債催再最哉塞妻宰彩才採栽歳済災采犀砕砦祭斎細菜裁載際剤在材罪財冴坂阪堺榊肴咲崎埼碕鷺作削咋搾昨朔柵窄策索錯桜鮭笹匙冊刷"
+	],
+	[
+		"bba1",
+		"察拶撮擦札殺薩雑皐鯖捌錆鮫皿晒三傘参山惨撒散桟燦珊産算纂蚕讃賛酸餐斬暫残仕仔伺使刺司史嗣四士始姉姿子屍市師志思指支孜斯施旨枝止死氏獅祉私糸紙紫肢脂至視詞詩試誌諮資賜雌飼歯事似侍児字寺慈持時"
+	],
+	[
+		"bca1",
+		"次滋治爾璽痔磁示而耳自蒔辞汐鹿式識鴫竺軸宍雫七叱執失嫉室悉湿漆疾質実蔀篠偲柴芝屡蕊縞舎写射捨赦斜煮社紗者謝車遮蛇邪借勺尺杓灼爵酌釈錫若寂弱惹主取守手朱殊狩珠種腫趣酒首儒受呪寿授樹綬需囚収周"
+	],
+	[
+		"bda1",
+		"宗就州修愁拾洲秀秋終繍習臭舟蒐衆襲讐蹴輯週酋酬集醜什住充十従戎柔汁渋獣縦重銃叔夙宿淑祝縮粛塾熟出術述俊峻春瞬竣舜駿准循旬楯殉淳準潤盾純巡遵醇順処初所暑曙渚庶緒署書薯藷諸助叙女序徐恕鋤除傷償"
+	],
+	[
+		"bea1",
+		"勝匠升召哨商唱嘗奨妾娼宵将小少尚庄床廠彰承抄招掌捷昇昌昭晶松梢樟樵沼消渉湘焼焦照症省硝礁祥称章笑粧紹肖菖蒋蕉衝裳訟証詔詳象賞醤鉦鍾鐘障鞘上丈丞乗冗剰城場壌嬢常情擾条杖浄状畳穣蒸譲醸錠嘱埴飾"
+	],
+	[
+		"bfa1",
+		"拭植殖燭織職色触食蝕辱尻伸信侵唇娠寝審心慎振新晋森榛浸深申疹真神秦紳臣芯薪親診身辛進針震人仁刃塵壬尋甚尽腎訊迅陣靭笥諏須酢図厨逗吹垂帥推水炊睡粋翠衰遂酔錐錘随瑞髄崇嵩数枢趨雛据杉椙菅頗雀裾"
+	],
+	[
+		"c0a1",
+		"澄摺寸世瀬畝是凄制勢姓征性成政整星晴棲栖正清牲生盛精聖声製西誠誓請逝醒青静斉税脆隻席惜戚斥昔析石積籍績脊責赤跡蹟碩切拙接摂折設窃節説雪絶舌蝉仙先千占宣専尖川戦扇撰栓栴泉浅洗染潜煎煽旋穿箭線"
+	],
+	[
+		"c1a1",
+		"繊羨腺舛船薦詮賎践選遷銭銑閃鮮前善漸然全禅繕膳糎噌塑岨措曾曽楚狙疏疎礎祖租粗素組蘇訴阻遡鼠僧創双叢倉喪壮奏爽宋層匝惣想捜掃挿掻操早曹巣槍槽漕燥争痩相窓糟総綜聡草荘葬蒼藻装走送遭鎗霜騒像増憎"
+	],
+	[
+		"c2a1",
+		"臓蔵贈造促側則即息捉束測足速俗属賊族続卒袖其揃存孫尊損村遜他多太汰詑唾堕妥惰打柁舵楕陀駄騨体堆対耐岱帯待怠態戴替泰滞胎腿苔袋貸退逮隊黛鯛代台大第醍題鷹滝瀧卓啄宅托択拓沢濯琢託鐸濁諾茸凧蛸只"
+	],
+	[
+		"c3a1",
+		"叩但達辰奪脱巽竪辿棚谷狸鱈樽誰丹単嘆坦担探旦歎淡湛炭短端箪綻耽胆蛋誕鍛団壇弾断暖檀段男談値知地弛恥智池痴稚置致蜘遅馳築畜竹筑蓄逐秩窒茶嫡着中仲宙忠抽昼柱注虫衷註酎鋳駐樗瀦猪苧著貯丁兆凋喋寵"
+	],
+	[
+		"c4a1",
+		"帖帳庁弔張彫徴懲挑暢朝潮牒町眺聴脹腸蝶調諜超跳銚長頂鳥勅捗直朕沈珍賃鎮陳津墜椎槌追鎚痛通塚栂掴槻佃漬柘辻蔦綴鍔椿潰坪壷嬬紬爪吊釣鶴亭低停偵剃貞呈堤定帝底庭廷弟悌抵挺提梯汀碇禎程締艇訂諦蹄逓"
+	],
+	[
+		"c5a1",
+		"邸鄭釘鼎泥摘擢敵滴的笛適鏑溺哲徹撤轍迭鉄典填天展店添纏甜貼転顛点伝殿澱田電兎吐堵塗妬屠徒斗杜渡登菟賭途都鍍砥砺努度土奴怒倒党冬凍刀唐塔塘套宕島嶋悼投搭東桃梼棟盗淘湯涛灯燈当痘祷等答筒糖統到"
+	],
+	[
+		"c6a1",
+		"董蕩藤討謄豆踏逃透鐙陶頭騰闘働動同堂導憧撞洞瞳童胴萄道銅峠鴇匿得徳涜特督禿篤毒独読栃橡凸突椴届鳶苫寅酉瀞噸屯惇敦沌豚遁頓呑曇鈍奈那内乍凪薙謎灘捺鍋楢馴縄畷南楠軟難汝二尼弐迩匂賑肉虹廿日乳入"
+	],
+	[
+		"c7a1",
+		"如尿韮任妊忍認濡禰祢寧葱猫熱年念捻撚燃粘乃廼之埜嚢悩濃納能脳膿農覗蚤巴把播覇杷波派琶破婆罵芭馬俳廃拝排敗杯盃牌背肺輩配倍培媒梅楳煤狽買売賠陪這蝿秤矧萩伯剥博拍柏泊白箔粕舶薄迫曝漠爆縛莫駁麦"
+	],
+	[
+		"c8a1",
+		"函箱硲箸肇筈櫨幡肌畑畠八鉢溌発醗髪伐罰抜筏閥鳩噺塙蛤隼伴判半反叛帆搬斑板氾汎版犯班畔繁般藩販範釆煩頒飯挽晩番盤磐蕃蛮匪卑否妃庇彼悲扉批披斐比泌疲皮碑秘緋罷肥被誹費避非飛樋簸備尾微枇毘琵眉美"
+	],
+	[
+		"c9a1",
+		"鼻柊稗匹疋髭彦膝菱肘弼必畢筆逼桧姫媛紐百謬俵彪標氷漂瓢票表評豹廟描病秒苗錨鋲蒜蛭鰭品彬斌浜瀕貧賓頻敏瓶不付埠夫婦富冨布府怖扶敷斧普浮父符腐膚芙譜負賦赴阜附侮撫武舞葡蕪部封楓風葺蕗伏副復幅服"
+	],
+	[
+		"caa1",
+		"福腹複覆淵弗払沸仏物鮒分吻噴墳憤扮焚奮粉糞紛雰文聞丙併兵塀幣平弊柄並蔽閉陛米頁僻壁癖碧別瞥蔑箆偏変片篇編辺返遍便勉娩弁鞭保舗鋪圃捕歩甫補輔穂募墓慕戊暮母簿菩倣俸包呆報奉宝峰峯崩庖抱捧放方朋"
+	],
+	[
+		"cba1",
+		"法泡烹砲縫胞芳萌蓬蜂褒訪豊邦鋒飽鳳鵬乏亡傍剖坊妨帽忘忙房暴望某棒冒紡肪膨謀貌貿鉾防吠頬北僕卜墨撲朴牧睦穆釦勃没殆堀幌奔本翻凡盆摩磨魔麻埋妹昧枚毎哩槙幕膜枕鮪柾鱒桝亦俣又抹末沫迄侭繭麿万慢満"
+	],
+	[
+		"cca1",
+		"漫蔓味未魅巳箕岬密蜜湊蓑稔脈妙粍民眠務夢無牟矛霧鵡椋婿娘冥名命明盟迷銘鳴姪牝滅免棉綿緬面麺摸模茂妄孟毛猛盲網耗蒙儲木黙目杢勿餅尤戻籾貰問悶紋門匁也冶夜爺耶野弥矢厄役約薬訳躍靖柳薮鑓愉愈油癒"
+	],
+	[
+		"cda1",
+		"諭輸唯佑優勇友宥幽悠憂揖有柚湧涌猶猷由祐裕誘遊邑郵雄融夕予余与誉輿預傭幼妖容庸揚揺擁曜楊様洋溶熔用窯羊耀葉蓉要謡踊遥陽養慾抑欲沃浴翌翼淀羅螺裸来莱頼雷洛絡落酪乱卵嵐欄濫藍蘭覧利吏履李梨理璃"
+	],
+	[
+		"cea1",
+		"痢裏裡里離陸律率立葎掠略劉流溜琉留硫粒隆竜龍侶慮旅虜了亮僚両凌寮料梁涼猟療瞭稜糧良諒遼量陵領力緑倫厘林淋燐琳臨輪隣鱗麟瑠塁涙累類令伶例冷励嶺怜玲礼苓鈴隷零霊麗齢暦歴列劣烈裂廉恋憐漣煉簾練聯"
+	],
+	[
+		"cfa1",
+		"蓮連錬呂魯櫓炉賂路露労婁廊弄朗楼榔浪漏牢狼篭老聾蝋郎六麓禄肋録論倭和話歪賄脇惑枠鷲亙亘鰐詫藁蕨椀湾碗腕"
+	],
+	[
+		"d0a1",
+		"弌丐丕个丱丶丼丿乂乖乘亂亅豫亊舒弍于亞亟亠亢亰亳亶从仍仄仆仂仗仞仭仟价伉佚估佛佝佗佇佶侈侏侘佻佩佰侑佯來侖儘俔俟俎俘俛俑俚俐俤俥倚倨倔倪倥倅伜俶倡倩倬俾俯們倆偃假會偕偐偈做偖偬偸傀傚傅傴傲"
+	],
+	[
+		"d1a1",
+		"僉僊傳僂僖僞僥僭僣僮價僵儉儁儂儖儕儔儚儡儺儷儼儻儿兀兒兌兔兢竸兩兪兮冀冂囘册冉冏冑冓冕冖冤冦冢冩冪冫决冱冲冰况冽凅凉凛几處凩凭凰凵凾刄刋刔刎刧刪刮刳刹剏剄剋剌剞剔剪剴剩剳剿剽劍劔劒剱劈劑辨"
+	],
+	[
+		"d2a1",
+		"辧劬劭劼劵勁勍勗勞勣勦飭勠勳勵勸勹匆匈甸匍匐匏匕匚匣匯匱匳匸區卆卅丗卉卍凖卞卩卮夘卻卷厂厖厠厦厥厮厰厶參簒雙叟曼燮叮叨叭叺吁吽呀听吭吼吮吶吩吝呎咏呵咎呟呱呷呰咒呻咀呶咄咐咆哇咢咸咥咬哄哈咨"
+	],
+	[
+		"d3a1",
+		"咫哂咤咾咼哘哥哦唏唔哽哮哭哺哢唹啀啣啌售啜啅啖啗唸唳啝喙喀咯喊喟啻啾喘喞單啼喃喩喇喨嗚嗅嗟嗄嗜嗤嗔嘔嗷嘖嗾嗽嘛嗹噎噐營嘴嘶嘲嘸噫噤嘯噬噪嚆嚀嚊嚠嚔嚏嚥嚮嚶嚴囂嚼囁囃囀囈囎囑囓囗囮囹圀囿圄圉"
+	],
+	[
+		"d4a1",
+		"圈國圍圓團圖嗇圜圦圷圸坎圻址坏坩埀垈坡坿垉垓垠垳垤垪垰埃埆埔埒埓堊埖埣堋堙堝塲堡塢塋塰毀塒堽塹墅墹墟墫墺壞墻墸墮壅壓壑壗壙壘壥壜壤壟壯壺壹壻壼壽夂夊夐夛梦夥夬夭夲夸夾竒奕奐奎奚奘奢奠奧奬奩"
+	],
+	[
+		"d5a1",
+		"奸妁妝佞侫妣妲姆姨姜妍姙姚娥娟娑娜娉娚婀婬婉娵娶婢婪媚媼媾嫋嫂媽嫣嫗嫦嫩嫖嫺嫻嬌嬋嬖嬲嫐嬪嬶嬾孃孅孀孑孕孚孛孥孩孰孳孵學斈孺宀它宦宸寃寇寉寔寐寤實寢寞寥寫寰寶寳尅將專對尓尠尢尨尸尹屁屆屎屓"
+	],
+	[
+		"d6a1",
+		"屐屏孱屬屮乢屶屹岌岑岔妛岫岻岶岼岷峅岾峇峙峩峽峺峭嶌峪崋崕崗嵜崟崛崑崔崢崚崙崘嵌嵒嵎嵋嵬嵳嵶嶇嶄嶂嶢嶝嶬嶮嶽嶐嶷嶼巉巍巓巒巖巛巫已巵帋帚帙帑帛帶帷幄幃幀幎幗幔幟幢幤幇幵并幺麼广庠廁廂廈廐廏"
+	],
+	[
+		"d7a1",
+		"廖廣廝廚廛廢廡廨廩廬廱廳廰廴廸廾弃弉彝彜弋弑弖弩弭弸彁彈彌彎弯彑彖彗彙彡彭彳彷徃徂彿徊很徑徇從徙徘徠徨徭徼忖忻忤忸忱忝悳忿怡恠怙怐怩怎怱怛怕怫怦怏怺恚恁恪恷恟恊恆恍恣恃恤恂恬恫恙悁悍惧悃悚"
+	],
+	[
+		"d8a1",
+		"悄悛悖悗悒悧悋惡悸惠惓悴忰悽惆悵惘慍愕愆惶惷愀惴惺愃愡惻惱愍愎慇愾愨愧慊愿愼愬愴愽慂慄慳慷慘慙慚慫慴慯慥慱慟慝慓慵憙憖憇憬憔憚憊憑憫憮懌懊應懷懈懃懆憺懋罹懍懦懣懶懺懴懿懽懼懾戀戈戉戍戌戔戛"
+	],
+	[
+		"d9a1",
+		"戞戡截戮戰戲戳扁扎扞扣扛扠扨扼抂抉找抒抓抖拔抃抔拗拑抻拏拿拆擔拈拜拌拊拂拇抛拉挌拮拱挧挂挈拯拵捐挾捍搜捏掖掎掀掫捶掣掏掉掟掵捫捩掾揩揀揆揣揉插揶揄搖搴搆搓搦搶攝搗搨搏摧摯摶摎攪撕撓撥撩撈撼"
+	],
+	[
+		"daa1",
+		"據擒擅擇撻擘擂擱擧舉擠擡抬擣擯攬擶擴擲擺攀擽攘攜攅攤攣攫攴攵攷收攸畋效敖敕敍敘敞敝敲數斂斃變斛斟斫斷旃旆旁旄旌旒旛旙无旡旱杲昊昃旻杳昵昶昴昜晏晄晉晁晞晝晤晧晨晟晢晰暃暈暎暉暄暘暝曁暹曉暾暼"
+	],
+	[
+		"dba1",
+		"曄暸曖曚曠昿曦曩曰曵曷朏朖朞朦朧霸朮朿朶杁朸朷杆杞杠杙杣杤枉杰枩杼杪枌枋枦枡枅枷柯枴柬枳柩枸柤柞柝柢柮枹柎柆柧檜栞框栩桀桍栲桎梳栫桙档桷桿梟梏梭梔條梛梃檮梹桴梵梠梺椏梍桾椁棊椈棘椢椦棡椌棍"
+	],
+	[
+		"dca1",
+		"棔棧棕椶椒椄棗棣椥棹棠棯椨椪椚椣椡棆楹楷楜楸楫楔楾楮椹楴椽楙椰楡楞楝榁楪榲榮槐榿槁槓榾槎寨槊槝榻槃榧樮榑榠榜榕榴槞槨樂樛槿權槹槲槧樅榱樞槭樔槫樊樒櫁樣樓橄樌橲樶橸橇橢橙橦橈樸樢檐檍檠檄檢檣"
+	],
+	[
+		"dda1",
+		"檗蘗檻櫃櫂檸檳檬櫞櫑櫟檪櫚櫪櫻欅蘖櫺欒欖鬱欟欸欷盜欹飮歇歃歉歐歙歔歛歟歡歸歹歿殀殄殃殍殘殕殞殤殪殫殯殲殱殳殷殼毆毋毓毟毬毫毳毯麾氈氓气氛氤氣汞汕汢汪沂沍沚沁沛汾汨汳沒沐泄泱泓沽泗泅泝沮沱沾"
+	],
+	[
+		"dea1",
+		"沺泛泯泙泪洟衍洶洫洽洸洙洵洳洒洌浣涓浤浚浹浙涎涕濤涅淹渕渊涵淇淦涸淆淬淞淌淨淒淅淺淙淤淕淪淮渭湮渮渙湲湟渾渣湫渫湶湍渟湃渺湎渤滿渝游溂溪溘滉溷滓溽溯滄溲滔滕溏溥滂溟潁漑灌滬滸滾漿滲漱滯漲滌"
+	],
+	[
+		"dfa1",
+		"漾漓滷澆潺潸澁澀潯潛濳潭澂潼潘澎澑濂潦澳澣澡澤澹濆澪濟濕濬濔濘濱濮濛瀉瀋濺瀑瀁瀏濾瀛瀚潴瀝瀘瀟瀰瀾瀲灑灣炙炒炯烱炬炸炳炮烟烋烝烙焉烽焜焙煥煕熈煦煢煌煖煬熏燻熄熕熨熬燗熹熾燒燉燔燎燠燬燧燵燼"
+	],
+	[
+		"e0a1",
+		"燹燿爍爐爛爨爭爬爰爲爻爼爿牀牆牋牘牴牾犂犁犇犒犖犢犧犹犲狃狆狄狎狒狢狠狡狹狷倏猗猊猜猖猝猴猯猩猥猾獎獏默獗獪獨獰獸獵獻獺珈玳珎玻珀珥珮珞璢琅瑯琥珸琲琺瑕琿瑟瑙瑁瑜瑩瑰瑣瑪瑶瑾璋璞璧瓊瓏瓔珱"
+	],
+	[
+		"e1a1",
+		"瓠瓣瓧瓩瓮瓲瓰瓱瓸瓷甄甃甅甌甎甍甕甓甞甦甬甼畄畍畊畉畛畆畚畩畤畧畫畭畸當疆疇畴疊疉疂疔疚疝疥疣痂疳痃疵疽疸疼疱痍痊痒痙痣痞痾痿痼瘁痰痺痲痳瘋瘍瘉瘟瘧瘠瘡瘢瘤瘴瘰瘻癇癈癆癜癘癡癢癨癩癪癧癬癰"
+	],
+	[
+		"e2a1",
+		"癲癶癸發皀皃皈皋皎皖皓皙皚皰皴皸皹皺盂盍盖盒盞盡盥盧盪蘯盻眈眇眄眩眤眞眥眦眛眷眸睇睚睨睫睛睥睿睾睹瞎瞋瞑瞠瞞瞰瞶瞹瞿瞼瞽瞻矇矍矗矚矜矣矮矼砌砒礦砠礪硅碎硴碆硼碚碌碣碵碪碯磑磆磋磔碾碼磅磊磬"
+	],
+	[
+		"e3a1",
+		"磧磚磽磴礇礒礑礙礬礫祀祠祗祟祚祕祓祺祿禊禝禧齋禪禮禳禹禺秉秕秧秬秡秣稈稍稘稙稠稟禀稱稻稾稷穃穗穉穡穢穩龝穰穹穽窈窗窕窘窖窩竈窰窶竅竄窿邃竇竊竍竏竕竓站竚竝竡竢竦竭竰笂笏笊笆笳笘笙笞笵笨笶筐"
+	],
+	[
+		"e4a1",
+		"筺笄筍笋筌筅筵筥筴筧筰筱筬筮箝箘箟箍箜箚箋箒箏筝箙篋篁篌篏箴篆篝篩簑簔篦篥籠簀簇簓篳篷簗簍篶簣簧簪簟簷簫簽籌籃籔籏籀籐籘籟籤籖籥籬籵粃粐粤粭粢粫粡粨粳粲粱粮粹粽糀糅糂糘糒糜糢鬻糯糲糴糶糺紆"
+	],
+	[
+		"e5a1",
+		"紂紜紕紊絅絋紮紲紿紵絆絳絖絎絲絨絮絏絣經綉絛綏絽綛綺綮綣綵緇綽綫總綢綯緜綸綟綰緘緝緤緞緻緲緡縅縊縣縡縒縱縟縉縋縢繆繦縻縵縹繃縷縲縺繧繝繖繞繙繚繹繪繩繼繻纃緕繽辮繿纈纉續纒纐纓纔纖纎纛纜缸缺"
+	],
+	[
+		"e6a1",
+		"罅罌罍罎罐网罕罔罘罟罠罨罩罧罸羂羆羃羈羇羌羔羞羝羚羣羯羲羹羮羶羸譱翅翆翊翕翔翡翦翩翳翹飜耆耄耋耒耘耙耜耡耨耿耻聊聆聒聘聚聟聢聨聳聲聰聶聹聽聿肄肆肅肛肓肚肭冐肬胛胥胙胝胄胚胖脉胯胱脛脩脣脯腋"
+	],
+	[
+		"e7a1",
+		"隋腆脾腓腑胼腱腮腥腦腴膃膈膊膀膂膠膕膤膣腟膓膩膰膵膾膸膽臀臂膺臉臍臑臙臘臈臚臟臠臧臺臻臾舁舂舅與舊舍舐舖舩舫舸舳艀艙艘艝艚艟艤艢艨艪艫舮艱艷艸艾芍芒芫芟芻芬苡苣苟苒苴苳苺莓范苻苹苞茆苜茉苙"
+	],
+	[
+		"e8a1",
+		"茵茴茖茲茱荀茹荐荅茯茫茗茘莅莚莪莟莢莖茣莎莇莊荼莵荳荵莠莉莨菴萓菫菎菽萃菘萋菁菷萇菠菲萍萢萠莽萸蔆菻葭萪萼蕚蒄葷葫蒭葮蒂葩葆萬葯葹萵蓊葢蒹蒿蒟蓙蓍蒻蓚蓐蓁蓆蓖蒡蔡蓿蓴蔗蔘蔬蔟蔕蔔蓼蕀蕣蕘蕈"
+	],
+	[
+		"e9a1",
+		"蕁蘂蕋蕕薀薤薈薑薊薨蕭薔薛藪薇薜蕷蕾薐藉薺藏薹藐藕藝藥藜藹蘊蘓蘋藾藺蘆蘢蘚蘰蘿虍乕虔號虧虱蚓蚣蚩蚪蚋蚌蚶蚯蛄蛆蚰蛉蠣蚫蛔蛞蛩蛬蛟蛛蛯蜒蜆蜈蜀蜃蛻蜑蜉蜍蛹蜊蜴蜿蜷蜻蜥蜩蜚蝠蝟蝸蝌蝎蝴蝗蝨蝮蝙"
+	],
+	[
+		"eaa1",
+		"蝓蝣蝪蠅螢螟螂螯蟋螽蟀蟐雖螫蟄螳蟇蟆螻蟯蟲蟠蠏蠍蟾蟶蟷蠎蟒蠑蠖蠕蠢蠡蠱蠶蠹蠧蠻衄衂衒衙衞衢衫袁衾袞衵衽袵衲袂袗袒袮袙袢袍袤袰袿袱裃裄裔裘裙裝裹褂裼裴裨裲褄褌褊褓襃褞褥褪褫襁襄褻褶褸襌褝襠襞"
+	],
+	[
+		"eba1",
+		"襦襤襭襪襯襴襷襾覃覈覊覓覘覡覩覦覬覯覲覺覽覿觀觚觜觝觧觴觸訃訖訐訌訛訝訥訶詁詛詒詆詈詼詭詬詢誅誂誄誨誡誑誥誦誚誣諄諍諂諚諫諳諧諤諱謔諠諢諷諞諛謌謇謚諡謖謐謗謠謳鞫謦謫謾謨譁譌譏譎證譖譛譚譫"
+	],
+	[
+		"eca1",
+		"譟譬譯譴譽讀讌讎讒讓讖讙讚谺豁谿豈豌豎豐豕豢豬豸豺貂貉貅貊貍貎貔豼貘戝貭貪貽貲貳貮貶賈賁賤賣賚賽賺賻贄贅贊贇贏贍贐齎贓賍贔贖赧赭赱赳趁趙跂趾趺跏跚跖跌跛跋跪跫跟跣跼踈踉跿踝踞踐踟蹂踵踰踴蹊"
+	],
+	[
+		"eda1",
+		"蹇蹉蹌蹐蹈蹙蹤蹠踪蹣蹕蹶蹲蹼躁躇躅躄躋躊躓躑躔躙躪躡躬躰軆躱躾軅軈軋軛軣軼軻軫軾輊輅輕輒輙輓輜輟輛輌輦輳輻輹轅轂輾轌轉轆轎轗轜轢轣轤辜辟辣辭辯辷迚迥迢迪迯邇迴逅迹迺逑逕逡逍逞逖逋逧逶逵逹迸"
+	],
+	[
+		"eea1",
+		"遏遐遑遒逎遉逾遖遘遞遨遯遶隨遲邂遽邁邀邊邉邏邨邯邱邵郢郤扈郛鄂鄒鄙鄲鄰酊酖酘酣酥酩酳酲醋醉醂醢醫醯醪醵醴醺釀釁釉釋釐釖釟釡釛釼釵釶鈞釿鈔鈬鈕鈑鉞鉗鉅鉉鉤鉈銕鈿鉋鉐銜銖銓銛鉚鋏銹銷鋩錏鋺鍄錮"
+	],
+	[
+		"efa1",
+		"錙錢錚錣錺錵錻鍜鍠鍼鍮鍖鎰鎬鎭鎔鎹鏖鏗鏨鏥鏘鏃鏝鏐鏈鏤鐚鐔鐓鐃鐇鐐鐶鐫鐵鐡鐺鑁鑒鑄鑛鑠鑢鑞鑪鈩鑰鑵鑷鑽鑚鑼鑾钁鑿閂閇閊閔閖閘閙閠閨閧閭閼閻閹閾闊濶闃闍闌闕闔闖關闡闥闢阡阨阮阯陂陌陏陋陷陜陞"
+	],
+	[
+		"f0a1",
+		"陝陟陦陲陬隍隘隕隗險隧隱隲隰隴隶隸隹雎雋雉雍襍雜霍雕雹霄霆霈霓霎霑霏霖霙霤霪霰霹霽霾靄靆靈靂靉靜靠靤靦靨勒靫靱靹鞅靼鞁靺鞆鞋鞏鞐鞜鞨鞦鞣鞳鞴韃韆韈韋韜韭齏韲竟韶韵頏頌頸頤頡頷頽顆顏顋顫顯顰"
+	],
+	[
+		"f1a1",
+		"顱顴顳颪颯颱颶飄飃飆飩飫餃餉餒餔餘餡餝餞餤餠餬餮餽餾饂饉饅饐饋饑饒饌饕馗馘馥馭馮馼駟駛駝駘駑駭駮駱駲駻駸騁騏騅駢騙騫騷驅驂驀驃騾驕驍驛驗驟驢驥驤驩驫驪骭骰骼髀髏髑髓體髞髟髢髣髦髯髫髮髴髱髷"
+	],
+	[
+		"f2a1",
+		"髻鬆鬘鬚鬟鬢鬣鬥鬧鬨鬩鬪鬮鬯鬲魄魃魏魍魎魑魘魴鮓鮃鮑鮖鮗鮟鮠鮨鮴鯀鯊鮹鯆鯏鯑鯒鯣鯢鯤鯔鯡鰺鯲鯱鯰鰕鰔鰉鰓鰌鰆鰈鰒鰊鰄鰮鰛鰥鰤鰡鰰鱇鰲鱆鰾鱚鱠鱧鱶鱸鳧鳬鳰鴉鴈鳫鴃鴆鴪鴦鶯鴣鴟鵄鴕鴒鵁鴿鴾鵆鵈"
+	],
+	[
+		"f3a1",
+		"鵝鵞鵤鵑鵐鵙鵲鶉鶇鶫鵯鵺鶚鶤鶩鶲鷄鷁鶻鶸鶺鷆鷏鷂鷙鷓鷸鷦鷭鷯鷽鸚鸛鸞鹵鹹鹽麁麈麋麌麒麕麑麝麥麩麸麪麭靡黌黎黏黐黔黜點黝黠黥黨黯黴黶黷黹黻黼黽鼇鼈皷鼕鼡鼬鼾齊齒齔齣齟齠齡齦齧齬齪齷齲齶龕龜龠"
+	],
+	[
+		"f4a1",
+		"堯槇遙瑤凜熙"
+	],
+	[
+		"f9a1",
+		"纊褜鍈銈蓜俉炻昱棈鋹曻彅丨仡仼伀伃伹佖侒侊侚侔俍偀倢俿倞偆偰偂傔僴僘兊兤冝冾凬刕劜劦勀勛匀匇匤卲厓厲叝﨎咜咊咩哿喆坙坥垬埈埇﨏塚增墲夋奓奛奝奣妤妺孖寀甯寘寬尞岦岺峵崧嵓﨑嵂嵭嶸嶹巐弡弴彧德"
+	],
+	[
+		"faa1",
+		"忞恝悅悊惞惕愠惲愑愷愰憘戓抦揵摠撝擎敎昀昕昻昉昮昞昤晥晗晙晴晳暙暠暲暿曺朎朗杦枻桒柀栁桄棏﨓楨﨔榘槢樰橫橆橳橾櫢櫤毖氿汜沆汯泚洄涇浯涖涬淏淸淲淼渹湜渧渼溿澈澵濵瀅瀇瀨炅炫焏焄煜煆煇凞燁燾犱"
+	],
+	[
+		"fba1",
+		"犾猤猪獷玽珉珖珣珒琇珵琦琪琩琮瑢璉璟甁畯皂皜皞皛皦益睆劯砡硎硤硺礰礼神祥禔福禛竑竧靖竫箞精絈絜綷綠緖繒罇羡羽茁荢荿菇菶葈蒴蕓蕙蕫﨟薰蘒﨡蠇裵訒訷詹誧誾諟諸諶譓譿賰賴贒赶﨣軏﨤逸遧郞都鄕鄧釚"
+	],
+	[
+		"fca1",
+		"釗釞釭釮釤釥鈆鈐鈊鈺鉀鈼鉎鉙鉑鈹鉧銧鉷鉸鋧鋗鋙鋐﨧鋕鋠鋓錥錡鋻﨨錞鋿錝錂鍰鍗鎤鏆鏞鏸鐱鑅鑈閒隆﨩隝隯霳霻靃靍靏靑靕顗顥飯飼餧館馞驎髙髜魵魲鮏鮱鮻鰀鵰鵫鶴鸙黑"
+	],
+	[
+		"fcf1",
+		"ⅰ",
+		9,
+		"￢￤＇＂"
+	],
+	[
+		"8fa2af",
+		"˘ˇ¸˙˝¯˛˚～΄΅"
+	],
+	[
+		"8fa2c2",
+		"¡¦¿"
+	],
+	[
+		"8fa2eb",
+		"ºª©®™¤№"
+	],
+	[
+		"8fa6e1",
+		"ΆΈΉΊΪ"
+	],
+	[
+		"8fa6e7",
+		"Ό"
+	],
+	[
+		"8fa6e9",
+		"ΎΫ"
+	],
+	[
+		"8fa6ec",
+		"Ώ"
+	],
+	[
+		"8fa6f1",
+		"άέήίϊΐόςύϋΰώ"
+	],
+	[
+		"8fa7c2",
+		"Ђ",
+		10,
+		"ЎЏ"
+	],
+	[
+		"8fa7f2",
+		"ђ",
+		10,
+		"ўџ"
+	],
+	[
+		"8fa9a1",
+		"ÆĐ"
+	],
+	[
+		"8fa9a4",
+		"Ħ"
+	],
+	[
+		"8fa9a6",
+		"Ĳ"
+	],
+	[
+		"8fa9a8",
+		"ŁĿ"
+	],
+	[
+		"8fa9ab",
+		"ŊØŒ"
+	],
+	[
+		"8fa9af",
+		"ŦÞ"
+	],
+	[
+		"8fa9c1",
+		"æđðħıĳĸłŀŉŋøœßŧþ"
+	],
+	[
+		"8faaa1",
+		"ÁÀÄÂĂǍĀĄÅÃĆĈČÇĊĎÉÈËÊĚĖĒĘ"
+	],
+	[
+		"8faaba",
+		"ĜĞĢĠĤÍÌÏÎǏİĪĮĨĴĶĹĽĻŃŇŅÑÓÒÖÔǑŐŌÕŔŘŖŚŜŠŞŤŢÚÙÜÛŬǓŰŪŲŮŨǗǛǙǕŴÝŸŶŹŽŻ"
+	],
+	[
+		"8faba1",
+		"áàäâăǎāąåãćĉčçċďéèëêěėēęǵĝğ"
+	],
+	[
+		"8fabbd",
+		"ġĥíìïîǐ"
+	],
+	[
+		"8fabc5",
+		"īįĩĵķĺľļńňņñóòöôǒőōõŕřŗśŝšşťţúùüûŭǔűūųůũǘǜǚǖŵýÿŷźžż"
+	],
+	[
+		"8fb0a1",
+		"丂丄丅丌丒丟丣两丨丫丮丯丰丵乀乁乄乇乑乚乜乣乨乩乴乵乹乿亍亖亗亝亯亹仃仐仚仛仠仡仢仨仯仱仳仵份仾仿伀伂伃伈伋伌伒伕伖众伙伮伱你伳伵伷伹伻伾佀佂佈佉佋佌佒佔佖佘佟佣佪佬佮佱佷佸佹佺佽佾侁侂侄"
+	],
+	[
+		"8fb1a1",
+		"侅侉侊侌侎侐侒侓侔侗侙侚侞侟侲侷侹侻侼侽侾俀俁俅俆俈俉俋俌俍俏俒俜俠俢俰俲俼俽俿倀倁倄倇倊倌倎倐倓倗倘倛倜倝倞倢倧倮倰倲倳倵偀偁偂偅偆偊偌偎偑偒偓偗偙偟偠偢偣偦偧偪偭偰偱倻傁傃傄傆傊傎傏傐"
+	],
+	[
