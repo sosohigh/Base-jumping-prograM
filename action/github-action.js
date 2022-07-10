@@ -151450,3 +151450,2127 @@ var require$$6 = [
 		"f040",
 		"璸瓀璵瓁璾璶璻瓂甔甓癜癤癙癐癓癗癚皦皽盬矂瞺磿礌礓礔礉礐礒礑禭禬穟簜簩簙簠簟簭簝簦簨簢簥簰繜繐繖繣繘繢繟繑繠繗繓羵羳翷翸聵臑臒"
 	],
+	[
+		"f0a1",
+		"臐艟艞薴藆藀藃藂薳薵薽藇藄薿藋藎藈藅薱薶藒蘤薸薷薾虩蟧蟦蟢蟛蟫蟪蟥蟟蟳蟤蟔蟜蟓蟭蟘蟣螤蟗蟙蠁蟴蟨蟝襓襋襏襌襆襐襑襉謪謧謣謳謰謵譇謯謼謾謱謥謷謦謶謮謤謻謽謺豂豵貙貘貗賾贄贂贀蹜蹢蹠蹗蹖蹞蹥蹧"
+	],
+	[
+		"f140",
+		"蹛蹚蹡蹝蹩蹔轆轇轈轋鄨鄺鄻鄾醨醥醧醯醪鎵鎌鎒鎷鎛鎝鎉鎧鎎鎪鎞鎦鎕鎈鎙鎟鎍鎱鎑鎲鎤鎨鎴鎣鎥闒闓闑隳雗雚巂雟雘雝霣霢霥鞬鞮鞨鞫鞤鞪"
+	],
+	[
+		"f1a1",
+		"鞢鞥韗韙韖韘韺顐顑顒颸饁餼餺騏騋騉騍騄騑騊騅騇騆髀髜鬈鬄鬅鬩鬵魊魌魋鯇鯆鯃鮿鯁鮵鮸鯓鮶鯄鮹鮽鵜鵓鵏鵊鵛鵋鵙鵖鵌鵗鵒鵔鵟鵘鵚麎麌黟鼁鼀鼖鼥鼫鼪鼩鼨齌齕儴儵劖勷厴嚫嚭嚦嚧嚪嚬壚壝壛夒嬽嬾嬿巃幰"
+	],
+	[
+		"f240",
+		"徿懻攇攐攍攉攌攎斄旞旝曞櫧櫠櫌櫑櫙櫋櫟櫜櫐櫫櫏櫍櫞歠殰氌瀙瀧瀠瀖瀫瀡瀢瀣瀩瀗瀤瀜瀪爌爊爇爂爅犥犦犤犣犡瓋瓅璷瓃甖癠矉矊矄矱礝礛"
+	],
+	[
+		"f2a1",
+		"礡礜礗礞禰穧穨簳簼簹簬簻糬糪繶繵繸繰繷繯繺繲繴繨罋罊羃羆羷翽翾聸臗臕艤艡艣藫藱藭藙藡藨藚藗藬藲藸藘藟藣藜藑藰藦藯藞藢蠀蟺蠃蟶蟷蠉蠌蠋蠆蟼蠈蟿蠊蠂襢襚襛襗襡襜襘襝襙覈覷覶觶譐譈譊譀譓譖譔譋譕"
+	],
+	[
+		"f340",
+		"譑譂譒譗豃豷豶貚贆贇贉趬趪趭趫蹭蹸蹳蹪蹯蹻軂轒轑轏轐轓辴酀鄿醰醭鏞鏇鏏鏂鏚鏐鏹鏬鏌鏙鎩鏦鏊鏔鏮鏣鏕鏄鏎鏀鏒鏧镽闚闛雡霩霫霬霨霦"
+	],
+	[
+		"f3a1",
+		"鞳鞷鞶韝韞韟顜顙顝顗颿颽颻颾饈饇饃馦馧騚騕騥騝騤騛騢騠騧騣騞騜騔髂鬋鬊鬎鬌鬷鯪鯫鯠鯞鯤鯦鯢鯰鯔鯗鯬鯜鯙鯥鯕鯡鯚鵷鶁鶊鶄鶈鵱鶀鵸鶆鶋鶌鵽鵫鵴鵵鵰鵩鶅鵳鵻鶂鵯鵹鵿鶇鵨麔麑黀黼鼭齀齁齍齖齗齘匷嚲"
+	],
+	[
+		"f440",
+		"嚵嚳壣孅巆巇廮廯忀忁懹攗攖攕攓旟曨曣曤櫳櫰櫪櫨櫹櫱櫮櫯瀼瀵瀯瀷瀴瀱灂瀸瀿瀺瀹灀瀻瀳灁爓爔犨獽獼璺皫皪皾盭矌矎矏矍矲礥礣礧礨礤礩"
+	],
+	[
+		"f4a1",
+		"禲穮穬穭竷籉籈籊籇籅糮繻繾纁纀羺翿聹臛臙舋艨艩蘢藿蘁藾蘛蘀藶蘄蘉蘅蘌藽蠙蠐蠑蠗蠓蠖襣襦覹觷譠譪譝譨譣譥譧譭趮躆躈躄轙轖轗轕轘轚邍酃酁醷醵醲醳鐋鐓鏻鐠鐏鐔鏾鐕鐐鐨鐙鐍鏵鐀鏷鐇鐎鐖鐒鏺鐉鏸鐊鏿"
+	],
+	[
+		"f540",
+		"鏼鐌鏶鐑鐆闞闠闟霮霯鞹鞻韽韾顠顢顣顟飁飂饐饎饙饌饋饓騲騴騱騬騪騶騩騮騸騭髇髊髆鬐鬒鬑鰋鰈鯷鰅鰒鯸鱀鰇鰎鰆鰗鰔鰉鶟鶙鶤鶝鶒鶘鶐鶛"
+	],
+	[
+		"f5a1",
+		"鶠鶔鶜鶪鶗鶡鶚鶢鶨鶞鶣鶿鶩鶖鶦鶧麙麛麚黥黤黧黦鼰鼮齛齠齞齝齙龑儺儹劘劗囃嚽嚾孈孇巋巏廱懽攛欂櫼欃櫸欀灃灄灊灈灉灅灆爝爚爙獾甗癪矐礭礱礯籔籓糲纊纇纈纋纆纍罍羻耰臝蘘蘪蘦蘟蘣蘜蘙蘧蘮蘡蘠蘩蘞蘥"
+	],
+	[
+		"f640",
+		"蠩蠝蠛蠠蠤蠜蠫衊襭襩襮襫觺譹譸譅譺譻贐贔趯躎躌轞轛轝酆酄酅醹鐿鐻鐶鐩鐽鐼鐰鐹鐪鐷鐬鑀鐱闥闤闣霵霺鞿韡顤飉飆飀饘饖騹騽驆驄驂驁騺"
+	],
+	[
+		"f6a1",
+		"騿髍鬕鬗鬘鬖鬺魒鰫鰝鰜鰬鰣鰨鰩鰤鰡鶷鶶鶼鷁鷇鷊鷏鶾鷅鷃鶻鶵鷎鶹鶺鶬鷈鶱鶭鷌鶳鷍鶲鹺麜黫黮黭鼛鼘鼚鼱齎齥齤龒亹囆囅囋奱孋孌巕巑廲攡攠攦攢欋欈欉氍灕灖灗灒爞爟犩獿瓘瓕瓙瓗癭皭礵禴穰穱籗籜籙籛籚"
+	],
+	[
+		"f740",
+		"糴糱纑罏羇臞艫蘴蘵蘳蘬蘲蘶蠬蠨蠦蠪蠥襱覿覾觻譾讄讂讆讅譿贕躕躔躚躒躐躖躗轠轢酇鑌鑐鑊鑋鑏鑇鑅鑈鑉鑆霿韣顪顩飋饔饛驎驓驔驌驏驈驊"
+	],
+	[
+		"f7a1",
+		"驉驒驐髐鬙鬫鬻魖魕鱆鱈鰿鱄鰹鰳鱁鰼鰷鰴鰲鰽鰶鷛鷒鷞鷚鷋鷐鷜鷑鷟鷩鷙鷘鷖鷵鷕鷝麶黰鼵鼳鼲齂齫龕龢儽劙壨壧奲孍巘蠯彏戁戃戄攩攥斖曫欑欒欏毊灛灚爢玂玁玃癰矔籧籦纕艬蘺虀蘹蘼蘱蘻蘾蠰蠲蠮蠳襶襴襳觾"
+	],
+	[
+		"f840",
+		"讌讎讋讈豅贙躘轤轣醼鑢鑕鑝鑗鑞韄韅頀驖驙鬞鬟鬠鱒鱘鱐鱊鱍鱋鱕鱙鱌鱎鷻鷷鷯鷣鷫鷸鷤鷶鷡鷮鷦鷲鷰鷢鷬鷴鷳鷨鷭黂黐黲黳鼆鼜鼸鼷鼶齃齏"
+	],
+	[
+		"f8a1",
+		"齱齰齮齯囓囍孎屭攭曭曮欓灟灡灝灠爣瓛瓥矕礸禷禶籪纗羉艭虃蠸蠷蠵衋讔讕躞躟躠躝醾醽釂鑫鑨鑩雥靆靃靇韇韥驞髕魙鱣鱧鱦鱢鱞鱠鸂鷾鸇鸃鸆鸅鸀鸁鸉鷿鷽鸄麠鼞齆齴齵齶囔攮斸欘欙欗欚灢爦犪矘矙礹籩籫糶纚"
+	],
+	[
+		"f940",
+		"纘纛纙臠臡虆虇虈襹襺襼襻觿讘讙躥躤躣鑮鑭鑯鑱鑳靉顲饟鱨鱮鱭鸋鸍鸐鸏鸒鸑麡黵鼉齇齸齻齺齹圞灦籯蠼趲躦釃鑴鑸鑶鑵驠鱴鱳鱱鱵鸔鸓黶鼊"
+	],
+	[
+		"f9a1",
+		"龤灨灥糷虪蠾蠽蠿讞貜躩軉靋顳顴飌饡馫驤驦驧鬤鸕鸗齈戇欞爧虌躨钂钀钁驩驨鬮鸙爩虋讟钃鱹麷癵驫鱺鸝灩灪麤齾齉龘碁銹裏墻恒粧嫺╔╦╗╠╬╣╚╩╝╒╤╕╞╪╡╘╧╛╓╥╖╟╫╢╙╨╜║═╭╮╰╯▓"
+	]
+];
+
+var require$$7 = [
+	[
+		"8740",
+		"䏰䰲䘃䖦䕸𧉧䵷䖳𧲱䳢𧳅㮕䜶䝄䱇䱀𤊿𣘗𧍒𦺋𧃒䱗𪍑䝏䗚䲅𧱬䴇䪤䚡𦬣爥𥩔𡩣𣸆𣽡晍囻"
+	],
+	[
+		"8767",
+		"綕夝𨮹㷴霴𧯯寛𡵞媤㘥𩺰嫑宷峼杮薓𩥅瑡璝㡵𡵓𣚞𦀡㻬"
+	],
+	[
+		"87a1",
+		"𥣞㫵竼龗𤅡𨤍𣇪𠪊𣉞䌊蒄龖鐯䤰蘓墖靊鈘秐稲晠権袝瑌篅枂稬剏遆㓦珄𥶹瓆鿇垳䤯呌䄱𣚎堘穲𧭥讏䚮𦺈䆁𥶙箮𢒼鿈𢓁𢓉𢓌鿉蔄𣖻䂴鿊䓡𪷿拁灮鿋"
+	],
+	[
+		"8840",
+		"㇀",
+		4,
+		"𠄌㇅𠃑𠃍㇆㇇𠃋𡿨㇈𠃊㇉㇊㇋㇌𠄎㇍㇎ĀÁǍÀĒÉĚÈŌÓǑÒ࿿Ê̄Ế࿿Ê̌ỀÊāáǎàɑēéěèīíǐìōóǒòūúǔùǖǘǚ"
+	],
+	[
+		"88a1",
+		"ǜü࿿ê̄ế࿿ê̌ềêɡ⏚⏛"
+	],
+	[
+		"8940",
+		"𪎩𡅅"
+	],
+	[
+		"8943",
+		"攊"
+	],
+	[
+		"8946",
+		"丽滝鵎釟"
+	],
+	[
+		"894c",
+		"𧜵撑会伨侨兖兴农凤务动医华发变团声处备夲头学实実岚庆总斉柾栄桥济炼电纤纬纺织经统缆缷艺苏药视设询车轧轮"
+	],
+	[
+		"89a1",
+		"琑糼緍楆竉刧"
+	],
+	[
+		"89ab",
+		"醌碸酞肼"
+	],
+	[
+		"89b0",
+		"贋胶𠧧"
+	],
+	[
+		"89b5",
+		"肟黇䳍鷉鸌䰾𩷶𧀎鸊𪄳㗁"
+	],
+	[
+		"89c1",
+		"溚舾甙"
+	],
+	[
+		"89c5",
+		"䤑马骏龙禇𨑬𡷊𠗐𢫦两亁亀亇亿仫伷㑌侽㹈倃傈㑽㒓㒥円夅凛凼刅争剹劐匧㗇厩㕑厰㕓参吣㕭㕲㚁咓咣咴咹哐哯唘唣唨㖘唿㖥㖿嗗㗅"
+	],
+	[
+		"8a40",
+		"𧶄唥"
+	],
+	[
+		"8a43",
+		"𠱂𠴕𥄫喐𢳆㧬𠍁蹆𤶸𩓥䁓𨂾睺𢰸㨴䟕𨅝𦧲𤷪擝𠵼𠾴𠳕𡃴撍蹾𠺖𠰋𠽤𢲩𨉖𤓓"
+	],
+	[
+		"8a64",
+		"𠵆𩩍𨃩䟴𤺧𢳂骲㩧𩗴㿭㔆𥋇𩟔𧣈𢵄鵮頕"
+	],
+	[
+		"8a76",
+		"䏙𦂥撴哣𢵌𢯊𡁷㧻𡁯"
+	],
+	[
+		"8aa1",
+		"𦛚𦜖𧦠擪𥁒𠱃蹨𢆡𨭌𠜱"
+	],
+	[
+		"8aac",
+		"䠋𠆩㿺塳𢶍"
+	],
+	[
+		"8ab2",
+		"𤗈𠓼𦂗𠽌𠶖啹䂻䎺"
+	],
+	[
+		"8abb",
+		"䪴𢩦𡂝膪飵𠶜捹㧾𢝵跀嚡摼㹃"
+	],
+	[
+		"8ac9",
+		"𪘁𠸉𢫏𢳉"
+	],
+	[
+		"8ace",
+		"𡃈𣧂㦒㨆𨊛㕸𥹉𢃇噒𠼱𢲲𩜠㒼氽𤸻"
+	],
+	[
+		"8adf",
+		"𧕴𢺋𢈈𪙛𨳍𠹺𠰴𦠜羓𡃏𢠃𢤹㗻𥇣𠺌𠾍𠺪㾓𠼰𠵇𡅏𠹌"
+	],
+	[
+		"8af6",
+		"𠺫𠮩𠵈𡃀𡄽㿹𢚖搲𠾭"
+	],
+	[
+		"8b40",
+		"𣏴𧘹𢯎𠵾𠵿𢱑𢱕㨘𠺘𡃇𠼮𪘲𦭐𨳒𨶙𨳊閪哌苄喹"
+	],
+	[
+		"8b55",
+		"𩻃鰦骶𧝞𢷮煀腭胬尜𦕲脴㞗卟𨂽醶𠻺𠸏𠹷𠻻㗝𤷫㘉𠳖嚯𢞵𡃉𠸐𠹸𡁸𡅈𨈇𡑕𠹹𤹐𢶤婔𡀝𡀞𡃵𡃶垜𠸑"
+	],
+	[
+		"8ba1",
+		"𧚔𨋍𠾵𠹻𥅾㜃𠾶𡆀𥋘𪊽𤧚𡠺𤅷𨉼墙剨㘚𥜽箲孨䠀䬬鼧䧧鰟鮍𥭴𣄽嗻㗲嚉丨夂𡯁屮靑𠂆乛亻㔾尣彑忄㣺扌攵歺氵氺灬爫丬犭𤣩罒礻糹罓𦉪㓁"
+	],
+	[
+		"8bde",
+		"𦍋耂肀𦘒𦥑卝衤见𧢲讠贝钅镸长门𨸏韦页风飞饣𩠐鱼鸟黄歯龜丷𠂇阝户钢"
+	],
+	[
+		"8c40",
+		"倻淾𩱳龦㷉袏𤅎灷峵䬠𥇍㕙𥴰愢𨨲辧釶熑朙玺𣊁𪄇㲋𡦀䬐磤琂冮𨜏䀉橣𪊺䈣蘏𠩯稪𩥇𨫪靕灍匤𢁾鏴盙𨧣龧矝亣俰傼丯众龨吴綋墒壐𡶶庒庙忂𢜒斋"
+	],
+	[
+		"8ca1",
+		"𣏹椙橃𣱣泿"
+	],
+	[
+		"8ca7",
+		"爀𤔅玌㻛𤨓嬕璹讃𥲤𥚕窓篬糃繬苸薗龩袐龪躹龫迏蕟駠鈡龬𨶹𡐿䁱䊢娚"
+	],
+	[
+		"8cc9",
+		"顨杫䉶圽"
+	],
+	[
+		"8cce",
+		"藖𤥻芿𧄍䲁𦵴嵻𦬕𦾾龭龮宖龯曧繛湗秊㶈䓃𣉖𢞖䎚䔶"
+	],
+	[
+		"8ce6",
+		"峕𣬚諹屸㴒𣕑嵸龲煗䕘𤃬𡸣䱷㥸㑊𠆤𦱁諌侴𠈹妿腬顖𩣺弻"
+	],
+	[
+		"8d40",
+		"𠮟"
+	],
+	[
+		"8d42",
+		"𢇁𨥭䄂䚻𩁹㼇龳𪆵䃸㟖䛷𦱆䅼𨚲𧏿䕭㣔𥒚䕡䔛䶉䱻䵶䗪㿈𤬏㙡䓞䒽䇭崾嵈嵖㷼㠏嶤嶹㠠㠸幂庽弥徃㤈㤔㤿㥍惗愽峥㦉憷憹懏㦸戬抐拥挘㧸嚱"
+	],
+	[
+		"8da1",
+		"㨃揢揻搇摚㩋擀崕嘡龟㪗斆㪽旿晓㫲暒㬢朖㭂枤栀㭘桊梄㭲㭱㭻椉楃牜楤榟榅㮼槖㯝橥橴橱檂㯬檙㯲檫檵櫔櫶殁毁毪汵沪㳋洂洆洦涁㳯涤涱渕渘温溆𨧀溻滢滚齿滨滩漤漴㵆𣽁澁澾㵪㵵熷岙㶊瀬㶑灐灔灯灿炉𠌥䏁㗱𠻘"
+	],
+	[
+		"8e40",
+		"𣻗垾𦻓焾𥟠㙎榢𨯩孴穉𥣡𩓙穥穽𥦬窻窰竂竃燑𦒍䇊竚竝竪䇯咲𥰁笋筕笩𥌎𥳾箢筯莜𥮴𦱿篐萡箒箸𥴠㶭𥱥蒒篺簆簵𥳁籄粃𤢂粦晽𤕸糉糇糦籴糳糵糎"
+	],
+	[
+		"8ea1",
+		"繧䔝𦹄絝𦻖璍綉綫焵綳緒𤁗𦀩緤㴓緵𡟹緥𨍭縝𦄡𦅚繮纒䌫鑬縧罀罁罇礶𦋐駡羗𦍑羣𡙡𠁨䕜𣝦䔃𨌺翺𦒉者耈耝耨耯𪂇𦳃耻耼聡𢜔䦉𦘦𣷣𦛨朥肧𨩈脇脚墰𢛶汿𦒘𤾸擧𡒊舘𡡞橓𤩥𤪕䑺舩𠬍𦩒𣵾俹𡓽蓢荢𦬊𤦧𣔰𡝳𣷸芪椛芳䇛"
+	],
+	[
+		"8f40",
+		"蕋苐茚𠸖𡞴㛁𣅽𣕚艻苢茘𣺋𦶣𦬅𦮗𣗎㶿茝嗬莅䔋𦶥莬菁菓㑾𦻔橗蕚㒖𦹂𢻯葘𥯤葱㷓䓤檧葊𣲵祘蒨𦮖𦹷𦹃蓞萏莑䒠蒓蓤𥲑䉀𥳀䕃蔴嫲𦺙䔧蕳䔖枿蘖"
+	],
+	[
+		"8fa1",
+		"𨘥𨘻藁𧂈蘂𡖂𧃍䕫䕪蘨㙈𡢢号𧎚虾蝱𪃸蟮𢰧螱蟚蠏噡虬桖䘏衅衆𧗠𣶹𧗤衞袜䙛袴袵揁装睷𧜏覇覊覦覩覧覼𨨥觧𧤤𧪽誜瞓釾誐𧩙竩𧬺𣾏䜓𧬸煼謌謟𥐰𥕥謿譌譍誩𤩺讐讛誯𡛟䘕衏貛𧵔𧶏貫㜥𧵓賖𧶘𧶽贒贃𡤐賛灜贑𤳉㻐起"
+	],
+	[
+		"9040",
+		"趩𨀂𡀔𤦊㭼𨆼𧄌竧躭躶軃鋔輙輭𨍥𨐒辥錃𪊟𠩐辳䤪𨧞𨔽𣶻廸𣉢迹𪀔𨚼𨔁𢌥㦀𦻗逷𨔼𧪾遡𨕬𨘋邨𨜓郄𨛦邮都酧㫰醩釄粬𨤳𡺉鈎沟鉁鉢𥖹銹𨫆𣲛𨬌𥗛"
+	],
+	[
+		"90a1",
+		"𠴱錬鍫𨫡𨯫炏嫃𨫢𨫥䥥鉄𨯬𨰹𨯿鍳鑛躼閅閦鐦閠濶䊹𢙺𨛘𡉼𣸮䧟氜陻隖䅬隣𦻕懚隶磵𨫠隽双䦡𦲸𠉴𦐐𩂯𩃥𤫑𡤕𣌊霱虂霶䨏䔽䖅𤫩灵孁霛靜𩇕靗孊𩇫靟鐥僐𣂷𣂼鞉鞟鞱鞾韀韒韠𥑬韮琜𩐳響韵𩐝𧥺䫑頴頳顋顦㬎𧅵㵑𠘰𤅜"
+	],
+	[
+		"9140",
+		"𥜆飊颷飈飇䫿𦴧𡛓喰飡飦飬鍸餹𤨩䭲𩡗𩤅駵騌騻騐驘𥜥㛄𩂱𩯕髠髢𩬅髴䰎鬔鬭𨘀倴鬴𦦨㣃𣁽魐魀𩴾婅𡡣鮎𤉋鰂鯿鰌𩹨鷔𩾷𪆒𪆫𪃡𪄣𪇟鵾鶃𪄴鸎梈"
+	],
+	[
+		"91a1",
+		"鷄𢅛𪆓𪈠𡤻𪈳鴹𪂹𪊴麐麕麞麢䴴麪麯𤍤黁㭠㧥㴝伲㞾𨰫鼂鼈䮖鐤𦶢鼗鼖鼹嚟嚊齅馸𩂋韲葿齢齩竜龎爖䮾𤥵𤦻煷𤧸𤍈𤩑玞𨯚𡣺禟𨥾𨸶鍩鏳𨩄鋬鎁鏋𨥬𤒹爗㻫睲穃烐𤑳𤏸煾𡟯炣𡢾𣖙㻇𡢅𥐯𡟸㜢𡛻𡠹㛡𡝴𡣑𥽋㜣𡛀坛𤨥𡏾𡊨"
+	],
+	[
+		"9240",
+		"𡏆𡒶蔃𣚦蔃葕𤦔𧅥𣸱𥕜𣻻𧁒䓴𣛮𩦝𦼦柹㜳㰕㷧塬𡤢栐䁗𣜿𤃡𤂋𤄏𦰡哋嚞𦚱嚒𠿟𠮨𠸍鏆𨬓鎜仸儫㠙𤐶亼𠑥𠍿佋侊𥙑婨𠆫𠏋㦙𠌊𠐔㐵伩𠋀𨺳𠉵諚𠈌亘"
+	],
+	[
+		"92a1",
+		"働儍侢伃𤨎𣺊佂倮偬傁俌俥偘僼兙兛兝兞湶𣖕𣸹𣺿浲𡢄𣺉冨凃𠗠䓝𠒣𠒒𠒑赺𨪜𠜎剙劤𠡳勡鍮䙺熌𤎌𠰠𤦬𡃤槑𠸝瑹㻞璙琔瑖玘䮎𤪼𤂍叐㖄爏𤃉喴𠍅响𠯆圝鉝雴鍦埝垍坿㘾壋媙𨩆𡛺𡝯𡜐娬妸銏婾嫏娒𥥆𡧳𡡡𤊕㛵洅瑃娡𥺃"
+	],
+	[
+		"9340",
+		"媁𨯗𠐓鏠璌𡌃焅䥲鐈𨧻鎽㞠尞岞幞幈𡦖𡥼𣫮廍孏𡤃𡤄㜁𡢠㛝𡛾㛓脪𨩇𡶺𣑲𨦨弌弎𡤧𡞫婫𡜻孄蘔𧗽衠恾𢡠𢘫忛㺸𢖯𢖾𩂈𦽳懀𠀾𠁆𢘛憙憘恵𢲛𢴇𤛔𩅍"
+	],
+	[
+		"93a1",
+		"摱𤙥𢭪㨩𢬢𣑐𩣪𢹸挷𪑛撶挱揑𤧣𢵧护𢲡搻敫楲㯴𣂎𣊭𤦉𣊫唍𣋠𡣙𩐿曎𣊉𣆳㫠䆐𥖄𨬢𥖏𡛼𥕛𥐥磮𣄃𡠪𣈴㑤𣈏𣆂𤋉暎𦴤晫䮓昰𧡰𡷫晣𣋒𣋡昞𥡲㣑𣠺𣞼㮙𣞢𣏾瓐㮖枏𤘪梶栞㯄檾㡣𣟕𤒇樳橒櫉欅𡤒攑梘橌㯗橺歗𣿀𣲚鎠鋲𨯪𨫋"
+	],
+	[
+		"9440",
+		"銉𨀞𨧜鑧涥漋𤧬浧𣽿㶏渄𤀼娽渊塇洤硂焻𤌚𤉶烱牐犇犔𤞏𤜥兹𤪤𠗫瑺𣻸𣙟𤩊𤤗𥿡㼆㺱𤫟𨰣𣼵悧㻳瓌琼鎇琷䒟𦷪䕑疃㽣𤳙𤴆㽘畕癳𪗆㬙瑨𨫌𤦫𤦎㫻"
+	],
+	[
+		"94a1",
+		"㷍𤩎㻿𤧅𤣳釺圲鍂𨫣𡡤僟𥈡𥇧睸𣈲眎眏睻𤚗𣞁㩞𤣰琸璛㺿𤪺𤫇䃈𤪖𦆮錇𥖁砞碍碈磒珐祙𧝁𥛣䄎禛蒖禥樭𣻺稺秴䅮𡛦䄲鈵秱𠵌𤦌𠊙𣶺𡝮㖗啫㕰㚪𠇔𠰍竢婙𢛵𥪯𥪜娍𠉛磰娪𥯆竾䇹籝籭䈑𥮳𥺼𥺦糍𤧹𡞰粎籼粮檲緜縇緓罎𦉡"
+	],
+	[
+		"9540",
+		"𦅜𧭈綗𥺂䉪𦭵𠤖柖𠁎𣗏埄𦐒𦏸𤥢翝笧𠠬𥫩𥵃笌𥸎駦虅驣樜𣐿㧢𤧷𦖭騟𦖠蒀𧄧𦳑䓪脷䐂胆脉腂𦞴飃𦩂艢艥𦩑葓𦶧蘐𧈛媆䅿𡡀嬫𡢡嫤𡣘蚠蜨𣶏蠭𧐢娂"
+	],
+	[
+		"95a1",
+		"衮佅袇袿裦襥襍𥚃襔𧞅𧞄𨯵𨯙𨮜𨧹㺭蒣䛵䛏㟲訽訜𩑈彍鈫𤊄旔焩烄𡡅鵭貟賩𧷜妚矃姰䍮㛔踪躧𤰉輰轊䋴汘澻𢌡䢛潹溋𡟚鯩㚵𤤯邻邗啱䤆醻鐄𨩋䁢𨫼鐧𨰝𨰻蓥訫閙閧閗閖𨴴瑅㻂𤣿𤩂𤏪㻧𣈥随𨻧𨹦𨹥㻌𤧭𤩸𣿮琒瑫㻼靁𩂰"
+	],
+	[
+		"9640",
+		"桇䨝𩂓𥟟靝鍨𨦉𨰦𨬯𦎾銺嬑譩䤼珹𤈛鞛靱餸𠼦巁𨯅𤪲頟𩓚鋶𩗗釥䓀𨭐𤩧𨭤飜𨩅㼀鈪䤥萔餻饍𧬆㷽馛䭯馪驜𨭥𥣈檏騡嫾騯𩣱䮐𩥈馼䮽䮗鍽塲𡌂堢𤦸"
+	],
+	[
+		"96a1",
+		"𡓨硄𢜟𣶸棅㵽鑘㤧慐𢞁𢥫愇鱏鱓鱻鰵鰐魿鯏𩸭鮟𪇵𪃾鴡䲮𤄄鸘䲰鴌𪆴𪃭𪃳𩤯鶥蒽𦸒𦿟𦮂藼䔳𦶤𦺄𦷰萠藮𦸀𣟗𦁤秢𣖜𣙀䤭𤧞㵢鏛銾鍈𠊿碹鉷鑍俤㑀遤𥕝砽硔碶硋𡝗𣇉𤥁㚚佲濚濙瀞瀞吔𤆵垻壳垊鴖埗焴㒯𤆬燫𦱀𤾗嬨𡞵𨩉"
+	],
+	[
+		"9740",
+		"愌嫎娋䊼𤒈㜬䭻𨧼鎻鎸𡣖𠼝葲𦳀𡐓𤋺𢰦𤏁妔𣶷𦝁綨𦅛𦂤𤦹𤦋𨧺鋥珢㻩璴𨭣𡢟㻡𤪳櫘珳珻㻖𤨾𤪔𡟙𤩦𠎧𡐤𤧥瑈𤤖炥𤥶銄珦鍟𠓾錱𨫎𨨖鎆𨯧𥗕䤵𨪂煫"
+	],
+	[
+		"97a1",
+		"𤥃𠳿嚤𠘚𠯫𠲸唂秄𡟺緾𡛂𤩐𡡒䔮鐁㜊𨫀𤦭妰𡢿𡢃𧒄媡㛢𣵛㚰鉟婹𨪁𡡢鍴㳍𠪴䪖㦊僴㵩㵌𡎜煵䋻𨈘渏𩃤䓫浗𧹏灧沯㳖𣿭𣸭渂漌㵯𠏵畑㚼㓈䚀㻚䡱姄鉮䤾轁𨰜𦯀堒埈㛖𡑒烾𤍢𤩱𢿣𡊰𢎽梹楧𡎘𣓥𧯴𣛟𨪃𣟖𣏺𤲟樚𣚭𦲷萾䓟䓎"
+	],
+	[
+		"9840",
+		"𦴦𦵑𦲂𦿞漗𧄉茽𡜺菭𦲀𧁓𡟛妉媂𡞳婡婱𡤅𤇼㜭姯𡜼㛇熎鎐暚𤊥婮娫𤊓樫𣻹𧜶𤑛𤋊焝𤉙𨧡侰𦴨峂𤓎𧹍𤎽樌𤉖𡌄炦焳𤏩㶥泟勇𤩏繥姫崯㷳彜𤩝𡟟綤萦"
+	],
+	[
+		"98a1",
+		"咅𣫺𣌀𠈔坾𠣕𠘙㿥𡾞𪊶瀃𩅛嵰玏糓𨩙𩐠俈翧狍猐𧫴猸猹𥛶獁獈㺩𧬘遬燵𤣲珡臶㻊県㻑沢国琙琞琟㻢㻰㻴㻺瓓㼎㽓畂畭畲疍㽼痈痜㿀癍㿗癴㿜発𤽜熈嘣覀塩䀝睃䀹条䁅㗛瞘䁪䁯属瞾矋売砘点砜䂨砹硇硑硦葈𥔵礳栃礲䄃"
+	],
+	[
+		"9940",
+		"䄉禑禙辻稆込䅧窑䆲窼艹䇄竏竛䇏両筢筬筻簒簛䉠䉺类粜䊌粸䊔糭输烀𠳏総緔緐緽羮羴犟䎗耠耥笹耮耱联㷌垴炠肷胩䏭脌猪脎脒畠脔䐁㬹腖腙腚"
+	],
+	[
+		"99a1",
+		"䐓堺腼膄䐥膓䐭膥埯臁臤艔䒏芦艶苊苘苿䒰荗险榊萅烵葤惣蒈䔄蒾蓡蓸蔐蔸蕒䔻蕯蕰藠䕷虲蚒蚲蛯际螋䘆䘗袮裿褤襇覑𧥧訩訸誔誴豑賔賲贜䞘塟跃䟭仮踺嗘坔蹱嗵躰䠷軎転軤軭軲辷迁迊迌逳駄䢭飠鈓䤞鈨鉘鉫銱銮銿"
+	],
+	[
+		"9a40",
+		"鋣鋫鋳鋴鋽鍃鎄鎭䥅䥑麿鐗匁鐝鐭鐾䥪鑔鑹锭関䦧间阳䧥枠䨤靀䨵鞲韂噔䫤惨颹䬙飱塄餎餙冴餜餷饂饝饢䭰駅䮝騼鬏窃魩鮁鯝鯱鯴䱭鰠㝯𡯂鵉鰺"
+	],
+	[
+		"9aa1",
+		"黾噐鶓鶽鷀鷼银辶鹻麬麱麽黆铜黢黱黸竈齄𠂔𠊷𠎠椚铃妬𠓗塀铁㞹𠗕𠘕𠙶𡚺块煳𠫂𠫍𠮿呪吆𠯋咞𠯻𠰻𠱓𠱥𠱼惧𠲍噺𠲵𠳝𠳭𠵯𠶲𠷈楕鰯螥𠸄𠸎𠻗𠾐𠼭𠹳尠𠾼帋𡁜𡁏𡁶朞𡁻𡂈𡂖㙇𡂿𡃓𡄯𡄻卤蒭𡋣𡍵𡌶讁𡕷𡘙𡟃𡟇乸炻𡠭𡥪"
+	],
+	[
+		"9b40",
+		"𡨭𡩅𡰪𡱰𡲬𡻈拃𡻕𡼕熘桕𢁅槩㛈𢉼𢏗𢏺𢜪𢡱𢥏苽𢥧𢦓𢫕覥𢫨辠𢬎鞸𢬿顇骽𢱌"
+	],
+	[
+		"9b62",
+		"𢲈𢲷𥯨𢴈𢴒𢶷𢶕𢹂𢽴𢿌𣀳𣁦𣌟𣏞徱晈暿𧩹𣕧𣗳爁𤦺矗𣘚𣜖纇𠍆墵朎"
+	],
+	[
+		"9ba1",
+		"椘𣪧𧙗𥿢𣸑𣺹𧗾𢂚䣐䪸𤄙𨪚𤋮𤌍𤀻𤌴𤎖𤩅𠗊凒𠘑妟𡺨㮾𣳿𤐄𤓖垈𤙴㦛𤜯𨗨𩧉㝢𢇃譞𨭎駖𤠒𤣻𤨕爉𤫀𠱸奥𤺥𤾆𠝹軚𥀬劏圿煱𥊙𥐙𣽊𤪧喼𥑆𥑮𦭒釔㑳𥔿𧘲𥕞䜘𥕢𥕦𥟇𤤿𥡝偦㓻𣏌惞𥤃䝼𨥈𥪮𥮉𥰆𡶐垡煑澶𦄂𧰒遖𦆲𤾚譢𦐂𦑊"
+	],
+	[
+		"9c40",
+		"嵛𦯷輶𦒄𡤜諪𤧶𦒈𣿯𦔒䯀𦖿𦚵𢜛鑥𥟡憕娧晉侻嚹𤔡𦛼乪𤤴陖涏𦲽㘘襷𦞙𦡮𦐑𦡞營𦣇筂𩃀𠨑𦤦鄄𦤹穅鷰𦧺騦𦨭㙟𦑩𠀡禃𦨴𦭛崬𣔙菏𦮝䛐𦲤画补𦶮墶"
+	],
+	[
+		"9ca1",
+		"㜜𢖍𧁋𧇍㱔𧊀𧊅銁𢅺𧊋錰𧋦𤧐氹钟𧑐𠻸蠧裵𢤦𨑳𡞱溸𤨪𡠠㦤㚹尐秣䔿暶𩲭𩢤襃𧟌𧡘囖䃟𡘊㦡𣜯𨃨𡏅熭荦𧧝𩆨婧䲷𧂯𨦫𧧽𧨊𧬋𧵦𤅺筃祾𨀉澵𪋟樃𨌘厢𦸇鎿栶靝𨅯𨀣𦦵𡏭𣈯𨁈嶅𨰰𨂃圕頣𨥉嶫𤦈斾槕叒𤪥𣾁㰑朶𨂐𨃴𨄮𡾡𨅏"
+	],
+	[
+		"9d40",
+		"𨆉𨆯𨈚𨌆𨌯𨎊㗊𨑨𨚪䣺揦𨥖砈鉕𨦸䏲𨧧䏟𨧨𨭆𨯔姸𨰉輋𨿅𩃬筑𩄐𩄼㷷𩅞𤫊运犏嚋𩓧𩗩𩖰𩖸𩜲𩣑𩥉𩥪𩧃𩨨𩬎𩵚𩶛纟𩻸𩼣䲤镇𪊓熢𪋿䶑递𪗋䶜𠲜达嗁"
+	],
+	[
+		"9da1",
+		"辺𢒰边𤪓䔉繿潖檱仪㓤𨬬𧢝㜺躀𡟵𨀤𨭬𨮙𧨾𦚯㷫𧙕𣲷𥘵𥥖亚𥺁𦉘嚿𠹭踎孭𣺈𤲞揞拐𡟶𡡻攰嘭𥱊吚𥌑㷆𩶘䱽嘢嘞罉𥻘奵𣵀蝰东𠿪𠵉𣚺脗鵞贘瘻鱅癎瞹鍅吲腈苷嘥脲萘肽嗪祢噃吖𠺝㗎嘅嗱曱𨋢㘭甴嗰喺咗啲𠱁𠲖廐𥅈𠹶𢱢"
+	],
+	[
+		"9e40",
+		"𠺢麫絚嗞𡁵抝靭咔賍燶酶揼掹揾啩𢭃鱲𢺳冚㓟𠶧冧呍唞唓癦踭𦢊疱肶蠄螆裇膶萜𡃁䓬猄𤜆宐茋𦢓噻𢛴𧴯𤆣𧵳𦻐𧊶酰𡇙鈈𣳼𪚩𠺬𠻹牦𡲢䝎𤿂𧿹𠿫䃺"
+	],
+	[
+		"9ea1",
+		"鱝攟𢶠䣳𤟠𩵼𠿬𠸊恢𧖣𠿭"
+	],
+	[
+		"9ead",
+		"𦁈𡆇熣纎鵐业丄㕷嬍沲卧㚬㧜卽㚥𤘘墚𤭮舭呋垪𥪕𠥹"
+	],
+	[
+		"9ec5",
+		"㩒𢑥獴𩺬䴉鯭𣳾𩼰䱛𤾩𩖞𩿞葜𣶶𧊲𦞳𣜠挮紥𣻷𣸬㨪逈勌㹴㙺䗩𠒎癀嫰𠺶硺𧼮墧䂿噼鮋嵴癔𪐴麅䳡痹㟻愙𣃚𤏲"
+	],
+	[
+		"9ef5",
+		"噝𡊩垧𤥣𩸆刴𧂮㖭汊鵼"
+	],
+	[
+		"9f40",
+		"籖鬹埞𡝬屓擓𩓐𦌵𧅤蚭𠴨𦴢𤫢𠵱"
+	],
+	[
+		"9f4f",
+		"凾𡼏嶎霃𡷑麁遌笟鬂峑箣扨挵髿篏鬪籾鬮籂粆鰕篼鬉鼗鰛𤤾齚啳寃俽麘俲剠㸆勑坧偖妷帒韈鶫轜呩鞴饀鞺匬愰"
+	],
+	[
+		"9fa1",
+		"椬叚鰊鴂䰻陁榀傦畆𡝭駚剳"
+	],
+	[
+		"9fae",
+		"酙隁酜"
+	],
+	[
+		"9fb2",
+		"酑𨺗捿𦴣櫊嘑醎畺抅𠏼獏籰𥰡𣳽"
+	],
+	[
+		"9fc1",
+		"𤤙盖鮝个𠳔莾衂"
+	],
+	[
+		"9fc9",
+		"届槀僭坺刟巵从氱𠇲伹咜哚劚趂㗾弌㗳"
+	],
+	[
+		"9fdb",
+		"歒酼龥鮗頮颴骺麨麄煺笔"
+	],
+	[
+		"9fe7",
+		"毺蠘罸"
+	],
+	[
+		"9feb",
+		"嘠𪙊蹷齓"
+	],
+	[
+		"9ff0",
+		"跔蹏鸜踁抂𨍽踨蹵竓𤩷稾磘泪詧瘇"
+	],
+	[
+		"a040",
+		"𨩚鼦泎蟖痃𪊲硓咢贌狢獱謭猂瓱賫𤪻蘯徺袠䒷"
+	],
+	[
+		"a055",
+		"𡠻𦸅"
+	],
+	[
+		"a058",
+		"詾𢔛"
+	],
+	[
+		"a05b",
+		"惽癧髗鵄鍮鮏蟵"
+	],
+	[
+		"a063",
+		"蠏賷猬霡鮰㗖犲䰇籑饊𦅙慙䰄麖慽"
+	],
+	[
+		"a073",
+		"坟慯抦戹拎㩜懢厪𣏵捤栂㗒"
+	],
+	[
+		"a0a1",
+		"嵗𨯂迚𨸹"
+	],
+	[
+		"a0a6",
+		"僙𡵆礆匲阸𠼻䁥"
+	],
+	[
+		"a0ae",
+		"矾"
+	],
+	[
+		"a0b0",
+		"糂𥼚糚稭聦聣絍甅瓲覔舚朌聢𧒆聛瓰脃眤覉𦟌畓𦻑螩蟎臈螌詉貭譃眫瓸蓚㘵榲趦"
+	],
+	[
+		"a0d4",
+		"覩瑨涹蟁𤀑瓧㷛煶悤憜㳑煢恷"
+	],
+	[
+		"a0e2",
+		"罱𨬭牐惩䭾删㰘𣳇𥻗𧙖𥔱𡥄𡋾𩤃𦷜𧂭峁𦆭𨨏𣙷𠃮𦡆𤼎䕢嬟𦍌齐麦𦉫"
+	],
+	[
+		"a3c0",
+		"␀",
+		31,
+		"␡"
+	],
+	[
+		"c6a1",
+		"①",
+		9,
+		"⑴",
+		9,
+		"ⅰ",
+		9,
+		"丶丿亅亠冂冖冫勹匸卩厶夊宀巛⼳广廴彐彡攴无疒癶辵隶¨ˆヽヾゝゞ〃仝々〆〇ー［］✽ぁ",
+		23
+	],
+	[
+		"c740",
+		"す",
+		58,
+		"ァアィイ"
+	],
+	[
+		"c7a1",
+		"ゥ",
+		81,
+		"А",
+		5,
+		"ЁЖ",
+		4
+	],
+	[
+		"c840",
+		"Л",
+		26,
+		"ёж",
+		25,
+		"⇧↸↹㇏𠃌乚𠂊刂䒑"
+	],
+	[
+		"c8a1",
+		"龰冈龱𧘇"
+	],
+	[
+		"c8cd",
+		"￢￤＇＂㈱№℡゛゜⺀⺄⺆⺇⺈⺊⺌⺍⺕⺜⺝⺥⺧⺪⺬⺮⺶⺼⺾⻆⻊⻌⻍⻏⻖⻗⻞⻣"
+	],
+	[
+		"c8f5",
+		"ʃɐɛɔɵœøŋʊɪ"
+	],
+	[
+		"f9fe",
+		"￭"
+	],
+	[
+		"fa40",
+		"𠕇鋛𠗟𣿅蕌䊵珯况㙉𤥂𨧤鍄𡧛苮𣳈砼杄拟𤤳𨦪𠊠𦮳𡌅侫𢓭倈𦴩𧪄𣘀𤪱𢔓倩𠍾徤𠎀𠍇滛𠐟偽儁㑺儎顬㝃萖𤦤𠒇兠𣎴兪𠯿𢃼𠋥𢔰𠖎𣈳𡦃宂蝽𠖳𣲙冲冸"
+	],
+	[
+		"faa1",
+		"鴴凉减凑㳜凓𤪦决凢卂凭菍椾𣜭彻刋刦刼劵剗劔効勅簕蕂勠蘍𦬓包𨫞啉滙𣾀𠥔𣿬匳卄𠯢泋𡜦栛珕恊㺪㣌𡛨燝䒢卭却𨚫卾卿𡖖𡘓矦厓𨪛厠厫厮玧𥝲㽙玜叁叅汉义埾叙㪫𠮏叠𣿫𢶣叶𠱷吓灹唫晗浛呭𦭓𠵴啝咏咤䞦𡜍𠻝㶴𠵍"
+	],
+	[
+		"fb40",
+		"𨦼𢚘啇䳭启琗喆喩嘅𡣗𤀺䕒𤐵暳𡂴嘷曍𣊊暤暭噍噏磱囱鞇叾圀囯园𨭦㘣𡉏坆𤆥汮炋坂㚱𦱾埦𡐖堃𡑔𤍣堦𤯵塜墪㕡壠壜𡈼壻寿坃𪅐𤉸鏓㖡够梦㛃湙"
+	],
+	[
+		"fba1",
+		"𡘾娤啓𡚒蔅姉𠵎𦲁𦴪𡟜姙𡟻𡞲𦶦浱𡠨𡛕姹𦹅媫婣㛦𤦩婷㜈媖瑥嫓𦾡𢕔㶅𡤑㜲𡚸広勐孶斈孼𧨎䀄䡝𠈄寕慠𡨴𥧌𠖥寳宝䴐尅𡭄尓珎尔𡲥𦬨屉䣝岅峩峯嶋𡷹𡸷崐崘嵆𡺤岺巗苼㠭𤤁𢁉𢅳芇㠶㯂帮檊幵幺𤒼𠳓厦亷廐厨𡝱帉廴𨒂"
+	],
+	[
+		"fc40",
+		"廹廻㢠廼栾鐛弍𠇁弢㫞䢮𡌺强𦢈𢏐彘𢑱彣鞽𦹮彲鍀𨨶徧嶶㵟𥉐𡽪𧃸𢙨釖𠊞𨨩怱暅𡡷㥣㷇㘹垐𢞴祱㹀悞悤悳𤦂𤦏𧩓璤僡媠慤萤慂慈𦻒憁凴𠙖憇宪𣾷"
+	],
+	[
+		"fca1",
+		"𢡟懓𨮝𩥝懐㤲𢦀𢣁怣慜攞掋𠄘担𡝰拕𢸍捬𤧟㨗搸揸𡎎𡟼撐澊𢸶頔𤂌𥜝擡擥鑻㩦携㩗敍漖𤨨𤨣斅敭敟𣁾斵𤥀䬷旑䃘𡠩无旣忟𣐀昘𣇷𣇸晄𣆤𣆥晋𠹵晧𥇦晳晴𡸽𣈱𨗴𣇈𥌓矅𢣷馤朂𤎜𤨡㬫槺𣟂杞杧杢𤇍𩃭柗䓩栢湐鈼栁𣏦𦶠桝"
+	],
+	[
+		"fd40",
+		"𣑯槡樋𨫟楳棃𣗍椁椀㴲㨁𣘼㮀枬楡𨩊䋼椶榘㮡𠏉荣傐槹𣙙𢄪橅𣜃檝㯳枱櫈𩆜㰍欝𠤣惞欵歴𢟍溵𣫛𠎵𡥘㝀吡𣭚毡𣻼毜氷𢒋𤣱𦭑汚舦汹𣶼䓅𣶽𤆤𤤌𤤀"
+	],
+	[
+		"fda1",
+		"𣳉㛥㳫𠴲鮃𣇹𢒑羏样𦴥𦶡𦷫涖浜湼漄𤥿𤂅𦹲蔳𦽴凇沜渝萮𨬡港𣸯瑓𣾂秌湏媑𣁋濸㜍澝𣸰滺𡒗𤀽䕕鏰潄潜㵎潴𩅰㴻澟𤅄濓𤂑𤅕𤀹𣿰𣾴𤄿凟𤅖𤅗𤅀𦇝灋灾炧炁烌烕烖烟䄄㷨熴熖𤉷焫煅媈煊煮岜𤍥煏鍢𤋁焬𤑚𤨧𤨢熺𨯨炽爎"
+	],
+	[
+		"fe40",
+		"鑂爕夑鑃爤鍁𥘅爮牀𤥴梽牕牗㹕𣁄栍漽犂猪猫𤠣𨠫䣭𨠄猨献珏玪𠰺𦨮珉瑉𤇢𡛧𤨤昣㛅𤦷𤦍𤧻珷琕椃𤨦琹𠗃㻗瑜𢢭瑠𨺲瑇珤瑶莹瑬㜰瑴鏱樬璂䥓𤪌"
+	],
+	[
+		"fea1",
+		"𤅟𤩹𨮏孆𨰃𡢞瓈𡦈甎瓩甞𨻙𡩋寗𨺬鎅畍畊畧畮𤾂㼄𤴓疎瑝疞疴瘂瘬癑癏癯癶𦏵皐臯㟸𦤑𦤎皡皥皷盌𦾟葢𥂝𥅽𡸜眞眦着撯𥈠睘𣊬瞯𨥤𨥨𡛁矴砉𡍶𤨒棊碯磇磓隥礮𥗠磗礴碱𧘌辸袄𨬫𦂃𢘜禆褀椂禀𥡗禝𧬹礼禩渪𧄦㺨秆𩄍秔"
+	]
+];
+
+var dbcsData;
+var hasRequiredDbcsData;
+
+function requireDbcsData () {
+	if (hasRequiredDbcsData) return dbcsData;
+	hasRequiredDbcsData = 1;
+
+	// Description of supported double byte encodings and aliases.
+	// Tables are not require()-d until they are needed to speed up library load.
+	// require()-s are direct to support Browserify.
+
+	dbcsData = {
+	    
+	    // == Japanese/ShiftJIS ====================================================
+	    // All japanese encodings are based on JIS X set of standards:
+	    // JIS X 0201 - Single-byte encoding of ASCII + ¥ + Kana chars at 0xA1-0xDF.
+	    // JIS X 0208 - Main set of 6879 characters, placed in 94x94 plane, to be encoded by 2 bytes. 
+	    //              Has several variations in 1978, 1983, 1990 and 1997.
+	    // JIS X 0212 - Supplementary plane of 6067 chars in 94x94 plane. 1990. Effectively dead.
+	    // JIS X 0213 - Extension and modern replacement of 0208 and 0212. Total chars: 11233.
+	    //              2 planes, first is superset of 0208, second - revised 0212.
+	    //              Introduced in 2000, revised 2004. Some characters are in Unicode Plane 2 (0x2xxxx)
+
+	    // Byte encodings are:
+	    //  * Shift_JIS: Compatible with 0201, uses not defined chars in top half as lead bytes for double-byte
+	    //               encoding of 0208. Lead byte ranges: 0x81-0x9F, 0xE0-0xEF; Trail byte ranges: 0x40-0x7E, 0x80-0x9E, 0x9F-0xFC.
+	    //               Windows CP932 is a superset of Shift_JIS. Some companies added more chars, notably KDDI.
+	    //  * EUC-JP:    Up to 3 bytes per character. Used mostly on *nixes.
+	    //               0x00-0x7F       - lower part of 0201
+	    //               0x8E, 0xA1-0xDF - upper part of 0201
+	    //               (0xA1-0xFE)x2   - 0208 plane (94x94).
+	    //               0x8F, (0xA1-0xFE)x2 - 0212 plane (94x94).
+	    //  * JIS X 208: 7-bit, direct encoding of 0208. Byte ranges: 0x21-0x7E (94 values). Uncommon.
+	    //               Used as-is in ISO2022 family.
+	    //  * ISO2022-JP: Stateful encoding, with escape sequences to switch between ASCII, 
+	    //                0201-1976 Roman, 0208-1978, 0208-1983.
+	    //  * ISO2022-JP-1: Adds esc seq for 0212-1990.
+	    //  * ISO2022-JP-2: Adds esc seq for GB2313-1980, KSX1001-1992, ISO8859-1, ISO8859-7.
+	    //  * ISO2022-JP-3: Adds esc seq for 0201-1976 Kana set, 0213-2000 Planes 1, 2.
+	    //  * ISO2022-JP-2004: Adds 0213-2004 Plane 1.
+	    //
+	    // After JIS X 0213 appeared, Shift_JIS-2004, EUC-JISX0213 and ISO2022-JP-2004 followed, with just changing the planes.
+	    //
+	    // Overall, it seems that it's a mess :( http://www8.plala.or.jp/tkubota1/unicode-symbols-map2.html
+
+	    'shiftjis': {
+	        type: '_dbcs',
+	        table: function() { return require$$0$3 },
+	        encodeAdd: {'\u00a5': 0x5C, '\u203E': 0x7E},
+	        encodeSkipVals: [{from: 0xED40, to: 0xF940}],
+	    },
+	    'csshiftjis': 'shiftjis',
+	    'mskanji': 'shiftjis',
+	    'sjis': 'shiftjis',
+	    'windows31j': 'shiftjis',
+	    'ms31j': 'shiftjis',
+	    'xsjis': 'shiftjis',
+	    'windows932': 'shiftjis',
+	    'ms932': 'shiftjis',
+	    '932': 'shiftjis',
+	    'cp932': 'shiftjis',
+
+	    'eucjp': {
+	        type: '_dbcs',
+	        table: function() { return require$$1$2 },
+	        encodeAdd: {'\u00a5': 0x5C, '\u203E': 0x7E},
+	    },
+
+	    // TODO: KDDI extension to Shift_JIS
+	    // TODO: IBM CCSID 942 = CP932, but F0-F9 custom chars and other char changes.
+	    // TODO: IBM CCSID 943 = Shift_JIS = CP932 with original Shift_JIS lower 128 chars.
+
+
+	    // == Chinese/GBK ==========================================================
+	    // http://en.wikipedia.org/wiki/GBK
+	    // We mostly implement W3C recommendation: https://www.w3.org/TR/encoding/#gbk-encoder
+
+	    // Oldest GB2312 (1981, ~7600 chars) is a subset of CP936
+	    'gb2312': 'cp936',
+	    'gb231280': 'cp936',
+	    'gb23121980': 'cp936',
+	    'csgb2312': 'cp936',
+	    'csiso58gb231280': 'cp936',
+	    'euccn': 'cp936',
+
+	    // Microsoft's CP936 is a subset and approximation of GBK.
+	    'windows936': 'cp936',
+	    'ms936': 'cp936',
+	    '936': 'cp936',
+	    'cp936': {
+	        type: '_dbcs',
+	        table: function() { return require$$2$3 },
+	    },
+
+	    // GBK (~22000 chars) is an extension of CP936 that added user-mapped chars and some other.
+	    'gbk': {
+	        type: '_dbcs',
+	        table: function() { return require$$2$3.concat(require$$3$1) },
+	    },
+	    'xgbk': 'gbk',
+	    'isoir58': 'gbk',
+
+	    // GB18030 is an algorithmic extension of GBK.
+	    // Main source: https://www.w3.org/TR/encoding/#gbk-encoder
+	    // http://icu-project.org/docs/papers/gb18030.html
+	    // http://source.icu-project.org/repos/icu/data/trunk/charset/data/xml/gb-18030-2000.xml
+	    // http://www.khngai.com/chinese/charmap/tblgbk.php?page=0
+	    'gb18030': {
+	        type: '_dbcs',
+	        table: function() { return require$$2$3.concat(require$$3$1) },
+	        gb18030: function() { return require$$4 },
+	        encodeSkipVals: [0x80],
+	        encodeAdd: {'€': 0xA2E3},
+	    },
+
+	    'chinese': 'gb18030',
+
+
+	    // == Korean ===============================================================
+	    // EUC-KR, KS_C_5601 and KS X 1001 are exactly the same.
+	    'windows949': 'cp949',
+	    'ms949': 'cp949',
+	    '949': 'cp949',
+	    'cp949': {
+	        type: '_dbcs',
+	        table: function() { return require$$5 },
+	    },
+
+	    'cseuckr': 'cp949',
+	    'csksc56011987': 'cp949',
+	    'euckr': 'cp949',
+	    'isoir149': 'cp949',
+	    'korean': 'cp949',
+	    'ksc56011987': 'cp949',
+	    'ksc56011989': 'cp949',
+	    'ksc5601': 'cp949',
+
+
+	    // == Big5/Taiwan/Hong Kong ================================================
+	    // There are lots of tables for Big5 and cp950. Please see the following links for history:
+	    // http://moztw.org/docs/big5/  http://www.haible.de/bruno/charsets/conversion-tables/Big5.html
+	    // Variations, in roughly number of defined chars:
+	    //  * Windows CP 950: Microsoft variant of Big5. Canonical: http://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WINDOWS/CP950.TXT
+	    //  * Windows CP 951: Microsoft variant of Big5-HKSCS-2001. Seems to be never public. http://me.abelcheung.org/articles/research/what-is-cp951/
+	    //  * Big5-2003 (Taiwan standard) almost superset of cp950.
+	    //  * Unicode-at-on (UAO) / Mozilla 1.8. Falling out of use on the Web. Not supported by other browsers.
+	    //  * Big5-HKSCS (-2001, -2004, -2008). Hong Kong standard. 
+	    //    many unicode code points moved from PUA to Supplementary plane (U+2XXXX) over the years.
+	    //    Plus, it has 4 combining sequences.
+	    //    Seems that Mozilla refused to support it for 10 yrs. https://bugzilla.mozilla.org/show_bug.cgi?id=162431 https://bugzilla.mozilla.org/show_bug.cgi?id=310299
+	    //    because big5-hkscs is the only encoding to include astral characters in non-algorithmic way.
+	    //    Implementations are not consistent within browsers; sometimes labeled as just big5.
+	    //    MS Internet Explorer switches from big5 to big5-hkscs when a patch applied.
+	    //    Great discussion & recap of what's going on https://bugzilla.mozilla.org/show_bug.cgi?id=912470#c31
+	    //    In the encoder, it might make sense to support encoding old PUA mappings to Big5 bytes seq-s.
+	    //    Official spec: http://www.ogcio.gov.hk/en/business/tech_promotion/ccli/terms/doc/2003cmp_2008.txt
+	    //                   http://www.ogcio.gov.hk/tc/business/tech_promotion/ccli/terms/doc/hkscs-2008-big5-iso.txt
+	    // 
+	    // Current understanding of how to deal with Big5(-HKSCS) is in the Encoding Standard, http://encoding.spec.whatwg.org/#big5-encoder
+	    // Unicode mapping (http://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/OTHER/BIG5.TXT) is said to be wrong.
+
+	    'windows950': 'cp950',
+	    'ms950': 'cp950',
+	    '950': 'cp950',
+	    'cp950': {
+	        type: '_dbcs',
+	        table: function() { return require$$6 },
+	    },
+
+	    // Big5 has many variations and is an extension of cp950. We use Encoding Standard's as a consensus.
+	    'big5': 'big5hkscs',
+	    'big5hkscs': {
+	        type: '_dbcs',
+	        table: function() { return require$$6.concat(require$$7) },
+	        encodeSkipVals: [0xa2cc],
+	    },
+
+	    'cnbig5': 'big5hkscs',
+	    'csbig5': 'big5hkscs',
+	    'xxbig5': 'big5hkscs',
+	};
+	return dbcsData;
+}
+
+var hasRequiredEncodings;
+
+function requireEncodings () {
+	if (hasRequiredEncodings) return encodings;
+	hasRequiredEncodings = 1;
+	(function (exports) {
+
+		// Update this array if you add/rename/remove files in this directory.
+		// We support Browserify by skipping automatic module discovery and requiring modules directly.
+		var modules = [
+		    requireInternal(),
+		    requireUtf16(),
+		    requireUtf7(),
+		    requireSbcsCodec(),
+		    requireSbcsData(),
+		    requireSbcsDataGenerated(),
+		    requireDbcsCodec(),
+		    requireDbcsData(),
+		];
+
+		// Put all encoding/alias/codec definitions to single object and export it. 
+		for (var i = 0; i < modules.length; i++) {
+		    var module = modules[i];
+		    for (var enc in module)
+		        if (Object.prototype.hasOwnProperty.call(module, enc))
+		            exports[enc] = module[enc];
+		}
+} (encodings));
+	return encodings;
+}
+
+var streams;
+var hasRequiredStreams;
+
+function requireStreams () {
+	if (hasRequiredStreams) return streams;
+	hasRequiredStreams = 1;
+
+	var Buffer = require$$0$i.Buffer,
+	    Transform = Stream$2.Transform;
+
+
+	// == Exports ==================================================================
+	streams = function(iconv) {
+	    
+	    // Additional Public API.
+	    iconv.encodeStream = function encodeStream(encoding, options) {
+	        return new IconvLiteEncoderStream(iconv.getEncoder(encoding, options), options);
+	    };
+
+	    iconv.decodeStream = function decodeStream(encoding, options) {
+	        return new IconvLiteDecoderStream(iconv.getDecoder(encoding, options), options);
+	    };
+
+	    iconv.supportsStreams = true;
+
+
+	    // Not published yet.
+	    iconv.IconvLiteEncoderStream = IconvLiteEncoderStream;
+	    iconv.IconvLiteDecoderStream = IconvLiteDecoderStream;
+	    iconv._collect = IconvLiteDecoderStream.prototype.collect;
+	};
+
+
+	// == Encoder stream =======================================================
+	function IconvLiteEncoderStream(conv, options) {
+	    this.conv = conv;
+	    options = options || {};
+	    options.decodeStrings = false; // We accept only strings, so we don't need to decode them.
+	    Transform.call(this, options);
+	}
+
+	IconvLiteEncoderStream.prototype = Object.create(Transform.prototype, {
+	    constructor: { value: IconvLiteEncoderStream }
+	});
+
+	IconvLiteEncoderStream.prototype._transform = function(chunk, encoding, done) {
+	    if (typeof chunk != 'string')
+	        return done(new Error("Iconv encoding stream needs strings as its input."));
+	    try {
+	        var res = this.conv.write(chunk);
+	        if (res && res.length) this.push(res);
+	        done();
+	    }
+	    catch (e) {
+	        done(e);
+	    }
+	};
+
+	IconvLiteEncoderStream.prototype._flush = function(done) {
+	    try {
+	        var res = this.conv.end();
+	        if (res && res.length) this.push(res);
+	        done();
+	    }
+	    catch (e) {
+	        done(e);
+	    }
+	};
+
+	IconvLiteEncoderStream.prototype.collect = function(cb) {
+	    var chunks = [];
+	    this.on('error', cb);
+	    this.on('data', function(chunk) { chunks.push(chunk); });
+	    this.on('end', function() {
+	        cb(null, Buffer.concat(chunks));
+	    });
+	    return this;
+	};
+
+
+	// == Decoder stream =======================================================
+	function IconvLiteDecoderStream(conv, options) {
+	    this.conv = conv;
+	    options = options || {};
+	    options.encoding = this.encoding = 'utf8'; // We output strings.
+	    Transform.call(this, options);
+	}
+
+	IconvLiteDecoderStream.prototype = Object.create(Transform.prototype, {
+	    constructor: { value: IconvLiteDecoderStream }
+	});
+
+	IconvLiteDecoderStream.prototype._transform = function(chunk, encoding, done) {
+	    if (!Buffer.isBuffer(chunk))
+	        return done(new Error("Iconv decoding stream needs buffers as its input."));
+	    try {
+	        var res = this.conv.write(chunk);
+	        if (res && res.length) this.push(res, this.encoding);
+	        done();
+	    }
+	    catch (e) {
+	        done(e);
+	    }
+	};
+
+	IconvLiteDecoderStream.prototype._flush = function(done) {
+	    try {
+	        var res = this.conv.end();
+	        if (res && res.length) this.push(res, this.encoding);                
+	        done();
+	    }
+	    catch (e) {
+	        done(e);
+	    }
+	};
+
+	IconvLiteDecoderStream.prototype.collect = function(cb) {
+	    var res = '';
+	    this.on('error', cb);
+	    this.on('data', function(chunk) { res += chunk; });
+	    this.on('end', function() {
+	        cb(null, res);
+	    });
+	    return this;
+	};
+	return streams;
+}
+
+var extendNode;
+var hasRequiredExtendNode;
+
+function requireExtendNode () {
+	if (hasRequiredExtendNode) return extendNode;
+	hasRequiredExtendNode = 1;
+	var Buffer = require$$0$i.Buffer;
+	// Note: not polyfilled with safer-buffer on a purpose, as overrides Buffer
+
+	// == Extend Node primitives to use iconv-lite =================================
+
+	extendNode = function (iconv) {
+	    var original = undefined; // Place to keep original methods.
+
+	    // Node authors rewrote Buffer internals to make it compatible with
+	    // Uint8Array and we cannot patch key functions since then.
+	    // Note: this does use older Buffer API on a purpose
+	    iconv.supportsNodeEncodingsExtension = !(Buffer.from || new Buffer(0) instanceof Uint8Array);
+
+	    iconv.extendNodeEncodings = function extendNodeEncodings() {
+	        if (original) return;
+	        original = {};
+
+	        if (!iconv.supportsNodeEncodingsExtension) {
+	            console.error("ACTION NEEDED: require('iconv-lite').extendNodeEncodings() is not supported in your version of Node");
+	            console.error("See more info at https://github.com/ashtuchkin/iconv-lite/wiki/Node-v4-compatibility");
+	            return;
+	        }
+
+	        var nodeNativeEncodings = {
+	            'hex': true, 'utf8': true, 'utf-8': true, 'ascii': true, 'binary': true, 
+	            'base64': true, 'ucs2': true, 'ucs-2': true, 'utf16le': true, 'utf-16le': true,
+	        };
+
+	        Buffer.isNativeEncoding = function(enc) {
+	            return enc && nodeNativeEncodings[enc.toLowerCase()];
+	        };
+
+	        // -- SlowBuffer -----------------------------------------------------------
+	        var SlowBuffer = require$$0$i.SlowBuffer;
+
+	        original.SlowBufferToString = SlowBuffer.prototype.toString;
+	        SlowBuffer.prototype.toString = function(encoding, start, end) {
+	            encoding = String(encoding || 'utf8').toLowerCase();
+
+	            // Use native conversion when possible
+	            if (Buffer.isNativeEncoding(encoding))
+	                return original.SlowBufferToString.call(this, encoding, start, end);
+
+	            // Otherwise, use our decoding method.
+	            if (typeof start == 'undefined') start = 0;
+	            if (typeof end == 'undefined') end = this.length;
+	            return iconv.decode(this.slice(start, end), encoding);
+	        };
+
+	        original.SlowBufferWrite = SlowBuffer.prototype.write;
+	        SlowBuffer.prototype.write = function(string, offset, length, encoding) {
+	            // Support both (string, offset, length, encoding)
+	            // and the legacy (string, encoding, offset, length)
+	            if (isFinite(offset)) {
+	                if (!isFinite(length)) {
+	                    encoding = length;
+	                    length = undefined;
+	                }
+	            } else {  // legacy
+	                var swap = encoding;
+	                encoding = offset;
+	                offset = length;
+	                length = swap;
+	            }
+
+	            offset = +offset || 0;
+	            var remaining = this.length - offset;
+	            if (!length) {
+	                length = remaining;
+	            } else {
+	                length = +length;
+	                if (length > remaining) {
+	                    length = remaining;
+	                }
+	            }
+	            encoding = String(encoding || 'utf8').toLowerCase();
+
+	            // Use native conversion when possible
+	            if (Buffer.isNativeEncoding(encoding))
+	                return original.SlowBufferWrite.call(this, string, offset, length, encoding);
+
+	            if (string.length > 0 && (length < 0 || offset < 0))
+	                throw new RangeError('attempt to write beyond buffer bounds');
+
+	            // Otherwise, use our encoding method.
+	            var buf = iconv.encode(string, encoding);
+	            if (buf.length < length) length = buf.length;
+	            buf.copy(this, offset, 0, length);
+	            return length;
+	        };
+
+	        // -- Buffer ---------------------------------------------------------------
+
+	        original.BufferIsEncoding = Buffer.isEncoding;
+	        Buffer.isEncoding = function(encoding) {
+	            return Buffer.isNativeEncoding(encoding) || iconv.encodingExists(encoding);
+	        };
+
+	        original.BufferByteLength = Buffer.byteLength;
+	        Buffer.byteLength = SlowBuffer.byteLength = function(str, encoding) {
+	            encoding = String(encoding || 'utf8').toLowerCase();
+
+	            // Use native conversion when possible
+	            if (Buffer.isNativeEncoding(encoding))
+	                return original.BufferByteLength.call(this, str, encoding);
+
+	            // Slow, I know, but we don't have a better way yet.
+	            return iconv.encode(str, encoding).length;
+	        };
+
+	        original.BufferToString = Buffer.prototype.toString;
+	        Buffer.prototype.toString = function(encoding, start, end) {
+	            encoding = String(encoding || 'utf8').toLowerCase();
+
+	            // Use native conversion when possible
+	            if (Buffer.isNativeEncoding(encoding))
+	                return original.BufferToString.call(this, encoding, start, end);
+
+	            // Otherwise, use our decoding method.
+	            if (typeof start == 'undefined') start = 0;
+	            if (typeof end == 'undefined') end = this.length;
+	            return iconv.decode(this.slice(start, end), encoding);
+	        };
+
+	        original.BufferWrite = Buffer.prototype.write;
+	        Buffer.prototype.write = function(string, offset, length, encoding) {
+	            var _offset = offset, _length = length, _encoding = encoding;
+	            // Support both (string, offset, length, encoding)
+	            // and the legacy (string, encoding, offset, length)
+	            if (isFinite(offset)) {
+	                if (!isFinite(length)) {
+	                    encoding = length;
+	                    length = undefined;
+	                }
+	            } else {  // legacy
+	                var swap = encoding;
+	                encoding = offset;
+	                offset = length;
+	                length = swap;
+	            }
+
+	            encoding = String(encoding || 'utf8').toLowerCase();
+
+	            // Use native conversion when possible
+	            if (Buffer.isNativeEncoding(encoding))
+	                return original.BufferWrite.call(this, string, _offset, _length, _encoding);
+
+	            offset = +offset || 0;
+	            var remaining = this.length - offset;
+	            if (!length) {
+	                length = remaining;
+	            } else {
+	                length = +length;
+	                if (length > remaining) {
+	                    length = remaining;
+	                }
+	            }
+
+	            if (string.length > 0 && (length < 0 || offset < 0))
+	                throw new RangeError('attempt to write beyond buffer bounds');
+
+	            // Otherwise, use our encoding method.
+	            var buf = iconv.encode(string, encoding);
+	            if (buf.length < length) length = buf.length;
+	            buf.copy(this, offset, 0, length);
+	            return length;
+
+	            // TODO: Set _charsWritten.
+	        };
+
+
+	        // -- Readable -------------------------------------------------------------
+	        if (iconv.supportsStreams) {
+	            var Readable = Stream$2.Readable;
+
+	            original.ReadableSetEncoding = Readable.prototype.setEncoding;
+	            Readable.prototype.setEncoding = function setEncoding(enc, options) {
+	                // Use our own decoder, it has the same interface.
+	                // We cannot use original function as it doesn't handle BOM-s.
+	                this._readableState.decoder = iconv.getDecoder(enc, options);
+	                this._readableState.encoding = enc;
+	            };
+
+	            Readable.prototype.collect = iconv._collect;
+	        }
+	    };
+
+	    // Remove iconv-lite Node primitive extensions.
+	    iconv.undoExtendNodeEncodings = function undoExtendNodeEncodings() {
+	        if (!iconv.supportsNodeEncodingsExtension)
+	            return;
+	        if (!original)
+	            throw new Error("require('iconv-lite').undoExtendNodeEncodings(): Nothing to undo; extendNodeEncodings() is not called.")
+
+	        delete Buffer.isNativeEncoding;
+
+	        var SlowBuffer = require$$0$i.SlowBuffer;
+
+	        SlowBuffer.prototype.toString = original.SlowBufferToString;
+	        SlowBuffer.prototype.write = original.SlowBufferWrite;
+
+	        Buffer.isEncoding = original.BufferIsEncoding;
+	        Buffer.byteLength = original.BufferByteLength;
+	        Buffer.prototype.toString = original.BufferToString;
+	        Buffer.prototype.write = original.BufferWrite;
+
+	        if (iconv.supportsStreams) {
+	            var Readable = Stream$2.Readable;
+
+	            Readable.prototype.setEncoding = original.ReadableSetEncoding;
+	            delete Readable.prototype.collect;
+	        }
+
+	        original = undefined;
+	    };
+	};
+	return extendNode;
+}
+
+var hasRequiredLib$1;
+
+function requireLib$1 () {
+	if (hasRequiredLib$1) return libExports;
+	hasRequiredLib$1 = 1;
+	(function (module) {
+
+		// Some environments don't have global Buffer (e.g. React Native).
+		// Solution would be installing npm modules "buffer" and "stream" explicitly.
+		var Buffer = requireSafer().Buffer;
+
+		var bomHandling = requireBomHandling(),
+		    iconv = module.exports;
+
+		// All codecs and aliases are kept here, keyed by encoding name/alias.
+		// They are lazy loaded in `iconv.getCodec` from `encodings/index.js`.
+		iconv.encodings = null;
+
+		// Characters emitted in case of error.
+		iconv.defaultCharUnicode = '�';
+		iconv.defaultCharSingleByte = '?';
+
+		// Public API.
+		iconv.encode = function encode(str, encoding, options) {
+		    str = "" + (str || ""); // Ensure string.
+
+		    var encoder = iconv.getEncoder(encoding, options);
+
+		    var res = encoder.write(str);
+		    var trail = encoder.end();
+		    
+		    return (trail && trail.length > 0) ? Buffer.concat([res, trail]) : res;
+		};
+
+		iconv.decode = function decode(buf, encoding, options) {
+		    if (typeof buf === 'string') {
+		        if (!iconv.skipDecodeWarning) {
+		            console.error('Iconv-lite warning: decode()-ing strings is deprecated. Refer to https://github.com/ashtuchkin/iconv-lite/wiki/Use-Buffers-when-decoding');
+		            iconv.skipDecodeWarning = true;
+		        }
+
+		        buf = Buffer.from("" + (buf || ""), "binary"); // Ensure buffer.
+		    }
+
+		    var decoder = iconv.getDecoder(encoding, options);
+
+		    var res = decoder.write(buf);
+		    var trail = decoder.end();
+
+		    return trail ? (res + trail) : res;
+		};
+
+		iconv.encodingExists = function encodingExists(enc) {
+		    try {
+		        iconv.getCodec(enc);
+		        return true;
+		    } catch (e) {
+		        return false;
+		    }
+		};
+
+		// Legacy aliases to convert functions
+		iconv.toEncoding = iconv.encode;
+		iconv.fromEncoding = iconv.decode;
+
+		// Search for a codec in iconv.encodings. Cache codec data in iconv._codecDataCache.
+		iconv._codecDataCache = {};
+		iconv.getCodec = function getCodec(encoding) {
+		    if (!iconv.encodings)
+		        iconv.encodings = requireEncodings(); // Lazy load all encoding definitions.
+		    
+		    // Canonicalize encoding name: strip all non-alphanumeric chars and appended year.
+		    var enc = iconv._canonicalizeEncoding(encoding);
+
+		    // Traverse iconv.encodings to find actual codec.
+		    var codecOptions = {};
+		    while (true) {
+		        var codec = iconv._codecDataCache[enc];
+		        if (codec)
+		            return codec;
+
+		        var codecDef = iconv.encodings[enc];
+
+		        switch (typeof codecDef) {
+		            case "string": // Direct alias to other encoding.
+		                enc = codecDef;
+		                break;
+
+		            case "object": // Alias with options. Can be layered.
+		                for (var key in codecDef)
+		                    codecOptions[key] = codecDef[key];
+
+		                if (!codecOptions.encodingName)
+		                    codecOptions.encodingName = enc;
+		                
+		                enc = codecDef.type;
+		                break;
+
+		            case "function": // Codec itself.
+		                if (!codecOptions.encodingName)
+		                    codecOptions.encodingName = enc;
+
+		                // The codec function must load all tables and return object with .encoder and .decoder methods.
+		                // It'll be called only once (for each different options object).
+		                codec = new codecDef(codecOptions, iconv);
+
+		                iconv._codecDataCache[codecOptions.encodingName] = codec; // Save it to be reused later.
+		                return codec;
+
+		            default:
+		                throw new Error("Encoding not recognized: '" + encoding + "' (searched as: '"+enc+"')");
+		        }
+		    }
+		};
+
+		iconv._canonicalizeEncoding = function(encoding) {
+		    // Canonicalize encoding name: strip all non-alphanumeric chars and appended year.
+		    return (''+encoding).toLowerCase().replace(/:\d{4}$|[^0-9a-z]/g, "");
+		};
+
+		iconv.getEncoder = function getEncoder(encoding, options) {
+		    var codec = iconv.getCodec(encoding),
+		        encoder = new codec.encoder(options, codec);
+
+		    if (codec.bomAware && options && options.addBOM)
+		        encoder = new bomHandling.PrependBOM(encoder, options);
+
+		    return encoder;
+		};
+
+		iconv.getDecoder = function getDecoder(encoding, options) {
+		    var codec = iconv.getCodec(encoding),
+		        decoder = new codec.decoder(options, codec);
+
+		    if (codec.bomAware && !(options && options.stripBOM === false))
+		        decoder = new bomHandling.StripBOM(decoder, options);
+
+		    return decoder;
+		};
+
+
+		// Load extensions in Node. All of them are omitted in Browserify build via 'browser' field in package.json.
+		var nodeVer = typeof process !== 'undefined' && process.versions && process.versions.node;
+		if (nodeVer) {
+
+		    // Load streaming support in Node v0.10+
+		    var nodeVerArr = nodeVer.split(".").map(Number);
+		    if (nodeVerArr[0] > 0 || nodeVerArr[1] >= 10) {
+		        requireStreams()(iconv);
+		    }
+
+		    // Load Node primitive extensions.
+		    requireExtendNode()(iconv);
+		}
+} (lib$3));
+	return libExports;
+}
+
+/*!
+ * unpipe
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var unpipe_1;
+var hasRequiredUnpipe;
+
+function requireUnpipe () {
+	if (hasRequiredUnpipe) return unpipe_1;
+	hasRequiredUnpipe = 1;
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	unpipe_1 = unpipe;
+
+	/**
+	 * Determine if there are Node.js pipe-like data listeners.
+	 * @private
+	 */
+
+	function hasPipeDataListeners(stream) {
+	  var listeners = stream.listeners('data');
+
+	  for (var i = 0; i < listeners.length; i++) {
+	    if (listeners[i].name === 'ondata') {
+	      return true
+	    }
+	  }
+
+	  return false
+	}
+
+	/**
+	 * Unpipe a stream from all destinations.
+	 *
+	 * @param {object} stream
+	 * @public
+	 */
+
+	function unpipe(stream) {
+	  if (!stream) {
+	    throw new TypeError('argument stream is required')
+	  }
+
+	  if (typeof stream.unpipe === 'function') {
+	    // new-style
+	    stream.unpipe();
+	    return
+	  }
+
+	  // Node.js 0.8 hack
+	  if (!hasPipeDataListeners(stream)) {
+	    return
+	  }
+
+	  var listener;
+	  var listeners = stream.listeners('close');
+
+	  for (var i = 0; i < listeners.length; i++) {
+	    listener = listeners[i];
+
+	    if (listener.name !== 'cleanup' && listener.name !== 'onclose') {
+	      continue
+	    }
+
+	    // invoke the listener
+	    listener.call(stream);
+	  }
+	}
+	return unpipe_1;
+}
+
+/*!
+ * raw-body
+ * Copyright(c) 2013-2014 Jonathan Ong
+ * Copyright(c) 2014-2022 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var rawBody;
+var hasRequiredRawBody;
+
+function requireRawBody () {
+	if (hasRequiredRawBody) return rawBody;
+	hasRequiredRawBody = 1;
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var asyncHooks = tryRequireAsyncHooks();
+	var bytes = requireBytes();
+	var createError = httpErrorsExports;
+	var iconv = requireLib$1();
+	var unpipe = requireUnpipe();
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	rawBody = getRawBody;
+
+	/**
+	 * Module variables.
+	 * @private
+	 */
+
+	var ICONV_ENCODING_MESSAGE_REGEXP = /^Encoding not recognized: /;
+
+	/**
+	 * Get the decoder for a given encoding.
+	 *
+	 * @param {string} encoding
+	 * @private
+	 */
+
+	function getDecoder (encoding) {
+	  if (!encoding) return null
+
+	  try {
+	    return iconv.getDecoder(encoding)
+	  } catch (e) {
+	    // error getting decoder
+	    if (!ICONV_ENCODING_MESSAGE_REGEXP.test(e.message)) throw e
+
+	    // the encoding was not found
+	    throw createError(415, 'specified encoding unsupported', {
+	      encoding: encoding,
+	      type: 'encoding.unsupported'
+	    })
+	  }
+	}
+
+	/**
+	 * Get the raw body of a stream (typically HTTP).
+	 *
+	 * @param {object} stream
+	 * @param {object|string|function} [options]
+	 * @param {function} [callback]
+	 * @public
+	 */
+
+	function getRawBody (stream, options, callback) {
+	  var done = callback;
+	  var opts = options || {};
+
+	  if (options === true || typeof options === 'string') {
+	    // short cut for encoding
+	    opts = {
+	      encoding: options
+	    };
+	  }
+
+	  if (typeof options === 'function') {
+	    done = options;
+	    opts = {};
+	  }
+
+	  // validate callback is a function, if provided
+	  if (done !== undefined && typeof done !== 'function') {
+	    throw new TypeError('argument callback must be a function')
+	  }
+
+	  // require the callback without promises
+	  if (!done && !commonjsGlobal.Promise) {
+	    throw new TypeError('argument callback is required')
+	  }
+
+	  // get encoding
+	  var encoding = opts.encoding !== true
+	    ? opts.encoding
+	    : 'utf-8';
+
+	  // convert the limit to an integer
+	  var limit = bytes.parse(opts.limit);
+
+	  // convert the expected length to an integer
+	  var length = opts.length != null && !isNaN(opts.length)
+	    ? parseInt(opts.length, 10)
+	    : null;
+
+	  if (done) {
+	    // classic callback style
+	    return readStream(stream, encoding, length, limit, wrap(done))
+	  }
+
+	  return new Promise(function executor (resolve, reject) {
+	    readStream(stream, encoding, length, limit, function onRead (err, buf) {
+	      if (err) return reject(err)
+	      resolve(buf);
+	    });
+	  })
+	}
+
+	/**
+	 * Halt a stream.
+	 *
+	 * @param {Object} stream
+	 * @private
+	 */
+
+	function halt (stream) {
+	  // unpipe everything from the stream
+	  unpipe(stream);
+
+	  // pause stream
+	  if (typeof stream.pause === 'function') {
+	    stream.pause();
+	  }
+	}
+
+	/**
+	 * Read the data from the stream.
+	 *
+	 * @param {object} stream
+	 * @param {string} encoding
+	 * @param {number} length
+	 * @param {number} limit
+	 * @param {function} callback
+	 * @public
+	 */
+
+	function readStream (stream, encoding, length, limit, callback) {
+	  var complete = false;
+	  var sync = true;
+
+	  // check the length and limit options.
+	  // note: we intentionally leave the stream paused,
+	  // so users should handle the stream themselves.
+	  if (limit !== null && length !== null && length > limit) {
+	    return done(createError(413, 'request entity too large', {
+	      expected: length,
+	      length: length,
+	      limit: limit,
+	      type: 'entity.too.large'
+	    }))
+	  }
+
+	  // streams1: assert request encoding is buffer.
+	  // streams2+: assert the stream encoding is buffer.
+	  //   stream._decoder: streams1
+	  //   state.encoding: streams2
+	  //   state.decoder: streams2, specifically < 0.10.6
+	  var state = stream._readableState;
+	  if (stream._decoder || (state && (state.encoding || state.decoder))) {
+	    // developer error
+	    return done(createError(500, 'stream encoding should not be set', {
+	      type: 'stream.encoding.set'
+	    }))
+	  }
+
+	  if (typeof stream.readable !== 'undefined' && !stream.readable) {
+	    return done(createError(500, 'stream is not readable', {
+	      type: 'stream.not.readable'
+	    }))
+	  }
+
+	  var received = 0;
+	  var decoder;
+
+	  try {
+	    decoder = getDecoder(encoding);
+	  } catch (err) {
+	    return done(err)
+	  }
+
+	  var buffer = decoder
+	    ? ''
+	    : [];
+
+	  // attach listeners
+	  stream.on('aborted', onAborted);
+	  stream.on('close', cleanup);
+	  stream.on('data', onData);
+	  stream.on('end', onEnd);
+	  stream.on('error', onEnd);
+
+	  // mark sync section complete
+	  sync = false;
+
+	  function done () {
+	    var args = new Array(arguments.length);
+
+	    // copy arguments
+	    for (var i = 0; i < args.length; i++) {
+	      args[i] = arguments[i];
+	    }
+
+	    // mark complete
+	    complete = true;
+
+	    if (sync) {
+	      process.nextTick(invokeCallback);
+	    } else {
+	      invokeCallback();
+	    }
+
+	    function invokeCallback () {
+	      cleanup();
+
+	      if (args[0]) {
+	        // halt the stream on error
+	        halt(stream);
+	      }
+
+	      callback.apply(null, args);
+	    }
+	  }
+
+	  function onAborted () {
+	    if (complete) return
+
+	    done(createError(400, 'request aborted', {
+	      code: 'ECONNABORTED',
+	      expected: length,
+	      length: length,
+	      received: received,
+	      type: 'request.aborted'
+	    }));
+	  }
+
+	  function onData (chunk) {
+	    if (complete) return
+
+	    received += chunk.length;
+
+	    if (limit !== null && received > limit) {
+	      done(createError(413, 'request entity too large', {
+	        limit: limit,
+	        received: received,
+	        type: 'entity.too.large'
+	      }));
+	    } else if (decoder) {
+	      buffer += decoder.write(chunk);
+	    } else {
+	      buffer.push(chunk);
+	    }
+	  }
+
+	  function onEnd (err) {
+	    if (complete) return
+	    if (err) return done(err)
+
+	    if (length !== null && received !== length) {
+	      done(createError(400, 'request size did not match content length', {
+	        expected: length,
+	        length: length,
+	        received: received,
+	        type: 'request.size.invalid'
+	      }));
+	    } else {
+	      var string = decoder
+	        ? buffer + (decoder.end() || '')
+	        : Buffer.concat(buffer);
+	      done(null, string);
+	    }
+	  }
+
+	  function cleanup () {
+	    buffer = null;
+
+	    stream.removeListener('aborted', onAborted);
+	    stream.removeListener('data', onData);
+	    stream.removeListener('end', onEnd);
+	    stream.removeListener('error', onEnd);
+	    stream.removeListener('close', cleanup);
+	  }
+	}
+
+	/**
+	 * Try to require async_hooks
+	 * @private
+	 */
+
+	function tryRequireAsyncHooks () {
+	  try {
+	    return require('async_hooks')
+	  } catch (e) {
+	    return {}
+	  }
+	}
+
+	/**
+	 * Wrap function with async resource, if possible.
+	 * AsyncResource.bind static method backported.
+	 * @private
+	 */
+
+	function wrap (fn) {
+	  var res;
+
+	  // create anonymous resource
+	  if (asyncHooks.AsyncResource) {
+	    res = new asyncHooks.AsyncResource(fn.name || 'bound-anonymous-fn');
+	  }
+
+	  // incompatible node.js
+	  if (!res || !res.runInAsyncScope) {
+	    return fn
+	  }
+
+	  // return bound function
+	  return res.runInAsyncScope.bind(res, fn, null)
+	}
+	return rawBody;
+}
+
+var onFinishedExports = {};
+var onFinished$4 = {
+  get exports(){ return onFinishedExports; },
+  set exports(v){ onFinishedExports = v; },
+};
+
+/*!
+ * ee-first
+ * Copyright(c) 2014 Jonathan Ong
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var eeFirst = first$1;
+
+/**
+ * Get the first event in a set of event emitters and event pairs.
+ *
+ * @param {array} stuff
+ * @param {function} done
+ * @public
+ */
+
+function first$1(stuff, done) {
+  if (!Array.isArray(stuff))
+    throw new TypeError('arg must be an array of [ee, events...] arrays')
+
+  var cleanups = [];
+
+  for (var i = 0; i < stuff.length; i++) {
+    var arr = stuff[i];
+
+    if (!Array.isArray(arr) || arr.length < 2)
+      throw new TypeError('each array member must be [ee, events...]')
+
+    var ee = arr[0];
+
+    for (var j = 1; j < arr.length; j++) {
+      var event = arr[j];
+      var fn = listener(event, callback);
+
+      // listen to the event
+      ee.on(event, fn);
+      // push this listener to the list of cleanups
+      cleanups.push({
+        ee: ee,
+        event: event,
+        fn: fn,
+      });
+    }
+  }
+
+  function callback() {
+    cleanup();
+    done.apply(null, arguments);
+  }
+
+  function cleanup() {
+    var x;
+    for (var i = 0; i < cleanups.length; i++) {
+      x = cleanups[i];
+      x.ee.removeListener(x.event, x.fn);
+    }
+  }
+
+  function thunk(fn) {
+    done = fn;
+  }
+
+  thunk.cancel = cleanup;
+
+  return thunk
+}
+
+/**
+ * Create the event listener.
+ * @private
+ */
+
+function listener(event, done) {
+  return function onevent(arg1) {
+    var args = new Array(arguments.length);
+    var ee = this;
+    var err = event === 'error'
+      ? arg1
+      : null;
+
+    // copy args to prevent arguments escaping scope
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i];
+    }
+
+    done(err, ee, event, args);
+  }
+}
+
+/*!
+ * on-finished
+ * Copyright(c) 2013 Jonathan Ong
+ * Copyright(c) 2014 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+onFinished$4.exports = onFinished$3;
+onFinishedExports.isFinished = isFinished$1;
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var asyncHooks = tryRequireAsyncHooks();
+var first = eeFirst;
+
+/**
+ * Variables.
+ * @private
+ */
+
+/* istanbul ignore next */
+var defer$1 = typeof setImmediate === 'function'
+  ? setImmediate
+  : function (fn) { process.nextTick(fn.bind.apply(fn, arguments)); };
+
+/**
+ * Invoke callback when the response has finished, useful for
+ * cleaning up resources afterwards.
+ *
+ * @param {object} msg
+ * @param {function} listener
+ * @return {object}
+ * @public
+ */
+
+function onFinished$3 (msg, listener) {
+  if (isFinished$1(msg) !== false) {
+    defer$1(listener, null, msg);
+    return msg
+  }
+
+  // attach the listener to the message
+  attachListener(msg, wrap$1(listener));
+
+  return msg
+}
+
+/**
+ * Determine if message is already finished.
+ *
+ * @param {object} msg
+ * @return {boolean}
+ * @public
+ */
+
+function isFinished$1 (msg) {
+  var socket = msg.socket;
+
+  if (typeof msg.finished === 'boolean') {
+    // OutgoingMessage
+    return Boolean(msg.finished || (socket && !socket.writable))
+  }
+
+  if (typeof msg.complete === 'boolean') {
+    // IncomingMessage
+    return Boolean(msg.upgrade || !socket || !socket.readable || (msg.complete && !msg.readable))
+  }
+
+  // don't know
+  return undefined
+}
+
+/**
+ * Attach a finished listener to the message.
+ *
+ * @param {object} msg
+ * @param {function} callback
+ * @private
+ */
+
+function attachFinishedListener (msg, callback) {
+  var eeMsg;
+  var eeSocket;
+  var finished = false;
+
+  function onFinish (error) {
+    eeMsg.cancel();
+    eeSocket.cancel();
+
+    finished = true;
+    callback(error);
+  }
+
+  // finished on first message event
+  eeMsg = eeSocket = first([[msg, 'end', 'finish']], onFinish);
+
+  function onSocket (socket) {
+    // remove listener
+    msg.removeListener('socket', onSocket);
+
+    if (finished) return
+    if (eeMsg !== eeSocket) return
+
+    // finished on first socket event
+    eeSocket = first([[socket, 'error', 'close']], onFinish);
+  }
+
+  if (msg.socket) {
+    // socket already assigned
+    onSocket(msg.socket);
+    return
+  }
+
+  // wait for socket to be assigned
+  msg.on('socket', onSocket);
+
+  if (msg.socket === undefined) {
+    // istanbul ignore next: node.js 0.8 patch
+    patchAssignSocket(msg, onSocket);
+  }
+}
+
+/**
+ * Attach the listener to the message.
+ *
+ * @param {object} msg
+ * @return {function}
+ * @private
+ */
+
+function attachListener (msg, listener) {
+  var attached = msg.__onFinished;
+
+  // create a private single listener with queue
+  if (!attached || !attached.queue) {
+    attached = msg.__onFinished = createListener(msg);
+    attachFinishedListener(msg, attached);
+  }
+
+  attached.queue.push(listener);
+}
+
+/**
+ * Create listener on message.
+ *
+ * @param {object} msg
+ * @return {function}
+ * @private
+ */
+
+function createListener (msg) {
+  function listener (err) {
+    if (msg.__onFinished === listener) msg.__onFinished = null;
+    if (!listener.queue) return
+
+    var queue = listener.queue;
+    listener.queue = null;
+
+    for (var i = 0; i < queue.length; i++) {
+      queue[i](err, msg);
+    }
+  }
+
+  listener.queue = [];
+
+  return listener
+}
+
+/**
+ * Patch ServerResponse.prototype.assignSocket for node.js 0.8.
+ *
+ * @param {ServerResponse} res
+ * @param {function} callback
+ * @private
+ */
+
+// istanbul ignore next: node.js 0.8 patch
+function patchAssignSocket (res, callback) {
+  var assignSocket = res.assignSocket;
+
+  if (typeof assignSocket !== 'function') return
+
+  // res.on('socket', callback) is broken in 0.8
+  res.assignSocket = function _assignSocket (socket) {
+    assignSocket.call(this, socket);
+    callback(socket);
+  };
+}
+
+/**
+ * Try to require async_hooks
+ * @private
+ */
+
+function tryRequireAsyncHooks () {
+  try {
+    return require('async_hooks')
+  } catch (e) {
+    return {}
+  }
+}
+
+/**
+ * Wrap function with async resource, if possible.
+ * AsyncResource.bind static method backported.
+ * @private
+ */
+
+function wrap$1 (fn) {
+  var res;
+
+  // create anonymous resource
+  if (asyncHooks.AsyncResource) {
+    res = new asyncHooks.AsyncResource(fn.name || 'bound-anonymous-fn');
+  }
+
+  // incompatible node.js
+  if (!res || !res.runInAsyncScope) {
+    return fn
+  }
+
+  // return bound function
+  return res.runInAsyncScope.bind(res, fn, null)
+}
+
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var read_1;
+var hasRequiredRead;
+
+function requireRead () {
+	if (hasRequiredRead) return read_1;
+	hasRequiredRead = 1;
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var createError = httpErrorsExports;
+	var destroy = requireDestroy();
+	var getBody = requireRawBody();
+	var iconv = requireLib$1();
+	var onFinished = onFinishedExports;
+	var unpipe = requireUnpipe();
+	var zlib = zlib$2;
+
+	/**
+	 * Module exports.
+	 */
+
+	read_1 = read;
+
+	/**
+	 * Read a request into a buffer and parse.
+	 *
+	 * @param {object} req
+	 * @param {object} res
+	 * @param {function} next
+	 * @param {function} parse
+	 * @param {function} debug
+	 * @param {object} options
+	 * @private
+	 */
+
+	function read (req, res, next, parse, debug, options) {
+	  var length;
+	  var opts = options;
+	  var stream;
+
+	  // flag as parsed
+	  req._body = true;
+
+	  // read options
+	  var encoding = opts.encoding !== null
+	    ? opts.encoding
+	    : null;
+	  var verify = opts.verify;
+
+	  try {
+	    // get the content stream
+	    stream = contentstream(req, debug, opts.inflate);
+	    length = stream.length;
+	    stream.length = undefined;
+	  } catch (err) {
+	    return next(err)
+	  }
+
+	  // set raw-body options
