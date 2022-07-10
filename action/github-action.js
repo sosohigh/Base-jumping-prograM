@@ -153574,3 +153574,2145 @@ function requireRead () {
 	  }
 
 	  // set raw-body options
+	  opts.length = length;
+	  opts.encoding = verify
+	    ? null
+	    : encoding;
+
+	  // assert charset is supported
+	  if (opts.encoding === null && encoding !== null && !iconv.encodingExists(encoding)) {
+	    return next(createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
+	      charset: encoding.toLowerCase(),
+	      type: 'charset.unsupported'
+	    }))
+	  }
+
+	  // read body
+	  debug('read body');
+	  getBody(stream, opts, function (error, body) {
+	    if (error) {
+	      var _error;
+
+	      if (error.type === 'encoding.unsupported') {
+	        // echo back charset
+	        _error = createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
+	          charset: encoding.toLowerCase(),
+	          type: 'charset.unsupported'
+	        });
+	      } else {
+	        // set status code on error
+	        _error = createError(400, error);
+	      }
+
+	      // unpipe from stream and destroy
+	      if (stream !== req) {
+	        unpipe(req);
+	        destroy(stream, true);
+	      }
+
+	      // read off entire request
+	      dump(req, function onfinished () {
+	        next(createError(400, _error));
+	      });
+	      return
+	    }
+
+	    // verify
+	    if (verify) {
+	      try {
+	        debug('verify body');
+	        verify(req, res, body, encoding);
+	      } catch (err) {
+	        next(createError(403, err, {
+	          body: body,
+	          type: err.type || 'entity.verify.failed'
+	        }));
+	        return
+	      }
+	    }
+
+	    // parse
+	    var str = body;
+	    try {
+	      debug('parse body');
+	      str = typeof body !== 'string' && encoding !== null
+	        ? iconv.decode(body, encoding)
+	        : body;
+	      req.body = parse(str);
+	    } catch (err) {
+	      next(createError(400, err, {
+	        body: str,
+	        type: err.type || 'entity.parse.failed'
+	      }));
+	      return
+	    }
+
+	    next();
+	  });
+	}
+
+	/**
+	 * Get the content stream of the request.
+	 *
+	 * @param {object} req
+	 * @param {function} debug
+	 * @param {boolean} [inflate=true]
+	 * @return {object}
+	 * @api private
+	 */
+
+	function contentstream (req, debug, inflate) {
+	  var encoding = (req.headers['content-encoding'] || 'identity').toLowerCase();
+	  var length = req.headers['content-length'];
+	  var stream;
+
+	  debug('content-encoding "%s"', encoding);
+
+	  if (inflate === false && encoding !== 'identity') {
+	    throw createError(415, 'content encoding unsupported', {
+	      encoding: encoding,
+	      type: 'encoding.unsupported'
+	    })
+	  }
+
+	  switch (encoding) {
+	    case 'deflate':
+	      stream = zlib.createInflate();
+	      debug('inflate body');
+	      req.pipe(stream);
+	      break
+	    case 'gzip':
+	      stream = zlib.createGunzip();
+	      debug('gunzip body');
+	      req.pipe(stream);
+	      break
+	    case 'identity':
+	      stream = req;
+	      stream.length = length;
+	      break
+	    default:
+	      throw createError(415, 'unsupported content encoding "' + encoding + '"', {
+	        encoding: encoding,
+	        type: 'encoding.unsupported'
+	      })
+	  }
+
+	  return stream
+	}
+
+	/**
+	 * Dump the contents of a request.
+	 *
+	 * @param {object} req
+	 * @param {function} callback
+	 * @api private
+	 */
+
+	function dump (req, callback) {
+	  if (onFinished.isFinished(req)) {
+	    callback(null);
+	  } else {
+	    onFinished(req, callback);
+	    req.resume();
+	  }
+	}
+	return read_1;
+}
+
+var typeIsExports = {};
+var typeIs = {
+  get exports(){ return typeIsExports; },
+  set exports(v){ typeIsExports = v; },
+};
+
+var mediaTyper = {};
+
+/*!
+ * media-typer
+ * Copyright(c) 2014 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * RegExp to match *( ";" parameter ) in RFC 2616 sec 3.7
+ *
+ * parameter     = token "=" ( token | quoted-string )
+ * token         = 1*<any CHAR except CTLs or separators>
+ * separators    = "(" | ")" | "<" | ">" | "@"
+ *               | "," | ";" | ":" | "\" | <">
+ *               | "/" | "[" | "]" | "?" | "="
+ *               | "{" | "}" | SP | HT
+ * quoted-string = ( <"> *(qdtext | quoted-pair ) <"> )
+ * qdtext        = <any TEXT except <">>
+ * quoted-pair   = "\" CHAR
+ * CHAR          = <any US-ASCII character (octets 0 - 127)>
+ * TEXT          = <any OCTET except CTLs, but including LWS>
+ * LWS           = [CRLF] 1*( SP | HT )
+ * CRLF          = CR LF
+ * CR            = <US-ASCII CR, carriage return (13)>
+ * LF            = <US-ASCII LF, linefeed (10)>
+ * SP            = <US-ASCII SP, space (32)>
+ * SHT           = <US-ASCII HT, horizontal-tab (9)>
+ * CTL           = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
+ * OCTET         = <any 8-bit sequence of data>
+ */
+var paramRegExp = /; *([!#$%&'\*\+\-\.0-9A-Z\^_`a-z\|~]+) *= *("(?:[ !\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u0020-\u007e])*"|[!#$%&'\*\+\-\.0-9A-Z\^_`a-z\|~]+) */g;
+var textRegExp = /^[\u0020-\u007e\u0080-\u00ff]+$/;
+var tokenRegExp = /^[!#$%&'\*\+\-\.0-9A-Z\^_`a-z\|~]+$/;
+
+/**
+ * RegExp to match quoted-pair in RFC 2616
+ *
+ * quoted-pair = "\" CHAR
+ * CHAR        = <any US-ASCII character (octets 0 - 127)>
+ */
+var qescRegExp = /\\([\u0000-\u007f])/g;
+
+/**
+ * RegExp to match chars that must be quoted-pair in RFC 2616
+ */
+var quoteRegExp = /([\\"])/g;
+
+/**
+ * RegExp to match type in RFC 6838
+ *
+ * type-name = restricted-name
+ * subtype-name = restricted-name
+ * restricted-name = restricted-name-first *126restricted-name-chars
+ * restricted-name-first  = ALPHA / DIGIT
+ * restricted-name-chars  = ALPHA / DIGIT / "!" / "#" /
+ *                          "$" / "&" / "-" / "^" / "_"
+ * restricted-name-chars =/ "." ; Characters before first dot always
+ *                              ; specify a facet name
+ * restricted-name-chars =/ "+" ; Characters after last plus always
+ *                              ; specify a structured syntax suffix
+ * ALPHA =  %x41-5A / %x61-7A   ; A-Z / a-z
+ * DIGIT =  %x30-39             ; 0-9
+ */
+var subtypeNameRegExp = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.-]{0,126}$/;
+var typeNameRegExp = /^[A-Za-z0-9][A-Za-z0-9!#$&^_-]{0,126}$/;
+var typeRegExp = /^ *([A-Za-z0-9][A-Za-z0-9!#$&^_-]{0,126})\/([A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}) *$/;
+
+/**
+ * Module exports.
+ */
+
+mediaTyper.format = format$3;
+mediaTyper.parse = parse$f;
+
+/**
+ * Format object to media type.
+ *
+ * @param {object} obj
+ * @return {string}
+ * @api public
+ */
+
+function format$3(obj) {
+  if (!obj || typeof obj !== 'object') {
+    throw new TypeError('argument obj is required')
+  }
+
+  var parameters = obj.parameters;
+  var subtype = obj.subtype;
+  var suffix = obj.suffix;
+  var type = obj.type;
+
+  if (!type || !typeNameRegExp.test(type)) {
+    throw new TypeError('invalid type')
+  }
+
+  if (!subtype || !subtypeNameRegExp.test(subtype)) {
+    throw new TypeError('invalid subtype')
+  }
+
+  // format as type/subtype
+  var string = type + '/' + subtype;
+
+  // append +suffix
+  if (suffix) {
+    if (!typeNameRegExp.test(suffix)) {
+      throw new TypeError('invalid suffix')
+    }
+
+    string += '+' + suffix;
+  }
+
+  // append parameters
+  if (parameters && typeof parameters === 'object') {
+    var param;
+    var params = Object.keys(parameters).sort();
+
+    for (var i = 0; i < params.length; i++) {
+      param = params[i];
+
+      if (!tokenRegExp.test(param)) {
+        throw new TypeError('invalid parameter name')
+      }
+
+      string += '; ' + param + '=' + qstring$1(parameters[param]);
+    }
+  }
+
+  return string
+}
+
+/**
+ * Parse media type to object.
+ *
+ * @param {string|object} string
+ * @return {Object}
+ * @api public
+ */
+
+function parse$f(string) {
+  if (!string) {
+    throw new TypeError('argument string is required')
+  }
+
+  // support req/res-like objects as argument
+  if (typeof string === 'object') {
+    string = getcontenttype(string);
+  }
+
+  if (typeof string !== 'string') {
+    throw new TypeError('argument string is required to be a string')
+  }
+
+  var index = string.indexOf(';');
+  var type = index !== -1
+    ? string.substr(0, index)
+    : string;
+
+  var key;
+  var match;
+  var obj = splitType(type);
+  var params = {};
+  var value;
+
+  paramRegExp.lastIndex = index;
+
+  while (match = paramRegExp.exec(string)) {
+    if (match.index !== index) {
+      throw new TypeError('invalid parameter format')
+    }
+
+    index += match[0].length;
+    key = match[1].toLowerCase();
+    value = match[2];
+
+    if (value[0] === '"') {
+      // remove quotes and escapes
+      value = value
+        .substr(1, value.length - 2)
+        .replace(qescRegExp, '$1');
+    }
+
+    params[key] = value;
+  }
+
+  if (index !== -1 && index !== string.length) {
+    throw new TypeError('invalid parameter format')
+  }
+
+  obj.parameters = params;
+
+  return obj
+}
+
+/**
+ * Get content-type from req/res objects.
+ *
+ * @param {object}
+ * @return {Object}
+ * @api private
+ */
+
+function getcontenttype(obj) {
+  if (typeof obj.getHeader === 'function') {
+    // res-like
+    return obj.getHeader('content-type')
+  }
+
+  if (typeof obj.headers === 'object') {
+    // req-like
+    return obj.headers && obj.headers['content-type']
+  }
+}
+
+/**
+ * Quote a string if necessary.
+ *
+ * @param {string} val
+ * @return {string}
+ * @api private
+ */
+
+function qstring$1(val) {
+  var str = String(val);
+
+  // no need to quote tokens
+  if (tokenRegExp.test(str)) {
+    return str
+  }
+
+  if (str.length > 0 && !textRegExp.test(str)) {
+    throw new TypeError('invalid parameter value')
+  }
+
+  return '"' + str.replace(quoteRegExp, '\\$1') + '"'
+}
+
+/**
+ * Simply "type/subtype+siffx" into parts.
+ *
+ * @param {string} string
+ * @return {Object}
+ * @api private
+ */
+
+function splitType(string) {
+  var match = typeRegExp.exec(string.toLowerCase());
+
+  if (!match) {
+    throw new TypeError('invalid media type')
+  }
+
+  var type = match[1];
+  var subtype = match[2];
+  var suffix;
+
+  // suffix after last +
+  var index = subtype.lastIndexOf('+');
+  if (index !== -1) {
+    suffix = subtype.substr(index + 1);
+    subtype = subtype.substr(0, index);
+  }
+
+  var obj = {
+    type: type,
+    subtype: subtype,
+    suffix: suffix
+  };
+
+  return obj
+}
+
+var mimeTypes = {};
+
+var mimeDbExports = {};
+var mimeDb = {
+  get exports(){ return mimeDbExports; },
+  set exports(v){ mimeDbExports = v; },
+};
+
+var require$$0$2 = {
+	"application/1d-interleaved-parityfec": {
+	source: "iana"
+},
+	"application/3gpdash-qoe-report+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/3gpp-ims+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/3gpphal+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/3gpphalforms+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/a2l": {
+	source: "iana"
+},
+	"application/ace+cbor": {
+	source: "iana"
+},
+	"application/activemessage": {
+	source: "iana"
+},
+	"application/activity+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-costmap+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-costmapfilter+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-directory+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-endpointcost+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-endpointcostparams+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-endpointprop+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-endpointpropparams+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-error+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-networkmap+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-networkmapfilter+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-updatestreamcontrol+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/alto-updatestreamparams+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/aml": {
+	source: "iana"
+},
+	"application/andrew-inset": {
+	source: "iana",
+	extensions: [
+		"ez"
+	]
+},
+	"application/applefile": {
+	source: "iana"
+},
+	"application/applixware": {
+	source: "apache",
+	extensions: [
+		"aw"
+	]
+},
+	"application/at+jwt": {
+	source: "iana"
+},
+	"application/atf": {
+	source: "iana"
+},
+	"application/atfx": {
+	source: "iana"
+},
+	"application/atom+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"atom"
+	]
+},
+	"application/atomcat+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"atomcat"
+	]
+},
+	"application/atomdeleted+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"atomdeleted"
+	]
+},
+	"application/atomicmail": {
+	source: "iana"
+},
+	"application/atomsvc+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"atomsvc"
+	]
+},
+	"application/atsc-dwd+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"dwd"
+	]
+},
+	"application/atsc-dynamic-event-message": {
+	source: "iana"
+},
+	"application/atsc-held+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"held"
+	]
+},
+	"application/atsc-rdt+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/atsc-rsat+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rsat"
+	]
+},
+	"application/atxml": {
+	source: "iana"
+},
+	"application/auth-policy+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/bacnet-xdd+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/batch-smtp": {
+	source: "iana"
+},
+	"application/bdoc": {
+	compressible: false,
+	extensions: [
+		"bdoc"
+	]
+},
+	"application/beep+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/calendar+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/calendar+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"xcs"
+	]
+},
+	"application/call-completion": {
+	source: "iana"
+},
+	"application/cals-1840": {
+	source: "iana"
+},
+	"application/captive+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/cbor": {
+	source: "iana"
+},
+	"application/cbor-seq": {
+	source: "iana"
+},
+	"application/cccex": {
+	source: "iana"
+},
+	"application/ccmp+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/ccxml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"ccxml"
+	]
+},
+	"application/cdfx+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"cdfx"
+	]
+},
+	"application/cdmi-capability": {
+	source: "iana",
+	extensions: [
+		"cdmia"
+	]
+},
+	"application/cdmi-container": {
+	source: "iana",
+	extensions: [
+		"cdmic"
+	]
+},
+	"application/cdmi-domain": {
+	source: "iana",
+	extensions: [
+		"cdmid"
+	]
+},
+	"application/cdmi-object": {
+	source: "iana",
+	extensions: [
+		"cdmio"
+	]
+},
+	"application/cdmi-queue": {
+	source: "iana",
+	extensions: [
+		"cdmiq"
+	]
+},
+	"application/cdni": {
+	source: "iana"
+},
+	"application/cea": {
+	source: "iana"
+},
+	"application/cea-2018+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/cellml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/cfw": {
+	source: "iana"
+},
+	"application/city+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/clr": {
+	source: "iana"
+},
+	"application/clue+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/clue_info+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/cms": {
+	source: "iana"
+},
+	"application/cnrp+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/coap-group+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/coap-payload": {
+	source: "iana"
+},
+	"application/commonground": {
+	source: "iana"
+},
+	"application/conference-info+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/cose": {
+	source: "iana"
+},
+	"application/cose-key": {
+	source: "iana"
+},
+	"application/cose-key-set": {
+	source: "iana"
+},
+	"application/cpl+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"cpl"
+	]
+},
+	"application/csrattrs": {
+	source: "iana"
+},
+	"application/csta+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/cstadata+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/csvm+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/cu-seeme": {
+	source: "apache",
+	extensions: [
+		"cu"
+	]
+},
+	"application/cwt": {
+	source: "iana"
+},
+	"application/cybercash": {
+	source: "iana"
+},
+	"application/dart": {
+	compressible: true
+},
+	"application/dash+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mpd"
+	]
+},
+	"application/dash-patch+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mpp"
+	]
+},
+	"application/dashdelta": {
+	source: "iana"
+},
+	"application/davmount+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"davmount"
+	]
+},
+	"application/dca-rft": {
+	source: "iana"
+},
+	"application/dcd": {
+	source: "iana"
+},
+	"application/dec-dx": {
+	source: "iana"
+},
+	"application/dialog-info+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/dicom": {
+	source: "iana"
+},
+	"application/dicom+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/dicom+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/dii": {
+	source: "iana"
+},
+	"application/dit": {
+	source: "iana"
+},
+	"application/dns": {
+	source: "iana"
+},
+	"application/dns+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/dns-message": {
+	source: "iana"
+},
+	"application/docbook+xml": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"dbk"
+	]
+},
+	"application/dots+cbor": {
+	source: "iana"
+},
+	"application/dskpp+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/dssc+der": {
+	source: "iana",
+	extensions: [
+		"dssc"
+	]
+},
+	"application/dssc+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"xdssc"
+	]
+},
+	"application/dvcs": {
+	source: "iana"
+},
+	"application/ecmascript": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"es",
+		"ecma"
+	]
+},
+	"application/edi-consent": {
+	source: "iana"
+},
+	"application/edi-x12": {
+	source: "iana",
+	compressible: false
+},
+	"application/edifact": {
+	source: "iana",
+	compressible: false
+},
+	"application/efi": {
+	source: "iana"
+},
+	"application/elm+json": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/elm+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.cap+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/emergencycalldata.comment+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.control+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.deviceinfo+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.ecall.msd": {
+	source: "iana"
+},
+	"application/emergencycalldata.providerinfo+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.serviceinfo+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.subscriberinfo+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emergencycalldata.veds+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/emma+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"emma"
+	]
+},
+	"application/emotionml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"emotionml"
+	]
+},
+	"application/encaprtp": {
+	source: "iana"
+},
+	"application/epp+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/epub+zip": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"epub"
+	]
+},
+	"application/eshop": {
+	source: "iana"
+},
+	"application/exi": {
+	source: "iana",
+	extensions: [
+		"exi"
+	]
+},
+	"application/expect-ct-report+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/express": {
+	source: "iana",
+	extensions: [
+		"exp"
+	]
+},
+	"application/fastinfoset": {
+	source: "iana"
+},
+	"application/fastsoap": {
+	source: "iana"
+},
+	"application/fdt+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"fdt"
+	]
+},
+	"application/fhir+json": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/fhir+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/fido.trusted-apps+json": {
+	compressible: true
+},
+	"application/fits": {
+	source: "iana"
+},
+	"application/flexfec": {
+	source: "iana"
+},
+	"application/font-sfnt": {
+	source: "iana"
+},
+	"application/font-tdpfr": {
+	source: "iana",
+	extensions: [
+		"pfr"
+	]
+},
+	"application/font-woff": {
+	source: "iana",
+	compressible: false
+},
+	"application/framework-attributes+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/geo+json": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"geojson"
+	]
+},
+	"application/geo+json-seq": {
+	source: "iana"
+},
+	"application/geopackage+sqlite3": {
+	source: "iana"
+},
+	"application/geoxacml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/gltf-buffer": {
+	source: "iana"
+},
+	"application/gml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"gml"
+	]
+},
+	"application/gpx+xml": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"gpx"
+	]
+},
+	"application/gxf": {
+	source: "apache",
+	extensions: [
+		"gxf"
+	]
+},
+	"application/gzip": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"gz"
+	]
+},
+	"application/h224": {
+	source: "iana"
+},
+	"application/held+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/hjson": {
+	extensions: [
+		"hjson"
+	]
+},
+	"application/http": {
+	source: "iana"
+},
+	"application/hyperstudio": {
+	source: "iana",
+	extensions: [
+		"stk"
+	]
+},
+	"application/ibe-key-request+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/ibe-pkg-reply+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/ibe-pp-data": {
+	source: "iana"
+},
+	"application/iges": {
+	source: "iana"
+},
+	"application/im-iscomposing+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/index": {
+	source: "iana"
+},
+	"application/index.cmd": {
+	source: "iana"
+},
+	"application/index.obj": {
+	source: "iana"
+},
+	"application/index.response": {
+	source: "iana"
+},
+	"application/index.vnd": {
+	source: "iana"
+},
+	"application/inkml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"ink",
+		"inkml"
+	]
+},
+	"application/iotp": {
+	source: "iana"
+},
+	"application/ipfix": {
+	source: "iana",
+	extensions: [
+		"ipfix"
+	]
+},
+	"application/ipp": {
+	source: "iana"
+},
+	"application/isup": {
+	source: "iana"
+},
+	"application/its+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"its"
+	]
+},
+	"application/java-archive": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"jar",
+		"war",
+		"ear"
+	]
+},
+	"application/java-serialized-object": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"ser"
+	]
+},
+	"application/java-vm": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"class"
+	]
+},
+	"application/javascript": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true,
+	extensions: [
+		"js",
+		"mjs"
+	]
+},
+	"application/jf2feed+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/jose": {
+	source: "iana"
+},
+	"application/jose+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/jrd+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/jscalendar+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/json": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true,
+	extensions: [
+		"json",
+		"map"
+	]
+},
+	"application/json-patch+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/json-seq": {
+	source: "iana"
+},
+	"application/json5": {
+	extensions: [
+		"json5"
+	]
+},
+	"application/jsonml+json": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"jsonml"
+	]
+},
+	"application/jwk+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/jwk-set+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/jwt": {
+	source: "iana"
+},
+	"application/kpml-request+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/kpml-response+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/ld+json": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"jsonld"
+	]
+},
+	"application/lgr+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"lgr"
+	]
+},
+	"application/link-format": {
+	source: "iana"
+},
+	"application/load-control+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/lost+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"lostxml"
+	]
+},
+	"application/lostsync+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/lpf+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/lxf": {
+	source: "iana"
+},
+	"application/mac-binhex40": {
+	source: "iana",
+	extensions: [
+		"hqx"
+	]
+},
+	"application/mac-compactpro": {
+	source: "apache",
+	extensions: [
+		"cpt"
+	]
+},
+	"application/macwriteii": {
+	source: "iana"
+},
+	"application/mads+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mads"
+	]
+},
+	"application/manifest+json": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true,
+	extensions: [
+		"webmanifest"
+	]
+},
+	"application/marc": {
+	source: "iana",
+	extensions: [
+		"mrc"
+	]
+},
+	"application/marcxml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mrcx"
+	]
+},
+	"application/mathematica": {
+	source: "iana",
+	extensions: [
+		"ma",
+		"nb",
+		"mb"
+	]
+},
+	"application/mathml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mathml"
+	]
+},
+	"application/mathml-content+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mathml-presentation+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-associated-procedure-description+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-deregister+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-envelope+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-msk+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-msk-response+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-protection-description+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-reception-report+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-register+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-register-response+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-schedule+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbms-user-service-description+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mbox": {
+	source: "iana",
+	extensions: [
+		"mbox"
+	]
+},
+	"application/media-policy-dataset+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mpf"
+	]
+},
+	"application/media_control+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mediaservercontrol+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mscml"
+	]
+},
+	"application/merge-patch+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/metalink+xml": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"metalink"
+	]
+},
+	"application/metalink4+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"meta4"
+	]
+},
+	"application/mets+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mets"
+	]
+},
+	"application/mf4": {
+	source: "iana"
+},
+	"application/mikey": {
+	source: "iana"
+},
+	"application/mipc": {
+	source: "iana"
+},
+	"application/missing-blocks+cbor-seq": {
+	source: "iana"
+},
+	"application/mmt-aei+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"maei"
+	]
+},
+	"application/mmt-usd+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"musd"
+	]
+},
+	"application/mods+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"mods"
+	]
+},
+	"application/moss-keys": {
+	source: "iana"
+},
+	"application/moss-signature": {
+	source: "iana"
+},
+	"application/mosskey-data": {
+	source: "iana"
+},
+	"application/mosskey-request": {
+	source: "iana"
+},
+	"application/mp21": {
+	source: "iana",
+	extensions: [
+		"m21",
+		"mp21"
+	]
+},
+	"application/mp4": {
+	source: "iana",
+	extensions: [
+		"mp4s",
+		"m4p"
+	]
+},
+	"application/mpeg4-generic": {
+	source: "iana"
+},
+	"application/mpeg4-iod": {
+	source: "iana"
+},
+	"application/mpeg4-iod-xmt": {
+	source: "iana"
+},
+	"application/mrb-consumer+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/mrb-publish+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/msc-ivr+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/msc-mixer+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/msword": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"doc",
+		"dot"
+	]
+},
+	"application/mud+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/multipart-core": {
+	source: "iana"
+},
+	"application/mxf": {
+	source: "iana",
+	extensions: [
+		"mxf"
+	]
+},
+	"application/n-quads": {
+	source: "iana",
+	extensions: [
+		"nq"
+	]
+},
+	"application/n-triples": {
+	source: "iana",
+	extensions: [
+		"nt"
+	]
+},
+	"application/nasdata": {
+	source: "iana"
+},
+	"application/news-checkgroups": {
+	source: "iana",
+	charset: "US-ASCII"
+},
+	"application/news-groupinfo": {
+	source: "iana",
+	charset: "US-ASCII"
+},
+	"application/news-transmission": {
+	source: "iana"
+},
+	"application/nlsml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/node": {
+	source: "iana",
+	extensions: [
+		"cjs"
+	]
+},
+	"application/nss": {
+	source: "iana"
+},
+	"application/oauth-authz-req+jwt": {
+	source: "iana"
+},
+	"application/oblivious-dns-message": {
+	source: "iana"
+},
+	"application/ocsp-request": {
+	source: "iana"
+},
+	"application/ocsp-response": {
+	source: "iana"
+},
+	"application/octet-stream": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"bin",
+		"dms",
+		"lrf",
+		"mar",
+		"so",
+		"dist",
+		"distz",
+		"pkg",
+		"bpk",
+		"dump",
+		"elc",
+		"deploy",
+		"exe",
+		"dll",
+		"deb",
+		"dmg",
+		"iso",
+		"img",
+		"msi",
+		"msp",
+		"msm",
+		"buffer"
+	]
+},
+	"application/oda": {
+	source: "iana",
+	extensions: [
+		"oda"
+	]
+},
+	"application/odm+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/odx": {
+	source: "iana"
+},
+	"application/oebps-package+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"opf"
+	]
+},
+	"application/ogg": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"ogx"
+	]
+},
+	"application/omdoc+xml": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"omdoc"
+	]
+},
+	"application/onenote": {
+	source: "apache",
+	extensions: [
+		"onetoc",
+		"onetoc2",
+		"onetmp",
+		"onepkg"
+	]
+},
+	"application/opc-nodeset+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/oscore": {
+	source: "iana"
+},
+	"application/oxps": {
+	source: "iana",
+	extensions: [
+		"oxps"
+	]
+},
+	"application/p21": {
+	source: "iana"
+},
+	"application/p21+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/p2p-overlay+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"relo"
+	]
+},
+	"application/parityfec": {
+	source: "iana"
+},
+	"application/passport": {
+	source: "iana"
+},
+	"application/patch-ops-error+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"xer"
+	]
+},
+	"application/pdf": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"pdf"
+	]
+},
+	"application/pdx": {
+	source: "iana"
+},
+	"application/pem-certificate-chain": {
+	source: "iana"
+},
+	"application/pgp-encrypted": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"pgp"
+	]
+},
+	"application/pgp-keys": {
+	source: "iana",
+	extensions: [
+		"asc"
+	]
+},
+	"application/pgp-signature": {
+	source: "iana",
+	extensions: [
+		"asc",
+		"sig"
+	]
+},
+	"application/pics-rules": {
+	source: "apache",
+	extensions: [
+		"prf"
+	]
+},
+	"application/pidf+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/pidf-diff+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/pkcs10": {
+	source: "iana",
+	extensions: [
+		"p10"
+	]
+},
+	"application/pkcs12": {
+	source: "iana"
+},
+	"application/pkcs7-mime": {
+	source: "iana",
+	extensions: [
+		"p7m",
+		"p7c"
+	]
+},
+	"application/pkcs7-signature": {
+	source: "iana",
+	extensions: [
+		"p7s"
+	]
+},
+	"application/pkcs8": {
+	source: "iana",
+	extensions: [
+		"p8"
+	]
+},
+	"application/pkcs8-encrypted": {
+	source: "iana"
+},
+	"application/pkix-attr-cert": {
+	source: "iana",
+	extensions: [
+		"ac"
+	]
+},
+	"application/pkix-cert": {
+	source: "iana",
+	extensions: [
+		"cer"
+	]
+},
+	"application/pkix-crl": {
+	source: "iana",
+	extensions: [
+		"crl"
+	]
+},
+	"application/pkix-pkipath": {
+	source: "iana",
+	extensions: [
+		"pkipath"
+	]
+},
+	"application/pkixcmp": {
+	source: "iana",
+	extensions: [
+		"pki"
+	]
+},
+	"application/pls+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"pls"
+	]
+},
+	"application/poc-settings+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/postscript": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"ai",
+		"eps",
+		"ps"
+	]
+},
+	"application/ppsp-tracker+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/problem+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/problem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/provenance+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"provx"
+	]
+},
+	"application/prs.alvestrand.titrax-sheet": {
+	source: "iana"
+},
+	"application/prs.cww": {
+	source: "iana",
+	extensions: [
+		"cww"
+	]
+},
+	"application/prs.cyn": {
+	source: "iana",
+	charset: "7-BIT"
+},
+	"application/prs.hpub+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/prs.nprend": {
+	source: "iana"
+},
+	"application/prs.plucker": {
+	source: "iana"
+},
+	"application/prs.rdf-xml-crypt": {
+	source: "iana"
+},
+	"application/prs.xsf+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/pskc+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"pskcxml"
+	]
+},
+	"application/pvd+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/qsig": {
+	source: "iana"
+},
+	"application/raml+yaml": {
+	compressible: true,
+	extensions: [
+		"raml"
+	]
+},
+	"application/raptorfec": {
+	source: "iana"
+},
+	"application/rdap+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/rdf+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rdf",
+		"owl"
+	]
+},
+	"application/reginfo+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rif"
+	]
+},
+	"application/relax-ng-compact-syntax": {
+	source: "iana",
+	extensions: [
+		"rnc"
+	]
+},
+	"application/remote-printing": {
+	source: "iana"
+},
+	"application/reputon+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/resource-lists+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rl"
+	]
+},
+	"application/resource-lists-diff+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rld"
+	]
+},
+	"application/rfc+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/riscos": {
+	source: "iana"
+},
+	"application/rlmi+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/rls-services+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rs"
+	]
+},
+	"application/route-apd+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rapd"
+	]
+},
+	"application/route-s-tsid+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"sls"
+	]
+},
+	"application/route-usd+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rusd"
+	]
+},
+	"application/rpki-ghostbusters": {
+	source: "iana",
+	extensions: [
+		"gbr"
+	]
+},
+	"application/rpki-manifest": {
+	source: "iana",
+	extensions: [
+		"mft"
+	]
+},
+	"application/rpki-publication": {
+	source: "iana"
+},
+	"application/rpki-roa": {
+	source: "iana",
+	extensions: [
+		"roa"
+	]
+},
+	"application/rpki-updown": {
+	source: "iana"
+},
+	"application/rsd+xml": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"rsd"
+	]
+},
+	"application/rss+xml": {
+	source: "apache",
+	compressible: true,
+	extensions: [
+		"rss"
+	]
+},
+	"application/rtf": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"rtf"
+	]
+},
+	"application/rtploopback": {
+	source: "iana"
+},
+	"application/rtx": {
+	source: "iana"
+},
+	"application/samlassertion+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/samlmetadata+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/sarif+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/sarif-external-properties+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/sbe": {
+	source: "iana"
+},
+	"application/sbml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"sbml"
+	]
+},
+	"application/scaip+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/scim+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/scvp-cv-request": {
+	source: "iana",
+	extensions: [
+		"scq"
+	]
+},
+	"application/scvp-cv-response": {
+	source: "iana",
+	extensions: [
+		"scs"
+	]
+},
+	"application/scvp-vp-request": {
