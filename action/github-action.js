@@ -157892,3 +157892,2186 @@ var require$$0$2 = {
 	extensions: [
 		"icc",
 		"icm"
+	]
+},
+	"application/vnd.ieee.1905": {
+	source: "iana"
+},
+	"application/vnd.igloader": {
+	source: "iana",
+	extensions: [
+		"igl"
+	]
+},
+	"application/vnd.imagemeter.folder+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/vnd.imagemeter.image+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/vnd.immervision-ivp": {
+	source: "iana",
+	extensions: [
+		"ivp"
+	]
+},
+	"application/vnd.immervision-ivu": {
+	source: "iana",
+	extensions: [
+		"ivu"
+	]
+},
+	"application/vnd.ims.imsccv1p1": {
+	source: "iana"
+},
+	"application/vnd.ims.imsccv1p2": {
+	source: "iana"
+},
+	"application/vnd.ims.imsccv1p3": {
+	source: "iana"
+},
+	"application/vnd.ims.lis.v2.result+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ims.lti.v2.toolconsumerprofile+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ims.lti.v2.toolproxy+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ims.lti.v2.toolproxy.id+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ims.lti.v2.toolsettings+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ims.lti.v2.toolsettings.simple+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.informedcontrol.rms+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.informix-visionary": {
+	source: "iana"
+},
+	"application/vnd.infotech.project": {
+	source: "iana"
+},
+	"application/vnd.infotech.project+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.innopath.wamp.notification": {
+	source: "iana"
+},
+	"application/vnd.insors.igm": {
+	source: "iana",
+	extensions: [
+		"igm"
+	]
+},
+	"application/vnd.intercon.formnet": {
+	source: "iana",
+	extensions: [
+		"xpw",
+		"xpx"
+	]
+},
+	"application/vnd.intergeo": {
+	source: "iana",
+	extensions: [
+		"i2g"
+	]
+},
+	"application/vnd.intertrust.digibox": {
+	source: "iana"
+},
+	"application/vnd.intertrust.nncp": {
+	source: "iana"
+},
+	"application/vnd.intu.qbo": {
+	source: "iana",
+	extensions: [
+		"qbo"
+	]
+},
+	"application/vnd.intu.qfx": {
+	source: "iana",
+	extensions: [
+		"qfx"
+	]
+},
+	"application/vnd.iptc.g2.catalogitem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.iptc.g2.conceptitem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.iptc.g2.knowledgeitem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.iptc.g2.newsitem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.iptc.g2.newsmessage+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.iptc.g2.packageitem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.iptc.g2.planningitem+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ipunplugged.rcprofile": {
+	source: "iana",
+	extensions: [
+		"rcprofile"
+	]
+},
+	"application/vnd.irepository.package+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"irp"
+	]
+},
+	"application/vnd.is-xpr": {
+	source: "iana",
+	extensions: [
+		"xpr"
+	]
+},
+	"application/vnd.isac.fcs": {
+	source: "iana",
+	extensions: [
+		"fcs"
+	]
+},
+	"application/vnd.iso11783-10+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/vnd.jam": {
+	source: "iana",
+	extensions: [
+		"jam"
+	]
+},
+	"application/vnd.japannet-directory-service": {
+	source: "iana"
+},
+	"application/vnd.japannet-jpnstore-wakeup": {
+	source: "iana"
+},
+	"application/vnd.japannet-payment-wakeup": {
+	source: "iana"
+},
+	"application/vnd.japannet-registration": {
+	source: "iana"
+},
+	"application/vnd.japannet-registration-wakeup": {
+	source: "iana"
+},
+	"application/vnd.japannet-setstore-wakeup": {
+	source: "iana"
+},
+	"application/vnd.japannet-verification": {
+	source: "iana"
+},
+	"application/vnd.japannet-verification-wakeup": {
+	source: "iana"
+},
+	"application/vnd.jcp.javame.midlet-rms": {
+	source: "iana",
+	extensions: [
+		"rms"
+	]
+},
+	"application/vnd.jisp": {
+	source: "iana",
+	extensions: [
+		"jisp"
+	]
+},
+	"application/vnd.joost.joda-archive": {
+	source: "iana",
+	extensions: [
+		"joda"
+	]
+},
+	"application/vnd.jsk.isdn-ngn": {
+	source: "iana"
+},
+	"application/vnd.kahootz": {
+	source: "iana",
+	extensions: [
+		"ktz",
+		"ktr"
+	]
+},
+	"application/vnd.kde.karbon": {
+	source: "iana",
+	extensions: [
+		"karbon"
+	]
+},
+	"application/vnd.kde.kchart": {
+	source: "iana",
+	extensions: [
+		"chrt"
+	]
+},
+	"application/vnd.kde.kformula": {
+	source: "iana",
+	extensions: [
+		"kfo"
+	]
+},
+	"application/vnd.kde.kivio": {
+	source: "iana",
+	extensions: [
+		"flw"
+	]
+},
+	"application/vnd.kde.kontour": {
+	source: "iana",
+	extensions: [
+		"kon"
+	]
+},
+	"application/vnd.kde.kpresenter": {
+	source: "iana",
+	extensions: [
+		"kpr",
+		"kpt"
+	]
+},
+	"application/vnd.kde.kspread": {
+	source: "iana",
+	extensions: [
+		"ksp"
+	]
+},
+	"application/vnd.kde.kword": {
+	source: "iana",
+	extensions: [
+		"kwd",
+		"kwt"
+	]
+},
+	"application/vnd.kenameaapp": {
+	source: "iana",
+	extensions: [
+		"htke"
+	]
+},
+	"application/vnd.kidspiration": {
+	source: "iana",
+	extensions: [
+		"kia"
+	]
+},
+	"application/vnd.kinar": {
+	source: "iana",
+	extensions: [
+		"kne",
+		"knp"
+	]
+},
+	"application/vnd.koan": {
+	source: "iana",
+	extensions: [
+		"skp",
+		"skd",
+		"skt",
+		"skm"
+	]
+},
+	"application/vnd.kodak-descriptor": {
+	source: "iana",
+	extensions: [
+		"sse"
+	]
+},
+	"application/vnd.las": {
+	source: "iana"
+},
+	"application/vnd.las.las+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.las.las+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"lasxml"
+	]
+},
+	"application/vnd.laszip": {
+	source: "iana"
+},
+	"application/vnd.leap+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.liberty-request+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.llamagraphics.life-balance.desktop": {
+	source: "iana",
+	extensions: [
+		"lbd"
+	]
+},
+	"application/vnd.llamagraphics.life-balance.exchange+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"lbe"
+	]
+},
+	"application/vnd.logipipe.circuit+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/vnd.loom": {
+	source: "iana"
+},
+	"application/vnd.lotus-1-2-3": {
+	source: "iana",
+	extensions: [
+		"123"
+	]
+},
+	"application/vnd.lotus-approach": {
+	source: "iana",
+	extensions: [
+		"apr"
+	]
+},
+	"application/vnd.lotus-freelance": {
+	source: "iana",
+	extensions: [
+		"pre"
+	]
+},
+	"application/vnd.lotus-notes": {
+	source: "iana",
+	extensions: [
+		"nsf"
+	]
+},
+	"application/vnd.lotus-organizer": {
+	source: "iana",
+	extensions: [
+		"org"
+	]
+},
+	"application/vnd.lotus-screencam": {
+	source: "iana",
+	extensions: [
+		"scm"
+	]
+},
+	"application/vnd.lotus-wordpro": {
+	source: "iana",
+	extensions: [
+		"lwp"
+	]
+},
+	"application/vnd.macports.portpkg": {
+	source: "iana",
+	extensions: [
+		"portpkg"
+	]
+},
+	"application/vnd.mapbox-vector-tile": {
+	source: "iana",
+	extensions: [
+		"mvt"
+	]
+},
+	"application/vnd.marlin.drm.actiontoken+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.marlin.drm.conftoken+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.marlin.drm.license+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.marlin.drm.mdcf": {
+	source: "iana"
+},
+	"application/vnd.mason+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.maxar.archive.3tz+zip": {
+	source: "iana",
+	compressible: false
+},
+	"application/vnd.maxmind.maxmind-db": {
+	source: "iana"
+},
+	"application/vnd.mcd": {
+	source: "iana",
+	extensions: [
+		"mcd"
+	]
+},
+	"application/vnd.medcalcdata": {
+	source: "iana",
+	extensions: [
+		"mc1"
+	]
+},
+	"application/vnd.mediastation.cdkey": {
+	source: "iana",
+	extensions: [
+		"cdkey"
+	]
+},
+	"application/vnd.meridian-slingshot": {
+	source: "iana"
+},
+	"application/vnd.mfer": {
+	source: "iana",
+	extensions: [
+		"mwf"
+	]
+},
+	"application/vnd.mfmp": {
+	source: "iana",
+	extensions: [
+		"mfm"
+	]
+},
+	"application/vnd.micro+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.micrografx.flo": {
+	source: "iana",
+	extensions: [
+		"flo"
+	]
+},
+	"application/vnd.micrografx.igx": {
+	source: "iana",
+	extensions: [
+		"igx"
+	]
+},
+	"application/vnd.microsoft.portable-executable": {
+	source: "iana"
+},
+	"application/vnd.microsoft.windows.thumbnail-cache": {
+	source: "iana"
+},
+	"application/vnd.miele+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.mif": {
+	source: "iana",
+	extensions: [
+		"mif"
+	]
+},
+	"application/vnd.minisoft-hp3000-save": {
+	source: "iana"
+},
+	"application/vnd.mitsubishi.misty-guard.trustweb": {
+	source: "iana"
+},
+	"application/vnd.mobius.daf": {
+	source: "iana",
+	extensions: [
+		"daf"
+	]
+},
+	"application/vnd.mobius.dis": {
+	source: "iana",
+	extensions: [
+		"dis"
+	]
+},
+	"application/vnd.mobius.mbk": {
+	source: "iana",
+	extensions: [
+		"mbk"
+	]
+},
+	"application/vnd.mobius.mqy": {
+	source: "iana",
+	extensions: [
+		"mqy"
+	]
+},
+	"application/vnd.mobius.msl": {
+	source: "iana",
+	extensions: [
+		"msl"
+	]
+},
+	"application/vnd.mobius.plc": {
+	source: "iana",
+	extensions: [
+		"plc"
+	]
+},
+	"application/vnd.mobius.txf": {
+	source: "iana",
+	extensions: [
+		"txf"
+	]
+},
+	"application/vnd.mophun.application": {
+	source: "iana",
+	extensions: [
+		"mpn"
+	]
+},
+	"application/vnd.mophun.certificate": {
+	source: "iana",
+	extensions: [
+		"mpc"
+	]
+},
+	"application/vnd.motorola.flexsuite": {
+	source: "iana"
+},
+	"application/vnd.motorola.flexsuite.adsi": {
+	source: "iana"
+},
+	"application/vnd.motorola.flexsuite.fis": {
+	source: "iana"
+},
+	"application/vnd.motorola.flexsuite.gotap": {
+	source: "iana"
+},
+	"application/vnd.motorola.flexsuite.kmr": {
+	source: "iana"
+},
+	"application/vnd.motorola.flexsuite.ttc": {
+	source: "iana"
+},
+	"application/vnd.motorola.flexsuite.wem": {
+	source: "iana"
+},
+	"application/vnd.motorola.iprm": {
+	source: "iana"
+},
+	"application/vnd.mozilla.xul+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"xul"
+	]
+},
+	"application/vnd.ms-3mfdocument": {
+	source: "iana"
+},
+	"application/vnd.ms-artgalry": {
+	source: "iana",
+	extensions: [
+		"cil"
+	]
+},
+	"application/vnd.ms-asf": {
+	source: "iana"
+},
+	"application/vnd.ms-cab-compressed": {
+	source: "iana",
+	extensions: [
+		"cab"
+	]
+},
+	"application/vnd.ms-color.iccprofile": {
+	source: "apache"
+},
+	"application/vnd.ms-excel": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"xls",
+		"xlm",
+		"xla",
+		"xlc",
+		"xlt",
+		"xlw"
+	]
+},
+	"application/vnd.ms-excel.addin.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"xlam"
+	]
+},
+	"application/vnd.ms-excel.sheet.binary.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"xlsb"
+	]
+},
+	"application/vnd.ms-excel.sheet.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"xlsm"
+	]
+},
+	"application/vnd.ms-excel.template.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"xltm"
+	]
+},
+	"application/vnd.ms-fontobject": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"eot"
+	]
+},
+	"application/vnd.ms-htmlhelp": {
+	source: "iana",
+	extensions: [
+		"chm"
+	]
+},
+	"application/vnd.ms-ims": {
+	source: "iana",
+	extensions: [
+		"ims"
+	]
+},
+	"application/vnd.ms-lrm": {
+	source: "iana",
+	extensions: [
+		"lrm"
+	]
+},
+	"application/vnd.ms-office.activex+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ms-officetheme": {
+	source: "iana",
+	extensions: [
+		"thmx"
+	]
+},
+	"application/vnd.ms-opentype": {
+	source: "apache",
+	compressible: true
+},
+	"application/vnd.ms-outlook": {
+	compressible: false,
+	extensions: [
+		"msg"
+	]
+},
+	"application/vnd.ms-package.obfuscated-opentype": {
+	source: "apache"
+},
+	"application/vnd.ms-pki.seccat": {
+	source: "apache",
+	extensions: [
+		"cat"
+	]
+},
+	"application/vnd.ms-pki.stl": {
+	source: "apache",
+	extensions: [
+		"stl"
+	]
+},
+	"application/vnd.ms-playready.initiator+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ms-powerpoint": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"ppt",
+		"pps",
+		"pot"
+	]
+},
+	"application/vnd.ms-powerpoint.addin.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"ppam"
+	]
+},
+	"application/vnd.ms-powerpoint.presentation.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"pptm"
+	]
+},
+	"application/vnd.ms-powerpoint.slide.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"sldm"
+	]
+},
+	"application/vnd.ms-powerpoint.slideshow.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"ppsm"
+	]
+},
+	"application/vnd.ms-powerpoint.template.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"potm"
+	]
+},
+	"application/vnd.ms-printdevicecapabilities+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ms-printing.printticket+xml": {
+	source: "apache",
+	compressible: true
+},
+	"application/vnd.ms-printschematicket+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ms-project": {
+	source: "iana",
+	extensions: [
+		"mpp",
+		"mpt"
+	]
+},
+	"application/vnd.ms-tnef": {
+	source: "iana"
+},
+	"application/vnd.ms-windows.devicepairing": {
+	source: "iana"
+},
+	"application/vnd.ms-windows.nwprinting.oob": {
+	source: "iana"
+},
+	"application/vnd.ms-windows.printerpairing": {
+	source: "iana"
+},
+	"application/vnd.ms-windows.wsd.oob": {
+	source: "iana"
+},
+	"application/vnd.ms-wmdrm.lic-chlg-req": {
+	source: "iana"
+},
+	"application/vnd.ms-wmdrm.lic-resp": {
+	source: "iana"
+},
+	"application/vnd.ms-wmdrm.meter-chlg-req": {
+	source: "iana"
+},
+	"application/vnd.ms-wmdrm.meter-resp": {
+	source: "iana"
+},
+	"application/vnd.ms-word.document.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"docm"
+	]
+},
+	"application/vnd.ms-word.template.macroenabled.12": {
+	source: "iana",
+	extensions: [
+		"dotm"
+	]
+},
+	"application/vnd.ms-works": {
+	source: "iana",
+	extensions: [
+		"wps",
+		"wks",
+		"wcm",
+		"wdb"
+	]
+},
+	"application/vnd.ms-wpl": {
+	source: "iana",
+	extensions: [
+		"wpl"
+	]
+},
+	"application/vnd.ms-xpsdocument": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"xps"
+	]
+},
+	"application/vnd.msa-disk-image": {
+	source: "iana"
+},
+	"application/vnd.mseq": {
+	source: "iana",
+	extensions: [
+		"mseq"
+	]
+},
+	"application/vnd.msign": {
+	source: "iana"
+},
+	"application/vnd.multiad.creator": {
+	source: "iana"
+},
+	"application/vnd.multiad.creator.cif": {
+	source: "iana"
+},
+	"application/vnd.music-niff": {
+	source: "iana"
+},
+	"application/vnd.musician": {
+	source: "iana",
+	extensions: [
+		"mus"
+	]
+},
+	"application/vnd.muvee.style": {
+	source: "iana",
+	extensions: [
+		"msty"
+	]
+},
+	"application/vnd.mynfc": {
+	source: "iana",
+	extensions: [
+		"taglet"
+	]
+},
+	"application/vnd.nacamar.ybrid+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.ncd.control": {
+	source: "iana"
+},
+	"application/vnd.ncd.reference": {
+	source: "iana"
+},
+	"application/vnd.nearst.inv+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.nebumind.line": {
+	source: "iana"
+},
+	"application/vnd.nervana": {
+	source: "iana"
+},
+	"application/vnd.netfpx": {
+	source: "iana"
+},
+	"application/vnd.neurolanguage.nlu": {
+	source: "iana",
+	extensions: [
+		"nlu"
+	]
+},
+	"application/vnd.nimn": {
+	source: "iana"
+},
+	"application/vnd.nintendo.nitro.rom": {
+	source: "iana"
+},
+	"application/vnd.nintendo.snes.rom": {
+	source: "iana"
+},
+	"application/vnd.nitf": {
+	source: "iana",
+	extensions: [
+		"ntf",
+		"nitf"
+	]
+},
+	"application/vnd.noblenet-directory": {
+	source: "iana",
+	extensions: [
+		"nnd"
+	]
+},
+	"application/vnd.noblenet-sealer": {
+	source: "iana",
+	extensions: [
+		"nns"
+	]
+},
+	"application/vnd.noblenet-web": {
+	source: "iana",
+	extensions: [
+		"nnw"
+	]
+},
+	"application/vnd.nokia.catalogs": {
+	source: "iana"
+},
+	"application/vnd.nokia.conml+wbxml": {
+	source: "iana"
+},
+	"application/vnd.nokia.conml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.nokia.iptv.config+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.nokia.isds-radio-presets": {
+	source: "iana"
+},
+	"application/vnd.nokia.landmark+wbxml": {
+	source: "iana"
+},
+	"application/vnd.nokia.landmark+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.nokia.landmarkcollection+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.nokia.n-gage.ac+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"ac"
+	]
+},
+	"application/vnd.nokia.n-gage.data": {
+	source: "iana",
+	extensions: [
+		"ngdat"
+	]
+},
+	"application/vnd.nokia.n-gage.symbian.install": {
+	source: "iana",
+	extensions: [
+		"n-gage"
+	]
+},
+	"application/vnd.nokia.ncd": {
+	source: "iana"
+},
+	"application/vnd.nokia.pcd+wbxml": {
+	source: "iana"
+},
+	"application/vnd.nokia.pcd+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.nokia.radio-preset": {
+	source: "iana",
+	extensions: [
+		"rpst"
+	]
+},
+	"application/vnd.nokia.radio-presets": {
+	source: "iana",
+	extensions: [
+		"rpss"
+	]
+},
+	"application/vnd.novadigm.edm": {
+	source: "iana",
+	extensions: [
+		"edm"
+	]
+},
+	"application/vnd.novadigm.edx": {
+	source: "iana",
+	extensions: [
+		"edx"
+	]
+},
+	"application/vnd.novadigm.ext": {
+	source: "iana",
+	extensions: [
+		"ext"
+	]
+},
+	"application/vnd.ntt-local.content-share": {
+	source: "iana"
+},
+	"application/vnd.ntt-local.file-transfer": {
+	source: "iana"
+},
+	"application/vnd.ntt-local.ogw_remote-access": {
+	source: "iana"
+},
+	"application/vnd.ntt-local.sip-ta_remote": {
+	source: "iana"
+},
+	"application/vnd.ntt-local.sip-ta_tcp_stream": {
+	source: "iana"
+},
+	"application/vnd.oasis.opendocument.chart": {
+	source: "iana",
+	extensions: [
+		"odc"
+	]
+},
+	"application/vnd.oasis.opendocument.chart-template": {
+	source: "iana",
+	extensions: [
+		"otc"
+	]
+},
+	"application/vnd.oasis.opendocument.database": {
+	source: "iana",
+	extensions: [
+		"odb"
+	]
+},
+	"application/vnd.oasis.opendocument.formula": {
+	source: "iana",
+	extensions: [
+		"odf"
+	]
+},
+	"application/vnd.oasis.opendocument.formula-template": {
+	source: "iana",
+	extensions: [
+		"odft"
+	]
+},
+	"application/vnd.oasis.opendocument.graphics": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"odg"
+	]
+},
+	"application/vnd.oasis.opendocument.graphics-template": {
+	source: "iana",
+	extensions: [
+		"otg"
+	]
+},
+	"application/vnd.oasis.opendocument.image": {
+	source: "iana",
+	extensions: [
+		"odi"
+	]
+},
+	"application/vnd.oasis.opendocument.image-template": {
+	source: "iana",
+	extensions: [
+		"oti"
+	]
+},
+	"application/vnd.oasis.opendocument.presentation": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"odp"
+	]
+},
+	"application/vnd.oasis.opendocument.presentation-template": {
+	source: "iana",
+	extensions: [
+		"otp"
+	]
+},
+	"application/vnd.oasis.opendocument.spreadsheet": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"ods"
+	]
+},
+	"application/vnd.oasis.opendocument.spreadsheet-template": {
+	source: "iana",
+	extensions: [
+		"ots"
+	]
+},
+	"application/vnd.oasis.opendocument.text": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"odt"
+	]
+},
+	"application/vnd.oasis.opendocument.text-master": {
+	source: "iana",
+	extensions: [
+		"odm"
+	]
+},
+	"application/vnd.oasis.opendocument.text-template": {
+	source: "iana",
+	extensions: [
+		"ott"
+	]
+},
+	"application/vnd.oasis.opendocument.text-web": {
+	source: "iana",
+	extensions: [
+		"oth"
+	]
+},
+	"application/vnd.obn": {
+	source: "iana"
+},
+	"application/vnd.ocf+cbor": {
+	source: "iana"
+},
+	"application/vnd.oci.image.manifest.v1+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oftn.l10n+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.contentaccessdownload+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.contentaccessstreaming+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.cspg-hexbinary": {
+	source: "iana"
+},
+	"application/vnd.oipf.dae.svg+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.dae.xhtml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.mippvcontrolmessage+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.pae.gem": {
+	source: "iana"
+},
+	"application/vnd.oipf.spdiscovery+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.spdlist+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.ueprofile+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oipf.userprofile+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.olpc-sugar": {
+	source: "iana",
+	extensions: [
+		"xo"
+	]
+},
+	"application/vnd.oma-scws-config": {
+	source: "iana"
+},
+	"application/vnd.oma-scws-http-request": {
+	source: "iana"
+},
+	"application/vnd.oma-scws-http-response": {
+	source: "iana"
+},
+	"application/vnd.oma.bcast.associated-procedure-parameter+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.drm-trigger+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.imd+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.ltkm": {
+	source: "iana"
+},
+	"application/vnd.oma.bcast.notification+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.provisioningtrigger": {
+	source: "iana"
+},
+	"application/vnd.oma.bcast.sgboot": {
+	source: "iana"
+},
+	"application/vnd.oma.bcast.sgdd+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.sgdu": {
+	source: "iana"
+},
+	"application/vnd.oma.bcast.simple-symbol-container": {
+	source: "iana"
+},
+	"application/vnd.oma.bcast.smartcard-trigger+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.sprov+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.bcast.stkm": {
+	source: "iana"
+},
+	"application/vnd.oma.cab-address-book+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.cab-feature-handler+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.cab-pcc+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.cab-subs-invite+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.cab-user-prefs+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.dcd": {
+	source: "iana"
+},
+	"application/vnd.oma.dcdc": {
+	source: "iana"
+},
+	"application/vnd.oma.dd2+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"dd2"
+	]
+},
+	"application/vnd.oma.drm.risd+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.group-usage-list+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.lwm2m+cbor": {
+	source: "iana"
+},
+	"application/vnd.oma.lwm2m+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.lwm2m+tlv": {
+	source: "iana"
+},
+	"application/vnd.oma.pal+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.poc.detailed-progress-report+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.poc.final-report+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.poc.groups+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.poc.invocation-descriptor+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.poc.optimized-progress-report+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.push": {
+	source: "iana"
+},
+	"application/vnd.oma.scidm.messages+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oma.xcap-directory+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.omads-email+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/vnd.omads-file+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/vnd.omads-folder+xml": {
+	source: "iana",
+	charset: "UTF-8",
+	compressible: true
+},
+	"application/vnd.omaloc-supl-init": {
+	source: "iana"
+},
+	"application/vnd.onepager": {
+	source: "iana"
+},
+	"application/vnd.onepagertamp": {
+	source: "iana"
+},
+	"application/vnd.onepagertamx": {
+	source: "iana"
+},
+	"application/vnd.onepagertat": {
+	source: "iana"
+},
+	"application/vnd.onepagertatp": {
+	source: "iana"
+},
+	"application/vnd.onepagertatx": {
+	source: "iana"
+},
+	"application/vnd.openblox.game+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"obgx"
+	]
+},
+	"application/vnd.openblox.game-binary": {
+	source: "iana"
+},
+	"application/vnd.openeye.oeb": {
+	source: "iana"
+},
+	"application/vnd.openofficeorg.extension": {
+	source: "apache",
+	extensions: [
+		"oxt"
+	]
+},
+	"application/vnd.openstreetmap.data+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"osm"
+	]
+},
+	"application/vnd.opentimestamps.ots": {
+	source: "iana"
+},
+	"application/vnd.openxmlformats-officedocument.custom-properties+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.customxmlproperties+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawing+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawingml.chart+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawingml.chartshapes+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawingml.diagramcolors+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawingml.diagramdata+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawingml.diagramlayout+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.drawingml.diagramstyle+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.extended-properties+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.commentauthors+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.comments+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.handoutmaster+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.notesmaster+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.notesslide+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"pptx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.presprops+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slide": {
+	source: "iana",
+	extensions: [
+		"sldx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slide+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slidelayout+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slidemaster+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slideshow": {
+	source: "iana",
+	extensions: [
+		"ppsx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.slideupdateinfo+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.tablestyles+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.tags+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.template": {
+	source: "iana",
+	extensions: [
+		"potx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.template.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.presentationml.viewprops+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.calcchain+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.externallink+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.pivotcachedefinition+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.pivotcacherecords+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.pivottable+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.querytable+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.revisionheaders+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.revisionlog+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedstrings+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"xlsx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheetmetadata+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.tablesinglecells+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.template": {
+	source: "iana",
+	extensions: [
+		"xltx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.usernames+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.volatiledependencies+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.theme+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.themeoverride+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.vmldrawing": {
+	source: "iana"
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"docx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document.glossary+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.fonttable+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.template": {
+	source: "iana",
+	extensions: [
+		"dotx"
+	]
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.websettings+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-package.core-properties+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-package.digital-signature-xmlsignature+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.openxmlformats-package.relationships+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oracle.resource+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.orange.indata": {
+	source: "iana"
+},
+	"application/vnd.osa.netdeploy": {
+	source: "iana"
+},
+	"application/vnd.osgeo.mapguide.package": {
+	source: "iana",
+	extensions: [
+		"mgp"
+	]
+},
+	"application/vnd.osgi.bundle": {
+	source: "iana"
+},
+	"application/vnd.osgi.dp": {
+	source: "iana",
+	extensions: [
+		"dp"
+	]
+},
+	"application/vnd.osgi.subsystem": {
+	source: "iana",
+	extensions: [
+		"esa"
+	]
+},
+	"application/vnd.otps.ct-kip+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.oxli.countgraph": {
+	source: "iana"
+},
+	"application/vnd.pagerduty+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.palm": {
+	source: "iana",
+	extensions: [
+		"pdb",
+		"pqa",
+		"oprc"
+	]
+},
+	"application/vnd.panoply": {
+	source: "iana"
+},
+	"application/vnd.paos.xml": {
+	source: "iana"
+},
+	"application/vnd.patentdive": {
+	source: "iana"
+},
+	"application/vnd.patientecommsdoc": {
+	source: "iana"
+},
+	"application/vnd.pawaafile": {
+	source: "iana",
+	extensions: [
+		"paw"
+	]
+},
+	"application/vnd.pcos": {
+	source: "iana"
+},
+	"application/vnd.pg.format": {
+	source: "iana",
+	extensions: [
+		"str"
+	]
+},
+	"application/vnd.pg.osasli": {
+	source: "iana",
+	extensions: [
+		"ei6"
+	]
+},
+	"application/vnd.piaccess.application-licence": {
+	source: "iana"
+},
+	"application/vnd.picsel": {
+	source: "iana",
+	extensions: [
+		"efif"
+	]
+},
+	"application/vnd.pmi.widget": {
+	source: "iana",
+	extensions: [
+		"wg"
+	]
+},
+	"application/vnd.poc.group-advertisement+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.pocketlearn": {
+	source: "iana",
+	extensions: [
+		"plf"
+	]
+},
+	"application/vnd.powerbuilder6": {
+	source: "iana",
+	extensions: [
+		"pbd"
+	]
+},
+	"application/vnd.powerbuilder6-s": {
+	source: "iana"
+},
+	"application/vnd.powerbuilder7": {
+	source: "iana"
+},
+	"application/vnd.powerbuilder7-s": {
+	source: "iana"
+},
+	"application/vnd.powerbuilder75": {
+	source: "iana"
+},
+	"application/vnd.powerbuilder75-s": {
+	source: "iana"
+},
+	"application/vnd.preminet": {
+	source: "iana"
+},
+	"application/vnd.previewsystems.box": {
+	source: "iana",
+	extensions: [
+		"box"
+	]
+},
+	"application/vnd.proteus.magazine": {
+	source: "iana",
+	extensions: [
+		"mgz"
+	]
+},
+	"application/vnd.psfs": {
+	source: "iana"
+},
+	"application/vnd.publishare-delta-tree": {
+	source: "iana",
+	extensions: [
+		"qps"
+	]
+},
+	"application/vnd.pvi.ptid1": {
+	source: "iana",
+	extensions: [
+		"ptid"
+	]
+},
+	"application/vnd.pwg-multiplexed": {
+	source: "iana"
+},
+	"application/vnd.pwg-xhtml-print+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.qualcomm.brew-app-res": {
+	source: "iana"
+},
+	"application/vnd.quarantainenet": {
+	source: "iana"
+},
+	"application/vnd.quark.quarkxpress": {
+	source: "iana",
+	extensions: [
+		"qxd",
+		"qxt",
+		"qwd",
+		"qwt",
+		"qxl",
+		"qxb"
+	]
+},
+	"application/vnd.quobject-quoxdocument": {
+	source: "iana"
+},
+	"application/vnd.radisys.moml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-audit+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-audit-conf+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-audit-conn+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-audit-dialog+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-audit-stream+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-conf+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog-base+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog-fax-detect+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog-fax-sendrecv+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog-group+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog-speech+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.radisys.msml-dialog-transform+xml": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.rainstor.data": {
+	source: "iana"
+},
+	"application/vnd.rapid": {
+	source: "iana"
+},
+	"application/vnd.rar": {
+	source: "iana",
+	extensions: [
+		"rar"
+	]
+},
+	"application/vnd.realvnc.bed": {
+	source: "iana",
+	extensions: [
+		"bed"
+	]
+},
+	"application/vnd.recordare.musicxml": {
+	source: "iana",
+	extensions: [
+		"mxl"
+	]
+},
+	"application/vnd.recordare.musicxml+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"musicxml"
+	]
+},
+	"application/vnd.renlearn.rlprint": {
+	source: "iana"
+},
+	"application/vnd.resilient.logic": {
+	source: "iana"
+},
+	"application/vnd.restful+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.rig.cryptonote": {
+	source: "iana",
+	extensions: [
+		"cryptonote"
+	]
+},
+	"application/vnd.rim.cod": {
+	source: "apache",
+	extensions: [
+		"cod"
+	]
+},
+	"application/vnd.rn-realmedia": {
+	source: "apache",
+	extensions: [
+		"rm"
+	]
+},
+	"application/vnd.rn-realmedia-vbr": {
+	source: "apache",
+	extensions: [
+		"rmvb"
+	]
+},
+	"application/vnd.route66.link66+xml": {
+	source: "iana",
+	compressible: true,
+	extensions: [
+		"link66"
+	]
+},
+	"application/vnd.rs-274x": {
+	source: "iana"
+},
+	"application/vnd.ruckus.download": {
+	source: "iana"
+},
+	"application/vnd.s3sms": {
+	source: "iana"
+},
+	"application/vnd.sailingtracker.track": {
+	source: "iana",
+	extensions: [
+		"st"
+	]
+},
+	"application/vnd.sar": {
+	source: "iana"
+},
+	"application/vnd.sbm.cid": {
+	source: "iana"
+},
+	"application/vnd.sbm.mid2": {
+	source: "iana"
+},
+	"application/vnd.scribus": {
+	source: "iana"
+},
+	"application/vnd.sealed.3df": {
+	source: "iana"
+},
+	"application/vnd.sealed.csf": {
+	source: "iana"
+},
+	"application/vnd.sealed.doc": {
+	source: "iana"
+},
+	"application/vnd.sealed.eml": {
+	source: "iana"
+},
+	"application/vnd.sealed.mht": {
+	source: "iana"
+},
+	"application/vnd.sealed.net": {
+	source: "iana"
+},
+	"application/vnd.sealed.ppt": {
+	source: "iana"
+},
+	"application/vnd.sealed.tiff": {
+	source: "iana"
+},
+	"application/vnd.sealed.xls": {
+	source: "iana"
+},
+	"application/vnd.sealedmedia.softseal.html": {
+	source: "iana"
+},
+	"application/vnd.sealedmedia.softseal.pdf": {
+	source: "iana"
+},
+	"application/vnd.seemail": {
+	source: "iana",
+	extensions: [
+		"see"
+	]
+},
+	"application/vnd.seis+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.sema": {
+	source: "iana",
+	extensions: [
+		"sema"
+	]
+},
+	"application/vnd.semd": {
+	source: "iana",
+	extensions: [
+		"semd"
+	]
+},
+	"application/vnd.semf": {
+	source: "iana",
+	extensions: [
+		"semf"
+	]
+},
+	"application/vnd.shade-save-file": {
+	source: "iana"
+},
+	"application/vnd.shana.informed.formdata": {
+	source: "iana",
+	extensions: [
+		"ifm"
+	]
+},
+	"application/vnd.shana.informed.formtemplate": {
+	source: "iana",
+	extensions: [
+		"itp"
+	]
+},
+	"application/vnd.shana.informed.interchange": {
+	source: "iana",
+	extensions: [
+		"iif"
+	]
+},
+	"application/vnd.shana.informed.package": {
+	source: "iana",
+	extensions: [
+		"ipk"
+	]
+},
+	"application/vnd.shootproof+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.shopkick+json": {
+	source: "iana",
+	compressible: true
+},
+	"application/vnd.shp": {
+	source: "iana"
+},
+	"application/vnd.shx": {
+	source: "iana"
+},
+	"application/vnd.sigrok.session": {
+	source: "iana"
+},
+	"application/vnd.simtech-mindmapper": {
+	source: "iana",
+	extensions: [
