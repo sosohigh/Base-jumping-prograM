@@ -164364,3 +164364,2216 @@ var require$$0$2 = {
 	"video/mp4v-es": {
 	source: "iana"
 },
+	"video/mpeg": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"mpeg",
+		"mpg",
+		"mpe",
+		"m1v",
+		"m2v"
+	]
+},
+	"video/mpeg4-generic": {
+	source: "iana"
+},
+	"video/mpv": {
+	source: "iana"
+},
+	"video/nv": {
+	source: "iana"
+},
+	"video/ogg": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"ogv"
+	]
+},
+	"video/parityfec": {
+	source: "iana"
+},
+	"video/pointer": {
+	source: "iana"
+},
+	"video/quicktime": {
+	source: "iana",
+	compressible: false,
+	extensions: [
+		"qt",
+		"mov"
+	]
+},
+	"video/raptorfec": {
+	source: "iana"
+},
+	"video/raw": {
+	source: "iana"
+},
+	"video/rtp-enc-aescm128": {
+	source: "iana"
+},
+	"video/rtploopback": {
+	source: "iana"
+},
+	"video/rtx": {
+	source: "iana"
+},
+	"video/scip": {
+	source: "iana"
+},
+	"video/smpte291": {
+	source: "iana"
+},
+	"video/smpte292m": {
+	source: "iana"
+},
+	"video/ulpfec": {
+	source: "iana"
+},
+	"video/vc1": {
+	source: "iana"
+},
+	"video/vc2": {
+	source: "iana"
+},
+	"video/vnd.cctv": {
+	source: "iana"
+},
+	"video/vnd.dece.hd": {
+	source: "iana",
+	extensions: [
+		"uvh",
+		"uvvh"
+	]
+},
+	"video/vnd.dece.mobile": {
+	source: "iana",
+	extensions: [
+		"uvm",
+		"uvvm"
+	]
+},
+	"video/vnd.dece.mp4": {
+	source: "iana"
+},
+	"video/vnd.dece.pd": {
+	source: "iana",
+	extensions: [
+		"uvp",
+		"uvvp"
+	]
+},
+	"video/vnd.dece.sd": {
+	source: "iana",
+	extensions: [
+		"uvs",
+		"uvvs"
+	]
+},
+	"video/vnd.dece.video": {
+	source: "iana",
+	extensions: [
+		"uvv",
+		"uvvv"
+	]
+},
+	"video/vnd.directv.mpeg": {
+	source: "iana"
+},
+	"video/vnd.directv.mpeg-tts": {
+	source: "iana"
+},
+	"video/vnd.dlna.mpeg-tts": {
+	source: "iana"
+},
+	"video/vnd.dvb.file": {
+	source: "iana",
+	extensions: [
+		"dvb"
+	]
+},
+	"video/vnd.fvt": {
+	source: "iana",
+	extensions: [
+		"fvt"
+	]
+},
+	"video/vnd.hns.video": {
+	source: "iana"
+},
+	"video/vnd.iptvforum.1dparityfec-1010": {
+	source: "iana"
+},
+	"video/vnd.iptvforum.1dparityfec-2005": {
+	source: "iana"
+},
+	"video/vnd.iptvforum.2dparityfec-1010": {
+	source: "iana"
+},
+	"video/vnd.iptvforum.2dparityfec-2005": {
+	source: "iana"
+},
+	"video/vnd.iptvforum.ttsavc": {
+	source: "iana"
+},
+	"video/vnd.iptvforum.ttsmpeg2": {
+	source: "iana"
+},
+	"video/vnd.motorola.video": {
+	source: "iana"
+},
+	"video/vnd.motorola.videop": {
+	source: "iana"
+},
+	"video/vnd.mpegurl": {
+	source: "iana",
+	extensions: [
+		"mxu",
+		"m4u"
+	]
+},
+	"video/vnd.ms-playready.media.pyv": {
+	source: "iana",
+	extensions: [
+		"pyv"
+	]
+},
+	"video/vnd.nokia.interleaved-multimedia": {
+	source: "iana"
+},
+	"video/vnd.nokia.mp4vr": {
+	source: "iana"
+},
+	"video/vnd.nokia.videovoip": {
+	source: "iana"
+},
+	"video/vnd.objectvideo": {
+	source: "iana"
+},
+	"video/vnd.radgamettools.bink": {
+	source: "iana"
+},
+	"video/vnd.radgamettools.smacker": {
+	source: "iana"
+},
+	"video/vnd.sealed.mpeg1": {
+	source: "iana"
+},
+	"video/vnd.sealed.mpeg4": {
+	source: "iana"
+},
+	"video/vnd.sealed.swf": {
+	source: "iana"
+},
+	"video/vnd.sealedmedia.softseal.mov": {
+	source: "iana"
+},
+	"video/vnd.uvvu.mp4": {
+	source: "iana",
+	extensions: [
+		"uvu",
+		"uvvu"
+	]
+},
+	"video/vnd.vivo": {
+	source: "iana",
+	extensions: [
+		"viv"
+	]
+},
+	"video/vnd.youtube.yt": {
+	source: "iana"
+},
+	"video/vp8": {
+	source: "iana"
+},
+	"video/vp9": {
+	source: "iana"
+},
+	"video/webm": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"webm"
+	]
+},
+	"video/x-f4v": {
+	source: "apache",
+	extensions: [
+		"f4v"
+	]
+},
+	"video/x-fli": {
+	source: "apache",
+	extensions: [
+		"fli"
+	]
+},
+	"video/x-flv": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"flv"
+	]
+},
+	"video/x-m4v": {
+	source: "apache",
+	extensions: [
+		"m4v"
+	]
+},
+	"video/x-matroska": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"mkv",
+		"mk3d",
+		"mks"
+	]
+},
+	"video/x-mng": {
+	source: "apache",
+	extensions: [
+		"mng"
+	]
+},
+	"video/x-ms-asf": {
+	source: "apache",
+	extensions: [
+		"asf",
+		"asx"
+	]
+},
+	"video/x-ms-vob": {
+	source: "apache",
+	extensions: [
+		"vob"
+	]
+},
+	"video/x-ms-wm": {
+	source: "apache",
+	extensions: [
+		"wm"
+	]
+},
+	"video/x-ms-wmv": {
+	source: "apache",
+	compressible: false,
+	extensions: [
+		"wmv"
+	]
+},
+	"video/x-ms-wmx": {
+	source: "apache",
+	extensions: [
+		"wmx"
+	]
+},
+	"video/x-ms-wvx": {
+	source: "apache",
+	extensions: [
+		"wvx"
+	]
+},
+	"video/x-msvideo": {
+	source: "apache",
+	extensions: [
+		"avi"
+	]
+},
+	"video/x-sgi-movie": {
+	source: "apache",
+	extensions: [
+		"movie"
+	]
+},
+	"video/x-smv": {
+	source: "apache",
+	extensions: [
+		"smv"
+	]
+},
+	"x-conference/x-cooltalk": {
+	source: "apache",
+	extensions: [
+		"ice"
+	]
+},
+	"x-shader/x-fragment": {
+	compressible: true
+},
+	"x-shader/x-vertex": {
+	compressible: true
+}
+};
+
+/*!
+ * mime-db
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2015-2022 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (module) {
+	/**
+	 * Module exports.
+	 */
+
+	module.exports = require$$0$2;
+} (mimeDb));
+
+/*!
+ * mime-types
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (exports) {
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var db = mimeDbExports;
+	var extname = require$$0$c.extname;
+
+	/**
+	 * Module variables.
+	 * @private
+	 */
+
+	var EXTRACT_TYPE_REGEXP = /^\s*([^;\s]*)(?:;|\s|$)/;
+	var TEXT_TYPE_REGEXP = /^text\//i;
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	exports.charset = charset;
+	exports.charsets = { lookup: charset };
+	exports.contentType = contentType;
+	exports.extension = extension;
+	exports.extensions = Object.create(null);
+	exports.lookup = lookup;
+	exports.types = Object.create(null);
+
+	// Populate the extensions/types maps
+	populateMaps(exports.extensions, exports.types);
+
+	/**
+	 * Get the default charset for a MIME type.
+	 *
+	 * @param {string} type
+	 * @return {boolean|string}
+	 */
+
+	function charset (type) {
+	  if (!type || typeof type !== 'string') {
+	    return false
+	  }
+
+	  // TODO: use media-typer
+	  var match = EXTRACT_TYPE_REGEXP.exec(type);
+	  var mime = match && db[match[1].toLowerCase()];
+
+	  if (mime && mime.charset) {
+	    return mime.charset
+	  }
+
+	  // default text/* to utf-8
+	  if (match && TEXT_TYPE_REGEXP.test(match[1])) {
+	    return 'UTF-8'
+	  }
+
+	  return false
+	}
+
+	/**
+	 * Create a full Content-Type header given a MIME type or extension.
+	 *
+	 * @param {string} str
+	 * @return {boolean|string}
+	 */
+
+	function contentType (str) {
+	  // TODO: should this even be in this module?
+	  if (!str || typeof str !== 'string') {
+	    return false
+	  }
+
+	  var mime = str.indexOf('/') === -1
+	    ? exports.lookup(str)
+	    : str;
+
+	  if (!mime) {
+	    return false
+	  }
+
+	  // TODO: use content-type or other module
+	  if (mime.indexOf('charset') === -1) {
+	    var charset = exports.charset(mime);
+	    if (charset) mime += '; charset=' + charset.toLowerCase();
+	  }
+
+	  return mime
+	}
+
+	/**
+	 * Get the default extension for a MIME type.
+	 *
+	 * @param {string} type
+	 * @return {boolean|string}
+	 */
+
+	function extension (type) {
+	  if (!type || typeof type !== 'string') {
+	    return false
+	  }
+
+	  // TODO: use media-typer
+	  var match = EXTRACT_TYPE_REGEXP.exec(type);
+
+	  // get extensions
+	  var exts = match && exports.extensions[match[1].toLowerCase()];
+
+	  if (!exts || !exts.length) {
+	    return false
+	  }
+
+	  return exts[0]
+	}
+
+	/**
+	 * Lookup the MIME type for a file path/extension.
+	 *
+	 * @param {string} path
+	 * @return {boolean|string}
+	 */
+
+	function lookup (path) {
+	  if (!path || typeof path !== 'string') {
+	    return false
+	  }
+
+	  // get the extension ("ext" or ".ext" or full path)
+	  var extension = extname('x.' + path)
+	    .toLowerCase()
+	    .substr(1);
+
+	  if (!extension) {
+	    return false
+	  }
+
+	  return exports.types[extension] || false
+	}
+
+	/**
+	 * Populate the extensions and types maps.
+	 * @private
+	 */
+
+	function populateMaps (extensions, types) {
+	  // source preference (least -> most)
+	  var preference = ['nginx', 'apache', undefined, 'iana'];
+
+	  Object.keys(db).forEach(function forEachMimeType (type) {
+	    var mime = db[type];
+	    var exts = mime.extensions;
+
+	    if (!exts || !exts.length) {
+	      return
+	    }
+
+	    // mime -> extensions
+	    extensions[type] = exts;
+
+	    // extension -> mime
+	    for (var i = 0; i < exts.length; i++) {
+	      var extension = exts[i];
+
+	      if (types[extension]) {
+	        var from = preference.indexOf(db[types[extension]].source);
+	        var to = preference.indexOf(mime.source);
+
+	        if (types[extension] !== 'application/octet-stream' &&
+	          (from > to || (from === to && types[extension].substr(0, 12) === 'application/'))) {
+	          // skip the remapping
+	          continue
+	        }
+	      }
+
+	      // set the extension -> mime
+	      types[extension] = type;
+	    }
+	  });
+	}
+} (mimeTypes));
+
+/*!
+ * type-is
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var typer = mediaTyper;
+var mime$5 = mimeTypes;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+typeIs.exports = typeofrequest;
+typeIsExports.is = typeis$1;
+typeIsExports.hasBody = hasbody;
+typeIsExports.normalize = normalize$2;
+typeIsExports.match = mimeMatch;
+
+/**
+ * Compare a `value` content-type with `types`.
+ * Each `type` can be an extension like `html`,
+ * a special shortcut like `multipart` or `urlencoded`,
+ * or a mime type.
+ *
+ * If no types match, `false` is returned.
+ * Otherwise, the first `type` that matches is returned.
+ *
+ * @param {String} value
+ * @param {Array} types
+ * @public
+ */
+
+function typeis$1 (value, types_) {
+  var i;
+  var types = types_;
+
+  // remove parameters and normalize
+  var val = tryNormalizeType(value);
+
+  // no type or invalid
+  if (!val) {
+    return false
+  }
+
+  // support flattened arguments
+  if (types && !Array.isArray(types)) {
+    types = new Array(arguments.length - 1);
+    for (i = 0; i < types.length; i++) {
+      types[i] = arguments[i + 1];
+    }
+  }
+
+  // no types, return the content type
+  if (!types || !types.length) {
+    return val
+  }
+
+  var type;
+  for (i = 0; i < types.length; i++) {
+    if (mimeMatch(normalize$2(type = types[i]), val)) {
+      return type[0] === '+' || type.indexOf('*') !== -1
+        ? val
+        : type
+    }
+  }
+
+  // no matches
+  return false
+}
+
+/**
+ * Check if a request has a request body.
+ * A request with a body __must__ either have `transfer-encoding`
+ * or `content-length` headers set.
+ * http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.3
+ *
+ * @param {Object} request
+ * @return {Boolean}
+ * @public
+ */
+
+function hasbody (req) {
+  return req.headers['transfer-encoding'] !== undefined ||
+    !isNaN(req.headers['content-length'])
+}
+
+/**
+ * Check if the incoming request contains the "Content-Type"
+ * header field, and it contains any of the give mime `type`s.
+ * If there is no request body, `null` is returned.
+ * If there is no content type, `false` is returned.
+ * Otherwise, it returns the first `type` that matches.
+ *
+ * Examples:
+ *
+ *     // With Content-Type: text/html; charset=utf-8
+ *     this.is('html'); // => 'html'
+ *     this.is('text/html'); // => 'text/html'
+ *     this.is('text/*', 'application/json'); // => 'text/html'
+ *
+ *     // When Content-Type is application/json
+ *     this.is('json', 'urlencoded'); // => 'json'
+ *     this.is('application/json'); // => 'application/json'
+ *     this.is('html', 'application/*'); // => 'application/json'
+ *
+ *     this.is('html'); // => false
+ *
+ * @param {String|Array} types...
+ * @return {String|false|null}
+ * @public
+ */
+
+function typeofrequest (req, types_) {
+  var types = types_;
+
+  // no body
+  if (!hasbody(req)) {
+    return null
+  }
+
+  // support flattened arguments
+  if (arguments.length > 2) {
+    types = new Array(arguments.length - 1);
+    for (var i = 0; i < types.length; i++) {
+      types[i] = arguments[i + 1];
+    }
+  }
+
+  // request content type
+  var value = req.headers['content-type'];
+
+  return typeis$1(value, types)
+}
+
+/**
+ * Normalize a mime type.
+ * If it's a shorthand, expand it to a valid mime type.
+ *
+ * In general, you probably want:
+ *
+ *   var type = is(req, ['urlencoded', 'json', 'multipart']);
+ *
+ * Then use the appropriate body parsers.
+ * These three are the most common request body types
+ * and are thus ensured to work.
+ *
+ * @param {String} type
+ * @private
+ */
+
+function normalize$2 (type) {
+  if (typeof type !== 'string') {
+    // invalid type
+    return false
+  }
+
+  switch (type) {
+    case 'urlencoded':
+      return 'application/x-www-form-urlencoded'
+    case 'multipart':
+      return 'multipart/*'
+  }
+
+  if (type[0] === '+') {
+    // "+json" -> "*/*+json" expando
+    return '*/*' + type
+  }
+
+  return type.indexOf('/') === -1
+    ? mime$5.lookup(type)
+    : type
+}
+
+/**
+ * Check if `expected` mime type
+ * matches `actual` mime type with
+ * wildcard and +suffix support.
+ *
+ * @param {String} expected
+ * @param {String} actual
+ * @return {Boolean}
+ * @private
+ */
+
+function mimeMatch (expected, actual) {
+  // invalid type
+  if (expected === false) {
+    return false
+  }
+
+  // split types
+  var actualParts = actual.split('/');
+  var expectedParts = expected.split('/');
+
+  // invalid format
+  if (actualParts.length !== 2 || expectedParts.length !== 2) {
+    return false
+  }
+
+  // validate type
+  if (expectedParts[0] !== '*' && expectedParts[0] !== actualParts[0]) {
+    return false
+  }
+
+  // validate suffix wildcard
+  if (expectedParts[1].substr(0, 2) === '*+') {
+    return expectedParts[1].length <= actualParts[1].length + 1 &&
+      expectedParts[1].substr(1) === actualParts[1].substr(1 - expectedParts[1].length)
+  }
+
+  // validate subtype
+  if (expectedParts[1] !== '*' && expectedParts[1] !== actualParts[1]) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Normalize a type and remove parameters.
+ *
+ * @param {string} value
+ * @return {string}
+ * @private
+ */
+
+function normalizeType$1 (value) {
+  // parse the type
+  var type = typer.parse(value);
+
+  // remove the parameters
+  type.parameters = undefined;
+
+  // reformat it
+  return typer.format(type)
+}
+
+/**
+ * Try to normalize a type and remove parameters.
+ *
+ * @param {string} value
+ * @return {string}
+ * @private
+ */
+
+function tryNormalizeType (value) {
+  if (!value) {
+    return null
+  }
+
+  try {
+    return normalizeType$1(value)
+  } catch (err) {
+    return null
+  }
+}
+
+/*!
+ * body-parser
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var json_1;
+var hasRequiredJson$2;
+
+function requireJson$2 () {
+	if (hasRequiredJson$2) return json_1;
+	hasRequiredJson$2 = 1;
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var bytes = requireBytes();
+	var contentType$1 = contentType;
+	var createError = httpErrorsExports;
+	var debug = requireSrc$1()('body-parser:json');
+	var read = requireRead();
+	var typeis = typeIsExports;
+
+	/**
+	 * Module exports.
+	 */
+
+	json_1 = json;
+
+	/**
+	 * RegExp to match the first non-space in a string.
+	 *
+	 * Allowed whitespace is defined in RFC 7159:
+	 *
+	 *    ws = *(
+	 *            %x20 /              ; Space
+	 *            %x09 /              ; Horizontal tab
+	 *            %x0A /              ; Line feed or New line
+	 *            %x0D )              ; Carriage return
+	 */
+
+	var FIRST_CHAR_REGEXP = /^[\x20\x09\x0a\x0d]*([^\x20\x09\x0a\x0d])/; // eslint-disable-line no-control-regex
+
+	/**
+	 * Create a middleware to parse JSON bodies.
+	 *
+	 * @param {object} [options]
+	 * @return {function}
+	 * @public
+	 */
+
+	function json (options) {
+	  var opts = options || {};
+
+	  var limit = typeof opts.limit !== 'number'
+	    ? bytes.parse(opts.limit || '100kb')
+	    : opts.limit;
+	  var inflate = opts.inflate !== false;
+	  var reviver = opts.reviver;
+	  var strict = opts.strict !== false;
+	  var type = opts.type || 'application/json';
+	  var verify = opts.verify || false;
+
+	  if (verify !== false && typeof verify !== 'function') {
+	    throw new TypeError('option verify must be function')
+	  }
+
+	  // create the appropriate type checking function
+	  var shouldParse = typeof type !== 'function'
+	    ? typeChecker(type)
+	    : type;
+
+	  function parse (body) {
+	    if (body.length === 0) {
+	      // special-case empty json body, as it's a common client-side mistake
+	      // TODO: maybe make this configurable or part of "strict" option
+	      return {}
+	    }
+
+	    if (strict) {
+	      var first = firstchar(body);
+
+	      if (first !== '{' && first !== '[') {
+	        debug('strict violation');
+	        throw createStrictSyntaxError(body, first)
+	      }
+	    }
+
+	    try {
+	      debug('parse json');
+	      return JSON.parse(body, reviver)
+	    } catch (e) {
+	      throw normalizeJsonSyntaxError(e, {
+	        message: e.message,
+	        stack: e.stack
+	      })
+	    }
+	  }
+
+	  return function jsonParser (req, res, next) {
+	    if (req._body) {
+	      debug('body already parsed');
+	      next();
+	      return
+	    }
+
+	    req.body = req.body || {};
+
+	    // skip requests without bodies
+	    if (!typeis.hasBody(req)) {
+	      debug('skip empty body');
+	      next();
+	      return
+	    }
+
+	    debug('content-type %j', req.headers['content-type']);
+
+	    // determine if request should be parsed
+	    if (!shouldParse(req)) {
+	      debug('skip parsing');
+	      next();
+	      return
+	    }
+
+	    // assert charset per RFC 7159 sec 8.1
+	    var charset = getCharset(req) || 'utf-8';
+	    if (charset.slice(0, 4) !== 'utf-') {
+	      debug('invalid charset');
+	      next(createError(415, 'unsupported charset "' + charset.toUpperCase() + '"', {
+	        charset: charset,
+	        type: 'charset.unsupported'
+	      }));
+	      return
+	    }
+
+	    // read
+	    read(req, res, next, parse, debug, {
+	      encoding: charset,
+	      inflate: inflate,
+	      limit: limit,
+	      verify: verify
+	    });
+	  }
+	}
+
+	/**
+	 * Create strict violation syntax error matching native error.
+	 *
+	 * @param {string} str
+	 * @param {string} char
+	 * @return {Error}
+	 * @private
+	 */
+
+	function createStrictSyntaxError (str, char) {
+	  var index = str.indexOf(char);
+	  var partial = index !== -1
+	    ? str.substring(0, index) + '#'
+	    : '';
+
+	  try {
+	    JSON.parse(partial); /* istanbul ignore next */ throw new SyntaxError('strict violation')
+	  } catch (e) {
+	    return normalizeJsonSyntaxError(e, {
+	      message: e.message.replace('#', char),
+	      stack: e.stack
+	    })
+	  }
+	}
+
+	/**
+	 * Get the first non-whitespace character in a string.
+	 *
+	 * @param {string} str
+	 * @return {function}
+	 * @private
+	 */
+
+	function firstchar (str) {
+	  var match = FIRST_CHAR_REGEXP.exec(str);
+
+	  return match
+	    ? match[1]
+	    : undefined
+	}
+
+	/**
+	 * Get the charset of a request.
+	 *
+	 * @param {object} req
+	 * @api private
+	 */
+
+	function getCharset (req) {
+	  try {
+	    return (contentType$1.parse(req).parameters.charset || '').toLowerCase()
+	  } catch (e) {
+	    return undefined
+	  }
+	}
+
+	/**
+	 * Normalize a SyntaxError for JSON.parse.
+	 *
+	 * @param {SyntaxError} error
+	 * @param {object} obj
+	 * @return {SyntaxError}
+	 */
+
+	function normalizeJsonSyntaxError (error, obj) {
+	  var keys = Object.getOwnPropertyNames(error);
+
+	  for (var i = 0; i < keys.length; i++) {
+	    var key = keys[i];
+	    if (key !== 'stack' && key !== 'message') {
+	      delete error[key];
+	    }
+	  }
+
+	  // replace stack before message for Node.js 0.10 and below
+	  error.stack = obj.stack.replace(error.message, obj.message);
+	  error.message = obj.message;
+
+	  return error
+	}
+
+	/**
+	 * Get the simple type checker.
+	 *
+	 * @param {string} type
+	 * @return {function}
+	 */
+
+	function typeChecker (type) {
+	  return function checkType (req) {
+	    return Boolean(typeis(req, type))
+	  }
+	}
+	return json_1;
+}
+
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var raw_1;
+var hasRequiredRaw$1;
+
+function requireRaw$1 () {
+	if (hasRequiredRaw$1) return raw_1;
+	hasRequiredRaw$1 = 1;
+
+	/**
+	 * Module dependencies.
+	 */
+
+	var bytes = requireBytes();
+	var debug = requireSrc$1()('body-parser:raw');
+	var read = requireRead();
+	var typeis = typeIsExports;
+
+	/**
+	 * Module exports.
+	 */
+
+	raw_1 = raw;
+
+	/**
+	 * Create a middleware to parse raw bodies.
+	 *
+	 * @param {object} [options]
+	 * @return {function}
+	 * @api public
+	 */
+
+	function raw (options) {
+	  var opts = options || {};
+
+	  var inflate = opts.inflate !== false;
+	  var limit = typeof opts.limit !== 'number'
+	    ? bytes.parse(opts.limit || '100kb')
+	    : opts.limit;
+	  var type = opts.type || 'application/octet-stream';
+	  var verify = opts.verify || false;
+
+	  if (verify !== false && typeof verify !== 'function') {
+	    throw new TypeError('option verify must be function')
+	  }
+
+	  // create the appropriate type checking function
+	  var shouldParse = typeof type !== 'function'
+	    ? typeChecker(type)
+	    : type;
+
+	  function parse (buf) {
+	    return buf
+	  }
+
+	  return function rawParser (req, res, next) {
+	    if (req._body) {
+	      debug('body already parsed');
+	      next();
+	      return
+	    }
+
+	    req.body = req.body || {};
+
+	    // skip requests without bodies
+	    if (!typeis.hasBody(req)) {
+	      debug('skip empty body');
+	      next();
+	      return
+	    }
+
+	    debug('content-type %j', req.headers['content-type']);
+
+	    // determine if request should be parsed
+	    if (!shouldParse(req)) {
+	      debug('skip parsing');
+	      next();
+	      return
+	    }
+
+	    // read
+	    read(req, res, next, parse, debug, {
+	      encoding: null,
+	      inflate: inflate,
+	      limit: limit,
+	      verify: verify
+	    });
+	  }
+	}
+
+	/**
+	 * Get the simple type checker.
+	 *
+	 * @param {string} type
+	 * @return {function}
+	 */
+
+	function typeChecker (type) {
+	  return function checkType (req) {
+	    return Boolean(typeis(req, type))
+	  }
+	}
+	return raw_1;
+}
+
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var text_1;
+var hasRequiredText$1;
+
+function requireText$1 () {
+	if (hasRequiredText$1) return text_1;
+	hasRequiredText$1 = 1;
+
+	/**
+	 * Module dependencies.
+	 */
+
+	var bytes = requireBytes();
+	var contentType$1 = contentType;
+	var debug = requireSrc$1()('body-parser:text');
+	var read = requireRead();
+	var typeis = typeIsExports;
+
+	/**
+	 * Module exports.
+	 */
+
+	text_1 = text;
+
+	/**
+	 * Create a middleware to parse text bodies.
+	 *
+	 * @param {object} [options]
+	 * @return {function}
+	 * @api public
+	 */
+
+	function text (options) {
+	  var opts = options || {};
+
+	  var defaultCharset = opts.defaultCharset || 'utf-8';
+	  var inflate = opts.inflate !== false;
+	  var limit = typeof opts.limit !== 'number'
+	    ? bytes.parse(opts.limit || '100kb')
+	    : opts.limit;
+	  var type = opts.type || 'text/plain';
+	  var verify = opts.verify || false;
+
+	  if (verify !== false && typeof verify !== 'function') {
+	    throw new TypeError('option verify must be function')
+	  }
+
+	  // create the appropriate type checking function
+	  var shouldParse = typeof type !== 'function'
+	    ? typeChecker(type)
+	    : type;
+
+	  function parse (buf) {
+	    return buf
+	  }
+
+	  return function textParser (req, res, next) {
+	    if (req._body) {
+	      debug('body already parsed');
+	      next();
+	      return
+	    }
+
+	    req.body = req.body || {};
+
+	    // skip requests without bodies
+	    if (!typeis.hasBody(req)) {
+	      debug('skip empty body');
+	      next();
+	      return
+	    }
+
+	    debug('content-type %j', req.headers['content-type']);
+
+	    // determine if request should be parsed
+	    if (!shouldParse(req)) {
+	      debug('skip parsing');
+	      next();
+	      return
+	    }
+
+	    // get charset
+	    var charset = getCharset(req) || defaultCharset;
+
+	    // read
+	    read(req, res, next, parse, debug, {
+	      encoding: charset,
+	      inflate: inflate,
+	      limit: limit,
+	      verify: verify
+	    });
+	  }
+	}
+
+	/**
+	 * Get the charset of a request.
+	 *
+	 * @param {object} req
+	 * @api private
+	 */
+
+	function getCharset (req) {
+	  try {
+	    return (contentType$1.parse(req).parameters.charset || '').toLowerCase()
+	  } catch (e) {
+	    return undefined
+	  }
+	}
+
+	/**
+	 * Get the simple type checker.
+	 *
+	 * @param {string} type
+	 * @return {function}
+	 */
+
+	function typeChecker (type) {
+	  return function checkType (req) {
+	    return Boolean(typeis(req, type))
+	  }
+	}
+	return text_1;
+}
+
+/* eslint complexity: [2, 18], max-statements: [2, 33] */
+var shams = function hasSymbols() {
+	if (typeof Symbol !== 'function' || typeof Object.getOwnPropertySymbols !== 'function') { return false; }
+	if (typeof Symbol.iterator === 'symbol') { return true; }
+
+	var obj = {};
+	var sym = Symbol('test');
+	var symObj = Object(sym);
+	if (typeof sym === 'string') { return false; }
+
+	if (Object.prototype.toString.call(sym) !== '[object Symbol]') { return false; }
+	if (Object.prototype.toString.call(symObj) !== '[object Symbol]') { return false; }
+
+	// temp disabled per https://github.com/ljharb/object.assign/issues/17
+	// if (sym instanceof Symbol) { return false; }
+	// temp disabled per https://github.com/WebReflection/get-own-property-symbols/issues/4
+	// if (!(symObj instanceof Symbol)) { return false; }
+
+	// if (typeof Symbol.prototype.toString !== 'function') { return false; }
+	// if (String(sym) !== Symbol.prototype.toString.call(sym)) { return false; }
+
+	var symVal = 42;
+	obj[sym] = symVal;
+	for (sym in obj) { return false; } // eslint-disable-line no-restricted-syntax, no-unreachable-loop
+	if (typeof Object.keys === 'function' && Object.keys(obj).length !== 0) { return false; }
+
+	if (typeof Object.getOwnPropertyNames === 'function' && Object.getOwnPropertyNames(obj).length !== 0) { return false; }
+
+	var syms = Object.getOwnPropertySymbols(obj);
+	if (syms.length !== 1 || syms[0] !== sym) { return false; }
+
+	if (!Object.prototype.propertyIsEnumerable.call(obj, sym)) { return false; }
+
+	if (typeof Object.getOwnPropertyDescriptor === 'function') {
+		var descriptor = Object.getOwnPropertyDescriptor(obj, sym);
+		if (descriptor.value !== symVal || descriptor.enumerable !== true) { return false; }
+	}
+
+	return true;
+};
+
+var origSymbol = typeof Symbol !== 'undefined' && Symbol;
+var hasSymbolSham = shams;
+
+var hasSymbols$1 = function hasNativeSymbols() {
+	if (typeof origSymbol !== 'function') { return false; }
+	if (typeof Symbol !== 'function') { return false; }
+	if (typeof origSymbol('foo') !== 'symbol') { return false; }
+	if (typeof Symbol('bar') !== 'symbol') { return false; }
+
+	return hasSymbolSham();
+};
+
+/* eslint no-invalid-this: 1 */
+
+var ERROR_MESSAGE = 'Function.prototype.bind called on incompatible ';
+var slice$4 = Array.prototype.slice;
+var toStr$1 = Object.prototype.toString;
+var funcType = '[object Function]';
+
+var implementation$1 = function bind(that) {
+    var target = this;
+    if (typeof target !== 'function' || toStr$1.call(target) !== funcType) {
+        throw new TypeError(ERROR_MESSAGE + target);
+    }
+    var args = slice$4.call(arguments, 1);
+
+    var bound;
+    var binder = function () {
+        if (this instanceof bound) {
+            var result = target.apply(
+                this,
+                args.concat(slice$4.call(arguments))
+            );
+            if (Object(result) === result) {
+                return result;
+            }
+            return this;
+        } else {
+            return target.apply(
+                that,
+                args.concat(slice$4.call(arguments))
+            );
+        }
+    };
+
+    var boundLength = Math.max(0, target.length - args.length);
+    var boundArgs = [];
+    for (var i = 0; i < boundLength; i++) {
+        boundArgs.push('$' + i);
+    }
+
+    bound = Function('binder', 'return function (' + boundArgs.join(',') + '){ return binder.apply(this,arguments); }')(binder);
+
+    if (target.prototype) {
+        var Empty = function Empty() {};
+        Empty.prototype = target.prototype;
+        bound.prototype = new Empty();
+        Empty.prototype = null;
+    }
+
+    return bound;
+};
+
+var implementation = implementation$1;
+
+var functionBind = Function.prototype.bind || implementation;
+
+var bind$1 = functionBind;
+
+var src$5 = bind$1.call(Function.call, Object.prototype.hasOwnProperty);
+
+var undefined$1;
+
+var $SyntaxError = SyntaxError;
+var $Function = Function;
+var $TypeError$1 = TypeError;
+
+// eslint-disable-next-line consistent-return
+var getEvalledConstructor = function (expressionSyntax) {
+	try {
+		return $Function('"use strict"; return (' + expressionSyntax + ').constructor;')();
+	} catch (e) {}
+};
+
+var $gOPD = Object.getOwnPropertyDescriptor;
+if ($gOPD) {
+	try {
+		$gOPD({}, '');
+	} catch (e) {
+		$gOPD = null; // this is IE 8, which has a broken gOPD
+	}
+}
+
+var throwTypeError = function () {
+	throw new $TypeError$1();
+};
+var ThrowTypeError = $gOPD
+	? (function () {
+		try {
+			// eslint-disable-next-line no-unused-expressions, no-caller, no-restricted-properties
+			arguments.callee; // IE 8 does not throw here
+			return throwTypeError;
+		} catch (calleeThrows) {
+			try {
+				// IE 8 throws on Object.getOwnPropertyDescriptor(arguments, '')
+				return $gOPD(arguments, 'callee').get;
+			} catch (gOPDthrows) {
+				return throwTypeError;
+			}
+		}
+	}())
+	: throwTypeError;
+
+var hasSymbols = hasSymbols$1();
+
+var getProto = Object.getPrototypeOf || function (x) { return x.__proto__; }; // eslint-disable-line no-proto
+
+var needsEval = {};
+
+var TypedArray = typeof Uint8Array === 'undefined' ? undefined$1 : getProto(Uint8Array);
+
+var INTRINSICS = {
+	'%AggregateError%': typeof AggregateError === 'undefined' ? undefined$1 : AggregateError,
+	'%Array%': Array,
+	'%ArrayBuffer%': typeof ArrayBuffer === 'undefined' ? undefined$1 : ArrayBuffer,
+	'%ArrayIteratorPrototype%': hasSymbols ? getProto([][Symbol.iterator]()) : undefined$1,
+	'%AsyncFromSyncIteratorPrototype%': undefined$1,
+	'%AsyncFunction%': needsEval,
+	'%AsyncGenerator%': needsEval,
+	'%AsyncGeneratorFunction%': needsEval,
+	'%AsyncIteratorPrototype%': needsEval,
+	'%Atomics%': typeof Atomics === 'undefined' ? undefined$1 : Atomics,
+	'%BigInt%': typeof BigInt === 'undefined' ? undefined$1 : BigInt,
+	'%BigInt64Array%': typeof BigInt64Array === 'undefined' ? undefined$1 : BigInt64Array,
+	'%BigUint64Array%': typeof BigUint64Array === 'undefined' ? undefined$1 : BigUint64Array,
+	'%Boolean%': Boolean,
+	'%DataView%': typeof DataView === 'undefined' ? undefined$1 : DataView,
+	'%Date%': Date,
+	'%decodeURI%': decodeURI,
+	'%decodeURIComponent%': decodeURIComponent,
+	'%encodeURI%': encodeURI,
+	'%encodeURIComponent%': encodeURIComponent,
+	'%Error%': Error,
+	'%eval%': eval, // eslint-disable-line no-eval
+	'%EvalError%': EvalError,
+	'%Float32Array%': typeof Float32Array === 'undefined' ? undefined$1 : Float32Array,
+	'%Float64Array%': typeof Float64Array === 'undefined' ? undefined$1 : Float64Array,
+	'%FinalizationRegistry%': typeof FinalizationRegistry === 'undefined' ? undefined$1 : FinalizationRegistry,
+	'%Function%': $Function,
+	'%GeneratorFunction%': needsEval,
+	'%Int8Array%': typeof Int8Array === 'undefined' ? undefined$1 : Int8Array,
+	'%Int16Array%': typeof Int16Array === 'undefined' ? undefined$1 : Int16Array,
+	'%Int32Array%': typeof Int32Array === 'undefined' ? undefined$1 : Int32Array,
+	'%isFinite%': isFinite,
+	'%isNaN%': isNaN,
+	'%IteratorPrototype%': hasSymbols ? getProto(getProto([][Symbol.iterator]())) : undefined$1,
+	'%JSON%': typeof JSON === 'object' ? JSON : undefined$1,
+	'%Map%': typeof Map === 'undefined' ? undefined$1 : Map,
+	'%MapIteratorPrototype%': typeof Map === 'undefined' || !hasSymbols ? undefined$1 : getProto(new Map()[Symbol.iterator]()),
+	'%Math%': Math,
+	'%Number%': Number,
+	'%Object%': Object,
+	'%parseFloat%': parseFloat,
+	'%parseInt%': parseInt,
+	'%Promise%': typeof Promise === 'undefined' ? undefined$1 : Promise,
+	'%Proxy%': typeof Proxy === 'undefined' ? undefined$1 : Proxy,
+	'%RangeError%': RangeError,
+	'%ReferenceError%': ReferenceError,
+	'%Reflect%': typeof Reflect === 'undefined' ? undefined$1 : Reflect,
+	'%RegExp%': RegExp,
+	'%Set%': typeof Set === 'undefined' ? undefined$1 : Set,
+	'%SetIteratorPrototype%': typeof Set === 'undefined' || !hasSymbols ? undefined$1 : getProto(new Set()[Symbol.iterator]()),
+	'%SharedArrayBuffer%': typeof SharedArrayBuffer === 'undefined' ? undefined$1 : SharedArrayBuffer,
+	'%String%': String,
+	'%StringIteratorPrototype%': hasSymbols ? getProto(''[Symbol.iterator]()) : undefined$1,
+	'%Symbol%': hasSymbols ? Symbol : undefined$1,
+	'%SyntaxError%': $SyntaxError,
+	'%ThrowTypeError%': ThrowTypeError,
+	'%TypedArray%': TypedArray,
+	'%TypeError%': $TypeError$1,
+	'%Uint8Array%': typeof Uint8Array === 'undefined' ? undefined$1 : Uint8Array,
+	'%Uint8ClampedArray%': typeof Uint8ClampedArray === 'undefined' ? undefined$1 : Uint8ClampedArray,
+	'%Uint16Array%': typeof Uint16Array === 'undefined' ? undefined$1 : Uint16Array,
+	'%Uint32Array%': typeof Uint32Array === 'undefined' ? undefined$1 : Uint32Array,
+	'%URIError%': URIError,
+	'%WeakMap%': typeof WeakMap === 'undefined' ? undefined$1 : WeakMap,
+	'%WeakRef%': typeof WeakRef === 'undefined' ? undefined$1 : WeakRef,
+	'%WeakSet%': typeof WeakSet === 'undefined' ? undefined$1 : WeakSet
+};
+
+try {
+	null.error; // eslint-disable-line no-unused-expressions
+} catch (e) {
+	// https://github.com/tc39/proposal-shadowrealm/pull/384#issuecomment-1364264229
+	var errorProto = getProto(getProto(e));
+	INTRINSICS['%Error.prototype%'] = errorProto;
+}
+
+var doEval = function doEval(name) {
+	var value;
+	if (name === '%AsyncFunction%') {
+		value = getEvalledConstructor('async function () {}');
+	} else if (name === '%GeneratorFunction%') {
+		value = getEvalledConstructor('function* () {}');
+	} else if (name === '%AsyncGeneratorFunction%') {
+		value = getEvalledConstructor('async function* () {}');
+	} else if (name === '%AsyncGenerator%') {
+		var fn = doEval('%AsyncGeneratorFunction%');
+		if (fn) {
+			value = fn.prototype;
+		}
+	} else if (name === '%AsyncIteratorPrototype%') {
+		var gen = doEval('%AsyncGenerator%');
+		if (gen) {
+			value = getProto(gen.prototype);
+		}
+	}
+
+	INTRINSICS[name] = value;
+
+	return value;
+};
+
+var LEGACY_ALIASES = {
+	'%ArrayBufferPrototype%': ['ArrayBuffer', 'prototype'],
+	'%ArrayPrototype%': ['Array', 'prototype'],
+	'%ArrayProto_entries%': ['Array', 'prototype', 'entries'],
+	'%ArrayProto_forEach%': ['Array', 'prototype', 'forEach'],
+	'%ArrayProto_keys%': ['Array', 'prototype', 'keys'],
+	'%ArrayProto_values%': ['Array', 'prototype', 'values'],
+	'%AsyncFunctionPrototype%': ['AsyncFunction', 'prototype'],
+	'%AsyncGenerator%': ['AsyncGeneratorFunction', 'prototype'],
+	'%AsyncGeneratorPrototype%': ['AsyncGeneratorFunction', 'prototype', 'prototype'],
+	'%BooleanPrototype%': ['Boolean', 'prototype'],
+	'%DataViewPrototype%': ['DataView', 'prototype'],
+	'%DatePrototype%': ['Date', 'prototype'],
+	'%ErrorPrototype%': ['Error', 'prototype'],
+	'%EvalErrorPrototype%': ['EvalError', 'prototype'],
+	'%Float32ArrayPrototype%': ['Float32Array', 'prototype'],
+	'%Float64ArrayPrototype%': ['Float64Array', 'prototype'],
+	'%FunctionPrototype%': ['Function', 'prototype'],
+	'%Generator%': ['GeneratorFunction', 'prototype'],
+	'%GeneratorPrototype%': ['GeneratorFunction', 'prototype', 'prototype'],
+	'%Int8ArrayPrototype%': ['Int8Array', 'prototype'],
+	'%Int16ArrayPrototype%': ['Int16Array', 'prototype'],
+	'%Int32ArrayPrototype%': ['Int32Array', 'prototype'],
+	'%JSONParse%': ['JSON', 'parse'],
+	'%JSONStringify%': ['JSON', 'stringify'],
+	'%MapPrototype%': ['Map', 'prototype'],
+	'%NumberPrototype%': ['Number', 'prototype'],
+	'%ObjectPrototype%': ['Object', 'prototype'],
+	'%ObjProto_toString%': ['Object', 'prototype', 'toString'],
+	'%ObjProto_valueOf%': ['Object', 'prototype', 'valueOf'],
+	'%PromisePrototype%': ['Promise', 'prototype'],
+	'%PromiseProto_then%': ['Promise', 'prototype', 'then'],
+	'%Promise_all%': ['Promise', 'all'],
+	'%Promise_reject%': ['Promise', 'reject'],
+	'%Promise_resolve%': ['Promise', 'resolve'],
+	'%RangeErrorPrototype%': ['RangeError', 'prototype'],
+	'%ReferenceErrorPrototype%': ['ReferenceError', 'prototype'],
+	'%RegExpPrototype%': ['RegExp', 'prototype'],
+	'%SetPrototype%': ['Set', 'prototype'],
+	'%SharedArrayBufferPrototype%': ['SharedArrayBuffer', 'prototype'],
+	'%StringPrototype%': ['String', 'prototype'],
+	'%SymbolPrototype%': ['Symbol', 'prototype'],
+	'%SyntaxErrorPrototype%': ['SyntaxError', 'prototype'],
+	'%TypedArrayPrototype%': ['TypedArray', 'prototype'],
+	'%TypeErrorPrototype%': ['TypeError', 'prototype'],
+	'%Uint8ArrayPrototype%': ['Uint8Array', 'prototype'],
+	'%Uint8ClampedArrayPrototype%': ['Uint8ClampedArray', 'prototype'],
+	'%Uint16ArrayPrototype%': ['Uint16Array', 'prototype'],
+	'%Uint32ArrayPrototype%': ['Uint32Array', 'prototype'],
+	'%URIErrorPrototype%': ['URIError', 'prototype'],
+	'%WeakMapPrototype%': ['WeakMap', 'prototype'],
+	'%WeakSetPrototype%': ['WeakSet', 'prototype']
+};
+
+var bind = functionBind;
+var hasOwn$1 = src$5;
+var $concat$1 = bind.call(Function.call, Array.prototype.concat);
+var $spliceApply = bind.call(Function.apply, Array.prototype.splice);
+var $replace$1 = bind.call(Function.call, String.prototype.replace);
+var $strSlice = bind.call(Function.call, String.prototype.slice);
+var $exec = bind.call(Function.call, RegExp.prototype.exec);
+
+/* adapted from https://github.com/lodash/lodash/blob/4.17.15/dist/lodash.js#L6735-L6744 */
+var rePropName = /[^%.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|%$))/g;
+var reEscapeChar = /\\(\\)?/g; /** Used to match backslashes in property paths. */
+var stringToPath = function stringToPath(string) {
+	var first = $strSlice(string, 0, 1);
+	var last = $strSlice(string, -1);
+	if (first === '%' && last !== '%') {
+		throw new $SyntaxError('invalid intrinsic syntax, expected closing `%`');
+	} else if (last === '%' && first !== '%') {
+		throw new $SyntaxError('invalid intrinsic syntax, expected opening `%`');
+	}
+	var result = [];
+	$replace$1(string, rePropName, function (match, number, quote, subString) {
+		result[result.length] = quote ? $replace$1(subString, reEscapeChar, '$1') : number || match;
+	});
+	return result;
+};
+/* end adaptation */
+
+var getBaseIntrinsic = function getBaseIntrinsic(name, allowMissing) {
+	var intrinsicName = name;
+	var alias;
+	if (hasOwn$1(LEGACY_ALIASES, intrinsicName)) {
+		alias = LEGACY_ALIASES[intrinsicName];
+		intrinsicName = '%' + alias[0] + '%';
+	}
+
+	if (hasOwn$1(INTRINSICS, intrinsicName)) {
+		var value = INTRINSICS[intrinsicName];
+		if (value === needsEval) {
+			value = doEval(intrinsicName);
+		}
+		if (typeof value === 'undefined' && !allowMissing) {
+			throw new $TypeError$1('intrinsic ' + name + ' exists, but is not available. Please file an issue!');
+		}
+
+		return {
+			alias: alias,
+			name: intrinsicName,
+			value: value
+		};
+	}
+
+	throw new $SyntaxError('intrinsic ' + name + ' does not exist!');
+};
+
+var getIntrinsic = function GetIntrinsic(name, allowMissing) {
+	if (typeof name !== 'string' || name.length === 0) {
+		throw new $TypeError$1('intrinsic name must be a non-empty string');
+	}
+	if (arguments.length > 1 && typeof allowMissing !== 'boolean') {
+		throw new $TypeError$1('"allowMissing" argument must be a boolean');
+	}
+
+	if ($exec(/^%?[^%]*%?$/, name) === null) {
+		throw new $SyntaxError('`%` may not be present anywhere but at the beginning and end of the intrinsic name');
+	}
+	var parts = stringToPath(name);
+	var intrinsicBaseName = parts.length > 0 ? parts[0] : '';
+
+	var intrinsic = getBaseIntrinsic('%' + intrinsicBaseName + '%', allowMissing);
+	var intrinsicRealName = intrinsic.name;
+	var value = intrinsic.value;
+	var skipFurtherCaching = false;
+
+	var alias = intrinsic.alias;
+	if (alias) {
+		intrinsicBaseName = alias[0];
+		$spliceApply(parts, $concat$1([0, 1], alias));
+	}
+
+	for (var i = 1, isOwn = true; i < parts.length; i += 1) {
+		var part = parts[i];
+		var first = $strSlice(part, 0, 1);
+		var last = $strSlice(part, -1);
+		if (
+			(
+				(first === '"' || first === "'" || first === '`')
+				|| (last === '"' || last === "'" || last === '`')
+			)
+			&& first !== last
+		) {
+			throw new $SyntaxError('property names with quotes must have matching quotes');
+		}
+		if (part === 'constructor' || !isOwn) {
+			skipFurtherCaching = true;
+		}
+
+		intrinsicBaseName += '.' + part;
+		intrinsicRealName = '%' + intrinsicBaseName + '%';
+
+		if (hasOwn$1(INTRINSICS, intrinsicRealName)) {
+			value = INTRINSICS[intrinsicRealName];
+		} else if (value != null) {
+			if (!(part in value)) {
+				if (!allowMissing) {
+					throw new $TypeError$1('base intrinsic for ' + name + ' exists, but the property is not available.');
+				}
+				return void undefined$1;
+			}
+			if ($gOPD && (i + 1) >= parts.length) {
+				var desc = $gOPD(value, part);
+				isOwn = !!desc;
+
+				// By convention, when a data property is converted to an accessor
+				// property to emulate a data property that does not suffer from
+				// the override mistake, that accessor's getter is marked with
+				// an `originalValue` property. Here, when we detect this, we
+				// uphold the illusion by pretending to see that original data
+				// property, i.e., returning the value rather than the getter
+				// itself.
+				if (isOwn && 'get' in desc && !('originalValue' in desc.get)) {
+					value = desc.get;
+				} else {
+					value = value[part];
+				}
+			} else {
+				isOwn = hasOwn$1(value, part);
+				value = value[part];
+			}
+
+			if (isOwn && !skipFurtherCaching) {
+				INTRINSICS[intrinsicRealName] = value;
+			}
+		}
+	}
+	return value;
+};
+
+var callBindExports = {};
+var callBind$1 = {
+  get exports(){ return callBindExports; },
+  set exports(v){ callBindExports = v; },
+};
+
+(function (module) {
+
+	var bind = functionBind;
+	var GetIntrinsic = getIntrinsic;
+
+	var $apply = GetIntrinsic('%Function.prototype.apply%');
+	var $call = GetIntrinsic('%Function.prototype.call%');
+	var $reflectApply = GetIntrinsic('%Reflect.apply%', true) || bind.call($call, $apply);
+
+	var $gOPD = GetIntrinsic('%Object.getOwnPropertyDescriptor%', true);
+	var $defineProperty = GetIntrinsic('%Object.defineProperty%', true);
+	var $max = GetIntrinsic('%Math.max%');
+
+	if ($defineProperty) {
+		try {
+			$defineProperty({}, 'a', { value: 1 });
+		} catch (e) {
+			// IE 8 has a broken defineProperty
+			$defineProperty = null;
+		}
+	}
+
+	module.exports = function callBind(originalFunction) {
+		var func = $reflectApply(bind, $call, arguments);
+		if ($gOPD && $defineProperty) {
+			var desc = $gOPD(func, 'length');
+			if (desc.configurable) {
+				// original length, plus the receiver, minus any additional arguments (after the receiver)
+				$defineProperty(
+					func,
+					'length',
+					{ value: 1 + $max(0, originalFunction.length - (arguments.length - 1)) }
+				);
+			}
+		}
+		return func;
+	};
+
+	var applyBind = function applyBind() {
+		return $reflectApply(bind, $apply, arguments);
+	};
+
+	if ($defineProperty) {
+		$defineProperty(module.exports, 'apply', { value: applyBind });
+	} else {
+		module.exports.apply = applyBind;
+	}
+} (callBind$1));
+
+var GetIntrinsic$1 = getIntrinsic;
+
+var callBind = callBindExports;
+
+var $indexOf = callBind(GetIntrinsic$1('String.prototype.indexOf'));
+
+var callBound$1 = function callBoundIntrinsic(name, allowMissing) {
+	var intrinsic = GetIntrinsic$1(name, !!allowMissing);
+	if (typeof intrinsic === 'function' && $indexOf(name, '.prototype.') > -1) {
+		return callBind(intrinsic);
+	}
+	return intrinsic;
+};
+
+var util_inspect = require$$1$7.inspect;
+
+var hasMap = typeof Map === 'function' && Map.prototype;
+var mapSizeDescriptor = Object.getOwnPropertyDescriptor && hasMap ? Object.getOwnPropertyDescriptor(Map.prototype, 'size') : null;
+var mapSize = hasMap && mapSizeDescriptor && typeof mapSizeDescriptor.get === 'function' ? mapSizeDescriptor.get : null;
+var mapForEach = hasMap && Map.prototype.forEach;
+var hasSet = typeof Set === 'function' && Set.prototype;
+var setSizeDescriptor = Object.getOwnPropertyDescriptor && hasSet ? Object.getOwnPropertyDescriptor(Set.prototype, 'size') : null;
+var setSize = hasSet && setSizeDescriptor && typeof setSizeDescriptor.get === 'function' ? setSizeDescriptor.get : null;
+var setForEach = hasSet && Set.prototype.forEach;
+var hasWeakMap = typeof WeakMap === 'function' && WeakMap.prototype;
+var weakMapHas = hasWeakMap ? WeakMap.prototype.has : null;
+var hasWeakSet = typeof WeakSet === 'function' && WeakSet.prototype;
+var weakSetHas = hasWeakSet ? WeakSet.prototype.has : null;
+var hasWeakRef = typeof WeakRef === 'function' && WeakRef.prototype;
+var weakRefDeref = hasWeakRef ? WeakRef.prototype.deref : null;
+var booleanValueOf = Boolean.prototype.valueOf;
+var objectToString = Object.prototype.toString;
+var functionToString = Function.prototype.toString;
+var $match = String.prototype.match;
+var $slice = String.prototype.slice;
+var $replace = String.prototype.replace;
+var $toUpperCase = String.prototype.toUpperCase;
+var $toLowerCase = String.prototype.toLowerCase;
+var $test = RegExp.prototype.test;
+var $concat = Array.prototype.concat;
+var $join = Array.prototype.join;
+var $arrSlice = Array.prototype.slice;
+var $floor = Math.floor;
+var bigIntValueOf = typeof BigInt === 'function' ? BigInt.prototype.valueOf : null;
+var gOPS = Object.getOwnPropertySymbols;
+var symToString = typeof Symbol === 'function' && typeof Symbol.iterator === 'symbol' ? Symbol.prototype.toString : null;
+var hasShammedSymbols = typeof Symbol === 'function' && typeof Symbol.iterator === 'object';
+// ie, `has-tostringtag/shams
+var toStringTag = typeof Symbol === 'function' && Symbol.toStringTag && (typeof Symbol.toStringTag === hasShammedSymbols ? 'object' : 'symbol')
+    ? Symbol.toStringTag
+    : null;
+var isEnumerable = Object.prototype.propertyIsEnumerable;
+
+var gPO = (typeof Reflect === 'function' ? Reflect.getPrototypeOf : Object.getPrototypeOf) || (
+    [].__proto__ === Array.prototype // eslint-disable-line no-proto
+        ? function (O) {
+            return O.__proto__; // eslint-disable-line no-proto
+        }
+        : null
+);
+
+function addNumericSeparator(num, str) {
+    if (
+        num === Infinity
+        || num === -Infinity
+        || num !== num
+        || (num && num > -1000 && num < 1000)
+        || $test.call(/e/, str)
+    ) {
+        return str;
+    }
+    var sepRegex = /[0-9](?=(?:[0-9]{3})+(?![0-9]))/g;
+    if (typeof num === 'number') {
+        var int = num < 0 ? -$floor(-num) : $floor(num); // trunc(num)
+        if (int !== num) {
+            var intStr = String(int);
+            var dec = $slice.call(str, intStr.length + 1);
+            return $replace.call(intStr, sepRegex, '$&_') + '.' + $replace.call($replace.call(dec, /([0-9]{3})/g, '$&_'), /_$/, '');
+        }
+    }
+    return $replace.call(str, sepRegex, '$&_');
+}
+
+var utilInspect = util_inspect;
+var inspectCustom = utilInspect.custom;
+var inspectSymbol = isSymbol(inspectCustom) ? inspectCustom : null;
+
+var objectInspect = function inspect_(obj, options, depth, seen) {
+    var opts = options || {};
+
+    if (has$4(opts, 'quoteStyle') && (opts.quoteStyle !== 'single' && opts.quoteStyle !== 'double')) {
+        throw new TypeError('option "quoteStyle" must be "single" or "double"');
+    }
+    if (
+        has$4(opts, 'maxStringLength') && (typeof opts.maxStringLength === 'number'
+            ? opts.maxStringLength < 0 && opts.maxStringLength !== Infinity
+            : opts.maxStringLength !== null
+        )
+    ) {
+        throw new TypeError('option "maxStringLength", if provided, must be a positive integer, Infinity, or `null`');
+    }
+    var customInspect = has$4(opts, 'customInspect') ? opts.customInspect : true;
+    if (typeof customInspect !== 'boolean' && customInspect !== 'symbol') {
+        throw new TypeError('option "customInspect", if provided, must be `true`, `false`, or `\'symbol\'`');
+    }
+
+    if (
+        has$4(opts, 'indent')
+        && opts.indent !== null
+        && opts.indent !== '\t'
+        && !(parseInt(opts.indent, 10) === opts.indent && opts.indent > 0)
+    ) {
+        throw new TypeError('option "indent" must be "\\t", an integer > 0, or `null`');
+    }
+    if (has$4(opts, 'numericSeparator') && typeof opts.numericSeparator !== 'boolean') {
+        throw new TypeError('option "numericSeparator", if provided, must be `true` or `false`');
+    }
+    var numericSeparator = opts.numericSeparator;
+
+    if (typeof obj === 'undefined') {
+        return 'undefined';
+    }
+    if (obj === null) {
+        return 'null';
+    }
+    if (typeof obj === 'boolean') {
+        return obj ? 'true' : 'false';
+    }
+
+    if (typeof obj === 'string') {
+        return inspectString(obj, opts);
+    }
+    if (typeof obj === 'number') {
+        if (obj === 0) {
+            return Infinity / obj > 0 ? '0' : '-0';
+        }
+        var str = String(obj);
+        return numericSeparator ? addNumericSeparator(obj, str) : str;
+    }
+    if (typeof obj === 'bigint') {
+        var bigIntStr = String(obj) + 'n';
+        return numericSeparator ? addNumericSeparator(obj, bigIntStr) : bigIntStr;
+    }
+
+    var maxDepth = typeof opts.depth === 'undefined' ? 5 : opts.depth;
+    if (typeof depth === 'undefined') { depth = 0; }
+    if (depth >= maxDepth && maxDepth > 0 && typeof obj === 'object') {
+        return isArray$4(obj) ? '[Array]' : '[Object]';
+    }
+
+    var indent = getIndent(opts, depth);
+
+    if (typeof seen === 'undefined') {
+        seen = [];
+    } else if (indexOf$1(seen, obj) >= 0) {
+        return '[Circular]';
+    }
+
+    function inspect(value, from, noIndent) {
+        if (from) {
+            seen = $arrSlice.call(seen);
+            seen.push(from);
+        }
+        if (noIndent) {
+            var newOpts = {
+                depth: opts.depth
+            };
+            if (has$4(opts, 'quoteStyle')) {
+                newOpts.quoteStyle = opts.quoteStyle;
+            }
+            return inspect_(value, newOpts, depth + 1, seen);
+        }
+        return inspect_(value, opts, depth + 1, seen);
+    }
+
+    if (typeof obj === 'function' && !isRegExp$2(obj)) { // in older engines, regexes are callable
+        var name = nameOf(obj);
+        var keys = arrObjKeys(obj, inspect);
+        return '[Function' + (name ? ': ' + name : ' (anonymous)') + ']' + (keys.length > 0 ? ' { ' + $join.call(keys, ', ') + ' }' : '');
+    }
+    if (isSymbol(obj)) {
+        var symString = hasShammedSymbols ? $replace.call(String(obj), /^(Symbol\(.*\))_[^)]*$/, '$1') : symToString.call(obj);
+        return typeof obj === 'object' && !hasShammedSymbols ? markBoxed(symString) : symString;
+    }
+    if (isElement(obj)) {
+        var s = '<' + $toLowerCase.call(String(obj.nodeName));
+        var attrs = obj.attributes || [];
+        for (var i = 0; i < attrs.length; i++) {
+            s += ' ' + attrs[i].name + '=' + wrapQuotes(quote(attrs[i].value), 'double', opts);
+        }
+        s += '>';
+        if (obj.childNodes && obj.childNodes.length) { s += '...'; }
+        s += '</' + $toLowerCase.call(String(obj.nodeName)) + '>';
+        return s;
+    }
+    if (isArray$4(obj)) {
+        if (obj.length === 0) { return '[]'; }
+        var xs = arrObjKeys(obj, inspect);
+        if (indent && !singleLineValues(xs)) {
+            return '[' + indentedJoin(xs, indent) + ']';
+        }
+        return '[ ' + $join.call(xs, ', ') + ' ]';
+    }
+    if (isError(obj)) {
+        var parts = arrObjKeys(obj, inspect);
+        if (!('cause' in Error.prototype) && 'cause' in obj && !isEnumerable.call(obj, 'cause')) {
+            return '{ [' + String(obj) + '] ' + $join.call($concat.call('[cause]: ' + inspect(obj.cause), parts), ', ') + ' }';
+        }
+        if (parts.length === 0) { return '[' + String(obj) + ']'; }
+        return '{ [' + String(obj) + '] ' + $join.call(parts, ', ') + ' }';
+    }
+    if (typeof obj === 'object' && customInspect) {
+        if (inspectSymbol && typeof obj[inspectSymbol] === 'function' && utilInspect) {
+            return utilInspect(obj, { depth: maxDepth - depth });
+        } else if (customInspect !== 'symbol' && typeof obj.inspect === 'function') {
+            return obj.inspect();
+        }
+    }
+    if (isMap(obj)) {
+        var mapParts = [];
+        if (mapForEach) {
+            mapForEach.call(obj, function (value, key) {
+                mapParts.push(inspect(key, obj, true) + ' => ' + inspect(value, obj));
+            });
+        }
+        return collectionOf('Map', mapSize.call(obj), mapParts, indent);
+    }
+    if (isSet(obj)) {
+        var setParts = [];
+        if (setForEach) {
+            setForEach.call(obj, function (value) {
+                setParts.push(inspect(value, obj));
+            });
+        }
+        return collectionOf('Set', setSize.call(obj), setParts, indent);
+    }
+    if (isWeakMap(obj)) {
+        return weakCollectionOf('WeakMap');
+    }
+    if (isWeakSet(obj)) {
+        return weakCollectionOf('WeakSet');
+    }
+    if (isWeakRef(obj)) {
+        return weakCollectionOf('WeakRef');
+    }
+    if (isNumber(obj)) {
+        return markBoxed(inspect(Number(obj)));
+    }
+    if (isBigInt(obj)) {
+        return markBoxed(inspect(bigIntValueOf.call(obj)));
+    }
+    if (isBoolean$2(obj)) {
+        return markBoxed(booleanValueOf.call(obj));
+    }
+    if (isString(obj)) {
+        return markBoxed(inspect(String(obj)));
+    }
+    if (!isDate$2(obj) && !isRegExp$2(obj)) {
+        var ys = arrObjKeys(obj, inspect);
+        var isPlainObject = gPO ? gPO(obj) === Object.prototype : obj instanceof Object || obj.constructor === Object;
+        var protoTag = obj instanceof Object ? '' : 'null prototype';
+        var stringTag = !isPlainObject && toStringTag && Object(obj) === obj && toStringTag in obj ? $slice.call(toStr(obj), 8, -1) : protoTag ? 'Object' : '';
+        var constructorTag = isPlainObject || typeof obj.constructor !== 'function' ? '' : obj.constructor.name ? obj.constructor.name + ' ' : '';
+        var tag = constructorTag + (stringTag || protoTag ? '[' + $join.call($concat.call([], stringTag || [], protoTag || []), ': ') + '] ' : '');
+        if (ys.length === 0) { return tag + '{}'; }
+        if (indent) {
+            return tag + '{' + indentedJoin(ys, indent) + '}';
+        }
+        return tag + '{ ' + $join.call(ys, ', ') + ' }';
+    }
+    return String(obj);
+};
+
+function wrapQuotes(s, defaultStyle, opts) {
+    var quoteChar = (opts.quoteStyle || defaultStyle) === 'double' ? '"' : "'";
+    return quoteChar + s + quoteChar;
+}
+
+function quote(s) {
+    return $replace.call(String(s), /"/g, '&quot;');
+}
+
+function isArray$4(obj) { return toStr(obj) === '[object Array]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+function isDate$2(obj) { return toStr(obj) === '[object Date]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+function isRegExp$2(obj) { return toStr(obj) === '[object RegExp]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+function isError(obj) { return toStr(obj) === '[object Error]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+function isString(obj) { return toStr(obj) === '[object String]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+function isNumber(obj) { return toStr(obj) === '[object Number]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+function isBoolean$2(obj) { return toStr(obj) === '[object Boolean]' && (!toStringTag || !(typeof obj === 'object' && toStringTag in obj)); }
+
+// Symbol and BigInt do have Symbol.toStringTag by spec, so that can't be used to eliminate false positives
+function isSymbol(obj) {
+    if (hasShammedSymbols) {
+        return obj && typeof obj === 'object' && obj instanceof Symbol;
+    }
+    if (typeof obj === 'symbol') {
+        return true;
+    }
+    if (!obj || typeof obj !== 'object' || !symToString) {
+        return false;
+    }
+    try {
+        symToString.call(obj);
+        return true;
+    } catch (e) {}
+    return false;
+}
+
+function isBigInt(obj) {
+    if (!obj || typeof obj !== 'object' || !bigIntValueOf) {
+        return false;
+    }
+    try {
+        bigIntValueOf.call(obj);
+        return true;
+    } catch (e) {}
+    return false;
+}
+
+var hasOwn = Object.prototype.hasOwnProperty || function (key) { return key in this; };
+function has$4(obj, key) {
+    return hasOwn.call(obj, key);
+}
+
+function toStr(obj) {
+    return objectToString.call(obj);
+}
+
+function nameOf(f) {
+    if (f.name) { return f.name; }
+    var m = $match.call(functionToString.call(f), /^function\s*([\w$]+)/);
+    if (m) { return m[1]; }
+    return null;
+}
+
+function indexOf$1(xs, x) {
+    if (xs.indexOf) { return xs.indexOf(x); }
+    for (var i = 0, l = xs.length; i < l; i++) {
+        if (xs[i] === x) { return i; }
+    }
+    return -1;
+}
+
+function isMap(x) {
+    if (!mapSize || !x || typeof x !== 'object') {
+        return false;
+    }
+    try {
+        mapSize.call(x);
+        try {
+            setSize.call(x);
+        } catch (s) {
+            return true;
+        }
+        return x instanceof Map; // core-js workaround, pre-v2.5.0
+    } catch (e) {}
+    return false;
+}
+
+function isWeakMap(x) {
+    if (!weakMapHas || !x || typeof x !== 'object') {
+        return false;
+    }
+    try {
+        weakMapHas.call(x, weakMapHas);
+        try {
+            weakSetHas.call(x, weakSetHas);
+        } catch (s) {
+            return true;
+        }
+        return x instanceof WeakMap; // core-js workaround, pre-v2.5.0
+    } catch (e) {}
+    return false;
+}
+
+function isWeakRef(x) {
+    if (!weakRefDeref || !x || typeof x !== 'object') {
+        return false;
+    }
+    try {
+        weakRefDeref.call(x);
+        return true;
+    } catch (e) {}
+    return false;
+}
+
+function isSet(x) {
+    if (!setSize || !x || typeof x !== 'object') {
+        return false;
+    }
+    try {
+        setSize.call(x);
+        try {
+            mapSize.call(x);
+        } catch (m) {
+            return true;
+        }
+        return x instanceof Set; // core-js workaround, pre-v2.5.0
+    } catch (e) {}
+    return false;
+}
+
+function isWeakSet(x) {
+    if (!weakSetHas || !x || typeof x !== 'object') {
+        return false;
+    }
