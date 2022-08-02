@@ -173311,3 +173311,2194 @@ function requireNode$1 () {
 		/**
 		 * Build up the default `inspectOpts` object from the environment variables.
 		 *
+		 *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+		 */
+
+		exports.inspectOpts = Object.keys(process.env).filter(function (key) {
+		  return /^debug_/i.test(key);
+		}).reduce(function (obj, key) {
+		  // camel-case
+		  var prop = key
+		    .substring(6)
+		    .toLowerCase()
+		    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
+
+		  // coerce string value into JS value
+		  var val = process.env[key];
+		  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+		  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+		  else if (val === 'null') val = null;
+		  else val = Number(val);
+
+		  obj[prop] = val;
+		  return obj;
+		}, {});
+
+		/**
+		 * The file descriptor to write the `debug()` calls to.
+		 * Set the `DEBUG_FD` env variable to override with another value. i.e.:
+		 *
+		 *   $ DEBUG_FD=3 node script.js 3>debug.log
+		 */
+
+		var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+
+		if (1 !== fd && 2 !== fd) {
+		  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')();
+		}
+
+		var stream = 1 === fd ? process.stdout :
+		             2 === fd ? process.stderr :
+		             createWritableStdioStream(fd);
+
+		/**
+		 * Is stdout a TTY? Colored output is enabled when `true`.
+		 */
+
+		function useColors() {
+		  return 'colors' in exports.inspectOpts
+		    ? Boolean(exports.inspectOpts.colors)
+		    : tty.isatty(fd);
+		}
+
+		/**
+		 * Map %o to `util.inspect()`, all on a single line.
+		 */
+
+		exports.formatters.o = function(v) {
+		  this.inspectOpts.colors = this.useColors;
+		  return util.inspect(v, this.inspectOpts)
+		    .split('\n').map(function(str) {
+		      return str.trim()
+		    }).join(' ');
+		};
+
+		/**
+		 * Map %o to `util.inspect()`, allowing multiple lines if needed.
+		 */
+
+		exports.formatters.O = function(v) {
+		  this.inspectOpts.colors = this.useColors;
+		  return util.inspect(v, this.inspectOpts);
+		};
+
+		/**
+		 * Adds ANSI color escape codes if enabled.
+		 *
+		 * @api public
+		 */
+
+		function formatArgs(args) {
+		  var name = this.namespace;
+		  var useColors = this.useColors;
+
+		  if (useColors) {
+		    var c = this.color;
+		    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
+
+		    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+		    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
+		  } else {
+		    args[0] = new Date().toUTCString()
+		      + ' ' + name + ' ' + args[0];
+		  }
+		}
+
+		/**
+		 * Invokes `util.format()` with the specified arguments and writes to `stream`.
+		 */
+
+		function log() {
+		  return stream.write(util.format.apply(util, arguments) + '\n');
+		}
+
+		/**
+		 * Save `namespaces`.
+		 *
+		 * @param {String} namespaces
+		 * @api private
+		 */
+
+		function save(namespaces) {
+		  if (null == namespaces) {
+		    // If you set a process.env field to null or undefined, it gets cast to the
+		    // string 'null' or 'undefined'. Just delete instead.
+		    delete process.env.DEBUG;
+		  } else {
+		    process.env.DEBUG = namespaces;
+		  }
+		}
+
+		/**
+		 * Load `namespaces`.
+		 *
+		 * @return {String} returns the previously persisted debug modes
+		 * @api private
+		 */
+
+		function load() {
+		  return process.env.DEBUG;
+		}
+
+		/**
+		 * Copied from `node/src/node.js`.
+		 *
+		 * XXX: It's lame that node doesn't expose this API out-of-the-box. It also
+		 * relies on the undocumented `tty_wrap.guessHandleType()` which is also lame.
+		 */
+
+		function createWritableStdioStream (fd) {
+		  var stream;
+		  var tty_wrap = process.binding('tty_wrap');
+
+		  // Note stream._type is used for test-module-load-list.js
+
+		  switch (tty_wrap.guessHandleType(fd)) {
+		    case 'TTY':
+		      stream = new tty.WriteStream(fd);
+		      stream._type = 'tty';
+
+		      // Hack to have stream not keep the event loop alive.
+		      // See https://github.com/joyent/node/issues/1726
+		      if (stream._handle && stream._handle.unref) {
+		        stream._handle.unref();
+		      }
+		      break;
+
+		    case 'FILE':
+		      var fs = require$$0$e;
+		      stream = new fs.SyncWriteStream(fd, { autoClose: false });
+		      stream._type = 'fs';
+		      break;
+
+		    case 'PIPE':
+		    case 'TCP':
+		      var net = require$$4$2;
+		      stream = new net.Socket({
+		        fd: fd,
+		        readable: false,
+		        writable: true
+		      });
+
+		      // FIXME Should probably have an option in net.Socket to create a
+		      // stream from an existing fd which is writable only. But for now
+		      // we'll just add this hack and set the `readable` member to false.
+		      // Test: ./node test/fixtures/echo.js < /etc/passwd
+		      stream.readable = false;
+		      stream.read = null;
+		      stream._type = 'pipe';
+
+		      // FIXME Hack to have stream not keep the event loop alive.
+		      // See https://github.com/joyent/node/issues/1726
+		      if (stream._handle && stream._handle.unref) {
+		        stream._handle.unref();
+		      }
+		      break;
+
+		    default:
+		      // Probably an error on in uv_guess_handle()
+		      throw new Error('Implement me. Unknown stream file type!');
+		  }
+
+		  // For supporting legacy API we put the FD here.
+		  stream.fd = fd;
+
+		  stream._isStdio = true;
+
+		  return stream;
+		}
+
+		/**
+		 * Init logic for `debug` instances.
+		 *
+		 * Create a new `inspectOpts` object in case `useColors` is set
+		 * differently for a particular `debug` instance.
+		 */
+
+		function init (debug) {
+		  debug.inspectOpts = {};
+
+		  var keys = Object.keys(exports.inspectOpts);
+		  for (var i = 0; i < keys.length; i++) {
+		    debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+		  }
+		}
+
+		/**
+		 * Enable namespaces listed in `process.env.DEBUG` initially.
+		 */
+
+		exports.enable(load());
+} (node$1, nodeExports$1));
+	return nodeExports$1;
+}
+
+/**
+ * Detect Electron renderer process, which is node, but we should
+ * treat as a browser.
+ */
+
+(function (module) {
+	if (typeof process !== 'undefined' && process.type === 'renderer') {
+	  module.exports = requireBrowser();
+	} else {
+	  module.exports = requireNode$1();
+	}
+} (src$2));
+
+/*!
+ * etag
+ * Copyright(c) 2014-2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var etag_1 = etag$1;
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var crypto$3 = require$$0$j;
+var Stats = require$$0$e.Stats;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var toString$5 = Object.prototype.toString;
+
+/**
+ * Generate an entity tag.
+ *
+ * @param {Buffer|string} entity
+ * @return {string}
+ * @private
+ */
+
+function entitytag (entity) {
+  if (entity.length === 0) {
+    // fast-path empty
+    return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"'
+  }
+
+  // compute hash of entity
+  var hash = crypto$3
+    .createHash('sha1')
+    .update(entity, 'utf8')
+    .digest('base64')
+    .substring(0, 27);
+
+  // compute length of entity
+  var len = typeof entity === 'string'
+    ? Buffer.byteLength(entity, 'utf8')
+    : entity.length;
+
+  return '"' + len.toString(16) + '-' + hash + '"'
+}
+
+/**
+ * Create a simple ETag.
+ *
+ * @param {string|Buffer|Stats} entity
+ * @param {object} [options]
+ * @param {boolean} [options.weak]
+ * @return {String}
+ * @public
+ */
+
+function etag$1 (entity, options) {
+  if (entity == null) {
+    throw new TypeError('argument entity is required')
+  }
+
+  // support fs.Stats object
+  var isStats = isstats(entity);
+  var weak = options && typeof options.weak === 'boolean'
+    ? options.weak
+    : isStats;
+
+  // validate argument
+  if (!isStats && typeof entity !== 'string' && !Buffer.isBuffer(entity)) {
+    throw new TypeError('argument entity must be string, Buffer, or fs.Stats')
+  }
+
+  // generate entity tag
+  var tag = isStats
+    ? stattag(entity)
+    : entitytag(entity);
+
+  return weak
+    ? 'W/' + tag
+    : tag
+}
+
+/**
+ * Determine if object is a Stats object.
+ *
+ * @param {object} obj
+ * @return {boolean}
+ * @api private
+ */
+
+function isstats (obj) {
+  // genuine fs.Stats
+  if (typeof Stats === 'function' && obj instanceof Stats) {
+    return true
+  }
+
+  // quack quack
+  return obj && typeof obj === 'object' &&
+    'ctime' in obj && toString$5.call(obj.ctime) === '[object Date]' &&
+    'mtime' in obj && toString$5.call(obj.mtime) === '[object Date]' &&
+    'ino' in obj && typeof obj.ino === 'number' &&
+    'size' in obj && typeof obj.size === 'number'
+}
+
+/**
+ * Generate a tag for a stat.
+ *
+ * @param {object} stat
+ * @return {string}
+ * @private
+ */
+
+function stattag (stat) {
+  var mtime = stat.mtime.getTime().toString(16);
+  var size = stat.size.toString(16);
+
+  return '"' + size + '-' + mtime + '"'
+}
+
+/*!
+ * fresh
+ * Copyright(c) 2012 TJ Holowaychuk
+ * Copyright(c) 2016-2017 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * RegExp to check for no-cache token in Cache-Control.
+ * @private
+ */
+
+var CACHE_CONTROL_NO_CACHE_REGEXP = /(?:^|,)\s*?no-cache\s*?(?:,|$)/;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var fresh_1 = fresh$2;
+
+/**
+ * Check freshness of the response using request and response headers.
+ *
+ * @param {Object} reqHeaders
+ * @param {Object} resHeaders
+ * @return {Boolean}
+ * @public
+ */
+
+function fresh$2 (reqHeaders, resHeaders) {
+  // fields
+  var modifiedSince = reqHeaders['if-modified-since'];
+  var noneMatch = reqHeaders['if-none-match'];
+
+  // unconditional request
+  if (!modifiedSince && !noneMatch) {
+    return false
+  }
+
+  // Always return stale when Cache-Control: no-cache
+  // to support end-to-end reload requests
+  // https://tools.ietf.org/html/rfc2616#section-14.9.4
+  var cacheControl = reqHeaders['cache-control'];
+  if (cacheControl && CACHE_CONTROL_NO_CACHE_REGEXP.test(cacheControl)) {
+    return false
+  }
+
+  // if-none-match
+  if (noneMatch && noneMatch !== '*') {
+    var etag = resHeaders['etag'];
+
+    if (!etag) {
+      return false
+    }
+
+    var etagStale = true;
+    var matches = parseTokenList$1(noneMatch);
+    for (var i = 0; i < matches.length; i++) {
+      var match = matches[i];
+      if (match === etag || match === 'W/' + etag || 'W/' + match === etag) {
+        etagStale = false;
+        break
+      }
+    }
+
+    if (etagStale) {
+      return false
+    }
+  }
+
+  // if-modified-since
+  if (modifiedSince) {
+    var lastModified = resHeaders['last-modified'];
+    var modifiedStale = !lastModified || !(parseHttpDate$1(lastModified) <= parseHttpDate$1(modifiedSince));
+
+    if (modifiedStale) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Parse an HTTP Date into a number.
+ *
+ * @param {string} date
+ * @private
+ */
+
+function parseHttpDate$1 (date) {
+  var timestamp = date && Date.parse(date);
+
+  // istanbul ignore next: guard against date.js Date.parse patching
+  return typeof timestamp === 'number'
+    ? timestamp
+    : NaN
+}
+
+/**
+ * Parse a HTTP token list.
+ *
+ * @param {string} str
+ * @private
+ */
+
+function parseTokenList$1 (str) {
+  var end = 0;
+  var list = [];
+  var start = 0;
+
+  // gather tokens
+  for (var i = 0, len = str.length; i < len; i++) {
+    switch (str.charCodeAt(i)) {
+      case 0x20: /*   */
+        if (start === end) {
+          start = end = i + 1;
+        }
+        break
+      case 0x2c: /* , */
+        list.push(str.substring(start, end));
+        start = end = i + 1;
+        break
+      default:
+        end = i + 1;
+        break
+    }
+  }
+
+  // final token
+  list.push(str.substring(start, end));
+
+  return list
+}
+
+var require$$2$2 = {
+	"application/andrew-inset": [
+	"ez"
+],
+	"application/applixware": [
+	"aw"
+],
+	"application/atom+xml": [
+	"atom"
+],
+	"application/atomcat+xml": [
+	"atomcat"
+],
+	"application/atomsvc+xml": [
+	"atomsvc"
+],
+	"application/bdoc": [
+	"bdoc"
+],
+	"application/ccxml+xml": [
+	"ccxml"
+],
+	"application/cdmi-capability": [
+	"cdmia"
+],
+	"application/cdmi-container": [
+	"cdmic"
+],
+	"application/cdmi-domain": [
+	"cdmid"
+],
+	"application/cdmi-object": [
+	"cdmio"
+],
+	"application/cdmi-queue": [
+	"cdmiq"
+],
+	"application/cu-seeme": [
+	"cu"
+],
+	"application/dash+xml": [
+	"mpd"
+],
+	"application/davmount+xml": [
+	"davmount"
+],
+	"application/docbook+xml": [
+	"dbk"
+],
+	"application/dssc+der": [
+	"dssc"
+],
+	"application/dssc+xml": [
+	"xdssc"
+],
+	"application/ecmascript": [
+	"ecma"
+],
+	"application/emma+xml": [
+	"emma"
+],
+	"application/epub+zip": [
+	"epub"
+],
+	"application/exi": [
+	"exi"
+],
+	"application/font-tdpfr": [
+	"pfr"
+],
+	"application/font-woff": [
+],
+	"application/font-woff2": [
+],
+	"application/geo+json": [
+	"geojson"
+],
+	"application/gml+xml": [
+	"gml"
+],
+	"application/gpx+xml": [
+	"gpx"
+],
+	"application/gxf": [
+	"gxf"
+],
+	"application/gzip": [
+	"gz"
+],
+	"application/hyperstudio": [
+	"stk"
+],
+	"application/inkml+xml": [
+	"ink",
+	"inkml"
+],
+	"application/ipfix": [
+	"ipfix"
+],
+	"application/java-archive": [
+	"jar",
+	"war",
+	"ear"
+],
+	"application/java-serialized-object": [
+	"ser"
+],
+	"application/java-vm": [
+	"class"
+],
+	"application/javascript": [
+	"js",
+	"mjs"
+],
+	"application/json": [
+	"json",
+	"map"
+],
+	"application/json5": [
+	"json5"
+],
+	"application/jsonml+json": [
+	"jsonml"
+],
+	"application/ld+json": [
+	"jsonld"
+],
+	"application/lost+xml": [
+	"lostxml"
+],
+	"application/mac-binhex40": [
+	"hqx"
+],
+	"application/mac-compactpro": [
+	"cpt"
+],
+	"application/mads+xml": [
+	"mads"
+],
+	"application/manifest+json": [
+	"webmanifest"
+],
+	"application/marc": [
+	"mrc"
+],
+	"application/marcxml+xml": [
+	"mrcx"
+],
+	"application/mathematica": [
+	"ma",
+	"nb",
+	"mb"
+],
+	"application/mathml+xml": [
+	"mathml"
+],
+	"application/mbox": [
+	"mbox"
+],
+	"application/mediaservercontrol+xml": [
+	"mscml"
+],
+	"application/metalink+xml": [
+	"metalink"
+],
+	"application/metalink4+xml": [
+	"meta4"
+],
+	"application/mets+xml": [
+	"mets"
+],
+	"application/mods+xml": [
+	"mods"
+],
+	"application/mp21": [
+	"m21",
+	"mp21"
+],
+	"application/mp4": [
+	"mp4s",
+	"m4p"
+],
+	"application/msword": [
+	"doc",
+	"dot"
+],
+	"application/mxf": [
+	"mxf"
+],
+	"application/octet-stream": [
+	"bin",
+	"dms",
+	"lrf",
+	"mar",
+	"so",
+	"dist",
+	"distz",
+	"pkg",
+	"bpk",
+	"dump",
+	"elc",
+	"deploy",
+	"exe",
+	"dll",
+	"deb",
+	"dmg",
+	"iso",
+	"img",
+	"msi",
+	"msp",
+	"msm",
+	"buffer"
+],
+	"application/oda": [
+	"oda"
+],
+	"application/oebps-package+xml": [
+	"opf"
+],
+	"application/ogg": [
+	"ogx"
+],
+	"application/omdoc+xml": [
+	"omdoc"
+],
+	"application/onenote": [
+	"onetoc",
+	"onetoc2",
+	"onetmp",
+	"onepkg"
+],
+	"application/oxps": [
+	"oxps"
+],
+	"application/patch-ops-error+xml": [
+	"xer"
+],
+	"application/pdf": [
+	"pdf"
+],
+	"application/pgp-encrypted": [
+	"pgp"
+],
+	"application/pgp-signature": [
+	"asc",
+	"sig"
+],
+	"application/pics-rules": [
+	"prf"
+],
+	"application/pkcs10": [
+	"p10"
+],
+	"application/pkcs7-mime": [
+	"p7m",
+	"p7c"
+],
+	"application/pkcs7-signature": [
+	"p7s"
+],
+	"application/pkcs8": [
+	"p8"
+],
+	"application/pkix-attr-cert": [
+	"ac"
+],
+	"application/pkix-cert": [
+	"cer"
+],
+	"application/pkix-crl": [
+	"crl"
+],
+	"application/pkix-pkipath": [
+	"pkipath"
+],
+	"application/pkixcmp": [
+	"pki"
+],
+	"application/pls+xml": [
+	"pls"
+],
+	"application/postscript": [
+	"ai",
+	"eps",
+	"ps"
+],
+	"application/prs.cww": [
+	"cww"
+],
+	"application/pskc+xml": [
+	"pskcxml"
+],
+	"application/raml+yaml": [
+	"raml"
+],
+	"application/rdf+xml": [
+	"rdf"
+],
+	"application/reginfo+xml": [
+	"rif"
+],
+	"application/relax-ng-compact-syntax": [
+	"rnc"
+],
+	"application/resource-lists+xml": [
+	"rl"
+],
+	"application/resource-lists-diff+xml": [
+	"rld"
+],
+	"application/rls-services+xml": [
+	"rs"
+],
+	"application/rpki-ghostbusters": [
+	"gbr"
+],
+	"application/rpki-manifest": [
+	"mft"
+],
+	"application/rpki-roa": [
+	"roa"
+],
+	"application/rsd+xml": [
+	"rsd"
+],
+	"application/rss+xml": [
+	"rss"
+],
+	"application/rtf": [
+	"rtf"
+],
+	"application/sbml+xml": [
+	"sbml"
+],
+	"application/scvp-cv-request": [
+	"scq"
+],
+	"application/scvp-cv-response": [
+	"scs"
+],
+	"application/scvp-vp-request": [
+	"spq"
+],
+	"application/scvp-vp-response": [
+	"spp"
+],
+	"application/sdp": [
+	"sdp"
+],
+	"application/set-payment-initiation": [
+	"setpay"
+],
+	"application/set-registration-initiation": [
+	"setreg"
+],
+	"application/shf+xml": [
+	"shf"
+],
+	"application/smil+xml": [
+	"smi",
+	"smil"
+],
+	"application/sparql-query": [
+	"rq"
+],
+	"application/sparql-results+xml": [
+	"srx"
+],
+	"application/srgs": [
+	"gram"
+],
+	"application/srgs+xml": [
+	"grxml"
+],
+	"application/sru+xml": [
+	"sru"
+],
+	"application/ssdl+xml": [
+	"ssdl"
+],
+	"application/ssml+xml": [
+	"ssml"
+],
+	"application/tei+xml": [
+	"tei",
+	"teicorpus"
+],
+	"application/thraud+xml": [
+	"tfi"
+],
+	"application/timestamped-data": [
+	"tsd"
+],
+	"application/vnd.3gpp.pic-bw-large": [
+	"plb"
+],
+	"application/vnd.3gpp.pic-bw-small": [
+	"psb"
+],
+	"application/vnd.3gpp.pic-bw-var": [
+	"pvb"
+],
+	"application/vnd.3gpp2.tcap": [
+	"tcap"
+],
+	"application/vnd.3m.post-it-notes": [
+	"pwn"
+],
+	"application/vnd.accpac.simply.aso": [
+	"aso"
+],
+	"application/vnd.accpac.simply.imp": [
+	"imp"
+],
+	"application/vnd.acucobol": [
+	"acu"
+],
+	"application/vnd.acucorp": [
+	"atc",
+	"acutc"
+],
+	"application/vnd.adobe.air-application-installer-package+zip": [
+	"air"
+],
+	"application/vnd.adobe.formscentral.fcdt": [
+	"fcdt"
+],
+	"application/vnd.adobe.fxp": [
+	"fxp",
+	"fxpl"
+],
+	"application/vnd.adobe.xdp+xml": [
+	"xdp"
+],
+	"application/vnd.adobe.xfdf": [
+	"xfdf"
+],
+	"application/vnd.ahead.space": [
+	"ahead"
+],
+	"application/vnd.airzip.filesecure.azf": [
+	"azf"
+],
+	"application/vnd.airzip.filesecure.azs": [
+	"azs"
+],
+	"application/vnd.amazon.ebook": [
+	"azw"
+],
+	"application/vnd.americandynamics.acc": [
+	"acc"
+],
+	"application/vnd.amiga.ami": [
+	"ami"
+],
+	"application/vnd.android.package-archive": [
+	"apk"
+],
+	"application/vnd.anser-web-certificate-issue-initiation": [
+	"cii"
+],
+	"application/vnd.anser-web-funds-transfer-initiation": [
+	"fti"
+],
+	"application/vnd.antix.game-component": [
+	"atx"
+],
+	"application/vnd.apple.installer+xml": [
+	"mpkg"
+],
+	"application/vnd.apple.mpegurl": [
+	"m3u8"
+],
+	"application/vnd.apple.pkpass": [
+	"pkpass"
+],
+	"application/vnd.aristanetworks.swi": [
+	"swi"
+],
+	"application/vnd.astraea-software.iota": [
+	"iota"
+],
+	"application/vnd.audiograph": [
+	"aep"
+],
+	"application/vnd.blueice.multipass": [
+	"mpm"
+],
+	"application/vnd.bmi": [
+	"bmi"
+],
+	"application/vnd.businessobjects": [
+	"rep"
+],
+	"application/vnd.chemdraw+xml": [
+	"cdxml"
+],
+	"application/vnd.chipnuts.karaoke-mmd": [
+	"mmd"
+],
+	"application/vnd.cinderella": [
+	"cdy"
+],
+	"application/vnd.claymore": [
+	"cla"
+],
+	"application/vnd.cloanto.rp9": [
+	"rp9"
+],
+	"application/vnd.clonk.c4group": [
+	"c4g",
+	"c4d",
+	"c4f",
+	"c4p",
+	"c4u"
+],
+	"application/vnd.cluetrust.cartomobile-config": [
+	"c11amc"
+],
+	"application/vnd.cluetrust.cartomobile-config-pkg": [
+	"c11amz"
+],
+	"application/vnd.commonspace": [
+	"csp"
+],
+	"application/vnd.contact.cmsg": [
+	"cdbcmsg"
+],
+	"application/vnd.cosmocaller": [
+	"cmc"
+],
+	"application/vnd.crick.clicker": [
+	"clkx"
+],
+	"application/vnd.crick.clicker.keyboard": [
+	"clkk"
+],
+	"application/vnd.crick.clicker.palette": [
+	"clkp"
+],
+	"application/vnd.crick.clicker.template": [
+	"clkt"
+],
+	"application/vnd.crick.clicker.wordbank": [
+	"clkw"
+],
+	"application/vnd.criticaltools.wbs+xml": [
+	"wbs"
+],
+	"application/vnd.ctc-posml": [
+	"pml"
+],
+	"application/vnd.cups-ppd": [
+	"ppd"
+],
+	"application/vnd.curl.car": [
+	"car"
+],
+	"application/vnd.curl.pcurl": [
+	"pcurl"
+],
+	"application/vnd.dart": [
+	"dart"
+],
+	"application/vnd.data-vision.rdz": [
+	"rdz"
+],
+	"application/vnd.dece.data": [
+	"uvf",
+	"uvvf",
+	"uvd",
+	"uvvd"
+],
+	"application/vnd.dece.ttml+xml": [
+	"uvt",
+	"uvvt"
+],
+	"application/vnd.dece.unspecified": [
+	"uvx",
+	"uvvx"
+],
+	"application/vnd.dece.zip": [
+	"uvz",
+	"uvvz"
+],
+	"application/vnd.denovo.fcselayout-link": [
+	"fe_launch"
+],
+	"application/vnd.dna": [
+	"dna"
+],
+	"application/vnd.dolby.mlp": [
+	"mlp"
+],
+	"application/vnd.dpgraph": [
+	"dpg"
+],
+	"application/vnd.dreamfactory": [
+	"dfac"
+],
+	"application/vnd.ds-keypoint": [
+	"kpxx"
+],
+	"application/vnd.dvb.ait": [
+	"ait"
+],
+	"application/vnd.dvb.service": [
+	"svc"
+],
+	"application/vnd.dynageo": [
+	"geo"
+],
+	"application/vnd.ecowin.chart": [
+	"mag"
+],
+	"application/vnd.enliven": [
+	"nml"
+],
+	"application/vnd.epson.esf": [
+	"esf"
+],
+	"application/vnd.epson.msf": [
+	"msf"
+],
+	"application/vnd.epson.quickanime": [
+	"qam"
+],
+	"application/vnd.epson.salt": [
+	"slt"
+],
+	"application/vnd.epson.ssf": [
+	"ssf"
+],
+	"application/vnd.eszigno3+xml": [
+	"es3",
+	"et3"
+],
+	"application/vnd.ezpix-album": [
+	"ez2"
+],
+	"application/vnd.ezpix-package": [
+	"ez3"
+],
+	"application/vnd.fdf": [
+	"fdf"
+],
+	"application/vnd.fdsn.mseed": [
+	"mseed"
+],
+	"application/vnd.fdsn.seed": [
+	"seed",
+	"dataless"
+],
+	"application/vnd.flographit": [
+	"gph"
+],
+	"application/vnd.fluxtime.clip": [
+	"ftc"
+],
+	"application/vnd.framemaker": [
+	"fm",
+	"frame",
+	"maker",
+	"book"
+],
+	"application/vnd.frogans.fnc": [
+	"fnc"
+],
+	"application/vnd.frogans.ltf": [
+	"ltf"
+],
+	"application/vnd.fsc.weblaunch": [
+	"fsc"
+],
+	"application/vnd.fujitsu.oasys": [
+	"oas"
+],
+	"application/vnd.fujitsu.oasys2": [
+	"oa2"
+],
+	"application/vnd.fujitsu.oasys3": [
+	"oa3"
+],
+	"application/vnd.fujitsu.oasysgp": [
+	"fg5"
+],
+	"application/vnd.fujitsu.oasysprs": [
+	"bh2"
+],
+	"application/vnd.fujixerox.ddd": [
+	"ddd"
+],
+	"application/vnd.fujixerox.docuworks": [
+	"xdw"
+],
+	"application/vnd.fujixerox.docuworks.binder": [
+	"xbd"
+],
+	"application/vnd.fuzzysheet": [
+	"fzs"
+],
+	"application/vnd.genomatix.tuxedo": [
+	"txd"
+],
+	"application/vnd.geogebra.file": [
+	"ggb"
+],
+	"application/vnd.geogebra.tool": [
+	"ggt"
+],
+	"application/vnd.geometry-explorer": [
+	"gex",
+	"gre"
+],
+	"application/vnd.geonext": [
+	"gxt"
+],
+	"application/vnd.geoplan": [
+	"g2w"
+],
+	"application/vnd.geospace": [
+	"g3w"
+],
+	"application/vnd.gmx": [
+	"gmx"
+],
+	"application/vnd.google-apps.document": [
+	"gdoc"
+],
+	"application/vnd.google-apps.presentation": [
+	"gslides"
+],
+	"application/vnd.google-apps.spreadsheet": [
+	"gsheet"
+],
+	"application/vnd.google-earth.kml+xml": [
+	"kml"
+],
+	"application/vnd.google-earth.kmz": [
+	"kmz"
+],
+	"application/vnd.grafeq": [
+	"gqf",
+	"gqs"
+],
+	"application/vnd.groove-account": [
+	"gac"
+],
+	"application/vnd.groove-help": [
+	"ghf"
+],
+	"application/vnd.groove-identity-message": [
+	"gim"
+],
+	"application/vnd.groove-injector": [
+	"grv"
+],
+	"application/vnd.groove-tool-message": [
+	"gtm"
+],
+	"application/vnd.groove-tool-template": [
+	"tpl"
+],
+	"application/vnd.groove-vcard": [
+	"vcg"
+],
+	"application/vnd.hal+xml": [
+	"hal"
+],
+	"application/vnd.handheld-entertainment+xml": [
+	"zmm"
+],
+	"application/vnd.hbci": [
+	"hbci"
+],
+	"application/vnd.hhe.lesson-player": [
+	"les"
+],
+	"application/vnd.hp-hpgl": [
+	"hpgl"
+],
+	"application/vnd.hp-hpid": [
+	"hpid"
+],
+	"application/vnd.hp-hps": [
+	"hps"
+],
+	"application/vnd.hp-jlyt": [
+	"jlt"
+],
+	"application/vnd.hp-pcl": [
+	"pcl"
+],
+	"application/vnd.hp-pclxl": [
+	"pclxl"
+],
+	"application/vnd.hydrostatix.sof-data": [
+	"sfd-hdstx"
+],
+	"application/vnd.ibm.minipay": [
+	"mpy"
+],
+	"application/vnd.ibm.modcap": [
+	"afp",
+	"listafp",
+	"list3820"
+],
+	"application/vnd.ibm.rights-management": [
+	"irm"
+],
+	"application/vnd.ibm.secure-container": [
+	"sc"
+],
+	"application/vnd.iccprofile": [
+	"icc",
+	"icm"
+],
+	"application/vnd.igloader": [
+	"igl"
+],
+	"application/vnd.immervision-ivp": [
+	"ivp"
+],
+	"application/vnd.immervision-ivu": [
+	"ivu"
+],
+	"application/vnd.insors.igm": [
+	"igm"
+],
+	"application/vnd.intercon.formnet": [
+	"xpw",
+	"xpx"
+],
+	"application/vnd.intergeo": [
+	"i2g"
+],
+	"application/vnd.intu.qbo": [
+	"qbo"
+],
+	"application/vnd.intu.qfx": [
+	"qfx"
+],
+	"application/vnd.ipunplugged.rcprofile": [
+	"rcprofile"
+],
+	"application/vnd.irepository.package+xml": [
+	"irp"
+],
+	"application/vnd.is-xpr": [
+	"xpr"
+],
+	"application/vnd.isac.fcs": [
+	"fcs"
+],
+	"application/vnd.jam": [
+	"jam"
+],
+	"application/vnd.jcp.javame.midlet-rms": [
+	"rms"
+],
+	"application/vnd.jisp": [
+	"jisp"
+],
+	"application/vnd.joost.joda-archive": [
+	"joda"
+],
+	"application/vnd.kahootz": [
+	"ktz",
+	"ktr"
+],
+	"application/vnd.kde.karbon": [
+	"karbon"
+],
+	"application/vnd.kde.kchart": [
+	"chrt"
+],
+	"application/vnd.kde.kformula": [
+	"kfo"
+],
+	"application/vnd.kde.kivio": [
+	"flw"
+],
+	"application/vnd.kde.kontour": [
+	"kon"
+],
+	"application/vnd.kde.kpresenter": [
+	"kpr",
+	"kpt"
+],
+	"application/vnd.kde.kspread": [
+	"ksp"
+],
+	"application/vnd.kde.kword": [
+	"kwd",
+	"kwt"
+],
+	"application/vnd.kenameaapp": [
+	"htke"
+],
+	"application/vnd.kidspiration": [
+	"kia"
+],
+	"application/vnd.kinar": [
+	"kne",
+	"knp"
+],
+	"application/vnd.koan": [
+	"skp",
+	"skd",
+	"skt",
+	"skm"
+],
+	"application/vnd.kodak-descriptor": [
+	"sse"
+],
+	"application/vnd.las.las+xml": [
+	"lasxml"
+],
+	"application/vnd.llamagraphics.life-balance.desktop": [
+	"lbd"
+],
+	"application/vnd.llamagraphics.life-balance.exchange+xml": [
+	"lbe"
+],
+	"application/vnd.lotus-1-2-3": [
+	"123"
+],
+	"application/vnd.lotus-approach": [
+	"apr"
+],
+	"application/vnd.lotus-freelance": [
+	"pre"
+],
+	"application/vnd.lotus-notes": [
+	"nsf"
+],
+	"application/vnd.lotus-organizer": [
+	"org"
+],
+	"application/vnd.lotus-screencam": [
+	"scm"
+],
+	"application/vnd.lotus-wordpro": [
+	"lwp"
+],
+	"application/vnd.macports.portpkg": [
+	"portpkg"
+],
+	"application/vnd.mcd": [
+	"mcd"
+],
+	"application/vnd.medcalcdata": [
+	"mc1"
+],
+	"application/vnd.mediastation.cdkey": [
+	"cdkey"
+],
+	"application/vnd.mfer": [
+	"mwf"
+],
+	"application/vnd.mfmp": [
+	"mfm"
+],
+	"application/vnd.micrografx.flo": [
+	"flo"
+],
+	"application/vnd.micrografx.igx": [
+	"igx"
+],
+	"application/vnd.mif": [
+	"mif"
+],
+	"application/vnd.mobius.daf": [
+	"daf"
+],
+	"application/vnd.mobius.dis": [
+	"dis"
+],
+	"application/vnd.mobius.mbk": [
+	"mbk"
+],
+	"application/vnd.mobius.mqy": [
+	"mqy"
+],
+	"application/vnd.mobius.msl": [
+	"msl"
+],
+	"application/vnd.mobius.plc": [
+	"plc"
+],
+	"application/vnd.mobius.txf": [
+	"txf"
+],
+	"application/vnd.mophun.application": [
+	"mpn"
+],
+	"application/vnd.mophun.certificate": [
+	"mpc"
+],
+	"application/vnd.mozilla.xul+xml": [
+	"xul"
+],
+	"application/vnd.ms-artgalry": [
+	"cil"
+],
+	"application/vnd.ms-cab-compressed": [
+	"cab"
+],
+	"application/vnd.ms-excel": [
+	"xls",
+	"xlm",
+	"xla",
+	"xlc",
+	"xlt",
+	"xlw"
+],
+	"application/vnd.ms-excel.addin.macroenabled.12": [
+	"xlam"
+],
+	"application/vnd.ms-excel.sheet.binary.macroenabled.12": [
+	"xlsb"
+],
+	"application/vnd.ms-excel.sheet.macroenabled.12": [
+	"xlsm"
+],
+	"application/vnd.ms-excel.template.macroenabled.12": [
+	"xltm"
+],
+	"application/vnd.ms-fontobject": [
+	"eot"
+],
+	"application/vnd.ms-htmlhelp": [
+	"chm"
+],
+	"application/vnd.ms-ims": [
+	"ims"
+],
+	"application/vnd.ms-lrm": [
+	"lrm"
+],
+	"application/vnd.ms-officetheme": [
+	"thmx"
+],
+	"application/vnd.ms-outlook": [
+	"msg"
+],
+	"application/vnd.ms-pki.seccat": [
+	"cat"
+],
+	"application/vnd.ms-pki.stl": [
+	"stl"
+],
+	"application/vnd.ms-powerpoint": [
+	"ppt",
+	"pps",
+	"pot"
+],
+	"application/vnd.ms-powerpoint.addin.macroenabled.12": [
+	"ppam"
+],
+	"application/vnd.ms-powerpoint.presentation.macroenabled.12": [
+	"pptm"
+],
+	"application/vnd.ms-powerpoint.slide.macroenabled.12": [
+	"sldm"
+],
+	"application/vnd.ms-powerpoint.slideshow.macroenabled.12": [
+	"ppsm"
+],
+	"application/vnd.ms-powerpoint.template.macroenabled.12": [
+	"potm"
+],
+	"application/vnd.ms-project": [
+	"mpp",
+	"mpt"
+],
+	"application/vnd.ms-word.document.macroenabled.12": [
+	"docm"
+],
+	"application/vnd.ms-word.template.macroenabled.12": [
+	"dotm"
+],
+	"application/vnd.ms-works": [
+	"wps",
+	"wks",
+	"wcm",
+	"wdb"
+],
+	"application/vnd.ms-wpl": [
+	"wpl"
+],
+	"application/vnd.ms-xpsdocument": [
+	"xps"
+],
+	"application/vnd.mseq": [
+	"mseq"
+],
+	"application/vnd.musician": [
+	"mus"
+],
+	"application/vnd.muvee.style": [
+	"msty"
+],
+	"application/vnd.mynfc": [
+	"taglet"
+],
+	"application/vnd.neurolanguage.nlu": [
+	"nlu"
+],
+	"application/vnd.nitf": [
+	"ntf",
+	"nitf"
+],
+	"application/vnd.noblenet-directory": [
+	"nnd"
+],
+	"application/vnd.noblenet-sealer": [
+	"nns"
+],
+	"application/vnd.noblenet-web": [
+	"nnw"
+],
+	"application/vnd.nokia.n-gage.data": [
+	"ngdat"
+],
+	"application/vnd.nokia.n-gage.symbian.install": [
+	"n-gage"
+],
+	"application/vnd.nokia.radio-preset": [
+	"rpst"
+],
+	"application/vnd.nokia.radio-presets": [
+	"rpss"
+],
+	"application/vnd.novadigm.edm": [
+	"edm"
+],
+	"application/vnd.novadigm.edx": [
+	"edx"
+],
+	"application/vnd.novadigm.ext": [
+	"ext"
+],
+	"application/vnd.oasis.opendocument.chart": [
+	"odc"
+],
+	"application/vnd.oasis.opendocument.chart-template": [
+	"otc"
+],
+	"application/vnd.oasis.opendocument.database": [
+	"odb"
+],
+	"application/vnd.oasis.opendocument.formula": [
+	"odf"
+],
+	"application/vnd.oasis.opendocument.formula-template": [
+	"odft"
+],
+	"application/vnd.oasis.opendocument.graphics": [
+	"odg"
+],
+	"application/vnd.oasis.opendocument.graphics-template": [
+	"otg"
+],
+	"application/vnd.oasis.opendocument.image": [
+	"odi"
+],
+	"application/vnd.oasis.opendocument.image-template": [
+	"oti"
+],
+	"application/vnd.oasis.opendocument.presentation": [
+	"odp"
+],
+	"application/vnd.oasis.opendocument.presentation-template": [
+	"otp"
+],
+	"application/vnd.oasis.opendocument.spreadsheet": [
+	"ods"
+],
+	"application/vnd.oasis.opendocument.spreadsheet-template": [
+	"ots"
+],
+	"application/vnd.oasis.opendocument.text": [
+	"odt"
+],
+	"application/vnd.oasis.opendocument.text-master": [
+	"odm"
+],
+	"application/vnd.oasis.opendocument.text-template": [
+	"ott"
+],
+	"application/vnd.oasis.opendocument.text-web": [
+	"oth"
+],
+	"application/vnd.olpc-sugar": [
+	"xo"
+],
+	"application/vnd.oma.dd2+xml": [
+	"dd2"
+],
+	"application/vnd.openofficeorg.extension": [
+	"oxt"
+],
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": [
+	"pptx"
+],
+	"application/vnd.openxmlformats-officedocument.presentationml.slide": [
+	"sldx"
+],
+	"application/vnd.openxmlformats-officedocument.presentationml.slideshow": [
+	"ppsx"
+],
+	"application/vnd.openxmlformats-officedocument.presentationml.template": [
+	"potx"
+],
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
+	"xlsx"
+],
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.template": [
+	"xltx"
+],
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+	"docx"
+],
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.template": [
+	"dotx"
+],
+	"application/vnd.osgeo.mapguide.package": [
+	"mgp"
+],
+	"application/vnd.osgi.dp": [
+	"dp"
+],
+	"application/vnd.osgi.subsystem": [
+	"esa"
+],
+	"application/vnd.palm": [
+	"pdb",
+	"pqa",
+	"oprc"
+],
+	"application/vnd.pawaafile": [
+	"paw"
+],
+	"application/vnd.pg.format": [
+	"str"
+],
+	"application/vnd.pg.osasli": [
+	"ei6"
+],
+	"application/vnd.picsel": [
+	"efif"
+],
+	"application/vnd.pmi.widget": [
+	"wg"
+],
+	"application/vnd.pocketlearn": [
+	"plf"
+],
+	"application/vnd.powerbuilder6": [
+	"pbd"
+],
+	"application/vnd.previewsystems.box": [
+	"box"
+],
+	"application/vnd.proteus.magazine": [
+	"mgz"
+],
+	"application/vnd.publishare-delta-tree": [
+	"qps"
+],
+	"application/vnd.pvi.ptid1": [
+	"ptid"
+],
+	"application/vnd.quark.quarkxpress": [
+	"qxd",
+	"qxt",
+	"qwd",
+	"qwt",
+	"qxl",
+	"qxb"
+],
+	"application/vnd.realvnc.bed": [
+	"bed"
+],
+	"application/vnd.recordare.musicxml": [
+	"mxl"
+],
+	"application/vnd.recordare.musicxml+xml": [
+	"musicxml"
+],
+	"application/vnd.rig.cryptonote": [
+	"cryptonote"
+],
+	"application/vnd.rim.cod": [
+	"cod"
+],
+	"application/vnd.rn-realmedia": [
+	"rm"
+],
+	"application/vnd.rn-realmedia-vbr": [
+	"rmvb"
+],
+	"application/vnd.route66.link66+xml": [
+	"link66"
+],
+	"application/vnd.sailingtracker.track": [
+	"st"
+],
+	"application/vnd.seemail": [
+	"see"
+],
+	"application/vnd.sema": [
+	"sema"
+],
+	"application/vnd.semd": [
+	"semd"
+],
+	"application/vnd.semf": [
+	"semf"
+],
+	"application/vnd.shana.informed.formdata": [
+	"ifm"
+],
+	"application/vnd.shana.informed.formtemplate": [
+	"itp"
+],
+	"application/vnd.shana.informed.interchange": [
+	"iif"
+],
+	"application/vnd.shana.informed.package": [
+	"ipk"
+],
+	"application/vnd.simtech-mindmapper": [
+	"twd",
+	"twds"
+],
+	"application/vnd.smaf": [
+	"mmf"
+],
+	"application/vnd.smart.teacher": [
+	"teacher"
+],
+	"application/vnd.solent.sdkm+xml": [
+	"sdkm",
+	"sdkd"
+],
+	"application/vnd.spotfire.dxp": [
+	"dxp"
+],
+	"application/vnd.spotfire.sfs": [
+	"sfs"
+],
+	"application/vnd.stardivision.calc": [
+	"sdc"
+],
+	"application/vnd.stardivision.draw": [
+	"sda"
+],
+	"application/vnd.stardivision.impress": [
+	"sdd"
+],
+	"application/vnd.stardivision.math": [
+	"smf"
+],
+	"application/vnd.stardivision.writer": [
+	"sdw",
+	"vor"
+],
+	"application/vnd.stardivision.writer-global": [
+	"sgl"
+],
+	"application/vnd.stepmania.package": [
+	"smzip"
+],
+	"application/vnd.stepmania.stepchart": [
+	"sm"
+],
+	"application/vnd.sun.wadl+xml": [
+	"wadl"
+],
+	"application/vnd.sun.xml.calc": [
+	"sxc"
+],
+	"application/vnd.sun.xml.calc.template": [
+	"stc"
+],
+	"application/vnd.sun.xml.draw": [
+	"sxd"
+],
+	"application/vnd.sun.xml.draw.template": [
+	"std"
+],
+	"application/vnd.sun.xml.impress": [
+	"sxi"
+],
+	"application/vnd.sun.xml.impress.template": [
+	"sti"
+],
+	"application/vnd.sun.xml.math": [
+	"sxm"
+],
+	"application/vnd.sun.xml.writer": [
+	"sxw"
+],
+	"application/vnd.sun.xml.writer.global": [
+	"sxg"
+],
+	"application/vnd.sun.xml.writer.template": [
+	"stw"
+],
+	"application/vnd.sus-calendar": [
+	"sus",
+	"susp"
+],
+	"application/vnd.svd": [
+	"svd"
+],
+	"application/vnd.symbian.install": [
+	"sis",
+	"sisx"
+],
+	"application/vnd.syncml+xml": [
+	"xsm"
+],
+	"application/vnd.syncml.dm+wbxml": [
+	"bdm"
+],
+	"application/vnd.syncml.dm+xml": [
+	"xdm"
+],
+	"application/vnd.tao.intent-module-archive": [
+	"tao"
+],
+	"application/vnd.tcpdump.pcap": [
+	"pcap",
+	"cap",
+	"dmp"
+],
+	"application/vnd.tmobile-livetv": [
+	"tmo"
+],
+	"application/vnd.trid.tpt": [
+	"tpt"
+],
+	"application/vnd.triscape.mxs": [
+	"mxs"
+],
+	"application/vnd.trueapp": [
+	"tra"
+],
+	"application/vnd.ufdl": [
+	"ufd",
+	"ufdl"
+],
+	"application/vnd.uiq.theme": [
+	"utz"
+],
+	"application/vnd.umajin": [
+	"umj"
+],
+	"application/vnd.unity": [
+	"unityweb"
+],
+	"application/vnd.uoml+xml": [
+	"uoml"
+],
+	"application/vnd.vcx": [
+	"vcx"
+],
+	"application/vnd.visio": [
+	"vsd",
+	"vst",
+	"vss",
+	"vsw"
+],
+	"application/vnd.visionary": [
+	"vis"
+],
+	"application/vnd.vsf": [
+	"vsf"
+],
+	"application/vnd.wap.wbxml": [
+	"wbxml"
+],
+	"application/vnd.wap.wmlc": [
+	"wmlc"
+],
+	"application/vnd.wap.wmlscriptc": [
+	"wmlsc"
+],
+	"application/vnd.webturbo": [
+	"wtb"
+],
+	"application/vnd.wolfram.player": [
+	"nbp"
+],
+	"application/vnd.wordperfect": [
+	"wpd"
+],
+	"application/vnd.wqd": [
+	"wqd"
+],
+	"application/vnd.wt.stf": [
+	"stf"
+],
+	"application/vnd.xara": [
+	"xar"
+],
+	"application/vnd.xfdl": [
+	"xfdl"
+],
+	"application/vnd.yamaha.hv-dic": [
+	"hvd"
+],
+	"application/vnd.yamaha.hv-script": [
+	"hvs"
+],
+	"application/vnd.yamaha.hv-voice": [
+	"hvp"
+],
+	"application/vnd.yamaha.openscoreformat": [
+	"osf"
+],
+	"application/vnd.yamaha.openscoreformat.osfpvg+xml": [
+	"osfpvg"
+],
+	"application/vnd.yamaha.smaf-audio": [
+	"saf"
+],
+	"application/vnd.yamaha.smaf-phrase": [
+	"spf"
+],
+	"application/vnd.yellowriver-custom-menu": [
+	"cmp"
+],
+	"application/vnd.zul": [
+	"zir",
+	"zirz"
+],
+	"application/vnd.zzazz.deck+xml": [
+	"zaz"
+],
+	"application/voicexml+xml": [
+	"vxml"
+],
+	"application/wasm": [
+	"wasm"
+],
+	"application/widget": [
+	"wgt"
+],
+	"application/winhlp": [
+	"hlp"
+],
+	"application/wsdl+xml": [
+	"wsdl"
+],
+	"application/wspolicy+xml": [
+	"wspolicy"
+],
+	"application/x-7z-compressed": [
+	"7z"
+],
+	"application/x-abiword": [
+	"abw"
+],
+	"application/x-ace-compressed": [
+	"ace"
+],
+	"application/x-apple-diskimage": [
+],
+	"application/x-arj": [
+	"arj"
+],
+	"application/x-authorware-bin": [
+	"aab",
+	"x32",
+	"u32",
+	"vox"
+],
+	"application/x-authorware-map": [
+	"aam"
+],
+	"application/x-authorware-seg": [
+	"aas"
+],
+	"application/x-bcpio": [
+	"bcpio"
+],
+	"application/x-bdoc": [
+],
+	"application/x-bittorrent": [
+	"torrent"
+],
+	"application/x-blorb": [
+	"blb",
+	"blorb"
+],
+	"application/x-bzip": [
+	"bz"
+],
+	"application/x-bzip2": [
+	"bz2",
+	"boz"
+],
+	"application/x-cbr": [
+	"cbr",
+	"cba",
+	"cbt",
+	"cbz",
+	"cb7"
+],
+	"application/x-cdlink": [
+	"vcd"
+],
+	"application/x-cfs-compressed": [
+	"cfs"
+],
+	"application/x-chat": [
+	"chat"
+],
+	"application/x-chess-pgn": [
+	"pgn"
+],
+	"application/x-chrome-extension": [
+	"crx"
+],
+	"application/x-cocoa": [
+	"cco"
+],
+	"application/x-conference": [
+	"nsc"
+],
+	"application/x-cpio": [
+	"cpio"
+],
+	"application/x-csh": [
+	"csh"
+],
+	"application/x-debian-package": [
+	"udeb"
+],
+	"application/x-dgc-compressed": [
+	"dgc"
+],
+	"application/x-director": [
+	"dir",
+	"dcr",
+	"dxr",
+	"cst",
+	"cct",
+	"cxt",
+	"w3d",
+	"fgd",
+	"swa"
+],
+	"application/x-doom": [
+	"wad"
+],
+	"application/x-dtbncx+xml": [
+	"ncx"
+],
+	"application/x-dtbook+xml": [
+	"dtb"
+],
+	"application/x-dtbresource+xml": [
+	"res"
+],
+	"application/x-dvi": [
+	"dvi"
+],
+	"application/x-envoy": [
+	"evy"
+],
+	"application/x-eva": [
+	"eva"
+],
+	"application/x-font-bdf": [
+	"bdf"
+],
+	"application/x-font-ghostscript": [
+	"gsf"
+],
+	"application/x-font-linux-psf": [
+	"psf"
+],
+	"application/x-font-pcf": [
+	"pcf"
+],
