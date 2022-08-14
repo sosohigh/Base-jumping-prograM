@@ -179781,3 +179781,2184 @@ function trustSingle (subnet) {
 	    fn.parent = this;
 
 	    // restore .app property on req and res
+	    router.use(path, function mounted_app(req, res, next) {
+	      var orig = req.app;
+	      fn.handle(req, res, function (err) {
+	        setPrototypeOf(req, orig.request);
+	        setPrototypeOf(res, orig.response);
+	        next(err);
+	      });
+	    });
+
+	    // mounted an app
+	    fn.emit('mount', this);
+	  }, this);
+
+	  return this;
+	};
+
+	/**
+	 * Proxy to the app `Router#route()`
+	 * Returns a new `Route` instance for the _path_.
+	 *
+	 * Routes are isolated middleware stacks for specific paths.
+	 * See the Route api docs for details.
+	 *
+	 * @public
+	 */
+
+	app.route = function route(path) {
+	  this.lazyrouter();
+	  return this._router.route(path);
+	};
+
+	/**
+	 * Register the given template engine callback `fn`
+	 * as `ext`.
+	 *
+	 * By default will `require()` the engine based on the
+	 * file extension. For example if you try to render
+	 * a "foo.ejs" file Express will invoke the following internally:
+	 *
+	 *     app.engine('ejs', require('ejs').__express);
+	 *
+	 * For engines that do not provide `.__express` out of the box,
+	 * or if you wish to "map" a different extension to the template engine
+	 * you may use this method. For example mapping the EJS template engine to
+	 * ".html" files:
+	 *
+	 *     app.engine('html', require('ejs').renderFile);
+	 *
+	 * In this case EJS provides a `.renderFile()` method with
+	 * the same signature that Express expects: `(path, options, callback)`,
+	 * though note that it aliases this method as `ejs.__express` internally
+	 * so if you're using ".ejs" extensions you don't need to do anything.
+	 *
+	 * Some template engines do not follow this convention, the
+	 * [Consolidate.js](https://github.com/tj/consolidate.js)
+	 * library was created to map all of node's popular template
+	 * engines to follow this convention, thus allowing them to
+	 * work seamlessly within Express.
+	 *
+	 * @param {String} ext
+	 * @param {Function} fn
+	 * @return {app} for chaining
+	 * @public
+	 */
+
+	app.engine = function engine(ext, fn) {
+	  if (typeof fn !== 'function') {
+	    throw new Error('callback function required');
+	  }
+
+	  // get file extension
+	  var extension = ext[0] !== '.'
+	    ? '.' + ext
+	    : ext;
+
+	  // store engine
+	  this.engines[extension] = fn;
+
+	  return this;
+	};
+
+	/**
+	 * Proxy to `Router#param()` with one added api feature. The _name_ parameter
+	 * can be an array of names.
+	 *
+	 * See the Router#param() docs for more details.
+	 *
+	 * @param {String|Array} name
+	 * @param {Function} fn
+	 * @return {app} for chaining
+	 * @public
+	 */
+
+	app.param = function param(name, fn) {
+	  this.lazyrouter();
+
+	  if (Array.isArray(name)) {
+	    for (var i = 0; i < name.length; i++) {
+	      this.param(name[i], fn);
+	    }
+
+	    return this;
+	  }
+
+	  this._router.param(name, fn);
+
+	  return this;
+	};
+
+	/**
+	 * Assign `setting` to `val`, or return `setting`'s value.
+	 *
+	 *    app.set('foo', 'bar');
+	 *    app.set('foo');
+	 *    // => "bar"
+	 *
+	 * Mounted servers inherit their parent server's settings.
+	 *
+	 * @param {String} setting
+	 * @param {*} [val]
+	 * @return {Server} for chaining
+	 * @public
+	 */
+
+	app.set = function set(setting, val) {
+	  if (arguments.length === 1) {
+	    // app.get(setting)
+	    var settings = this.settings;
+
+	    while (settings && settings !== Object.prototype) {
+	      if (hasOwnProperty.call(settings, setting)) {
+	        return settings[setting]
+	      }
+
+	      settings = Object.getPrototypeOf(settings);
+	    }
+
+	    return undefined
+	  }
+
+	  debug('set "%s" to %o', setting, val);
+
+	  // set value
+	  this.settings[setting] = val;
+
+	  // trigger matched settings
+	  switch (setting) {
+	    case 'etag':
+	      this.set('etag fn', compileETag(val));
+	      break;
+	    case 'query parser':
+	      this.set('query parser fn', compileQueryParser(val));
+	      break;
+	    case 'trust proxy':
+	      this.set('trust proxy fn', compileTrust(val));
+
+	      // trust proxy inherit back-compat
+	      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
+	        configurable: true,
+	        value: false
+	      });
+
+	      break;
+	  }
+
+	  return this;
+	};
+
+	/**
+	 * Return the app's absolute pathname
+	 * based on the parent(s) that have
+	 * mounted it.
+	 *
+	 * For example if the application was
+	 * mounted as "/admin", which itself
+	 * was mounted as "/blog" then the
+	 * return value would be "/blog/admin".
+	 *
+	 * @return {String}
+	 * @private
+	 */
+
+	app.path = function path() {
+	  return this.parent
+	    ? this.parent.path() + this.mountpath
+	    : '';
+	};
+
+	/**
+	 * Check if `setting` is enabled (truthy).
+	 *
+	 *    app.enabled('foo')
+	 *    // => false
+	 *
+	 *    app.enable('foo')
+	 *    app.enabled('foo')
+	 *    // => true
+	 *
+	 * @param {String} setting
+	 * @return {Boolean}
+	 * @public
+	 */
+
+	app.enabled = function enabled(setting) {
+	  return Boolean(this.set(setting));
+	};
+
+	/**
+	 * Check if `setting` is disabled.
+	 *
+	 *    app.disabled('foo')
+	 *    // => true
+	 *
+	 *    app.enable('foo')
+	 *    app.disabled('foo')
+	 *    // => false
+	 *
+	 * @param {String} setting
+	 * @return {Boolean}
+	 * @public
+	 */
+
+	app.disabled = function disabled(setting) {
+	  return !this.set(setting);
+	};
+
+	/**
+	 * Enable `setting`.
+	 *
+	 * @param {String} setting
+	 * @return {app} for chaining
+	 * @public
+	 */
+
+	app.enable = function enable(setting) {
+	  return this.set(setting, true);
+	};
+
+	/**
+	 * Disable `setting`.
+	 *
+	 * @param {String} setting
+	 * @return {app} for chaining
+	 * @public
+	 */
+
+	app.disable = function disable(setting) {
+	  return this.set(setting, false);
+	};
+
+	/**
+	 * Delegate `.VERB(...)` calls to `router.VERB(...)`.
+	 */
+
+	methods.forEach(function(method){
+	  app[method] = function(path){
+	    if (method === 'get' && arguments.length === 1) {
+	      // app.get(setting)
+	      return this.set(path);
+	    }
+
+	    this.lazyrouter();
+
+	    var route = this._router.route(path);
+	    route[method].apply(route, slice.call(arguments, 1));
+	    return this;
+	  };
+	});
+
+	/**
+	 * Special-cased "all" method, applying the given route `path`,
+	 * middleware, and callback to _every_ HTTP method.
+	 *
+	 * @param {String} path
+	 * @param {Function} ...
+	 * @return {app} for chaining
+	 * @public
+	 */
+
+	app.all = function all(path) {
+	  this.lazyrouter();
+
+	  var route = this._router.route(path);
+	  var args = slice.call(arguments, 1);
+
+	  for (var i = 0; i < methods.length; i++) {
+	    route[methods[i]].apply(route, args);
+	  }
+
+	  return this;
+	};
+
+	// del -> delete alias
+
+	app.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');
+
+	/**
+	 * Render the given view `name` name with `options`
+	 * and a callback accepting an error and the
+	 * rendered template string.
+	 *
+	 * Example:
+	 *
+	 *    app.render('email', { name: 'Tobi' }, function(err, html){
+	 *      // ...
+	 *    })
+	 *
+	 * @param {String} name
+	 * @param {Object|Function} options or fn
+	 * @param {Function} callback
+	 * @public
+	 */
+
+	app.render = function render(name, options, callback) {
+	  var cache = this.cache;
+	  var done = callback;
+	  var engines = this.engines;
+	  var opts = options;
+	  var renderOptions = {};
+	  var view;
+
+	  // support callback function as second arg
+	  if (typeof options === 'function') {
+	    done = options;
+	    opts = {};
+	  }
+
+	  // merge app.locals
+	  merge(renderOptions, this.locals);
+
+	  // merge options._locals
+	  if (opts._locals) {
+	    merge(renderOptions, opts._locals);
+	  }
+
+	  // merge options
+	  merge(renderOptions, opts);
+
+	  // set .cache unless explicitly provided
+	  if (renderOptions.cache == null) {
+	    renderOptions.cache = this.enabled('view cache');
+	  }
+
+	  // primed cache
+	  if (renderOptions.cache) {
+	    view = cache[name];
+	  }
+
+	  // view
+	  if (!view) {
+	    var View = this.get('view');
+
+	    view = new View(name, {
+	      defaultEngine: this.get('view engine'),
+	      root: this.get('views'),
+	      engines: engines
+	    });
+
+	    if (!view.path) {
+	      var dirs = Array.isArray(view.root) && view.root.length > 1
+	        ? 'directories "' + view.root.slice(0, -1).join('", "') + '" or "' + view.root[view.root.length - 1] + '"'
+	        : 'directory "' + view.root + '"';
+	      var err = new Error('Failed to lookup view "' + name + '" in views ' + dirs);
+	      err.view = view;
+	      return done(err);
+	    }
+
+	    // prime the cache
+	    if (renderOptions.cache) {
+	      cache[name] = view;
+	    }
+	  }
+
+	  // render
+	  tryRender(view, renderOptions, done);
+	};
+
+	/**
+	 * Listen for connections.
+	 *
+	 * A node `http.Server` is returned, with this
+	 * application (which is a `Function`) as its
+	 * callback. If you wish to create both an HTTP
+	 * and HTTPS server you may do so with the "http"
+	 * and "https" modules as shown here:
+	 *
+	 *    var http = require('http')
+	 *      , https = require('https')
+	 *      , express = require('express')
+	 *      , app = express();
+	 *
+	 *    http.createServer(app).listen(80);
+	 *    https.createServer({ ... }, app).listen(443);
+	 *
+	 * @return {http.Server}
+	 * @public
+	 */
+
+	app.listen = function listen() {
+	  var server = http.createServer(this);
+	  return server.listen.apply(server, arguments);
+	};
+
+	/**
+	 * Log error using console.error.
+	 *
+	 * @param {Error} err
+	 * @private
+	 */
+
+	function logerror(err) {
+	  /* istanbul ignore next */
+	  if (this.get('env') !== 'test') console.error(err.stack || err.toString());
+	}
+
+	/**
+	 * Try rendering a view.
+	 * @private
+	 */
+
+	function tryRender(view, options, callback) {
+	  try {
+	    view.render(options, callback);
+	  } catch (err) {
+	    callback(err);
+	  }
+	}
+} (application));
+
+var negotiatorExports = {};
+var negotiator = {
+  get exports(){ return negotiatorExports; },
+  set exports(v){ negotiatorExports = v; },
+};
+
+var charsetExports = {};
+var charset = {
+  get exports(){ return charsetExports; },
+  set exports(v){ charsetExports = v; },
+};
+
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+charset.exports = preferredCharsets$1;
+charsetExports.preferredCharsets = preferredCharsets$1;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleCharsetRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept-Charset header.
+ * @private
+ */
+
+function parseAcceptCharset(accept) {
+  var accepts = accept.split(',');
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var charset = parseCharset(accepts[i].trim(), i);
+
+    if (charset) {
+      accepts[j++] = charset;
+    }
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse a charset from the Accept-Charset header.
+ * @private
+ */
+
+function parseCharset(str, i) {
+  var match = simpleCharsetRegExp.exec(str);
+  if (!match) return null;
+
+  var charset = match[1];
+  var q = 1;
+  if (match[2]) {
+    var params = match[2].split(';');
+    for (var j = 0; j < params.length; j++) {
+      var p = params[j].trim().split('=');
+      if (p[0] === 'q') {
+        q = parseFloat(p[1]);
+        break;
+      }
+    }
+  }
+
+  return {
+    charset: charset,
+    q: q,
+    i: i
+  };
+}
+
+/**
+ * Get the priority of a charset.
+ * @private
+ */
+
+function getCharsetPriority(charset, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify$3(charset, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the charset.
+ * @private
+ */
+
+function specify$3(charset, spec, index) {
+  var s = 0;
+  if(spec.charset.toLowerCase() === charset.toLowerCase()){
+    s |= 1;
+  } else if (spec.charset !== '*' ) {
+    return null
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s
+  }
+}
+
+/**
+ * Get the preferred charsets from an Accept-Charset header.
+ * @public
+ */
+
+function preferredCharsets$1(accept, provided) {
+  // RFC 2616 sec 14.2: no header = *
+  var accepts = parseAcceptCharset(accept === undefined ? '*' : accept || '');
+
+  if (!provided) {
+    // sorted list of all charsets
+    return accepts
+      .filter(isQuality$3)
+      .sort(compareSpecs$3)
+      .map(getFullCharset);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getCharsetPriority(type, accepts, index);
+  });
+
+  // sorted list of accepted charsets
+  return priorities.filter(isQuality$3).sort(compareSpecs$3).map(function getCharset(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs$3(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full charset string.
+ * @private
+ */
+
+function getFullCharset(spec) {
+  return spec.charset;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality$3(spec) {
+  return spec.q > 0;
+}
+
+var encodingExports = {};
+var encoding = {
+  get exports(){ return encodingExports; },
+  set exports(v){ encodingExports = v; },
+};
+
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+encoding.exports = preferredEncodings$1;
+encodingExports.preferredEncodings = preferredEncodings$1;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleEncodingRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept-Encoding header.
+ * @private
+ */
+
+function parseAcceptEncoding(accept) {
+  var accepts = accept.split(',');
+  var hasIdentity = false;
+  var minQuality = 1;
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var encoding = parseEncoding(accepts[i].trim(), i);
+
+    if (encoding) {
+      accepts[j++] = encoding;
+      hasIdentity = hasIdentity || specify$2('identity', encoding);
+      minQuality = Math.min(minQuality, encoding.q || 1);
+    }
+  }
+
+  if (!hasIdentity) {
+    /*
+     * If identity doesn't explicitly appear in the accept-encoding header,
+     * it's added to the list of acceptable encoding with the lowest q
+     */
+    accepts[j++] = {
+      encoding: 'identity',
+      q: minQuality,
+      i: i
+    };
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse an encoding from the Accept-Encoding header.
+ * @private
+ */
+
+function parseEncoding(str, i) {
+  var match = simpleEncodingRegExp.exec(str);
+  if (!match) return null;
+
+  var encoding = match[1];
+  var q = 1;
+  if (match[2]) {
+    var params = match[2].split(';');
+    for (var j = 0; j < params.length; j++) {
+      var p = params[j].trim().split('=');
+      if (p[0] === 'q') {
+        q = parseFloat(p[1]);
+        break;
+      }
+    }
+  }
+
+  return {
+    encoding: encoding,
+    q: q,
+    i: i
+  };
+}
+
+/**
+ * Get the priority of an encoding.
+ * @private
+ */
+
+function getEncodingPriority(encoding, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify$2(encoding, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the encoding.
+ * @private
+ */
+
+function specify$2(encoding, spec, index) {
+  var s = 0;
+  if(spec.encoding.toLowerCase() === encoding.toLowerCase()){
+    s |= 1;
+  } else if (spec.encoding !== '*' ) {
+    return null
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s
+  }
+}
+/**
+ * Get the preferred encodings from an Accept-Encoding header.
+ * @public
+ */
+
+function preferredEncodings$1(accept, provided) {
+  var accepts = parseAcceptEncoding(accept || '');
+
+  if (!provided) {
+    // sorted list of all encodings
+    return accepts
+      .filter(isQuality$2)
+      .sort(compareSpecs$2)
+      .map(getFullEncoding);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getEncodingPriority(type, accepts, index);
+  });
+
+  // sorted list of accepted encodings
+  return priorities.filter(isQuality$2).sort(compareSpecs$2).map(function getEncoding(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs$2(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full encoding string.
+ * @private
+ */
+
+function getFullEncoding(spec) {
+  return spec.encoding;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality$2(spec) {
+  return spec.q > 0;
+}
+
+var languageExports = {};
+var language = {
+  get exports(){ return languageExports; },
+  set exports(v){ languageExports = v; },
+};
+
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+language.exports = preferredLanguages$1;
+languageExports.preferredLanguages = preferredLanguages$1;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleLanguageRegExp = /^\s*([^\s\-;]+)(?:-([^\s;]+))?\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept-Language header.
+ * @private
+ */
+
+function parseAcceptLanguage(accept) {
+  var accepts = accept.split(',');
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var language = parseLanguage(accepts[i].trim(), i);
+
+    if (language) {
+      accepts[j++] = language;
+    }
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse a language from the Accept-Language header.
+ * @private
+ */
+
+function parseLanguage(str, i) {
+  var match = simpleLanguageRegExp.exec(str);
+  if (!match) return null;
+
+  var prefix = match[1];
+  var suffix = match[2];
+  var full = prefix;
+
+  if (suffix) full += "-" + suffix;
+
+  var q = 1;
+  if (match[3]) {
+    var params = match[3].split(';');
+    for (var j = 0; j < params.length; j++) {
+      var p = params[j].split('=');
+      if (p[0] === 'q') q = parseFloat(p[1]);
+    }
+  }
+
+  return {
+    prefix: prefix,
+    suffix: suffix,
+    q: q,
+    i: i,
+    full: full
+  };
+}
+
+/**
+ * Get the priority of a language.
+ * @private
+ */
+
+function getLanguagePriority(language, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify$1(language, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the language.
+ * @private
+ */
+
+function specify$1(language, spec, index) {
+  var p = parseLanguage(language);
+  if (!p) return null;
+  var s = 0;
+  if(spec.full.toLowerCase() === p.full.toLowerCase()){
+    s |= 4;
+  } else if (spec.prefix.toLowerCase() === p.full.toLowerCase()) {
+    s |= 2;
+  } else if (spec.full.toLowerCase() === p.prefix.toLowerCase()) {
+    s |= 1;
+  } else if (spec.full !== '*' ) {
+    return null
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s
+  }
+}
+/**
+ * Get the preferred languages from an Accept-Language header.
+ * @public
+ */
+
+function preferredLanguages$1(accept, provided) {
+  // RFC 2616 sec 14.4: no header = *
+  var accepts = parseAcceptLanguage(accept === undefined ? '*' : accept || '');
+
+  if (!provided) {
+    // sorted list of all languages
+    return accepts
+      .filter(isQuality$1)
+      .sort(compareSpecs$1)
+      .map(getFullLanguage);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getLanguagePriority(type, accepts, index);
+  });
+
+  // sorted list of accepted languages
+  return priorities.filter(isQuality$1).sort(compareSpecs$1).map(function getLanguage(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs$1(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full language string.
+ * @private
+ */
+
+function getFullLanguage(spec) {
+  return spec.full;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality$1(spec) {
+  return spec.q > 0;
+}
+
+var mediaTypeExports = {};
+var mediaType = {
+  get exports(){ return mediaTypeExports; },
+  set exports(v){ mediaTypeExports = v; },
+};
+
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+mediaType.exports = preferredMediaTypes$1;
+mediaTypeExports.preferredMediaTypes = preferredMediaTypes$1;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleMediaTypeRegExp = /^\s*([^\s\/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept header.
+ * @private
+ */
+
+function parseAccept(accept) {
+  var accepts = splitMediaTypes(accept);
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var mediaType = parseMediaType(accepts[i].trim(), i);
+
+    if (mediaType) {
+      accepts[j++] = mediaType;
+    }
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse a media type from the Accept header.
+ * @private
+ */
+
+function parseMediaType(str, i) {
+  var match = simpleMediaTypeRegExp.exec(str);
+  if (!match) return null;
+
+  var params = Object.create(null);
+  var q = 1;
+  var subtype = match[2];
+  var type = match[1];
+
+  if (match[3]) {
+    var kvps = splitParameters(match[3]).map(splitKeyValuePair);
+
+    for (var j = 0; j < kvps.length; j++) {
+      var pair = kvps[j];
+      var key = pair[0].toLowerCase();
+      var val = pair[1];
+
+      // get the value, unwrapping quotes
+      var value = val && val[0] === '"' && val[val.length - 1] === '"'
+        ? val.substr(1, val.length - 2)
+        : val;
+
+      if (key === 'q') {
+        q = parseFloat(value);
+        break;
+      }
+
+      // store parameter
+      params[key] = value;
+    }
+  }
+
+  return {
+    type: type,
+    subtype: subtype,
+    params: params,
+    q: q,
+    i: i
+  };
+}
+
+/**
+ * Get the priority of a media type.
+ * @private
+ */
+
+function getMediaTypePriority(type, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify(type, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the media type.
+ * @private
+ */
+
+function specify(type, spec, index) {
+  var p = parseMediaType(type);
+  var s = 0;
+
+  if (!p) {
+    return null;
+  }
+
+  if(spec.type.toLowerCase() == p.type.toLowerCase()) {
+    s |= 4;
+  } else if(spec.type != '*') {
+    return null;
+  }
+
+  if(spec.subtype.toLowerCase() == p.subtype.toLowerCase()) {
+    s |= 2;
+  } else if(spec.subtype != '*') {
+    return null;
+  }
+
+  var keys = Object.keys(spec.params);
+  if (keys.length > 0) {
+    if (keys.every(function (k) {
+      return spec.params[k] == '*' || (spec.params[k] || '').toLowerCase() == (p.params[k] || '').toLowerCase();
+    })) {
+      s |= 1;
+    } else {
+      return null
+    }
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s,
+  }
+}
+
+/**
+ * Get the preferred media types from an Accept header.
+ * @public
+ */
+
+function preferredMediaTypes$1(accept, provided) {
+  // RFC 2616 sec 14.2: no header = */*
+  var accepts = parseAccept(accept === undefined ? '*/*' : accept || '');
+
+  if (!provided) {
+    // sorted list of all types
+    return accepts
+      .filter(isQuality)
+      .sort(compareSpecs)
+      .map(getFullType);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getMediaTypePriority(type, accepts, index);
+  });
+
+  // sorted list of accepted types
+  return priorities.filter(isQuality).sort(compareSpecs).map(function getType(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full type string.
+ * @private
+ */
+
+function getFullType(spec) {
+  return spec.type + '/' + spec.subtype;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality(spec) {
+  return spec.q > 0;
+}
+
+/**
+ * Count the number of quotes in a string.
+ * @private
+ */
+
+function quoteCount(string) {
+  var count = 0;
+  var index = 0;
+
+  while ((index = string.indexOf('"', index)) !== -1) {
+    count++;
+    index++;
+  }
+
+  return count;
+}
+
+/**
+ * Split a key value pair.
+ * @private
+ */
+
+function splitKeyValuePair(str) {
+  var index = str.indexOf('=');
+  var key;
+  var val;
+
+  if (index === -1) {
+    key = str;
+  } else {
+    key = str.substr(0, index);
+    val = str.substr(index + 1);
+  }
+
+  return [key, val];
+}
+
+/**
+ * Split an Accept header into media types.
+ * @private
+ */
+
+function splitMediaTypes(accept) {
+  var accepts = accept.split(',');
+
+  for (var i = 1, j = 0; i < accepts.length; i++) {
+    if (quoteCount(accepts[j]) % 2 == 0) {
+      accepts[++j] = accepts[i];
+    } else {
+      accepts[j] += ',' + accepts[i];
+    }
+  }
+
+  // trim accepts
+  accepts.length = j + 1;
+
+  return accepts;
+}
+
+/**
+ * Split a string of parameters.
+ * @private
+ */
+
+function splitParameters(str) {
+  var parameters = str.split(';');
+
+  for (var i = 1, j = 0; i < parameters.length; i++) {
+    if (quoteCount(parameters[j]) % 2 == 0) {
+      parameters[++j] = parameters[i];
+    } else {
+      parameters[j] += ';' + parameters[i];
+    }
+  }
+
+  // trim parameters
+  parameters.length = j + 1;
+
+  for (var i = 0; i < parameters.length; i++) {
+    parameters[i] = parameters[i].trim();
+  }
+
+  return parameters;
+}
+
+/*!
+ * negotiator
+ * Copyright(c) 2012 Federico Romero
+ * Copyright(c) 2012-2014 Isaac Z. Schlueter
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var preferredCharsets = charsetExports;
+var preferredEncodings = encodingExports;
+var preferredLanguages = languageExports;
+var preferredMediaTypes = mediaTypeExports;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+negotiator.exports = Negotiator$1;
+negotiatorExports.Negotiator = Negotiator$1;
+
+/**
+ * Create a Negotiator instance from a request.
+ * @param {object} request
+ * @public
+ */
+
+function Negotiator$1(request) {
+  if (!(this instanceof Negotiator$1)) {
+    return new Negotiator$1(request);
+  }
+
+  this.request = request;
+}
+
+Negotiator$1.prototype.charset = function charset(available) {
+  var set = this.charsets(available);
+  return set && set[0];
+};
+
+Negotiator$1.prototype.charsets = function charsets(available) {
+  return preferredCharsets(this.request.headers['accept-charset'], available);
+};
+
+Negotiator$1.prototype.encoding = function encoding(available) {
+  var set = this.encodings(available);
+  return set && set[0];
+};
+
+Negotiator$1.prototype.encodings = function encodings(available) {
+  return preferredEncodings(this.request.headers['accept-encoding'], available);
+};
+
+Negotiator$1.prototype.language = function language(available) {
+  var set = this.languages(available);
+  return set && set[0];
+};
+
+Negotiator$1.prototype.languages = function languages(available) {
+  return preferredLanguages(this.request.headers['accept-language'], available);
+};
+
+Negotiator$1.prototype.mediaType = function mediaType(available) {
+  var set = this.mediaTypes(available);
+  return set && set[0];
+};
+
+Negotiator$1.prototype.mediaTypes = function mediaTypes(available) {
+  return preferredMediaTypes(this.request.headers.accept, available);
+};
+
+// Backwards compatibility
+Negotiator$1.prototype.preferredCharset = Negotiator$1.prototype.charset;
+Negotiator$1.prototype.preferredCharsets = Negotiator$1.prototype.charsets;
+Negotiator$1.prototype.preferredEncoding = Negotiator$1.prototype.encoding;
+Negotiator$1.prototype.preferredEncodings = Negotiator$1.prototype.encodings;
+Negotiator$1.prototype.preferredLanguage = Negotiator$1.prototype.language;
+Negotiator$1.prototype.preferredLanguages = Negotiator$1.prototype.languages;
+Negotiator$1.prototype.preferredMediaType = Negotiator$1.prototype.mediaType;
+Negotiator$1.prototype.preferredMediaTypes = Negotiator$1.prototype.mediaTypes;
+
+/*!
+ * accepts
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var Negotiator = negotiatorExports;
+var mime$2 = mimeTypes;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var accepts$1 = Accepts;
+
+/**
+ * Create a new Accepts object for the given req.
+ *
+ * @param {object} req
+ * @public
+ */
+
+function Accepts (req) {
+  if (!(this instanceof Accepts)) {
+    return new Accepts(req)
+  }
+
+  this.headers = req.headers;
+  this.negotiator = new Negotiator(req);
+}
+
+/**
+ * Check if the given `type(s)` is acceptable, returning
+ * the best match when true, otherwise `undefined`, in which
+ * case you should respond with 406 "Not Acceptable".
+ *
+ * The `type` value may be a single mime type string
+ * such as "application/json", the extension name
+ * such as "json" or an array `["json", "html", "text/plain"]`. When a list
+ * or array is given the _best_ match, if any is returned.
+ *
+ * Examples:
+ *
+ *     // Accept: text/html
+ *     this.types('html');
+ *     // => "html"
+ *
+ *     // Accept: text/*, application/json
+ *     this.types('html');
+ *     // => "html"
+ *     this.types('text/html');
+ *     // => "text/html"
+ *     this.types('json', 'text');
+ *     // => "json"
+ *     this.types('application/json');
+ *     // => "application/json"
+ *
+ *     // Accept: text/*, application/json
+ *     this.types('image/png');
+ *     this.types('png');
+ *     // => undefined
+ *
+ *     // Accept: text/*;q=.5, application/json
+ *     this.types(['html', 'json']);
+ *     this.types('html', 'json');
+ *     // => "json"
+ *
+ * @param {String|Array} types...
+ * @return {String|Array|Boolean}
+ * @public
+ */
+
+Accepts.prototype.type =
+Accepts.prototype.types = function (types_) {
+  var types = types_;
+
+  // support flattened arguments
+  if (types && !Array.isArray(types)) {
+    types = new Array(arguments.length);
+    for (var i = 0; i < types.length; i++) {
+      types[i] = arguments[i];
+    }
+  }
+
+  // no types, return all requested types
+  if (!types || types.length === 0) {
+    return this.negotiator.mediaTypes()
+  }
+
+  // no accept header, return first given type
+  if (!this.headers.accept) {
+    return types[0]
+  }
+
+  var mimes = types.map(extToMime);
+  var accepts = this.negotiator.mediaTypes(mimes.filter(validMime));
+  var first = accepts[0];
+
+  return first
+    ? types[mimes.indexOf(first)]
+    : false
+};
+
+/**
+ * Return accepted encodings or best fit based on `encodings`.
+ *
+ * Given `Accept-Encoding: gzip, deflate`
+ * an array sorted by quality is returned:
+ *
+ *     ['gzip', 'deflate']
+ *
+ * @param {String|Array} encodings...
+ * @return {String|Array}
+ * @public
+ */
+
+Accepts.prototype.encoding =
+Accepts.prototype.encodings = function (encodings_) {
+  var encodings = encodings_;
+
+  // support flattened arguments
+  if (encodings && !Array.isArray(encodings)) {
+    encodings = new Array(arguments.length);
+    for (var i = 0; i < encodings.length; i++) {
+      encodings[i] = arguments[i];
+    }
+  }
+
+  // no encodings, return all requested encodings
+  if (!encodings || encodings.length === 0) {
+    return this.negotiator.encodings()
+  }
+
+  return this.negotiator.encodings(encodings)[0] || false
+};
+
+/**
+ * Return accepted charsets or best fit based on `charsets`.
+ *
+ * Given `Accept-Charset: utf-8, iso-8859-1;q=0.2, utf-7;q=0.5`
+ * an array sorted by quality is returned:
+ *
+ *     ['utf-8', 'utf-7', 'iso-8859-1']
+ *
+ * @param {String|Array} charsets...
+ * @return {String|Array}
+ * @public
+ */
+
+Accepts.prototype.charset =
+Accepts.prototype.charsets = function (charsets_) {
+  var charsets = charsets_;
+
+  // support flattened arguments
+  if (charsets && !Array.isArray(charsets)) {
+    charsets = new Array(arguments.length);
+    for (var i = 0; i < charsets.length; i++) {
+      charsets[i] = arguments[i];
+    }
+  }
+
+  // no charsets, return all requested charsets
+  if (!charsets || charsets.length === 0) {
+    return this.negotiator.charsets()
+  }
+
+  return this.negotiator.charsets(charsets)[0] || false
+};
+
+/**
+ * Return accepted languages or best fit based on `langs`.
+ *
+ * Given `Accept-Language: en;q=0.8, es, pt`
+ * an array sorted by quality is returned:
+ *
+ *     ['es', 'pt', 'en']
+ *
+ * @param {String|Array} langs...
+ * @return {Array|String}
+ * @public
+ */
+
+Accepts.prototype.lang =
+Accepts.prototype.langs =
+Accepts.prototype.language =
+Accepts.prototype.languages = function (languages_) {
+  var languages = languages_;
+
+  // support flattened arguments
+  if (languages && !Array.isArray(languages)) {
+    languages = new Array(arguments.length);
+    for (var i = 0; i < languages.length; i++) {
+      languages[i] = arguments[i];
+    }
+  }
+
+  // no languages, return all requested languages
+  if (!languages || languages.length === 0) {
+    return this.negotiator.languages()
+  }
+
+  return this.negotiator.languages(languages)[0] || false
+};
+
+/**
+ * Convert extnames to mime.
+ *
+ * @param {String} type
+ * @return {String}
+ * @private
+ */
+
+function extToMime (type) {
+  return type.indexOf('/') === -1
+    ? mime$2.lookup(type)
+    : type
+}
+
+/**
+ * Check if mime is valid.
+ *
+ * @param {String} type
+ * @return {String}
+ * @private
+ */
+
+function validMime (type) {
+  return typeof type === 'string'
+}
+
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var accepts = accepts$1;
+var deprecate$1 = depd_1('express');
+var isIP$1 = require$$4$2.isIP;
+var typeis = typeIsExports;
+var http$4 = http$6;
+var fresh = fresh_1;
+var parseRange = rangeParser_1;
+var parse$8 = parseurlExports;
+var proxyaddr = proxyAddrExports;
+
+/**
+ * Request prototype.
+ * @public
+ */
+
+var req$2 = Object.create(http$4.IncomingMessage.prototype);
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var request = req$2;
+
+/**
+ * Return request header.
+ *
+ * The `Referrer` header field is special-cased,
+ * both `Referrer` and `Referer` are interchangeable.
+ *
+ * Examples:
+ *
+ *     req.get('Content-Type');
+ *     // => "text/plain"
+ *
+ *     req.get('content-type');
+ *     // => "text/plain"
+ *
+ *     req.get('Something');
+ *     // => undefined
+ *
+ * Aliased as `req.header()`.
+ *
+ * @param {String} name
+ * @return {String}
+ * @public
+ */
+
+req$2.get =
+req$2.header = function header(name) {
+  if (!name) {
+    throw new TypeError('name argument is required to req.get');
+  }
+
+  if (typeof name !== 'string') {
+    throw new TypeError('name must be a string to req.get');
+  }
+
+  var lc = name.toLowerCase();
+
+  switch (lc) {
+    case 'referer':
+    case 'referrer':
+      return this.headers.referrer
+        || this.headers.referer;
+    default:
+      return this.headers[lc];
+  }
+};
+
+/**
+ * To do: update docs.
+ *
+ * Check if the given `type(s)` is acceptable, returning
+ * the best match when true, otherwise `undefined`, in which
+ * case you should respond with 406 "Not Acceptable".
+ *
+ * The `type` value may be a single MIME type string
+ * such as "application/json", an extension name
+ * such as "json", a comma-delimited list such as "json, html, text/plain",
+ * an argument list such as `"json", "html", "text/plain"`,
+ * or an array `["json", "html", "text/plain"]`. When a list
+ * or array is given, the _best_ match, if any is returned.
+ *
+ * Examples:
+ *
+ *     // Accept: text/html
+ *     req.accepts('html');
+ *     // => "html"
+ *
+ *     // Accept: text/*, application/json
+ *     req.accepts('html');
+ *     // => "html"
+ *     req.accepts('text/html');
+ *     // => "text/html"
+ *     req.accepts('json, text');
+ *     // => "json"
+ *     req.accepts('application/json');
+ *     // => "application/json"
+ *
+ *     // Accept: text/*, application/json
+ *     req.accepts('image/png');
+ *     req.accepts('png');
+ *     // => undefined
+ *
+ *     // Accept: text/*;q=.5, application/json
+ *     req.accepts(['html', 'json']);
+ *     req.accepts('html', 'json');
+ *     req.accepts('html, json');
+ *     // => "json"
+ *
+ * @param {String|Array} type(s)
+ * @return {String|Array|Boolean}
+ * @public
+ */
+
+req$2.accepts = function(){
+  var accept = accepts(this);
+  return accept.types.apply(accept, arguments);
+};
+
+/**
+ * Check if the given `encoding`s are accepted.
+ *
+ * @param {String} ...encoding
+ * @return {String|Array}
+ * @public
+ */
+
+req$2.acceptsEncodings = function(){
+  var accept = accepts(this);
+  return accept.encodings.apply(accept, arguments);
+};
+
+req$2.acceptsEncoding = deprecate$1.function(req$2.acceptsEncodings,
+  'req.acceptsEncoding: Use acceptsEncodings instead');
+
+/**
+ * Check if the given `charset`s are acceptable,
+ * otherwise you should respond with 406 "Not Acceptable".
+ *
+ * @param {String} ...charset
+ * @return {String|Array}
+ * @public
+ */
+
+req$2.acceptsCharsets = function(){
+  var accept = accepts(this);
+  return accept.charsets.apply(accept, arguments);
+};
+
+req$2.acceptsCharset = deprecate$1.function(req$2.acceptsCharsets,
+  'req.acceptsCharset: Use acceptsCharsets instead');
+
+/**
+ * Check if the given `lang`s are acceptable,
+ * otherwise you should respond with 406 "Not Acceptable".
+ *
+ * @param {String} ...lang
+ * @return {String|Array}
+ * @public
+ */
+
+req$2.acceptsLanguages = function(){
+  var accept = accepts(this);
+  return accept.languages.apply(accept, arguments);
+};
+
+req$2.acceptsLanguage = deprecate$1.function(req$2.acceptsLanguages,
+  'req.acceptsLanguage: Use acceptsLanguages instead');
+
+/**
+ * Parse Range header field, capping to the given `size`.
+ *
+ * Unspecified ranges such as "0-" require knowledge of your resource length. In
+ * the case of a byte range this is of course the total number of bytes. If the
+ * Range header field is not given `undefined` is returned, `-1` when unsatisfiable,
+ * and `-2` when syntactically invalid.
+ *
+ * When ranges are returned, the array has a "type" property which is the type of
+ * range that is required (most commonly, "bytes"). Each array element is an object
+ * with a "start" and "end" property for the portion of the range.
+ *
+ * The "combine" option can be set to `true` and overlapping & adjacent ranges
+ * will be combined into a single range.
+ *
+ * NOTE: remember that ranges are inclusive, so for example "Range: users=0-3"
+ * should respond with 4 users when available, not 3.
+ *
+ * @param {number} size
+ * @param {object} [options]
+ * @param {boolean} [options.combine=false]
+ * @return {number|array}
+ * @public
+ */
+
+req$2.range = function range(size, options) {
+  var range = this.get('Range');
+  if (!range) return;
+  return parseRange(size, range, options);
+};
+
+/**
+ * Return the value of param `name` when present or `defaultValue`.
+ *
+ *  - Checks route placeholders, ex: _/user/:id_
+ *  - Checks body params, ex: id=12, {"id":12}
+ *  - Checks query string params, ex: ?id=12
+ *
+ * To utilize request bodies, `req.body`
+ * should be an object. This can be done by using
+ * the `bodyParser()` middleware.
+ *
+ * @param {String} name
+ * @param {Mixed} [defaultValue]
+ * @return {String}
+ * @public
+ */
+
+req$2.param = function param(name, defaultValue) {
+  var params = this.params || {};
+  var body = this.body || {};
+  var query = this.query || {};
+
+  var args = arguments.length === 1
+    ? 'name'
+    : 'name, default';
+  deprecate$1('req.param(' + args + '): Use req.params, req.body, or req.query instead');
+
+  if (null != params[name] && params.hasOwnProperty(name)) return params[name];
+  if (null != body[name]) return body[name];
+  if (null != query[name]) return query[name];
+
+  return defaultValue;
+};
+
+/**
+ * Check if the incoming request contains the "Content-Type"
+ * header field, and it contains the given mime `type`.
+ *
+ * Examples:
+ *
+ *      // With Content-Type: text/html; charset=utf-8
+ *      req.is('html');
+ *      req.is('text/html');
+ *      req.is('text/*');
+ *      // => true
+ *
+ *      // When Content-Type is application/json
+ *      req.is('json');
+ *      req.is('application/json');
+ *      req.is('application/*');
+ *      // => true
+ *
+ *      req.is('html');
+ *      // => false
+ *
+ * @param {String|Array} types...
+ * @return {String|false|null}
+ * @public
+ */
+
+req$2.is = function is(types) {
+  var arr = types;
+
+  // support flattened arguments
+  if (!Array.isArray(types)) {
+    arr = new Array(arguments.length);
+    for (var i = 0; i < arr.length; i++) {
+      arr[i] = arguments[i];
+    }
+  }
+
+  return typeis(this, arr);
+};
+
+/**
+ * Return the protocol string "http" or "https"
+ * when requested with TLS. When the "trust proxy"
+ * setting trusts the socket address, the
+ * "X-Forwarded-Proto" header field will be trusted
+ * and used if present.
+ *
+ * If you're running behind a reverse proxy that
+ * supplies https for you this may be enabled.
+ *
+ * @return {String}
+ * @public
+ */
+
+defineGetter(req$2, 'protocol', function protocol(){
+  var proto = this.connection.encrypted
+    ? 'https'
+    : 'http';
+  var trust = this.app.get('trust proxy fn');
+
+  if (!trust(this.connection.remoteAddress, 0)) {
+    return proto;
+  }
+
+  // Note: X-Forwarded-Proto is normally only ever a
+  //       single value, but this is to be safe.
+  var header = this.get('X-Forwarded-Proto') || proto;
+  var index = header.indexOf(',');
+
+  return index !== -1
+    ? header.substring(0, index).trim()
+    : header.trim()
+});
+
+/**
+ * Short-hand for:
+ *
+ *    req.protocol === 'https'
+ *
+ * @return {Boolean}
+ * @public
+ */
+
+defineGetter(req$2, 'secure', function secure(){
+  return this.protocol === 'https';
+});
+
+/**
+ * Return the remote address from the trusted proxy.
+ *
+ * The is the remote address on the socket unless
+ * "trust proxy" is set.
+ *
+ * @return {String}
+ * @public
+ */
+
+defineGetter(req$2, 'ip', function ip(){
+  var trust = this.app.get('trust proxy fn');
+  return proxyaddr(this, trust);
+});
+
+/**
+ * When "trust proxy" is set, trusted proxy addresses + client.
+ *
+ * For example if the value were "client, proxy1, proxy2"
+ * you would receive the array `["client", "proxy1", "proxy2"]`
+ * where "proxy2" is the furthest down-stream and "proxy1" and
+ * "proxy2" were trusted.
+ *
+ * @return {Array}
+ * @public
+ */
+
+defineGetter(req$2, 'ips', function ips() {
+  var trust = this.app.get('trust proxy fn');
+  var addrs = proxyaddr.all(this, trust);
+
+  // reverse the order (to farthest -> closest)
+  // and remove socket address
+  addrs.reverse().pop();
+
+  return addrs
+});
+
+/**
+ * Return subdomains as an array.
+ *
+ * Subdomains are the dot-separated parts of the host before the main domain of
+ * the app. By default, the domain of the app is assumed to be the last two
+ * parts of the host. This can be changed by setting "subdomain offset".
+ *
+ * For example, if the domain is "tobi.ferrets.example.com":
+ * If "subdomain offset" is not set, req.subdomains is `["ferrets", "tobi"]`.
+ * If "subdomain offset" is 3, req.subdomains is `["tobi"]`.
+ *
+ * @return {Array}
+ * @public
+ */
+
+defineGetter(req$2, 'subdomains', function subdomains() {
+  var hostname = this.hostname;
+
+  if (!hostname) return [];
+
+  var offset = this.app.get('subdomain offset');
+  var subdomains = !isIP$1(hostname)
+    ? hostname.split('.').reverse()
+    : [hostname];
+
+  return subdomains.slice(offset);
+});
+
+/**
+ * Short-hand for `url.parse(req.url).pathname`.
+ *
+ * @return {String}
+ * @public
+ */
+
+defineGetter(req$2, 'path', function path() {
+  return parse$8(this).pathname;
+});
+
+/**
+ * Parse the "Host" header field to a hostname.
+ *
+ * When the "trust proxy" setting trusts the socket
+ * address, the "X-Forwarded-Host" header field will
+ * be trusted.
+ *
+ * @return {String}
+ * @public
+ */
+
+defineGetter(req$2, 'hostname', function hostname(){
+  var trust = this.app.get('trust proxy fn');
+  var host = this.get('X-Forwarded-Host');
+
+  if (!host || !trust(this.connection.remoteAddress, 0)) {
+    host = this.get('Host');
+  } else if (host.indexOf(',') !== -1) {
+    // Note: X-Forwarded-Host is normally only ever a
+    //       single value, but this is to be safe.
+    host = host.substring(0, host.indexOf(',')).trimRight();
+  }
+
+  if (!host) return;
+
+  // IPv6 literal support
+  var offset = host[0] === '['
+    ? host.indexOf(']') + 1
+    : 0;
+  var index = host.indexOf(':', offset);
+
+  return index !== -1
+    ? host.substring(0, index)
+    : host;
+});
+
+// TODO: change req.host to return host in next major
+
+defineGetter(req$2, 'host', deprecate$1.function(function host(){
+  return this.hostname;
+}, 'req.host: Use req.hostname instead'));
+
+/**
+ * Check if the request is fresh, aka
+ * Last-Modified and/or the ETag
+ * still match.
+ *
+ * @return {Boolean}
+ * @public
+ */
+
+defineGetter(req$2, 'fresh', function(){
+  var method = this.method;
+  var res = this.res;
+  var status = res.statusCode;
+
+  // GET or HEAD for weak freshness validation only
+  if ('GET' !== method && 'HEAD' !== method) return false;
+
+  // 2xx or 304 as per rfc2616 14.26
+  if ((status >= 200 && status < 300) || 304 === status) {
+    return fresh(this.headers, {
+      'etag': res.get('ETag'),
+      'last-modified': res.get('Last-Modified')
+    })
+  }
+
+  return false;
+});
+
+/**
+ * Check if the request is stale, aka
+ * "Last-Modified" and / or the "ETag" for the
+ * resource has changed.
+ *
+ * @return {Boolean}
+ * @public
+ */
+
+defineGetter(req$2, 'stale', function stale(){
+  return !this.fresh;
+});
+
+/**
+ * Check if the request was an _XMLHttpRequest_.
+ *
+ * @return {Boolean}
+ * @public
+ */
+
+defineGetter(req$2, 'xhr', function xhr(){
+  var val = this.get('X-Requested-With') || '';
+  return val.toLowerCase() === 'xmlhttprequest';
+});
+
+/**
+ * Helper function for creating a getter on an object.
+ *
+ * @param {Object} obj
+ * @param {String} name
+ * @param {Function} getter
+ * @private
+ */
+function defineGetter(obj, name, getter) {
+  Object.defineProperty(obj, name, {
+    configurable: true,
+    enumerable: true,
+    get: getter
+  });
+}
+
+var cookieSignature = {};
+
+/**
+ * Module dependencies.
+ */
+
+(function (exports) {
+	var crypto = require$$0$j;
+
+	/**
+	 * Sign the given `val` with `secret`.
+	 *
+	 * @param {String} val
+	 * @param {String} secret
+	 * @return {String}
+	 * @api private
+	 */
+
+	exports.sign = function(val, secret){
+	  if ('string' != typeof val) throw new TypeError("Cookie value must be provided as a string.");
+	  if ('string' != typeof secret) throw new TypeError("Secret string must be provided.");
+	  return val + '.' + crypto
+	    .createHmac('sha256', secret)
+	    .update(val)
+	    .digest('base64')
+	    .replace(/\=+$/, '');
+	};
+
+	/**
+	 * Unsign and decode the given `val` with `secret`,
+	 * returning `false` if the signature is invalid.
+	 *
+	 * @param {String} val
+	 * @param {String} secret
+	 * @return {String|Boolean}
+	 * @api private
+	 */
+
+	exports.unsign = function(val, secret){
+	  if ('string' != typeof val) throw new TypeError("Signed cookie string must be provided.");
+	  if ('string' != typeof secret) throw new TypeError("Secret string must be provided.");
+	  var str = val.slice(0, val.lastIndexOf('.'))
+	    , mac = exports.sign(str, secret);
+	  
+	  return sha1(mac) == sha1(val) ? str : false;
+	};
+
+	/**
+	 * Private
+	 */
+
+	function sha1(str){
+	  return crypto.createHash('sha1').update(str).digest('hex');
+	}
+} (cookieSignature));
+
+var cookie$1 = {};
+
+/*!
+ * cookie
