@@ -177616,3 +177616,2168 @@ SendStream.prototype.send = function send (path, stat) {
     // impossible to send now
     this.headersAlreadySent();
     return
+  }
+
+  debug$2('pipe "%s"', path);
+
+  // set header fields
+  this.setHeader(path, stat);
+
+  // set content-type
+  this.type(path);
+
+  // conditional GET support
+  if (this.isConditionalGET()) {
+    if (this.isPreconditionFailure()) {
+      this.error(412);
+      return
+    }
+
+    if (this.isCachable() && this.isFresh()) {
+      this.notModified();
+      return
+    }
+  }
+
+  // adjust len to start/end options
+  len = Math.max(0, len - offset);
+  if (options.end !== undefined) {
+    var bytes = options.end - offset + 1;
+    if (len > bytes) len = bytes;
+  }
+
+  // Range support
+  if (this._acceptRanges && BYTES_RANGE_REGEXP.test(ranges)) {
+    // parse
+    ranges = parseRange$1(len, ranges, {
+      combine: true
+    });
+
+    // If-Range support
+    if (!this.isRangeFresh()) {
+      debug$2('range stale');
+      ranges = -2;
+    }
+
+    // unsatisfiable
+    if (ranges === -1) {
+      debug$2('range unsatisfiable');
+
+      // Content-Range
+      res.setHeader('Content-Range', contentRange('bytes', len));
+
+      // 416 Requested Range Not Satisfiable
+      return this.error(416, {
+        headers: { 'Content-Range': res.getHeader('Content-Range') }
+      })
+    }
+
+    // valid (syntactically invalid/multiple ranges are treated as a regular response)
+    if (ranges !== -2 && ranges.length === 1) {
+      debug$2('range %j', ranges);
+
+      // Content-Range
+      res.statusCode = 206;
+      res.setHeader('Content-Range', contentRange('bytes', len, ranges[0]));
+
+      // adjust for requested range
+      offset += ranges[0].start;
+      len = ranges[0].end - ranges[0].start + 1;
+    }
+  }
+
+  // clone options
+  for (var prop in options) {
+    opts[prop] = options[prop];
+  }
+
+  // set read options
+  opts.start = offset;
+  opts.end = Math.max(offset, offset + len - 1);
+
+  // content-length
+  res.setHeader('Content-Length', len);
+
+  // HEAD support
+  if (req.method === 'HEAD') {
+    res.end();
+    return
+  }
+
+  this.stream(path, opts);
+};
+
+/**
+ * Transfer file for `path`.
+ *
+ * @param {String} path
+ * @api private
+ */
+SendStream.prototype.sendFile = function sendFile (path) {
+  var i = 0;
+  var self = this;
+
+  debug$2('stat "%s"', path);
+  fs$h.stat(path, function onstat (err, stat) {
+    if (err && err.code === 'ENOENT' && !extname$1(path) && path[path.length - 1] !== sep) {
+      // not found, check extensions
+      return next(err)
+    }
+    if (err) return self.onStatError(err)
+    if (stat.isDirectory()) return self.redirect(path)
+    self.emit('file', path, stat);
+    self.send(path, stat);
+  });
+
+  function next (err) {
+    if (self._extensions.length <= i) {
+      return err
+        ? self.onStatError(err)
+        : self.error(404)
+    }
+
+    var p = path + '.' + self._extensions[i++];
+
+    debug$2('stat "%s"', p);
+    fs$h.stat(p, function (err, stat) {
+      if (err) return next(err)
+      if (stat.isDirectory()) return next()
+      self.emit('file', p, stat);
+      self.send(p, stat);
+    });
+  }
+};
+
+/**
+ * Transfer index for `path`.
+ *
+ * @param {String} path
+ * @api private
+ */
+SendStream.prototype.sendIndex = function sendIndex (path) {
+  var i = -1;
+  var self = this;
+
+  function next (err) {
+    if (++i >= self._index.length) {
+      if (err) return self.onStatError(err)
+      return self.error(404)
+    }
+
+    var p = join$2(path, self._index[i]);
+
+    debug$2('stat "%s"', p);
+    fs$h.stat(p, function (err, stat) {
+      if (err) return next(err)
+      if (stat.isDirectory()) return next()
+      self.emit('file', p, stat);
+      self.send(p, stat);
+    });
+  }
+
+  next();
+};
+
+/**
+ * Stream `path` to the response.
+ *
+ * @param {String} path
+ * @param {Object} options
+ * @api private
+ */
+
+SendStream.prototype.stream = function stream (path, options) {
+  var self = this;
+  var res = this.res;
+
+  // pipe
+  var stream = fs$h.createReadStream(path, options);
+  this.emit('stream', stream);
+  stream.pipe(res);
+
+  // cleanup
+  function cleanup () {
+    destroy$1(stream, true);
+  }
+
+  // response finished, cleanup
+  onFinished$1(res, cleanup);
+
+  // error handling
+  stream.on('error', function onerror (err) {
+    // clean up stream early
+    cleanup();
+
+    // error
+    self.onStatError(err);
+  });
+
+  // end
+  stream.on('end', function onend () {
+    self.emit('end');
+  });
+};
+
+/**
+ * Set content-type based on `path`
+ * if it hasn't been explicitly set.
+ *
+ * @param {String} path
+ * @api private
+ */
+
+SendStream.prototype.type = function type (path) {
+  var res = this.res;
+
+  if (res.getHeader('Content-Type')) return
+
+  var type = mime$3.lookup(path);
+
+  if (!type) {
+    debug$2('no content-type');
+    return
+  }
+
+  var charset = mime$3.charsets.lookup(type);
+
+  debug$2('content-type %s', type);
+  res.setHeader('Content-Type', type + (charset ? '; charset=' + charset : ''));
+};
+
+/**
+ * Set response header fields, most
+ * fields may be pre-defined.
+ *
+ * @param {String} path
+ * @param {Object} stat
+ * @api private
+ */
+
+SendStream.prototype.setHeader = function setHeader (path, stat) {
+  var res = this.res;
+
+  this.emit('headers', res, path, stat);
+
+  if (this._acceptRanges && !res.getHeader('Accept-Ranges')) {
+    debug$2('accept ranges');
+    res.setHeader('Accept-Ranges', 'bytes');
+  }
+
+  if (this._cacheControl && !res.getHeader('Cache-Control')) {
+    var cacheControl = 'public, max-age=' + Math.floor(this._maxage / 1000);
+
+    if (this._immutable) {
+      cacheControl += ', immutable';
+    }
+
+    debug$2('cache-control %s', cacheControl);
+    res.setHeader('Cache-Control', cacheControl);
+  }
+
+  if (this._lastModified && !res.getHeader('Last-Modified')) {
+    var modified = stat.mtime.toUTCString();
+    debug$2('modified %s', modified);
+    res.setHeader('Last-Modified', modified);
+  }
+
+  if (this._etag && !res.getHeader('ETag')) {
+    var val = etag(stat);
+    debug$2('etag %s', val);
+    res.setHeader('ETag', val);
+  }
+};
+
+/**
+ * Clear all headers from a response.
+ *
+ * @param {object} res
+ * @private
+ */
+
+function clearHeaders (res) {
+  var headers = getHeaderNames(res);
+
+  for (var i = 0; i < headers.length; i++) {
+    res.removeHeader(headers[i]);
+  }
+}
+
+/**
+ * Collapse all leading slashes into a single slash
+ *
+ * @param {string} str
+ * @private
+ */
+function collapseLeadingSlashes (str) {
+  for (var i = 0; i < str.length; i++) {
+    if (str[i] !== '/') {
+      break
+    }
+  }
+
+  return i > 1
+    ? '/' + str.substr(i)
+    : str
+}
+
+/**
+ * Determine if path parts contain a dotfile.
+ *
+ * @api private
+ */
+
+function containsDotFile (parts) {
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    if (part.length > 1 && part[0] === '.') {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Create a Content-Range header.
+ *
+ * @param {string} type
+ * @param {number} size
+ * @param {array} [range]
+ */
+
+function contentRange (type, size, range) {
+  return type + ' ' + (range ? range.start + '-' + range.end : '*') + '/' + size
+}
+
+/**
+ * Create a minimal HTML document.
+ *
+ * @param {string} title
+ * @param {string} body
+ * @private
+ */
+
+function createHtmlDocument (title, body) {
+  return '<!DOCTYPE html>\n' +
+    '<html lang="en">\n' +
+    '<head>\n' +
+    '<meta charset="utf-8">\n' +
+    '<title>' + title + '</title>\n' +
+    '</head>\n' +
+    '<body>\n' +
+    '<pre>' + body + '</pre>\n' +
+    '</body>\n' +
+    '</html>\n'
+}
+
+/**
+ * Create a HttpError object from simple arguments.
+ *
+ * @param {number} status
+ * @param {Error|object} err
+ * @private
+ */
+
+function createHttpError (status, err) {
+  if (!err) {
+    return createError$1(status)
+  }
+
+  return err instanceof Error
+    ? createError$1(status, err, { expose: false })
+    : createError$1(status, err)
+}
+
+/**
+ * decodeURIComponent.
+ *
+ * Allows V8 to only deoptimize this fn instead of all
+ * of send().
+ *
+ * @param {String} path
+ * @api private
+ */
+
+function decode$3 (path) {
+  try {
+    return decodeURIComponent(path)
+  } catch (err) {
+    return -1
+  }
+}
+
+/**
+ * Get the header names on a respnse.
+ *
+ * @param {object} res
+ * @returns {array[string]}
+ * @private
+ */
+
+function getHeaderNames (res) {
+  return typeof res.getHeaderNames !== 'function'
+    ? Object.keys(res._headers || {})
+    : res.getHeaderNames()
+}
+
+/**
+ * Determine if emitter has listeners of a given type.
+ *
+ * The way to do this check is done three different ways in Node.js >= 0.8
+ * so this consolidates them into a minimal set using instance methods.
+ *
+ * @param {EventEmitter} emitter
+ * @param {string} type
+ * @returns {boolean}
+ * @private
+ */
+
+function hasListeners (emitter, type) {
+  var count = typeof emitter.listenerCount !== 'function'
+    ? emitter.listeners(type).length
+    : emitter.listenerCount(type);
+
+  return count > 0
+}
+
+/**
+ * Determine if the response headers have been sent.
+ *
+ * @param {object} res
+ * @returns {boolean}
+ * @private
+ */
+
+function headersSent (res) {
+  return typeof res.headersSent !== 'boolean'
+    ? Boolean(res._header)
+    : res.headersSent
+}
+
+/**
+ * Normalize the index option into an array.
+ *
+ * @param {boolean|string|array} val
+ * @param {string} name
+ * @private
+ */
+
+function normalizeList (val, name) {
+  var list = [].concat(val || []);
+
+  for (var i = 0; i < list.length; i++) {
+    if (typeof list[i] !== 'string') {
+      throw new TypeError(name + ' must be array of strings or false')
+    }
+  }
+
+  return list
+}
+
+/**
+ * Parse an HTTP Date into a number.
+ *
+ * @param {string} date
+ * @private
+ */
+
+function parseHttpDate (date) {
+  var timestamp = date && Date.parse(date);
+
+  return typeof timestamp === 'number'
+    ? timestamp
+    : NaN
+}
+
+/**
+ * Parse a HTTP token list.
+ *
+ * @param {string} str
+ * @private
+ */
+
+function parseTokenList (str) {
+  var end = 0;
+  var list = [];
+  var start = 0;
+
+  // gather tokens
+  for (var i = 0, len = str.length; i < len; i++) {
+    switch (str.charCodeAt(i)) {
+      case 0x20: /*   */
+        if (start === end) {
+          start = end = i + 1;
+        }
+        break
+      case 0x2c: /* , */
+        if (start !== end) {
+          list.push(str.substring(start, end));
+        }
+        start = end = i + 1;
+        break
+      default:
+        end = i + 1;
+        break
+    }
+  }
+
+  // final token
+  if (start !== end) {
+    list.push(str.substring(start, end));
+  }
+
+  return list
+}
+
+/**
+ * Set an object of headers on a response.
+ *
+ * @param {object} res
+ * @param {object} headers
+ * @private
+ */
+
+function setHeaders (res, headers) {
+  var keys = Object.keys(headers);
+
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    res.setHeader(key, headers[key]);
+  }
+}
+
+var proxyAddrExports = {};
+var proxyAddr = {
+  get exports(){ return proxyAddrExports; },
+  set exports(v){ proxyAddrExports = v; },
+};
+
+/*!
+ * forwarded
+ * Copyright(c) 2014-2017 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var forwarded_1 = forwarded$1;
+
+/**
+ * Get all addresses in the request, using the `X-Forwarded-For` header.
+ *
+ * @param {object} req
+ * @return {array}
+ * @public
+ */
+
+function forwarded$1 (req) {
+  if (!req) {
+    throw new TypeError('argument req is required')
+  }
+
+  // simple header parsing
+  var proxyAddrs = parse$9(req.headers['x-forwarded-for'] || '');
+  var socketAddr = getSocketAddr(req);
+  var addrs = [socketAddr].concat(proxyAddrs);
+
+  // return all addresses
+  return addrs
+}
+
+/**
+ * Get the socket address for a request.
+ *
+ * @param {object} req
+ * @return {string}
+ * @private
+ */
+
+function getSocketAddr (req) {
+  return req.socket
+    ? req.socket.remoteAddress
+    : req.connection.remoteAddress
+}
+
+/**
+ * Parse the X-Forwarded-For header.
+ *
+ * @param {string} header
+ * @private
+ */
+
+function parse$9 (header) {
+  var end = header.length;
+  var list = [];
+  var start = header.length;
+
+  // gather addresses, backwards
+  for (var i = header.length - 1; i >= 0; i--) {
+    switch (header.charCodeAt(i)) {
+      case 0x20: /*   */
+        if (start === end) {
+          start = end = i;
+        }
+        break
+      case 0x2c: /* , */
+        if (start !== end) {
+          list.push(header.substring(start, end));
+        }
+        start = end = i;
+        break
+      default:
+        start = i;
+        break
+    }
+  }
+
+  // final address
+  if (start !== end) {
+    list.push(header.substring(start, end));
+  }
+
+  return list
+}
+
+var ipaddrExports = {};
+var ipaddr$1 = {
+  get exports(){ return ipaddrExports; },
+  set exports(v){ ipaddrExports = v; },
+};
+
+(function (module) {
+	(function() {
+	  var expandIPv6, ipaddr, ipv4Part, ipv4Regexes, ipv6Part, ipv6Regexes, matchCIDR, root, zoneIndex;
+
+	  ipaddr = {};
+
+	  root = this;
+
+	  if ((module !== null) && module.exports) {
+	    module.exports = ipaddr;
+	  } else {
+	    root['ipaddr'] = ipaddr;
+	  }
+
+	  matchCIDR = function(first, second, partSize, cidrBits) {
+	    var part, shift;
+	    if (first.length !== second.length) {
+	      throw new Error("ipaddr: cannot match CIDR for objects with different lengths");
+	    }
+	    part = 0;
+	    while (cidrBits > 0) {
+	      shift = partSize - cidrBits;
+	      if (shift < 0) {
+	        shift = 0;
+	      }
+	      if (first[part] >> shift !== second[part] >> shift) {
+	        return false;
+	      }
+	      cidrBits -= partSize;
+	      part += 1;
+	    }
+	    return true;
+	  };
+
+	  ipaddr.subnetMatch = function(address, rangeList, defaultName) {
+	    var k, len, rangeName, rangeSubnets, subnet;
+	    if (defaultName == null) {
+	      defaultName = 'unicast';
+	    }
+	    for (rangeName in rangeList) {
+	      rangeSubnets = rangeList[rangeName];
+	      if (rangeSubnets[0] && !(rangeSubnets[0] instanceof Array)) {
+	        rangeSubnets = [rangeSubnets];
+	      }
+	      for (k = 0, len = rangeSubnets.length; k < len; k++) {
+	        subnet = rangeSubnets[k];
+	        if (address.kind() === subnet[0].kind()) {
+	          if (address.match.apply(address, subnet)) {
+	            return rangeName;
+	          }
+	        }
+	      }
+	    }
+	    return defaultName;
+	  };
+
+	  ipaddr.IPv4 = (function() {
+	    function IPv4(octets) {
+	      var k, len, octet;
+	      if (octets.length !== 4) {
+	        throw new Error("ipaddr: ipv4 octet count should be 4");
+	      }
+	      for (k = 0, len = octets.length; k < len; k++) {
+	        octet = octets[k];
+	        if (!((0 <= octet && octet <= 255))) {
+	          throw new Error("ipaddr: ipv4 octet should fit in 8 bits");
+	        }
+	      }
+	      this.octets = octets;
+	    }
+
+	    IPv4.prototype.kind = function() {
+	      return 'ipv4';
+	    };
+
+	    IPv4.prototype.toString = function() {
+	      return this.octets.join(".");
+	    };
+
+	    IPv4.prototype.toNormalizedString = function() {
+	      return this.toString();
+	    };
+
+	    IPv4.prototype.toByteArray = function() {
+	      return this.octets.slice(0);
+	    };
+
+	    IPv4.prototype.match = function(other, cidrRange) {
+	      var ref;
+	      if (cidrRange === void 0) {
+	        ref = other, other = ref[0], cidrRange = ref[1];
+	      }
+	      if (other.kind() !== 'ipv4') {
+	        throw new Error("ipaddr: cannot match ipv4 address with non-ipv4 one");
+	      }
+	      return matchCIDR(this.octets, other.octets, 8, cidrRange);
+	    };
+
+	    IPv4.prototype.SpecialRanges = {
+	      unspecified: [[new IPv4([0, 0, 0, 0]), 8]],
+	      broadcast: [[new IPv4([255, 255, 255, 255]), 32]],
+	      multicast: [[new IPv4([224, 0, 0, 0]), 4]],
+	      linkLocal: [[new IPv4([169, 254, 0, 0]), 16]],
+	      loopback: [[new IPv4([127, 0, 0, 0]), 8]],
+	      carrierGradeNat: [[new IPv4([100, 64, 0, 0]), 10]],
+	      "private": [[new IPv4([10, 0, 0, 0]), 8], [new IPv4([172, 16, 0, 0]), 12], [new IPv4([192, 168, 0, 0]), 16]],
+	      reserved: [[new IPv4([192, 0, 0, 0]), 24], [new IPv4([192, 0, 2, 0]), 24], [new IPv4([192, 88, 99, 0]), 24], [new IPv4([198, 51, 100, 0]), 24], [new IPv4([203, 0, 113, 0]), 24], [new IPv4([240, 0, 0, 0]), 4]]
+	    };
+
+	    IPv4.prototype.range = function() {
+	      return ipaddr.subnetMatch(this, this.SpecialRanges);
+	    };
+
+	    IPv4.prototype.toIPv4MappedAddress = function() {
+	      return ipaddr.IPv6.parse("::ffff:" + (this.toString()));
+	    };
+
+	    IPv4.prototype.prefixLengthFromSubnetMask = function() {
+	      var cidr, i, k, octet, stop, zeros, zerotable;
+	      zerotable = {
+	        0: 8,
+	        128: 7,
+	        192: 6,
+	        224: 5,
+	        240: 4,
+	        248: 3,
+	        252: 2,
+	        254: 1,
+	        255: 0
+	      };
+	      cidr = 0;
+	      stop = false;
+	      for (i = k = 3; k >= 0; i = k += -1) {
+	        octet = this.octets[i];
+	        if (octet in zerotable) {
+	          zeros = zerotable[octet];
+	          if (stop && zeros !== 0) {
+	            return null;
+	          }
+	          if (zeros !== 8) {
+	            stop = true;
+	          }
+	          cidr += zeros;
+	        } else {
+	          return null;
+	        }
+	      }
+	      return 32 - cidr;
+	    };
+
+	    return IPv4;
+
+	  })();
+
+	  ipv4Part = "(0?\\d+|0x[a-f0-9]+)";
+
+	  ipv4Regexes = {
+	    fourOctet: new RegExp("^" + ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part + "$", 'i'),
+	    longValue: new RegExp("^" + ipv4Part + "$", 'i')
+	  };
+
+	  ipaddr.IPv4.parser = function(string) {
+	    var match, parseIntAuto, part, shift, value;
+	    parseIntAuto = function(string) {
+	      if (string[0] === "0" && string[1] !== "x") {
+	        return parseInt(string, 8);
+	      } else {
+	        return parseInt(string);
+	      }
+	    };
+	    if (match = string.match(ipv4Regexes.fourOctet)) {
+	      return (function() {
+	        var k, len, ref, results;
+	        ref = match.slice(1, 6);
+	        results = [];
+	        for (k = 0, len = ref.length; k < len; k++) {
+	          part = ref[k];
+	          results.push(parseIntAuto(part));
+	        }
+	        return results;
+	      })();
+	    } else if (match = string.match(ipv4Regexes.longValue)) {
+	      value = parseIntAuto(match[1]);
+	      if (value > 0xffffffff || value < 0) {
+	        throw new Error("ipaddr: address outside defined range");
+	      }
+	      return ((function() {
+	        var k, results;
+	        results = [];
+	        for (shift = k = 0; k <= 24; shift = k += 8) {
+	          results.push((value >> shift) & 0xff);
+	        }
+	        return results;
+	      })()).reverse();
+	    } else {
+	      return null;
+	    }
+	  };
+
+	  ipaddr.IPv6 = (function() {
+	    function IPv6(parts, zoneId) {
+	      var i, k, l, len, part, ref;
+	      if (parts.length === 16) {
+	        this.parts = [];
+	        for (i = k = 0; k <= 14; i = k += 2) {
+	          this.parts.push((parts[i] << 8) | parts[i + 1]);
+	        }
+	      } else if (parts.length === 8) {
+	        this.parts = parts;
+	      } else {
+	        throw new Error("ipaddr: ipv6 part count should be 8 or 16");
+	      }
+	      ref = this.parts;
+	      for (l = 0, len = ref.length; l < len; l++) {
+	        part = ref[l];
+	        if (!((0 <= part && part <= 0xffff))) {
+	          throw new Error("ipaddr: ipv6 part should fit in 16 bits");
+	        }
+	      }
+	      if (zoneId) {
+	        this.zoneId = zoneId;
+	      }
+	    }
+
+	    IPv6.prototype.kind = function() {
+	      return 'ipv6';
+	    };
+
+	    IPv6.prototype.toString = function() {
+	      return this.toNormalizedString().replace(/((^|:)(0(:|$))+)/, '::');
+	    };
+
+	    IPv6.prototype.toRFC5952String = function() {
+	      var bestMatchIndex, bestMatchLength, match, regex, string;
+	      regex = /((^|:)(0(:|$)){2,})/g;
+	      string = this.toNormalizedString();
+	      bestMatchIndex = 0;
+	      bestMatchLength = -1;
+	      while ((match = regex.exec(string))) {
+	        if (match[0].length > bestMatchLength) {
+	          bestMatchIndex = match.index;
+	          bestMatchLength = match[0].length;
+	        }
+	      }
+	      if (bestMatchLength < 0) {
+	        return string;
+	      }
+	      return string.substring(0, bestMatchIndex) + '::' + string.substring(bestMatchIndex + bestMatchLength);
+	    };
+
+	    IPv6.prototype.toByteArray = function() {
+	      var bytes, k, len, part, ref;
+	      bytes = [];
+	      ref = this.parts;
+	      for (k = 0, len = ref.length; k < len; k++) {
+	        part = ref[k];
+	        bytes.push(part >> 8);
+	        bytes.push(part & 0xff);
+	      }
+	      return bytes;
+	    };
+
+	    IPv6.prototype.toNormalizedString = function() {
+	      var addr, part, suffix;
+	      addr = ((function() {
+	        var k, len, ref, results;
+	        ref = this.parts;
+	        results = [];
+	        for (k = 0, len = ref.length; k < len; k++) {
+	          part = ref[k];
+	          results.push(part.toString(16));
+	        }
+	        return results;
+	      }).call(this)).join(":");
+	      suffix = '';
+	      if (this.zoneId) {
+	        suffix = '%' + this.zoneId;
+	      }
+	      return addr + suffix;
+	    };
+
+	    IPv6.prototype.toFixedLengthString = function() {
+	      var addr, part, suffix;
+	      addr = ((function() {
+	        var k, len, ref, results;
+	        ref = this.parts;
+	        results = [];
+	        for (k = 0, len = ref.length; k < len; k++) {
+	          part = ref[k];
+	          results.push(part.toString(16).padStart(4, '0'));
+	        }
+	        return results;
+	      }).call(this)).join(":");
+	      suffix = '';
+	      if (this.zoneId) {
+	        suffix = '%' + this.zoneId;
+	      }
+	      return addr + suffix;
+	    };
+
+	    IPv6.prototype.match = function(other, cidrRange) {
+	      var ref;
+	      if (cidrRange === void 0) {
+	        ref = other, other = ref[0], cidrRange = ref[1];
+	      }
+	      if (other.kind() !== 'ipv6') {
+	        throw new Error("ipaddr: cannot match ipv6 address with non-ipv6 one");
+	      }
+	      return matchCIDR(this.parts, other.parts, 16, cidrRange);
+	    };
+
+	    IPv6.prototype.SpecialRanges = {
+	      unspecified: [new IPv6([0, 0, 0, 0, 0, 0, 0, 0]), 128],
+	      linkLocal: [new IPv6([0xfe80, 0, 0, 0, 0, 0, 0, 0]), 10],
+	      multicast: [new IPv6([0xff00, 0, 0, 0, 0, 0, 0, 0]), 8],
+	      loopback: [new IPv6([0, 0, 0, 0, 0, 0, 0, 1]), 128],
+	      uniqueLocal: [new IPv6([0xfc00, 0, 0, 0, 0, 0, 0, 0]), 7],
+	      ipv4Mapped: [new IPv6([0, 0, 0, 0, 0, 0xffff, 0, 0]), 96],
+	      rfc6145: [new IPv6([0, 0, 0, 0, 0xffff, 0, 0, 0]), 96],
+	      rfc6052: [new IPv6([0x64, 0xff9b, 0, 0, 0, 0, 0, 0]), 96],
+	      '6to4': [new IPv6([0x2002, 0, 0, 0, 0, 0, 0, 0]), 16],
+	      teredo: [new IPv6([0x2001, 0, 0, 0, 0, 0, 0, 0]), 32],
+	      reserved: [[new IPv6([0x2001, 0xdb8, 0, 0, 0, 0, 0, 0]), 32]]
+	    };
+
+	    IPv6.prototype.range = function() {
+	      return ipaddr.subnetMatch(this, this.SpecialRanges);
+	    };
+
+	    IPv6.prototype.isIPv4MappedAddress = function() {
+	      return this.range() === 'ipv4Mapped';
+	    };
+
+	    IPv6.prototype.toIPv4Address = function() {
+	      var high, low, ref;
+	      if (!this.isIPv4MappedAddress()) {
+	        throw new Error("ipaddr: trying to convert a generic ipv6 address to ipv4");
+	      }
+	      ref = this.parts.slice(-2), high = ref[0], low = ref[1];
+	      return new ipaddr.IPv4([high >> 8, high & 0xff, low >> 8, low & 0xff]);
+	    };
+
+	    IPv6.prototype.prefixLengthFromSubnetMask = function() {
+	      var cidr, i, k, part, stop, zeros, zerotable;
+	      zerotable = {
+	        0: 16,
+	        32768: 15,
+	        49152: 14,
+	        57344: 13,
+	        61440: 12,
+	        63488: 11,
+	        64512: 10,
+	        65024: 9,
+	        65280: 8,
+	        65408: 7,
+	        65472: 6,
+	        65504: 5,
+	        65520: 4,
+	        65528: 3,
+	        65532: 2,
+	        65534: 1,
+	        65535: 0
+	      };
+	      cidr = 0;
+	      stop = false;
+	      for (i = k = 7; k >= 0; i = k += -1) {
+	        part = this.parts[i];
+	        if (part in zerotable) {
+	          zeros = zerotable[part];
+	          if (stop && zeros !== 0) {
+	            return null;
+	          }
+	          if (zeros !== 16) {
+	            stop = true;
+	          }
+	          cidr += zeros;
+	        } else {
+	          return null;
+	        }
+	      }
+	      return 128 - cidr;
+	    };
+
+	    return IPv6;
+
+	  })();
+
+	  ipv6Part = "(?:[0-9a-f]+::?)+";
+
+	  zoneIndex = "%[0-9a-z]{1,}";
+
+	  ipv6Regexes = {
+	    zoneIndex: new RegExp(zoneIndex, 'i'),
+	    "native": new RegExp("^(::)?(" + ipv6Part + ")?([0-9a-f]+)?(::)?(" + zoneIndex + ")?$", 'i'),
+	    transitional: new RegExp(("^((?:" + ipv6Part + ")|(?:::)(?:" + ipv6Part + ")?)") + (ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part) + ("(" + zoneIndex + ")?$"), 'i')
+	  };
+
+	  expandIPv6 = function(string, parts) {
+	    var colonCount, lastColon, part, replacement, replacementCount, zoneId;
+	    if (string.indexOf('::') !== string.lastIndexOf('::')) {
+	      return null;
+	    }
+	    zoneId = (string.match(ipv6Regexes['zoneIndex']) || [])[0];
+	    if (zoneId) {
+	      zoneId = zoneId.substring(1);
+	      string = string.replace(/%.+$/, '');
+	    }
+	    colonCount = 0;
+	    lastColon = -1;
+	    while ((lastColon = string.indexOf(':', lastColon + 1)) >= 0) {
+	      colonCount++;
+	    }
+	    if (string.substr(0, 2) === '::') {
+	      colonCount--;
+	    }
+	    if (string.substr(-2, 2) === '::') {
+	      colonCount--;
+	    }
+	    if (colonCount > parts) {
+	      return null;
+	    }
+	    replacementCount = parts - colonCount;
+	    replacement = ':';
+	    while (replacementCount--) {
+	      replacement += '0:';
+	    }
+	    string = string.replace('::', replacement);
+	    if (string[0] === ':') {
+	      string = string.slice(1);
+	    }
+	    if (string[string.length - 1] === ':') {
+	      string = string.slice(0, -1);
+	    }
+	    parts = (function() {
+	      var k, len, ref, results;
+	      ref = string.split(":");
+	      results = [];
+	      for (k = 0, len = ref.length; k < len; k++) {
+	        part = ref[k];
+	        results.push(parseInt(part, 16));
+	      }
+	      return results;
+	    })();
+	    return {
+	      parts: parts,
+	      zoneId: zoneId
+	    };
+	  };
+
+	  ipaddr.IPv6.parser = function(string) {
+	    var addr, k, len, match, octet, octets, zoneId;
+	    if (ipv6Regexes['native'].test(string)) {
+	      return expandIPv6(string, 8);
+	    } else if (match = string.match(ipv6Regexes['transitional'])) {
+	      zoneId = match[6] || '';
+	      addr = expandIPv6(match[1].slice(0, -1) + zoneId, 6);
+	      if (addr.parts) {
+	        octets = [parseInt(match[2]), parseInt(match[3]), parseInt(match[4]), parseInt(match[5])];
+	        for (k = 0, len = octets.length; k < len; k++) {
+	          octet = octets[k];
+	          if (!((0 <= octet && octet <= 255))) {
+	            return null;
+	          }
+	        }
+	        addr.parts.push(octets[0] << 8 | octets[1]);
+	        addr.parts.push(octets[2] << 8 | octets[3]);
+	        return {
+	          parts: addr.parts,
+	          zoneId: addr.zoneId
+	        };
+	      }
+	    }
+	    return null;
+	  };
+
+	  ipaddr.IPv4.isIPv4 = ipaddr.IPv6.isIPv6 = function(string) {
+	    return this.parser(string) !== null;
+	  };
+
+	  ipaddr.IPv4.isValid = function(string) {
+	    try {
+	      new this(this.parser(string));
+	      return true;
+	    } catch (error1) {
+	      return false;
+	    }
+	  };
+
+	  ipaddr.IPv4.isValidFourPartDecimal = function(string) {
+	    if (ipaddr.IPv4.isValid(string) && string.match(/^(0|[1-9]\d*)(\.(0|[1-9]\d*)){3}$/)) {
+	      return true;
+	    } else {
+	      return false;
+	    }
+	  };
+
+	  ipaddr.IPv6.isValid = function(string) {
+	    var addr;
+	    if (typeof string === "string" && string.indexOf(":") === -1) {
+	      return false;
+	    }
+	    try {
+	      addr = this.parser(string);
+	      new this(addr.parts, addr.zoneId);
+	      return true;
+	    } catch (error1) {
+	      return false;
+	    }
+	  };
+
+	  ipaddr.IPv4.parse = function(string) {
+	    var parts;
+	    parts = this.parser(string);
+	    if (parts === null) {
+	      throw new Error("ipaddr: string is not formatted like ip address");
+	    }
+	    return new this(parts);
+	  };
+
+	  ipaddr.IPv6.parse = function(string) {
+	    var addr;
+	    addr = this.parser(string);
+	    if (addr.parts === null) {
+	      throw new Error("ipaddr: string is not formatted like ip address");
+	    }
+	    return new this(addr.parts, addr.zoneId);
+	  };
+
+	  ipaddr.IPv4.parseCIDR = function(string) {
+	    var maskLength, match, parsed;
+	    if (match = string.match(/^(.+)\/(\d+)$/)) {
+	      maskLength = parseInt(match[2]);
+	      if (maskLength >= 0 && maskLength <= 32) {
+	        parsed = [this.parse(match[1]), maskLength];
+	        Object.defineProperty(parsed, 'toString', {
+	          value: function() {
+	            return this.join('/');
+	          }
+	        });
+	        return parsed;
+	      }
+	    }
+	    throw new Error("ipaddr: string is not formatted like an IPv4 CIDR range");
+	  };
+
+	  ipaddr.IPv4.subnetMaskFromPrefixLength = function(prefix) {
+	    var filledOctetCount, j, octets;
+	    prefix = parseInt(prefix);
+	    if (prefix < 0 || prefix > 32) {
+	      throw new Error('ipaddr: invalid IPv4 prefix length');
+	    }
+	    octets = [0, 0, 0, 0];
+	    j = 0;
+	    filledOctetCount = Math.floor(prefix / 8);
+	    while (j < filledOctetCount) {
+	      octets[j] = 255;
+	      j++;
+	    }
+	    if (filledOctetCount < 4) {
+	      octets[filledOctetCount] = Math.pow(2, prefix % 8) - 1 << 8 - (prefix % 8);
+	    }
+	    return new this(octets);
+	  };
+
+	  ipaddr.IPv4.broadcastAddressFromCIDR = function(string) {
+	    var cidr, i, ipInterfaceOctets, octets, subnetMaskOctets;
+	    try {
+	      cidr = this.parseCIDR(string);
+	      ipInterfaceOctets = cidr[0].toByteArray();
+	      subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+	      octets = [];
+	      i = 0;
+	      while (i < 4) {
+	        octets.push(parseInt(ipInterfaceOctets[i], 10) | parseInt(subnetMaskOctets[i], 10) ^ 255);
+	        i++;
+	      }
+	      return new this(octets);
+	    } catch (error1) {
+	      throw new Error('ipaddr: the address does not have IPv4 CIDR format');
+	    }
+	  };
+
+	  ipaddr.IPv4.networkAddressFromCIDR = function(string) {
+	    var cidr, i, ipInterfaceOctets, octets, subnetMaskOctets;
+	    try {
+	      cidr = this.parseCIDR(string);
+	      ipInterfaceOctets = cidr[0].toByteArray();
+	      subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+	      octets = [];
+	      i = 0;
+	      while (i < 4) {
+	        octets.push(parseInt(ipInterfaceOctets[i], 10) & parseInt(subnetMaskOctets[i], 10));
+	        i++;
+	      }
+	      return new this(octets);
+	    } catch (error1) {
+	      throw new Error('ipaddr: the address does not have IPv4 CIDR format');
+	    }
+	  };
+
+	  ipaddr.IPv6.parseCIDR = function(string) {
+	    var maskLength, match, parsed;
+	    if (match = string.match(/^(.+)\/(\d+)$/)) {
+	      maskLength = parseInt(match[2]);
+	      if (maskLength >= 0 && maskLength <= 128) {
+	        parsed = [this.parse(match[1]), maskLength];
+	        Object.defineProperty(parsed, 'toString', {
+	          value: function() {
+	            return this.join('/');
+	          }
+	        });
+	        return parsed;
+	      }
+	    }
+	    throw new Error("ipaddr: string is not formatted like an IPv6 CIDR range");
+	  };
+
+	  ipaddr.isValid = function(string) {
+	    return ipaddr.IPv6.isValid(string) || ipaddr.IPv4.isValid(string);
+	  };
+
+	  ipaddr.parse = function(string) {
+	    if (ipaddr.IPv6.isValid(string)) {
+	      return ipaddr.IPv6.parse(string);
+	    } else if (ipaddr.IPv4.isValid(string)) {
+	      return ipaddr.IPv4.parse(string);
+	    } else {
+	      throw new Error("ipaddr: the address has neither IPv6 nor IPv4 format");
+	    }
+	  };
+
+	  ipaddr.parseCIDR = function(string) {
+	    try {
+	      return ipaddr.IPv6.parseCIDR(string);
+	    } catch (error1) {
+	      try {
+	        return ipaddr.IPv4.parseCIDR(string);
+	      } catch (error1) {
+	        throw new Error("ipaddr: the address has neither IPv6 nor IPv4 CIDR format");
+	      }
+	    }
+	  };
+
+	  ipaddr.fromByteArray = function(bytes) {
+	    var length;
+	    length = bytes.length;
+	    if (length === 4) {
+	      return new ipaddr.IPv4(bytes);
+	    } else if (length === 16) {
+	      return new ipaddr.IPv6(bytes);
+	    } else {
+	      throw new Error("ipaddr: the binary input is neither an IPv6 nor IPv4 address");
+	    }
+	  };
+
+	  ipaddr.process = function(string) {
+	    var addr;
+	    addr = this.parse(string);
+	    if (addr.kind() === 'ipv6' && addr.isIPv4MappedAddress()) {
+	      return addr.toIPv4Address();
+	    } else {
+	      return addr;
+	    }
+	  };
+
+	}).call(commonjsGlobal);
+} (ipaddr$1));
+
+/*!
+ * proxy-addr
+ * Copyright(c) 2014-2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+proxyAddr.exports = proxyaddr$1;
+proxyAddrExports.all = alladdrs;
+proxyAddrExports.compile = compile$1;
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var forwarded = forwarded_1;
+var ipaddr = ipaddrExports;
+
+/**
+ * Variables.
+ * @private
+ */
+
+var DIGIT_REGEXP = /^[0-9]+$/;
+var isip = ipaddr.isValid;
+var parseip = ipaddr.parse;
+
+/**
+ * Pre-defined IP ranges.
+ * @private
+ */
+
+var IP_RANGES = {
+  linklocal: ['169.254.0.0/16', 'fe80::/10'],
+  loopback: ['127.0.0.1/8', '::1/128'],
+  uniquelocal: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7']
+};
+
+/**
+ * Get all addresses in the request, optionally stopping
+ * at the first untrusted.
+ *
+ * @param {Object} request
+ * @param {Function|Array|String} [trust]
+ * @public
+ */
+
+function alladdrs (req, trust) {
+  // get addresses
+  var addrs = forwarded(req);
+
+  if (!trust) {
+    // Return all addresses
+    return addrs
+  }
+
+  if (typeof trust !== 'function') {
+    trust = compile$1(trust);
+  }
+
+  for (var i = 0; i < addrs.length - 1; i++) {
+    if (trust(addrs[i], i)) continue
+
+    addrs.length = i + 1;
+  }
+
+  return addrs
+}
+
+/**
+ * Compile argument into trust function.
+ *
+ * @param {Array|String} val
+ * @private
+ */
+
+function compile$1 (val) {
+  if (!val) {
+    throw new TypeError('argument is required')
+  }
+
+  var trust;
+
+  if (typeof val === 'string') {
+    trust = [val];
+  } else if (Array.isArray(val)) {
+    trust = val.slice();
+  } else {
+    throw new TypeError('unsupported trust argument')
+  }
+
+  for (var i = 0; i < trust.length; i++) {
+    val = trust[i];
+
+    if (!Object.prototype.hasOwnProperty.call(IP_RANGES, val)) {
+      continue
+    }
+
+    // Splice in pre-defined range
+    val = IP_RANGES[val];
+    trust.splice.apply(trust, [i, 1].concat(val));
+    i += val.length - 1;
+  }
+
+  return compileTrust(compileRangeSubnets(trust))
+}
+
+/**
+ * Compile `arr` elements into range subnets.
+ *
+ * @param {Array} arr
+ * @private
+ */
+
+function compileRangeSubnets (arr) {
+  var rangeSubnets = new Array(arr.length);
+
+  for (var i = 0; i < arr.length; i++) {
+    rangeSubnets[i] = parseipNotation(arr[i]);
+  }
+
+  return rangeSubnets
+}
+
+/**
+ * Compile range subnet array into trust function.
+ *
+ * @param {Array} rangeSubnets
+ * @private
+ */
+
+function compileTrust (rangeSubnets) {
+  // Return optimized function based on length
+  var len = rangeSubnets.length;
+  return len === 0
+    ? trustNone
+    : len === 1
+      ? trustSingle(rangeSubnets[0])
+      : trustMulti(rangeSubnets)
+}
+
+/**
+ * Parse IP notation string into range subnet.
+ *
+ * @param {String} note
+ * @private
+ */
+
+function parseipNotation (note) {
+  var pos = note.lastIndexOf('/');
+  var str = pos !== -1
+    ? note.substring(0, pos)
+    : note;
+
+  if (!isip(str)) {
+    throw new TypeError('invalid IP address: ' + str)
+  }
+
+  var ip = parseip(str);
+
+  if (pos === -1 && ip.kind() === 'ipv6' && ip.isIPv4MappedAddress()) {
+    // Store as IPv4
+    ip = ip.toIPv4Address();
+  }
+
+  var max = ip.kind() === 'ipv6'
+    ? 128
+    : 32;
+
+  var range = pos !== -1
+    ? note.substring(pos + 1, note.length)
+    : null;
+
+  if (range === null) {
+    range = max;
+  } else if (DIGIT_REGEXP.test(range)) {
+    range = parseInt(range, 10);
+  } else if (ip.kind() === 'ipv4' && isip(range)) {
+    range = parseNetmask(range);
+  } else {
+    range = null;
+  }
+
+  if (range <= 0 || range > max) {
+    throw new TypeError('invalid range on address: ' + note)
+  }
+
+  return [ip, range]
+}
+
+/**
+ * Parse netmask string into CIDR range.
+ *
+ * @param {String} netmask
+ * @private
+ */
+
+function parseNetmask (netmask) {
+  var ip = parseip(netmask);
+  var kind = ip.kind();
+
+  return kind === 'ipv4'
+    ? ip.prefixLengthFromSubnetMask()
+    : null
+}
+
+/**
+ * Determine address of proxied request.
+ *
+ * @param {Object} request
+ * @param {Function|Array|String} trust
+ * @public
+ */
+
+function proxyaddr$1 (req, trust) {
+  if (!req) {
+    throw new TypeError('req argument is required')
+  }
+
+  if (!trust) {
+    throw new TypeError('trust argument is required')
+  }
+
+  var addrs = alladdrs(req, trust);
+  var addr = addrs[addrs.length - 1];
+
+  return addr
+}
+
+/**
+ * Static trust function to trust nothing.
+ *
+ * @private
+ */
+
+function trustNone () {
+  return false
+}
+
+/**
+ * Compile trust function for multiple subnets.
+ *
+ * @param {Array} subnets
+ * @private
+ */
+
+function trustMulti (subnets) {
+  return function trust (addr) {
+    if (!isip(addr)) return false
+
+    var ip = parseip(addr);
+    var ipconv;
+    var kind = ip.kind();
+
+    for (var i = 0; i < subnets.length; i++) {
+      var subnet = subnets[i];
+      var subnetip = subnet[0];
+      var subnetkind = subnetip.kind();
+      var subnetrange = subnet[1];
+      var trusted = ip;
+
+      if (kind !== subnetkind) {
+        if (subnetkind === 'ipv4' && !ip.isIPv4MappedAddress()) {
+          // Incompatible IP addresses
+          continue
+        }
+
+        if (!ipconv) {
+          // Convert IP to match subnet IP kind
+          ipconv = subnetkind === 'ipv4'
+            ? ip.toIPv4Address()
+            : ip.toIPv4MappedAddress();
+        }
+
+        trusted = ipconv;
+      }
+
+      if (trusted.match(subnetip, subnetrange)) {
+        return true
+      }
+    }
+
+    return false
+  }
+}
+
+/**
+ * Compile trust function for single subnet.
+ *
+ * @param {Object} subnet
+ * @private
+ */
+
+function trustSingle (subnet) {
+  var subnetip = subnet[0];
+  var subnetkind = subnetip.kind();
+  var subnetisipv4 = subnetkind === 'ipv4';
+  var subnetrange = subnet[1];
+
+  return function trust (addr) {
+    if (!isip(addr)) return false
+
+    var ip = parseip(addr);
+    var kind = ip.kind();
+
+    if (kind !== subnetkind) {
+      if (subnetisipv4 && !ip.isIPv4MappedAddress()) {
+        // Incompatible IP addresses
+        return false
+      }
+
+      // Convert IP to match subnet IP kind
+      ip = subnetisipv4
+        ? ip.toIPv4Address()
+        : ip.toIPv4MappedAddress();
+    }
+
+    return ip.match(subnetip, subnetrange)
+  }
+}
+
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (exports) {
+
+	/**
+	 * Module dependencies.
+	 * @api private
+	 */
+
+	var Buffer = safeBufferExports.Buffer;
+	var contentDisposition = contentDispositionExports;
+	var contentType$1 = contentType;
+	var deprecate = depd_1('express');
+	var flatten = arrayFlatten_1;
+	var mime = sendExports.mime;
+	var etag = etag_1;
+	var proxyaddr = proxyAddrExports;
+	var qs = lib$2;
+	var querystring = require$$8$1;
+
+	/**
+	 * Return strong ETag for `body`.
+	 *
+	 * @param {String|Buffer} body
+	 * @param {String} [encoding]
+	 * @return {String}
+	 * @api private
+	 */
+
+	exports.etag = createETagGenerator({ weak: false });
+
+	/**
+	 * Return weak ETag for `body`.
+	 *
+	 * @param {String|Buffer} body
+	 * @param {String} [encoding]
+	 * @return {String}
+	 * @api private
+	 */
+
+	exports.wetag = createETagGenerator({ weak: true });
+
+	/**
+	 * Check if `path` looks absolute.
+	 *
+	 * @param {String} path
+	 * @return {Boolean}
+	 * @api private
+	 */
+
+	exports.isAbsolute = function(path){
+	  if ('/' === path[0]) return true;
+	  if (':' === path[1] && ('\\' === path[2] || '/' === path[2])) return true; // Windows device path
+	  if ('\\\\' === path.substring(0, 2)) return true; // Microsoft Azure absolute path
+	};
+
+	/**
+	 * Flatten the given `arr`.
+	 *
+	 * @param {Array} arr
+	 * @return {Array}
+	 * @api private
+	 */
+
+	exports.flatten = deprecate.function(flatten,
+	  'utils.flatten: use array-flatten npm module instead');
+
+	/**
+	 * Normalize the given `type`, for example "html" becomes "text/html".
+	 *
+	 * @param {String} type
+	 * @return {Object}
+	 * @api private
+	 */
+
+	exports.normalizeType = function(type){
+	  return ~type.indexOf('/')
+	    ? acceptParams(type)
+	    : { value: mime.lookup(type), params: {} };
+	};
+
+	/**
+	 * Normalize `types`, for example "html" becomes "text/html".
+	 *
+	 * @param {Array} types
+	 * @return {Array}
+	 * @api private
+	 */
+
+	exports.normalizeTypes = function(types){
+	  var ret = [];
+
+	  for (var i = 0; i < types.length; ++i) {
+	    ret.push(exports.normalizeType(types[i]));
+	  }
+
+	  return ret;
+	};
+
+	/**
+	 * Generate Content-Disposition header appropriate for the filename.
+	 * non-ascii filenames are urlencoded and a filename* parameter is added
+	 *
+	 * @param {String} filename
+	 * @return {String}
+	 * @api private
+	 */
+
+	exports.contentDisposition = deprecate.function(contentDisposition,
+	  'utils.contentDisposition: use content-disposition npm module instead');
+
+	/**
+	 * Parse accept params `str` returning an
+	 * object with `.value`, `.quality` and `.params`.
+	 * also includes `.originalIndex` for stable sorting
+	 *
+	 * @param {String} str
+	 * @param {Number} index
+	 * @return {Object}
+	 * @api private
+	 */
+
+	function acceptParams(str, index) {
+	  var parts = str.split(/ *; */);
+	  var ret = { value: parts[0], quality: 1, params: {}, originalIndex: index };
+
+	  for (var i = 1; i < parts.length; ++i) {
+	    var pms = parts[i].split(/ *= */);
+	    if ('q' === pms[0]) {
+	      ret.quality = parseFloat(pms[1]);
+	    } else {
+	      ret.params[pms[0]] = pms[1];
+	    }
+	  }
+
+	  return ret;
+	}
+
+	/**
+	 * Compile "etag" value to function.
+	 *
+	 * @param  {Boolean|String|Function} val
+	 * @return {Function}
+	 * @api private
+	 */
+
+	exports.compileETag = function(val) {
+	  var fn;
+
+	  if (typeof val === 'function') {
+	    return val;
+	  }
+
+	  switch (val) {
+	    case true:
+	    case 'weak':
+	      fn = exports.wetag;
+	      break;
+	    case false:
+	      break;
+	    case 'strong':
+	      fn = exports.etag;
+	      break;
+	    default:
+	      throw new TypeError('unknown value for etag function: ' + val);
+	  }
+
+	  return fn;
+	};
+
+	/**
+	 * Compile "query parser" value to function.
+	 *
+	 * @param  {String|Function} val
+	 * @return {Function}
+	 * @api private
+	 */
+
+	exports.compileQueryParser = function compileQueryParser(val) {
+	  var fn;
+
+	  if (typeof val === 'function') {
+	    return val;
+	  }
+
+	  switch (val) {
+	    case true:
+	    case 'simple':
+	      fn = querystring.parse;
+	      break;
+	    case false:
+	      fn = newObject;
+	      break;
+	    case 'extended':
+	      fn = parseExtendedQueryString;
+	      break;
+	    default:
+	      throw new TypeError('unknown value for query parser function: ' + val);
+	  }
+
+	  return fn;
+	};
+
+	/**
+	 * Compile "proxy trust" value to function.
+	 *
+	 * @param  {Boolean|String|Number|Array|Function} val
+	 * @return {Function}
+	 * @api private
+	 */
+
+	exports.compileTrust = function(val) {
+	  if (typeof val === 'function') return val;
+
+	  if (val === true) {
+	    // Support plain true/false
+	    return function(){ return true };
+	  }
+
+	  if (typeof val === 'number') {
+	    // Support trusting hop count
+	    return function(a, i){ return i < val };
+	  }
+
+	  if (typeof val === 'string') {
+	    // Support comma-separated values
+	    val = val.split(',')
+	      .map(function (v) { return v.trim() });
+	  }
+
+	  return proxyaddr.compile(val || []);
+	};
+
+	/**
+	 * Set the charset in a given Content-Type string.
+	 *
+	 * @param {String} type
+	 * @param {String} charset
+	 * @return {String}
+	 * @api private
+	 */
+
+	exports.setCharset = function setCharset(type, charset) {
+	  if (!type || !charset) {
+	    return type;
+	  }
+
+	  // parse type
+	  var parsed = contentType$1.parse(type);
+
+	  // set charset
+	  parsed.parameters.charset = charset;
+
+	  // format type
+	  return contentType$1.format(parsed);
+	};
+
+	/**
+	 * Create an ETag generator function, generating ETags with
+	 * the given options.
+	 *
+	 * @param {object} options
+	 * @return {function}
+	 * @private
+	 */
+
+	function createETagGenerator (options) {
+	  return function generateETag (body, encoding) {
+	    var buf = !Buffer.isBuffer(body)
+	      ? Buffer.from(body, encoding)
+	      : body;
+
+	    return etag(buf, options)
+	  }
+	}
+
+	/**
+	 * Parse an extended query string with qs.
+	 *
+	 * @return {Object}
+	 * @private
+	 */
+
+	function parseExtendedQueryString(str) {
+	  return qs.parse(str, {
+	    allowPrototypes: true
+	  });
+	}
+
+	/**
+	 * Return new empty object.
+	 *
+	 * @return {Object}
+	 * @api private
+	 */
+
+	function newObject() {
+	  return {};
+	}
+} (utils$3));
+
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (module, exports) {
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var finalhandler = finalhandler_1;
+	var Router = routerExports;
+	var methods = methods$2;
+	var middleware = init;
+	var query$1 = query;
+	var debug = srcExports$1('express:application');
+	var View = view;
+	var http = http$6;
+	var compileETag = utils$3.compileETag;
+	var compileQueryParser = utils$3.compileQueryParser;
+	var compileTrust = utils$3.compileTrust;
+	var deprecate = depd_1('express');
+	var flatten = arrayFlatten_1;
+	var merge = utilsMergeExports;
+	var resolve = require$$0$c.resolve;
+	var setPrototypeOf = setprototypeof;
+
+	/**
+	 * Module variables.
+	 * @private
+	 */
+
+	var hasOwnProperty = Object.prototype.hasOwnProperty;
+	var slice = Array.prototype.slice;
+
+	/**
+	 * Application prototype.
+	 */
+
+	var app = module.exports = {};
+
+	/**
+	 * Variable for trust proxy inheritance back-compat
+	 * @private
+	 */
+
+	var trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';
+
+	/**
+	 * Initialize the server.
+	 *
+	 *   - setup default configuration
+	 *   - setup default middleware
+	 *   - setup route reflection methods
+	 *
+	 * @private
+	 */
+
+	app.init = function init() {
+	  this.cache = {};
+	  this.engines = {};
+	  this.settings = {};
+
+	  this.defaultConfiguration();
+	};
+
+	/**
+	 * Initialize application configuration.
+	 * @private
+	 */
+
+	app.defaultConfiguration = function defaultConfiguration() {
+	  var env = process.env.NODE_ENV || 'development';
+
+	  // default settings
+	  this.enable('x-powered-by');
+	  this.set('etag', 'weak');
+	  this.set('env', env);
+	  this.set('query parser', 'extended');
+	  this.set('subdomain offset', 2);
+	  this.set('trust proxy', false);
+
+	  // trust proxy inherit back-compat
+	  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
+	    configurable: true,
+	    value: true
+	  });
+
+	  debug('booting in %s mode', env);
+
+	  this.on('mount', function onmount(parent) {
+	    // inherit trust proxy
+	    if (this.settings[trustProxyDefaultSymbol] === true
+	      && typeof parent.settings['trust proxy fn'] === 'function') {
+	      delete this.settings['trust proxy'];
+	      delete this.settings['trust proxy fn'];
+	    }
+
+	    // inherit protos
+	    setPrototypeOf(this.request, parent.request);
+	    setPrototypeOf(this.response, parent.response);
+	    setPrototypeOf(this.engines, parent.engines);
+	    setPrototypeOf(this.settings, parent.settings);
+	  });
+
+	  // setup locals
+	  this.locals = Object.create(null);
+
+	  // top-most app is mounted at /
+	  this.mountpath = '/';
+
+	  // default locals
+	  this.locals.settings = this.settings;
+
+	  // default configuration
+	  this.set('view', View);
+	  this.set('views', resolve('views'));
+	  this.set('jsonp callback name', 'callback');
+
+	  if (env === 'production') {
+	    this.enable('view cache');
+	  }
+
+	  Object.defineProperty(this, 'router', {
+	    get: function() {
+	      throw new Error('\'app.router\' is deprecated!\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');
+	    }
+	  });
+	};
+
+	/**
+	 * lazily adds the base router if it has not yet been added.
+	 *
+	 * We cannot add the base router in the defaultConfiguration because
+	 * it reads app settings which might be set after that has run.
+	 *
+	 * @private
+	 */
+	app.lazyrouter = function lazyrouter() {
+	  if (!this._router) {
+	    this._router = new Router({
+	      caseSensitive: this.enabled('case sensitive routing'),
+	      strict: this.enabled('strict routing')
+	    });
+
+	    this._router.use(query$1(this.get('query parser fn')));
+	    this._router.use(middleware.init(this));
+	  }
+	};
+
+	/**
+	 * Dispatch a req, res pair into the application. Starts pipeline processing.
+	 *
+	 * If no callback is provided, then default error handlers will respond
+	 * in the event of an error bubbling through the stack.
+	 *
+	 * @private
+	 */
+
+	app.handle = function handle(req, res, callback) {
+	  var router = this._router;
+
+	  // final handler
+	  var done = callback || finalhandler(req, res, {
+	    env: this.get('env'),
+	    onerror: logerror.bind(this)
+	  });
+
+	  // no routes
+	  if (!router) {
+	    debug('no routes defined on app');
+	    done();
+	    return;
+	  }
+
+	  router.handle(req, res, done);
+	};
+
+	/**
+	 * Proxy `Router#use()` to add middleware to the app router.
+	 * See Router#use() documentation for details.
+	 *
+	 * If the _fn_ parameter is an express app, then it will be
+	 * mounted at the _route_ specified.
+	 *
+	 * @public
+	 */
+
+	app.use = function use(fn) {
+	  var offset = 0;
+	  var path = '/';
+
+	  // default path to '/'
+	  // disambiguate app.use([fn])
+	  if (typeof fn !== 'function') {
+	    var arg = fn;
+
+	    while (Array.isArray(arg) && arg.length !== 0) {
+	      arg = arg[0];
+	    }
+
+	    // first arg is the path
+	    if (typeof arg !== 'function') {
+	      offset = 1;
+	      path = fn;
+	    }
+	  }
+
+	  var fns = flatten(slice.call(arguments, offset));
+
+	  if (fns.length === 0) {
+	    throw new TypeError('app.use() requires a middleware function')
+	  }
+
+	  // setup router
+	  this.lazyrouter();
+	  var router = this._router;
+
+	  fns.forEach(function (fn) {
+	    // non-express app
+	    if (!fn || !fn.handle || !fn.set) {
+	      return router.use(path, fn);
+	    }
+
+	    debug('.use app under %s', path);
+	    fn.mountpath = path;
+	    fn.parent = this;
+
+	    // restore .app property on req and res
