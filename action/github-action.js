@@ -175502,3 +175502,2117 @@ var require$$2$2 = {
 	"application/x-font-pcf": [
 	"pcf"
 ],
+	"application/x-font-snf": [
+	"snf"
+],
+	"application/x-font-type1": [
+	"pfa",
+	"pfb",
+	"pfm",
+	"afm"
+],
+	"application/x-freearc": [
+	"arc"
+],
+	"application/x-futuresplash": [
+	"spl"
+],
+	"application/x-gca-compressed": [
+	"gca"
+],
+	"application/x-glulx": [
+	"ulx"
+],
+	"application/x-gnumeric": [
+	"gnumeric"
+],
+	"application/x-gramps-xml": [
+	"gramps"
+],
+	"application/x-gtar": [
+	"gtar"
+],
+	"application/x-hdf": [
+	"hdf"
+],
+	"application/x-httpd-php": [
+	"php"
+],
+	"application/x-install-instructions": [
+	"install"
+],
+	"application/x-iso9660-image": [
+],
+	"application/x-java-archive-diff": [
+	"jardiff"
+],
+	"application/x-java-jnlp-file": [
+	"jnlp"
+],
+	"application/x-latex": [
+	"latex"
+],
+	"application/x-lua-bytecode": [
+	"luac"
+],
+	"application/x-lzh-compressed": [
+	"lzh",
+	"lha"
+],
+	"application/x-makeself": [
+	"run"
+],
+	"application/x-mie": [
+	"mie"
+],
+	"application/x-mobipocket-ebook": [
+	"prc",
+	"mobi"
+],
+	"application/x-ms-application": [
+	"application"
+],
+	"application/x-ms-shortcut": [
+	"lnk"
+],
+	"application/x-ms-wmd": [
+	"wmd"
+],
+	"application/x-ms-wmz": [
+	"wmz"
+],
+	"application/x-ms-xbap": [
+	"xbap"
+],
+	"application/x-msaccess": [
+	"mdb"
+],
+	"application/x-msbinder": [
+	"obd"
+],
+	"application/x-mscardfile": [
+	"crd"
+],
+	"application/x-msclip": [
+	"clp"
+],
+	"application/x-msdos-program": [
+],
+	"application/x-msdownload": [
+	"com",
+	"bat"
+],
+	"application/x-msmediaview": [
+	"mvb",
+	"m13",
+	"m14"
+],
+	"application/x-msmetafile": [
+	"wmf",
+	"emf",
+	"emz"
+],
+	"application/x-msmoney": [
+	"mny"
+],
+	"application/x-mspublisher": [
+	"pub"
+],
+	"application/x-msschedule": [
+	"scd"
+],
+	"application/x-msterminal": [
+	"trm"
+],
+	"application/x-mswrite": [
+	"wri"
+],
+	"application/x-netcdf": [
+	"nc",
+	"cdf"
+],
+	"application/x-ns-proxy-autoconfig": [
+	"pac"
+],
+	"application/x-nzb": [
+	"nzb"
+],
+	"application/x-perl": [
+	"pl",
+	"pm"
+],
+	"application/x-pilot": [
+],
+	"application/x-pkcs12": [
+	"p12",
+	"pfx"
+],
+	"application/x-pkcs7-certificates": [
+	"p7b",
+	"spc"
+],
+	"application/x-pkcs7-certreqresp": [
+	"p7r"
+],
+	"application/x-rar-compressed": [
+	"rar"
+],
+	"application/x-redhat-package-manager": [
+	"rpm"
+],
+	"application/x-research-info-systems": [
+	"ris"
+],
+	"application/x-sea": [
+	"sea"
+],
+	"application/x-sh": [
+	"sh"
+],
+	"application/x-shar": [
+	"shar"
+],
+	"application/x-shockwave-flash": [
+	"swf"
+],
+	"application/x-silverlight-app": [
+	"xap"
+],
+	"application/x-sql": [
+	"sql"
+],
+	"application/x-stuffit": [
+	"sit"
+],
+	"application/x-stuffitx": [
+	"sitx"
+],
+	"application/x-subrip": [
+	"srt"
+],
+	"application/x-sv4cpio": [
+	"sv4cpio"
+],
+	"application/x-sv4crc": [
+	"sv4crc"
+],
+	"application/x-t3vm-image": [
+	"t3"
+],
+	"application/x-tads": [
+	"gam"
+],
+	"application/x-tar": [
+	"tar"
+],
+	"application/x-tcl": [
+	"tcl",
+	"tk"
+],
+	"application/x-tex": [
+	"tex"
+],
+	"application/x-tex-tfm": [
+	"tfm"
+],
+	"application/x-texinfo": [
+	"texinfo",
+	"texi"
+],
+	"application/x-tgif": [
+	"obj"
+],
+	"application/x-ustar": [
+	"ustar"
+],
+	"application/x-virtualbox-hdd": [
+	"hdd"
+],
+	"application/x-virtualbox-ova": [
+	"ova"
+],
+	"application/x-virtualbox-ovf": [
+	"ovf"
+],
+	"application/x-virtualbox-vbox": [
+	"vbox"
+],
+	"application/x-virtualbox-vbox-extpack": [
+	"vbox-extpack"
+],
+	"application/x-virtualbox-vdi": [
+	"vdi"
+],
+	"application/x-virtualbox-vhd": [
+	"vhd"
+],
+	"application/x-virtualbox-vmdk": [
+	"vmdk"
+],
+	"application/x-wais-source": [
+	"src"
+],
+	"application/x-web-app-manifest+json": [
+	"webapp"
+],
+	"application/x-x509-ca-cert": [
+	"der",
+	"crt",
+	"pem"
+],
+	"application/x-xfig": [
+	"fig"
+],
+	"application/x-xliff+xml": [
+	"xlf"
+],
+	"application/x-xpinstall": [
+	"xpi"
+],
+	"application/x-xz": [
+	"xz"
+],
+	"application/x-zmachine": [
+	"z1",
+	"z2",
+	"z3",
+	"z4",
+	"z5",
+	"z6",
+	"z7",
+	"z8"
+],
+	"application/xaml+xml": [
+	"xaml"
+],
+	"application/xcap-diff+xml": [
+	"xdf"
+],
+	"application/xenc+xml": [
+	"xenc"
+],
+	"application/xhtml+xml": [
+	"xhtml",
+	"xht"
+],
+	"application/xml": [
+	"xml",
+	"xsl",
+	"xsd",
+	"rng"
+],
+	"application/xml-dtd": [
+	"dtd"
+],
+	"application/xop+xml": [
+	"xop"
+],
+	"application/xproc+xml": [
+	"xpl"
+],
+	"application/xslt+xml": [
+	"xslt"
+],
+	"application/xspf+xml": [
+	"xspf"
+],
+	"application/xv+xml": [
+	"mxml",
+	"xhvml",
+	"xvml",
+	"xvm"
+],
+	"application/yang": [
+	"yang"
+],
+	"application/yin+xml": [
+	"yin"
+],
+	"application/zip": [
+	"zip"
+],
+	"audio/3gpp": [
+],
+	"audio/adpcm": [
+	"adp"
+],
+	"audio/basic": [
+	"au",
+	"snd"
+],
+	"audio/midi": [
+	"mid",
+	"midi",
+	"kar",
+	"rmi"
+],
+	"audio/mp3": [
+],
+	"audio/mp4": [
+	"m4a",
+	"mp4a"
+],
+	"audio/mpeg": [
+	"mpga",
+	"mp2",
+	"mp2a",
+	"mp3",
+	"m2a",
+	"m3a"
+],
+	"audio/ogg": [
+	"oga",
+	"ogg",
+	"spx"
+],
+	"audio/s3m": [
+	"s3m"
+],
+	"audio/silk": [
+	"sil"
+],
+	"audio/vnd.dece.audio": [
+	"uva",
+	"uvva"
+],
+	"audio/vnd.digital-winds": [
+	"eol"
+],
+	"audio/vnd.dra": [
+	"dra"
+],
+	"audio/vnd.dts": [
+	"dts"
+],
+	"audio/vnd.dts.hd": [
+	"dtshd"
+],
+	"audio/vnd.lucent.voice": [
+	"lvp"
+],
+	"audio/vnd.ms-playready.media.pya": [
+	"pya"
+],
+	"audio/vnd.nuera.ecelp4800": [
+	"ecelp4800"
+],
+	"audio/vnd.nuera.ecelp7470": [
+	"ecelp7470"
+],
+	"audio/vnd.nuera.ecelp9600": [
+	"ecelp9600"
+],
+	"audio/vnd.rip": [
+	"rip"
+],
+	"audio/wav": [
+	"wav"
+],
+	"audio/wave": [
+],
+	"audio/webm": [
+	"weba"
+],
+	"audio/x-aac": [
+	"aac"
+],
+	"audio/x-aiff": [
+	"aif",
+	"aiff",
+	"aifc"
+],
+	"audio/x-caf": [
+	"caf"
+],
+	"audio/x-flac": [
+	"flac"
+],
+	"audio/x-m4a": [
+],
+	"audio/x-matroska": [
+	"mka"
+],
+	"audio/x-mpegurl": [
+	"m3u"
+],
+	"audio/x-ms-wax": [
+	"wax"
+],
+	"audio/x-ms-wma": [
+	"wma"
+],
+	"audio/x-pn-realaudio": [
+	"ram",
+	"ra"
+],
+	"audio/x-pn-realaudio-plugin": [
+	"rmp"
+],
+	"audio/x-realaudio": [
+],
+	"audio/x-wav": [
+],
+	"audio/xm": [
+	"xm"
+],
+	"chemical/x-cdx": [
+	"cdx"
+],
+	"chemical/x-cif": [
+	"cif"
+],
+	"chemical/x-cmdf": [
+	"cmdf"
+],
+	"chemical/x-cml": [
+	"cml"
+],
+	"chemical/x-csml": [
+	"csml"
+],
+	"chemical/x-xyz": [
+	"xyz"
+],
+	"font/collection": [
+	"ttc"
+],
+	"font/otf": [
+	"otf"
+],
+	"font/ttf": [
+	"ttf"
+],
+	"font/woff": [
+	"woff"
+],
+	"font/woff2": [
+	"woff2"
+],
+	"image/apng": [
+	"apng"
+],
+	"image/bmp": [
+	"bmp"
+],
+	"image/cgm": [
+	"cgm"
+],
+	"image/g3fax": [
+	"g3"
+],
+	"image/gif": [
+	"gif"
+],
+	"image/ief": [
+	"ief"
+],
+	"image/jp2": [
+	"jp2",
+	"jpg2"
+],
+	"image/jpeg": [
+	"jpeg",
+	"jpg",
+	"jpe"
+],
+	"image/jpm": [
+	"jpm"
+],
+	"image/jpx": [
+	"jpx",
+	"jpf"
+],
+	"image/ktx": [
+	"ktx"
+],
+	"image/png": [
+	"png"
+],
+	"image/prs.btif": [
+	"btif"
+],
+	"image/sgi": [
+	"sgi"
+],
+	"image/svg+xml": [
+	"svg",
+	"svgz"
+],
+	"image/tiff": [
+	"tiff",
+	"tif"
+],
+	"image/vnd.adobe.photoshop": [
+	"psd"
+],
+	"image/vnd.dece.graphic": [
+	"uvi",
+	"uvvi",
+	"uvg",
+	"uvvg"
+],
+	"image/vnd.djvu": [
+	"djvu",
+	"djv"
+],
+	"image/vnd.dvb.subtitle": [
+],
+	"image/vnd.dwg": [
+	"dwg"
+],
+	"image/vnd.dxf": [
+	"dxf"
+],
+	"image/vnd.fastbidsheet": [
+	"fbs"
+],
+	"image/vnd.fpx": [
+	"fpx"
+],
+	"image/vnd.fst": [
+	"fst"
+],
+	"image/vnd.fujixerox.edmics-mmr": [
+	"mmr"
+],
+	"image/vnd.fujixerox.edmics-rlc": [
+	"rlc"
+],
+	"image/vnd.ms-modi": [
+	"mdi"
+],
+	"image/vnd.ms-photo": [
+	"wdp"
+],
+	"image/vnd.net-fpx": [
+	"npx"
+],
+	"image/vnd.wap.wbmp": [
+	"wbmp"
+],
+	"image/vnd.xiff": [
+	"xif"
+],
+	"image/webp": [
+	"webp"
+],
+	"image/x-3ds": [
+	"3ds"
+],
+	"image/x-cmu-raster": [
+	"ras"
+],
+	"image/x-cmx": [
+	"cmx"
+],
+	"image/x-freehand": [
+	"fh",
+	"fhc",
+	"fh4",
+	"fh5",
+	"fh7"
+],
+	"image/x-icon": [
+	"ico"
+],
+	"image/x-jng": [
+	"jng"
+],
+	"image/x-mrsid-image": [
+	"sid"
+],
+	"image/x-ms-bmp": [
+],
+	"image/x-pcx": [
+	"pcx"
+],
+	"image/x-pict": [
+	"pic",
+	"pct"
+],
+	"image/x-portable-anymap": [
+	"pnm"
+],
+	"image/x-portable-bitmap": [
+	"pbm"
+],
+	"image/x-portable-graymap": [
+	"pgm"
+],
+	"image/x-portable-pixmap": [
+	"ppm"
+],
+	"image/x-rgb": [
+	"rgb"
+],
+	"image/x-tga": [
+	"tga"
+],
+	"image/x-xbitmap": [
+	"xbm"
+],
+	"image/x-xpixmap": [
+	"xpm"
+],
+	"image/x-xwindowdump": [
+	"xwd"
+],
+	"message/rfc822": [
+	"eml",
+	"mime"
+],
+	"model/gltf+json": [
+	"gltf"
+],
+	"model/gltf-binary": [
+	"glb"
+],
+	"model/iges": [
+	"igs",
+	"iges"
+],
+	"model/mesh": [
+	"msh",
+	"mesh",
+	"silo"
+],
+	"model/vnd.collada+xml": [
+	"dae"
+],
+	"model/vnd.dwf": [
+	"dwf"
+],
+	"model/vnd.gdl": [
+	"gdl"
+],
+	"model/vnd.gtw": [
+	"gtw"
+],
+	"model/vnd.mts": [
+	"mts"
+],
+	"model/vnd.vtu": [
+	"vtu"
+],
+	"model/vrml": [
+	"wrl",
+	"vrml"
+],
+	"model/x3d+binary": [
+	"x3db",
+	"x3dbz"
+],
+	"model/x3d+vrml": [
+	"x3dv",
+	"x3dvz"
+],
+	"model/x3d+xml": [
+	"x3d",
+	"x3dz"
+],
+	"text/cache-manifest": [
+	"appcache",
+	"manifest"
+],
+	"text/calendar": [
+	"ics",
+	"ifb"
+],
+	"text/coffeescript": [
+	"coffee",
+	"litcoffee"
+],
+	"text/css": [
+	"css"
+],
+	"text/csv": [
+	"csv"
+],
+	"text/hjson": [
+	"hjson"
+],
+	"text/html": [
+	"html",
+	"htm",
+	"shtml"
+],
+	"text/jade": [
+	"jade"
+],
+	"text/jsx": [
+	"jsx"
+],
+	"text/less": [
+	"less"
+],
+	"text/markdown": [
+	"markdown",
+	"md"
+],
+	"text/mathml": [
+	"mml"
+],
+	"text/n3": [
+	"n3"
+],
+	"text/plain": [
+	"txt",
+	"text",
+	"conf",
+	"def",
+	"list",
+	"log",
+	"in",
+	"ini"
+],
+	"text/prs.lines.tag": [
+	"dsc"
+],
+	"text/richtext": [
+	"rtx"
+],
+	"text/rtf": [
+],
+	"text/sgml": [
+	"sgml",
+	"sgm"
+],
+	"text/slim": [
+	"slim",
+	"slm"
+],
+	"text/stylus": [
+	"stylus",
+	"styl"
+],
+	"text/tab-separated-values": [
+	"tsv"
+],
+	"text/troff": [
+	"t",
+	"tr",
+	"roff",
+	"man",
+	"me",
+	"ms"
+],
+	"text/turtle": [
+	"ttl"
+],
+	"text/uri-list": [
+	"uri",
+	"uris",
+	"urls"
+],
+	"text/vcard": [
+	"vcard"
+],
+	"text/vnd.curl": [
+	"curl"
+],
+	"text/vnd.curl.dcurl": [
+	"dcurl"
+],
+	"text/vnd.curl.mcurl": [
+	"mcurl"
+],
+	"text/vnd.curl.scurl": [
+	"scurl"
+],
+	"text/vnd.dvb.subtitle": [
+	"sub"
+],
+	"text/vnd.fly": [
+	"fly"
+],
+	"text/vnd.fmi.flexstor": [
+	"flx"
+],
+	"text/vnd.graphviz": [
+	"gv"
+],
+	"text/vnd.in3d.3dml": [
+	"3dml"
+],
+	"text/vnd.in3d.spot": [
+	"spot"
+],
+	"text/vnd.sun.j2me.app-descriptor": [
+	"jad"
+],
+	"text/vnd.wap.wml": [
+	"wml"
+],
+	"text/vnd.wap.wmlscript": [
+	"wmls"
+],
+	"text/vtt": [
+	"vtt"
+],
+	"text/x-asm": [
+	"s",
+	"asm"
+],
+	"text/x-c": [
+	"c",
+	"cc",
+	"cxx",
+	"cpp",
+	"h",
+	"hh",
+	"dic"
+],
+	"text/x-component": [
+	"htc"
+],
+	"text/x-fortran": [
+	"f",
+	"for",
+	"f77",
+	"f90"
+],
+	"text/x-handlebars-template": [
+	"hbs"
+],
+	"text/x-java-source": [
+	"java"
+],
+	"text/x-lua": [
+	"lua"
+],
+	"text/x-markdown": [
+	"mkd"
+],
+	"text/x-nfo": [
+	"nfo"
+],
+	"text/x-opml": [
+	"opml"
+],
+	"text/x-org": [
+],
+	"text/x-pascal": [
+	"p",
+	"pas"
+],
+	"text/x-processing": [
+	"pde"
+],
+	"text/x-sass": [
+	"sass"
+],
+	"text/x-scss": [
+	"scss"
+],
+	"text/x-setext": [
+	"etx"
+],
+	"text/x-sfv": [
+	"sfv"
+],
+	"text/x-suse-ymp": [
+	"ymp"
+],
+	"text/x-uuencode": [
+	"uu"
+],
+	"text/x-vcalendar": [
+	"vcs"
+],
+	"text/x-vcard": [
+	"vcf"
+],
+	"text/xml": [
+],
+	"text/yaml": [
+	"yaml",
+	"yml"
+],
+	"video/3gpp": [
+	"3gp",
+	"3gpp"
+],
+	"video/3gpp2": [
+	"3g2"
+],
+	"video/h261": [
+	"h261"
+],
+	"video/h263": [
+	"h263"
+],
+	"video/h264": [
+	"h264"
+],
+	"video/jpeg": [
+	"jpgv"
+],
+	"video/jpm": [
+	"jpgm"
+],
+	"video/mj2": [
+	"mj2",
+	"mjp2"
+],
+	"video/mp2t": [
+	"ts"
+],
+	"video/mp4": [
+	"mp4",
+	"mp4v",
+	"mpg4"
+],
+	"video/mpeg": [
+	"mpeg",
+	"mpg",
+	"mpe",
+	"m1v",
+	"m2v"
+],
+	"video/ogg": [
+	"ogv"
+],
+	"video/quicktime": [
+	"qt",
+	"mov"
+],
+	"video/vnd.dece.hd": [
+	"uvh",
+	"uvvh"
+],
+	"video/vnd.dece.mobile": [
+	"uvm",
+	"uvvm"
+],
+	"video/vnd.dece.pd": [
+	"uvp",
+	"uvvp"
+],
+	"video/vnd.dece.sd": [
+	"uvs",
+	"uvvs"
+],
+	"video/vnd.dece.video": [
+	"uvv",
+	"uvvv"
+],
+	"video/vnd.dvb.file": [
+	"dvb"
+],
+	"video/vnd.fvt": [
+	"fvt"
+],
+	"video/vnd.mpegurl": [
+	"mxu",
+	"m4u"
+],
+	"video/vnd.ms-playready.media.pyv": [
+	"pyv"
+],
+	"video/vnd.uvvu.mp4": [
+	"uvu",
+	"uvvu"
+],
+	"video/vnd.vivo": [
+	"viv"
+],
+	"video/webm": [
+	"webm"
+],
+	"video/x-f4v": [
+	"f4v"
+],
+	"video/x-fli": [
+	"fli"
+],
+	"video/x-flv": [
+	"flv"
+],
+	"video/x-m4v": [
+	"m4v"
+],
+	"video/x-matroska": [
+	"mkv",
+	"mk3d",
+	"mks"
+],
+	"video/x-mng": [
+	"mng"
+],
+	"video/x-ms-asf": [
+	"asf",
+	"asx"
+],
+	"video/x-ms-vob": [
+	"vob"
+],
+	"video/x-ms-wm": [
+	"wm"
+],
+	"video/x-ms-wmv": [
+	"wmv"
+],
+	"video/x-ms-wmx": [
+	"wmx"
+],
+	"video/x-ms-wvx": [
+	"wvx"
+],
+	"video/x-msvideo": [
+	"avi"
+],
+	"video/x-sgi-movie": [
+	"movie"
+],
+	"video/x-smv": [
+	"smv"
+],
+	"x-conference/x-cooltalk": [
+	"ice"
+]
+};
+
+var fs$i = require$$0$e;
+
+function Mime() {
+  // Map of extension -> mime type
+  this.types = Object.create(null);
+
+  // Map of mime type -> extension
+  this.extensions = Object.create(null);
+}
+
+/**
+ * Define mimetype -> extension mappings.  Each key is a mime-type that maps
+ * to an array of extensions associated with the type.  The first extension is
+ * used as the default extension for the type.
+ *
+ * e.g. mime.define({'audio/ogg', ['oga', 'ogg', 'spx']});
+ *
+ * @param map (Object) type definitions
+ */
+Mime.prototype.define = function (map) {
+  for (var type in map) {
+    var exts = map[type];
+    for (var i = 0; i < exts.length; i++) {
+      if (process.env.DEBUG_MIME && this.types[exts[i]]) {
+        console.warn((this._loading || "define()").replace(/.*\//, ''), 'changes "' + exts[i] + '" extension type from ' +
+          this.types[exts[i]] + ' to ' + type);
+      }
+
+      this.types[exts[i]] = type;
+    }
+
+    // Default extension is the first one we encounter
+    if (!this.extensions[type]) {
+      this.extensions[type] = exts[0];
+    }
+  }
+};
+
+/**
+ * Load an Apache2-style ".types" file
+ *
+ * This may be called multiple times (it's expected).  Where files declare
+ * overlapping types/extensions, the last file wins.
+ *
+ * @param file (String) path of file to load.
+ */
+Mime.prototype.load = function(file) {
+  this._loading = file;
+  // Read file and split into lines
+  var map = {},
+      content = fs$i.readFileSync(file, 'ascii'),
+      lines = content.split(/[\r\n]+/);
+
+  lines.forEach(function(line) {
+    // Clean up whitespace/comments, and split into fields
+    var fields = line.replace(/\s*#.*|^\s*|\s*$/g, '').split(/\s+/);
+    map[fields.shift()] = fields;
+  });
+
+  this.define(map);
+
+  this._loading = null;
+};
+
+/**
+ * Lookup a mime type based on extension
+ */
+Mime.prototype.lookup = function(path, fallback) {
+  var ext = path.replace(/^.*[\.\/\\]/, '').toLowerCase();
+
+  return this.types[ext] || fallback || this.default_type;
+};
+
+/**
+ * Return file extension associated with a mime type
+ */
+Mime.prototype.extension = function(mimeType) {
+  var type = mimeType.match(/^\s*([^;\s]*)(?:;|\s|$)/)[1].toLowerCase();
+  return this.extensions[type];
+};
+
+// Default instance
+var mime$4 = new Mime();
+
+// Define built-in types
+mime$4.define(require$$2$2);
+
+// Default type
+mime$4.default_type = mime$4.lookup('bin');
+
+//
+// Additional API specific to the default instance
+//
+
+mime$4.Mime = Mime;
+
+/**
+ * Lookup a charset based on mime type.
+ */
+mime$4.charsets = {
+  lookup: function(mimeType, fallback) {
+    // Assume text types are utf8
+    return (/^text\/|^application\/(javascript|json)/).test(mimeType) ? 'UTF-8' : fallback;
+  }
+};
+
+var mime_1 = mime$4;
+
+/**
+ * Helpers.
+ */
+
+var s = 1000;
+var m$1 = s * 60;
+var h$1 = m$1 * 60;
+var d = h$1 * 24;
+var w = d * 7;
+var y = d * 365.25;
+
+/**
+ * Parse or format the given `val`.
+ *
+ * Options:
+ *
+ *  - `long` verbose formatting [false]
+ *
+ * @param {String|Number} val
+ * @param {Object} [options]
+ * @throws {Error} throw an error if val is not a non-empty string or a number
+ * @return {String|Number}
+ * @api public
+ */
+
+var ms$1 = function (val, options) {
+  options = options || {};
+  var type = typeof val;
+  if (type === 'string' && val.length > 0) {
+    return parse$a(val);
+  } else if (type === 'number' && isFinite(val)) {
+    return options.long ? fmtLong(val) : fmtShort(val);
+  }
+  throw new Error(
+    'val is not a non-empty string or a valid number. val=' +
+      JSON.stringify(val)
+  );
+};
+
+/**
+ * Parse the given `str` and return milliseconds.
+ *
+ * @param {String} str
+ * @return {Number}
+ * @api private
+ */
+
+function parse$a(str) {
+  str = String(str);
+  if (str.length > 100) {
+    return;
+  }
+  var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
+    str
+  );
+  if (!match) {
+    return;
+  }
+  var n = parseFloat(match[1]);
+  var type = (match[2] || 'ms').toLowerCase();
+  switch (type) {
+    case 'years':
+    case 'year':
+    case 'yrs':
+    case 'yr':
+    case 'y':
+      return n * y;
+    case 'weeks':
+    case 'week':
+    case 'w':
+      return n * w;
+    case 'days':
+    case 'day':
+    case 'd':
+      return n * d;
+    case 'hours':
+    case 'hour':
+    case 'hrs':
+    case 'hr':
+    case 'h':
+      return n * h$1;
+    case 'minutes':
+    case 'minute':
+    case 'mins':
+    case 'min':
+    case 'm':
+      return n * m$1;
+    case 'seconds':
+    case 'second':
+    case 'secs':
+    case 'sec':
+    case 's':
+      return n * s;
+    case 'milliseconds':
+    case 'millisecond':
+    case 'msecs':
+    case 'msec':
+    case 'ms':
+      return n;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Short format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtShort(ms) {
+  var msAbs = Math.abs(ms);
+  if (msAbs >= d) {
+    return Math.round(ms / d) + 'd';
+  }
+  if (msAbs >= h$1) {
+    return Math.round(ms / h$1) + 'h';
+  }
+  if (msAbs >= m$1) {
+    return Math.round(ms / m$1) + 'm';
+  }
+  if (msAbs >= s) {
+    return Math.round(ms / s) + 's';
+  }
+  return ms + 'ms';
+}
+
+/**
+ * Long format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtLong(ms) {
+  var msAbs = Math.abs(ms);
+  if (msAbs >= d) {
+    return plural(ms, msAbs, d, 'day');
+  }
+  if (msAbs >= h$1) {
+    return plural(ms, msAbs, h$1, 'hour');
+  }
+  if (msAbs >= m$1) {
+    return plural(ms, msAbs, m$1, 'minute');
+  }
+  if (msAbs >= s) {
+    return plural(ms, msAbs, s, 'second');
+  }
+  return ms + ' ms';
+}
+
+/**
+ * Pluralization helper.
+ */
+
+function plural(ms, msAbs, n, name) {
+  var isPlural = msAbs >= n * 1.5;
+  return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
+}
+
+/*!
+ * range-parser
+ * Copyright(c) 2012-2014 TJ Holowaychuk
+ * Copyright(c) 2015-2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var rangeParser_1 = rangeParser;
+
+/**
+ * Parse "Range" header `str` relative to the given file `size`.
+ *
+ * @param {Number} size
+ * @param {String} str
+ * @param {Object} [options]
+ * @return {Array}
+ * @public
+ */
+
+function rangeParser (size, str, options) {
+  if (typeof str !== 'string') {
+    throw new TypeError('argument str must be a string')
+  }
+
+  var index = str.indexOf('=');
+
+  if (index === -1) {
+    return -2
+  }
+
+  // split the range string
+  var arr = str.slice(index + 1).split(',');
+  var ranges = [];
+
+  // add ranges type
+  ranges.type = str.slice(0, index);
+
+  // parse all ranges
+  for (var i = 0; i < arr.length; i++) {
+    var range = arr[i].split('-');
+    var start = parseInt(range[0], 10);
+    var end = parseInt(range[1], 10);
+
+    // -nnn
+    if (isNaN(start)) {
+      start = size - end;
+      end = size - 1;
+    // nnn-
+    } else if (isNaN(end)) {
+      end = size - 1;
+    }
+
+    // limit last-byte-pos to current length
+    if (end > size - 1) {
+      end = size - 1;
+    }
+
+    // invalid or unsatisifiable
+    if (isNaN(start) || isNaN(end) || start > end || start < 0) {
+      continue
+    }
+
+    // add range
+    ranges.push({
+      start: start,
+      end: end
+    });
+  }
+
+  if (ranges.length < 1) {
+    // unsatisifiable
+    return -1
+  }
+
+  return options && options.combine
+    ? combineRanges(ranges)
+    : ranges
+}
+
+/**
+ * Combine overlapping & adjacent ranges.
+ * @private
+ */
+
+function combineRanges (ranges) {
+  var ordered = ranges.map(mapWithIndex).sort(sortByRangeStart);
+
+  for (var j = 0, i = 1; i < ordered.length; i++) {
+    var range = ordered[i];
+    var current = ordered[j];
+
+    if (range.start > current.end + 1) {
+      // next range
+      ordered[++j] = range;
+    } else if (range.end > current.end) {
+      // extend range
+      current.end = range.end;
+      current.index = Math.min(current.index, range.index);
+    }
+  }
+
+  // trim ordered array
+  ordered.length = j + 1;
+
+  // generate combined range
+  var combined = ordered.sort(sortByRangeIndex).map(mapWithoutIndex);
+
+  // copy ranges type
+  combined.type = ranges.type;
+
+  return combined
+}
+
+/**
+ * Map function to add index value to ranges.
+ * @private
+ */
+
+function mapWithIndex (range, index) {
+  return {
+    start: range.start,
+    end: range.end,
+    index: index
+  }
+}
+
+/**
+ * Map function to remove index value from ranges.
+ * @private
+ */
+
+function mapWithoutIndex (range) {
+  return {
+    start: range.start,
+    end: range.end
+  }
+}
+
+/**
+ * Sort function to sort ranges by index.
+ * @private
+ */
+
+function sortByRangeIndex (a, b) {
+  return a.index - b.index
+}
+
+/**
+ * Sort function to sort ranges by start position.
+ * @private
+ */
+
+function sortByRangeStart (a, b) {
+  return a.start - b.start
+}
+
+/*!
+ * send
+ * Copyright(c) 2012 TJ Holowaychuk
+ * Copyright(c) 2014-2022 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var createError$1 = httpErrorsExports;
+var debug$2 = srcExports('send');
+var deprecate$2 = depd_1('send');
+var destroy$1 = requireDestroy();
+var encodeUrl$1 = encodeurl;
+var escapeHtml$1 = escapeHtml_1;
+var etag = etag_1;
+var fresh$1 = fresh_1;
+var fs$h = require$$0$e;
+var mime$3 = mime_1;
+var ms = ms$1;
+var onFinished$1 = onFinishedExports;
+var parseRange$1 = rangeParser_1;
+var path$j = require$$0$c;
+var statuses$1 = statuses$3;
+var Stream$1 = Stream$2;
+var util$6 = require$$1$7;
+
+/**
+ * Path function references.
+ * @private
+ */
+
+var extname$1 = path$j.extname;
+var join$2 = path$j.join;
+var normalize$1 = path$j.normalize;
+var resolve$2 = path$j.resolve;
+var sep = path$j.sep;
+
+/**
+ * Regular expression for identifying a bytes Range header.
+ * @private
+ */
+
+var BYTES_RANGE_REGEXP = /^ *bytes=/;
+
+/**
+ * Maximum value allowed for the max age.
+ * @private
+ */
+
+var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1000; // 1 year
+
+/**
+ * Regular expression to match a path with a directory up component.
+ * @private
+ */
+
+var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+send$2.exports = send$1;
+sendExports.mime = mime$3;
+
+/**
+ * Return a `SendStream` for `req` and `path`.
+ *
+ * @param {object} req
+ * @param {string} path
+ * @param {object} [options]
+ * @return {SendStream}
+ * @public
+ */
+
+function send$1 (req, path, options) {
+  return new SendStream(req, path, options)
+}
+
+/**
+ * Initialize a `SendStream` with the given `path`.
+ *
+ * @param {Request} req
+ * @param {String} path
+ * @param {object} [options]
+ * @private
+ */
+
+function SendStream (req, path, options) {
+  Stream$1.call(this);
+
+  var opts = options || {};
+
+  this.options = opts;
+  this.path = path;
+  this.req = req;
+
+  this._acceptRanges = opts.acceptRanges !== undefined
+    ? Boolean(opts.acceptRanges)
+    : true;
+
+  this._cacheControl = opts.cacheControl !== undefined
+    ? Boolean(opts.cacheControl)
+    : true;
+
+  this._etag = opts.etag !== undefined
+    ? Boolean(opts.etag)
+    : true;
+
+  this._dotfiles = opts.dotfiles !== undefined
+    ? opts.dotfiles
+    : 'ignore';
+
+  if (this._dotfiles !== 'ignore' && this._dotfiles !== 'allow' && this._dotfiles !== 'deny') {
+    throw new TypeError('dotfiles option must be "allow", "deny", or "ignore"')
+  }
+
+  this._hidden = Boolean(opts.hidden);
+
+  if (opts.hidden !== undefined) {
+    deprecate$2('hidden: use dotfiles: \'' + (this._hidden ? 'allow' : 'ignore') + '\' instead');
+  }
+
+  // legacy support
+  if (opts.dotfiles === undefined) {
+    this._dotfiles = undefined;
+  }
+
+  this._extensions = opts.extensions !== undefined
+    ? normalizeList(opts.extensions, 'extensions option')
+    : [];
+
+  this._immutable = opts.immutable !== undefined
+    ? Boolean(opts.immutable)
+    : false;
+
+  this._index = opts.index !== undefined
+    ? normalizeList(opts.index, 'index option')
+    : ['index.html'];
+
+  this._lastModified = opts.lastModified !== undefined
+    ? Boolean(opts.lastModified)
+    : true;
+
+  this._maxage = opts.maxAge || opts.maxage;
+  this._maxage = typeof this._maxage === 'string'
+    ? ms(this._maxage)
+    : Number(this._maxage);
+  this._maxage = !isNaN(this._maxage)
+    ? Math.min(Math.max(0, this._maxage), MAX_MAXAGE)
+    : 0;
+
+  this._root = opts.root
+    ? resolve$2(opts.root)
+    : null;
+
+  if (!this._root && opts.from) {
+    this.from(opts.from);
+  }
+}
+
+/**
+ * Inherits from `Stream`.
+ */
+
+util$6.inherits(SendStream, Stream$1);
+
+/**
+ * Enable or disable etag generation.
+ *
+ * @param {Boolean} val
+ * @return {SendStream}
+ * @api public
+ */
+
+SendStream.prototype.etag = deprecate$2.function(function etag (val) {
+  this._etag = Boolean(val);
+  debug$2('etag %s', this._etag);
+  return this
+}, 'send.etag: pass etag as option');
+
+/**
+ * Enable or disable "hidden" (dot) files.
+ *
+ * @param {Boolean} path
+ * @return {SendStream}
+ * @api public
+ */
+
+SendStream.prototype.hidden = deprecate$2.function(function hidden (val) {
+  this._hidden = Boolean(val);
+  this._dotfiles = undefined;
+  debug$2('hidden %s', this._hidden);
+  return this
+}, 'send.hidden: use dotfiles option');
+
+/**
+ * Set index `paths`, set to a falsy
+ * value to disable index support.
+ *
+ * @param {String|Boolean|Array} paths
+ * @return {SendStream}
+ * @api public
+ */
+
+SendStream.prototype.index = deprecate$2.function(function index (paths) {
+  var index = !paths ? [] : normalizeList(paths, 'paths argument');
+  debug$2('index %o', paths);
+  this._index = index;
+  return this
+}, 'send.index: pass index as option');
+
+/**
+ * Set root `path`.
+ *
+ * @param {String} path
+ * @return {SendStream}
+ * @api public
+ */
+
+SendStream.prototype.root = function root (path) {
+  this._root = resolve$2(String(path));
+  debug$2('root %s', this._root);
+  return this
+};
+
+SendStream.prototype.from = deprecate$2.function(SendStream.prototype.root,
+  'send.from: pass root as option');
+
+SendStream.prototype.root = deprecate$2.function(SendStream.prototype.root,
+  'send.root: pass root as option');
+
+/**
+ * Set max-age to `maxAge`.
+ *
+ * @param {Number} maxAge
+ * @return {SendStream}
+ * @api public
+ */
+
+SendStream.prototype.maxage = deprecate$2.function(function maxage (maxAge) {
+  this._maxage = typeof maxAge === 'string'
+    ? ms(maxAge)
+    : Number(maxAge);
+  this._maxage = !isNaN(this._maxage)
+    ? Math.min(Math.max(0, this._maxage), MAX_MAXAGE)
+    : 0;
+  debug$2('max-age %d', this._maxage);
+  return this
+}, 'send.maxage: pass maxAge as option');
+
+/**
+ * Emit error with `status`.
+ *
+ * @param {number} status
+ * @param {Error} [err]
+ * @private
+ */
+
+SendStream.prototype.error = function error (status, err) {
+  // emit if listeners instead of responding
+  if (hasListeners(this, 'error')) {
+    return this.emit('error', createHttpError(status, err))
+  }
+
+  var res = this.res;
+  var msg = statuses$1.message[status] || String(status);
+  var doc = createHtmlDocument('Error', escapeHtml$1(msg));
+
+  // clear existing headers
+  clearHeaders(res);
+
+  // add error headers
+  if (err && err.headers) {
+    setHeaders(res, err.headers);
+  }
+
+  // send basic response
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+  res.setHeader('Content-Length', Buffer.byteLength(doc));
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.end(doc);
+};
+
+/**
+ * Check if the pathname ends with "/".
+ *
+ * @return {boolean}
+ * @private
+ */
+
+SendStream.prototype.hasTrailingSlash = function hasTrailingSlash () {
+  return this.path[this.path.length - 1] === '/'
+};
+
+/**
+ * Check if this is a conditional GET request.
+ *
+ * @return {Boolean}
+ * @api private
+ */
+
+SendStream.prototype.isConditionalGET = function isConditionalGET () {
+  return this.req.headers['if-match'] ||
+    this.req.headers['if-unmodified-since'] ||
+    this.req.headers['if-none-match'] ||
+    this.req.headers['if-modified-since']
+};
+
+/**
+ * Check if the request preconditions failed.
+ *
+ * @return {boolean}
+ * @private
+ */
+
+SendStream.prototype.isPreconditionFailure = function isPreconditionFailure () {
+  var req = this.req;
+  var res = this.res;
+
+  // if-match
+  var match = req.headers['if-match'];
+  if (match) {
+    var etag = res.getHeader('ETag');
+    return !etag || (match !== '*' && parseTokenList(match).every(function (match) {
+      return match !== etag && match !== 'W/' + etag && 'W/' + match !== etag
+    }))
+  }
+
+  // if-unmodified-since
+  var unmodifiedSince = parseHttpDate(req.headers['if-unmodified-since']);
+  if (!isNaN(unmodifiedSince)) {
+    var lastModified = parseHttpDate(res.getHeader('Last-Modified'));
+    return isNaN(lastModified) || lastModified > unmodifiedSince
+  }
+
+  return false
+};
+
+/**
+ * Strip various content header fields for a change in entity.
+ *
+ * @private
+ */
+
+SendStream.prototype.removeContentHeaderFields = function removeContentHeaderFields () {
+  var res = this.res;
+
+  res.removeHeader('Content-Encoding');
+  res.removeHeader('Content-Language');
+  res.removeHeader('Content-Length');
+  res.removeHeader('Content-Range');
+  res.removeHeader('Content-Type');
+};
+
+/**
+ * Respond with 304 not modified.
+ *
+ * @api private
+ */
+
+SendStream.prototype.notModified = function notModified () {
+  var res = this.res;
+  debug$2('not modified');
+  this.removeContentHeaderFields();
+  res.statusCode = 304;
+  res.end();
+};
+
+/**
+ * Raise error that headers already sent.
+ *
+ * @api private
+ */
+
+SendStream.prototype.headersAlreadySent = function headersAlreadySent () {
+  var err = new Error('Can\'t set headers after they are sent.');
+  debug$2('headers already sent');
+  this.error(500, err);
+};
+
+/**
+ * Check if the request is cacheable, aka
+ * responded with 2xx or 304 (see RFC 2616 section 14.2{5,6}).
+ *
+ * @return {Boolean}
+ * @api private
+ */
+
+SendStream.prototype.isCachable = function isCachable () {
+  var statusCode = this.res.statusCode;
+  return (statusCode >= 200 && statusCode < 300) ||
+    statusCode === 304
+};
+
+/**
+ * Handle stat() error.
+ *
+ * @param {Error} error
+ * @private
+ */
+
+SendStream.prototype.onStatError = function onStatError (error) {
+  switch (error.code) {
+    case 'ENAMETOOLONG':
+    case 'ENOENT':
+    case 'ENOTDIR':
+      this.error(404, error);
+      break
+    default:
+      this.error(500, error);
+      break
+  }
+};
+
+/**
+ * Check if the cache is fresh.
+ *
+ * @return {Boolean}
+ * @api private
+ */
+
+SendStream.prototype.isFresh = function isFresh () {
+  return fresh$1(this.req.headers, {
+    etag: this.res.getHeader('ETag'),
+    'last-modified': this.res.getHeader('Last-Modified')
+  })
+};
+
+/**
+ * Check if the range is fresh.
+ *
+ * @return {Boolean}
+ * @api private
+ */
+
+SendStream.prototype.isRangeFresh = function isRangeFresh () {
+  var ifRange = this.req.headers['if-range'];
+
+  if (!ifRange) {
+    return true
+  }
+
+  // if-range as etag
+  if (ifRange.indexOf('"') !== -1) {
+    var etag = this.res.getHeader('ETag');
+    return Boolean(etag && ifRange.indexOf(etag) !== -1)
+  }
+
+  // if-range as modified date
+  var lastModified = this.res.getHeader('Last-Modified');
+  return parseHttpDate(lastModified) <= parseHttpDate(ifRange)
+};
+
+/**
+ * Redirect to path.
+ *
+ * @param {string} path
+ * @private
+ */
+
+SendStream.prototype.redirect = function redirect (path) {
+  var res = this.res;
+
+  if (hasListeners(this, 'directory')) {
+    this.emit('directory', res, path);
+    return
+  }
+
+  if (this.hasTrailingSlash()) {
+    this.error(403);
+    return
+  }
+
+  var loc = encodeUrl$1(collapseLeadingSlashes(this.path + '/'));
+  var doc = createHtmlDocument('Redirecting', 'Redirecting to <a href="' + escapeHtml$1(loc) + '">' +
+    escapeHtml$1(loc) + '</a>');
+
+  // redirect
+  res.statusCode = 301;
+  res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+  res.setHeader('Content-Length', Buffer.byteLength(doc));
+  res.setHeader('Content-Security-Policy', "default-src 'none'");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Location', loc);
+  res.end(doc);
+};
+
+/**
+ * Pipe to `res.
+ *
+ * @param {Stream} res
+ * @return {Stream} res
+ * @api public
+ */
+
+SendStream.prototype.pipe = function pipe (res) {
+  // root path
+  var root = this._root;
+
+  // references
+  this.res = res;
+
+  // decode the path
+  var path = decode$3(this.path);
+  if (path === -1) {
+    this.error(400);
+    return res
+  }
+
+  // null byte(s)
+  if (~path.indexOf('\0')) {
+    this.error(400);
+    return res
+  }
+
+  var parts;
+  if (root !== null) {
+    // normalize
+    if (path) {
+      path = normalize$1('.' + sep + path);
+    }
+
+    // malicious path
+    if (UP_PATH_REGEXP.test(path)) {
+      debug$2('malicious path "%s"', path);
+      this.error(403);
+      return res
+    }
+
+    // explode path parts
+    parts = path.split(sep);
+
+    // join / normalize from optional root dir
+    path = normalize$1(join$2(root, path));
+  } else {
+    // ".." is malicious without "root"
+    if (UP_PATH_REGEXP.test(path)) {
+      debug$2('malicious path "%s"', path);
+      this.error(403);
+      return res
+    }
+
+    // explode path parts
+    parts = normalize$1(path).split(sep);
+
+    // resolve the path
+    path = resolve$2(path);
+  }
+
+  // dotfile handling
+  if (containsDotFile(parts)) {
+    var access = this._dotfiles;
+
+    // legacy support
+    if (access === undefined) {
+      access = parts[parts.length - 1][0] === '.'
+        ? (this._hidden ? 'allow' : 'ignore')
+        : 'allow';
+    }
+
+    debug$2('%s dotfile "%s"', access, path);
+    switch (access) {
+      case 'allow':
+        break
+      case 'deny':
+        this.error(403);
+        return res
+      case 'ignore':
+      default:
+        this.error(404);
+        return res
+    }
+  }
+
+  // index file support
+  if (this._index.length && this.hasTrailingSlash()) {
+    this.sendIndex(path);
+    return res
+  }
+
+  this.sendFile(path);
+  return res
+};
+
+/**
+ * Transfer `path`.
+ *
+ * @param {String} path
+ * @api public
+ */
+
+SendStream.prototype.send = function send (path, stat) {
+  var len = stat.size;
+  var options = this.options;
+  var opts = {};
+  var res = this.res;
+  var req = this.req;
+  var ranges = req.headers.range;
+  var offset = options.start || 0;
+
+  if (headersSent(res)) {
+    // impossible to send now
+    this.headersAlreadySent();
+    return
