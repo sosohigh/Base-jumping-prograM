@@ -181962,3 +181962,2209 @@ var cookie$1 = {};
 
 /*!
  * cookie
+ * Copyright(c) 2012-2014 Roman Shtylman
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ * @public
+ */
+
+cookie$1.parse = parse$7;
+cookie$1.serialize = serialize;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var __toString = Object.prototype.toString;
+
+/**
+ * RegExp to match field-content in RFC 7230 sec 3.2
+ *
+ * field-content = field-vchar [ 1*( SP / HTAB ) field-vchar ]
+ * field-vchar   = VCHAR / obs-text
+ * obs-text      = %x80-FF
+ */
+
+var fieldContentRegExp = /^[\u0009\u0020-\u007e\u0080-\u00ff]+$/;
+
+/**
+ * Parse a cookie header.
+ *
+ * Parse the given cookie header string into an object
+ * The object has the various cookies as keys(names) => values
+ *
+ * @param {string} str
+ * @param {object} [options]
+ * @return {object}
+ * @public
+ */
+
+function parse$7(str, options) {
+  if (typeof str !== 'string') {
+    throw new TypeError('argument str must be a string');
+  }
+
+  var obj = {};
+  var opt = options || {};
+  var dec = opt.decode || decode$2;
+
+  var index = 0;
+  while (index < str.length) {
+    var eqIdx = str.indexOf('=', index);
+
+    // no more cookie pairs
+    if (eqIdx === -1) {
+      break
+    }
+
+    var endIdx = str.indexOf(';', index);
+
+    if (endIdx === -1) {
+      endIdx = str.length;
+    } else if (endIdx < eqIdx) {
+      // backtrack on prior semicolon
+      index = str.lastIndexOf(';', eqIdx - 1) + 1;
+      continue
+    }
+
+    var key = str.slice(index, eqIdx).trim();
+
+    // only assign once
+    if (undefined === obj[key]) {
+      var val = str.slice(eqIdx + 1, endIdx).trim();
+
+      // quoted values
+      if (val.charCodeAt(0) === 0x22) {
+        val = val.slice(1, -1);
+      }
+
+      obj[key] = tryDecode(val, dec);
+    }
+
+    index = endIdx + 1;
+  }
+
+  return obj;
+}
+
+/**
+ * Serialize data into a cookie header.
+ *
+ * Serialize the a name value pair into a cookie string suitable for
+ * http headers. An optional options object specified cookie parameters.
+ *
+ * serialize('foo', 'bar', { httpOnly: true })
+ *   => "foo=bar; httpOnly"
+ *
+ * @param {string} name
+ * @param {string} val
+ * @param {object} [options]
+ * @return {string}
+ * @public
+ */
+
+function serialize(name, val, options) {
+  var opt = options || {};
+  var enc = opt.encode || encode$2;
+
+  if (typeof enc !== 'function') {
+    throw new TypeError('option encode is invalid');
+  }
+
+  if (!fieldContentRegExp.test(name)) {
+    throw new TypeError('argument name is invalid');
+  }
+
+  var value = enc(val);
+
+  if (value && !fieldContentRegExp.test(value)) {
+    throw new TypeError('argument val is invalid');
+  }
+
+  var str = name + '=' + value;
+
+  if (null != opt.maxAge) {
+    var maxAge = opt.maxAge - 0;
+
+    if (isNaN(maxAge) || !isFinite(maxAge)) {
+      throw new TypeError('option maxAge is invalid')
+    }
+
+    str += '; Max-Age=' + Math.floor(maxAge);
+  }
+
+  if (opt.domain) {
+    if (!fieldContentRegExp.test(opt.domain)) {
+      throw new TypeError('option domain is invalid');
+    }
+
+    str += '; Domain=' + opt.domain;
+  }
+
+  if (opt.path) {
+    if (!fieldContentRegExp.test(opt.path)) {
+      throw new TypeError('option path is invalid');
+    }
+
+    str += '; Path=' + opt.path;
+  }
+
+  if (opt.expires) {
+    var expires = opt.expires;
+
+    if (!isDate$1(expires) || isNaN(expires.valueOf())) {
+      throw new TypeError('option expires is invalid');
+    }
+
+    str += '; Expires=' + expires.toUTCString();
+  }
+
+  if (opt.httpOnly) {
+    str += '; HttpOnly';
+  }
+
+  if (opt.secure) {
+    str += '; Secure';
+  }
+
+  if (opt.priority) {
+    var priority = typeof opt.priority === 'string'
+      ? opt.priority.toLowerCase()
+      : opt.priority;
+
+    switch (priority) {
+      case 'low':
+        str += '; Priority=Low';
+        break
+      case 'medium':
+        str += '; Priority=Medium';
+        break
+      case 'high':
+        str += '; Priority=High';
+        break
+      default:
+        throw new TypeError('option priority is invalid')
+    }
+  }
+
+  if (opt.sameSite) {
+    var sameSite = typeof opt.sameSite === 'string'
+      ? opt.sameSite.toLowerCase() : opt.sameSite;
+
+    switch (sameSite) {
+      case true:
+        str += '; SameSite=Strict';
+        break;
+      case 'lax':
+        str += '; SameSite=Lax';
+        break;
+      case 'strict':
+        str += '; SameSite=Strict';
+        break;
+      case 'none':
+        str += '; SameSite=None';
+        break;
+      default:
+        throw new TypeError('option sameSite is invalid');
+    }
+  }
+
+  return str;
+}
+
+/**
+ * URL-decode string value. Optimized to skip native call when no %.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+
+function decode$2 (str) {
+  return str.indexOf('%') !== -1
+    ? decodeURIComponent(str)
+    : str
+}
+
+/**
+ * URL-encode value.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+
+function encode$2 (val) {
+  return encodeURIComponent(val)
+}
+
+/**
+ * Determine if value is a Date.
+ *
+ * @param {*} val
+ * @private
+ */
+
+function isDate$1 (val) {
+  return __toString.call(val) === '[object Date]' ||
+    val instanceof Date
+}
+
+/**
+ * Try decoding a string using a decoding function.
+ *
+ * @param {string} str
+ * @param {function} decode
+ * @private
+ */
+
+function tryDecode(str, decode) {
+  try {
+    return decode(str);
+  } catch (e) {
+    return str;
+  }
+}
+
+var varyExports = {};
+var vary$2 = {
+  get exports(){ return varyExports; },
+  set exports(v){ varyExports = v; },
+};
+
+/*!
+ * vary
+ * Copyright(c) 2014-2017 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module exports.
+ */
+
+vary$2.exports = vary$1;
+varyExports.append = append;
+
+/**
+ * RegExp to match field-name in RFC 7230 sec 3.2
+ *
+ * field-name    = token
+ * token         = 1*tchar
+ * tchar         = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+ *               / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+ *               / DIGIT / ALPHA
+ *               ; any VCHAR, except delimiters
+ */
+
+var FIELD_NAME_REGEXP = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/**
+ * Append a field to a vary header.
+ *
+ * @param {String} header
+ * @param {String|Array} field
+ * @return {String}
+ * @public
+ */
+
+function append (header, field) {
+  if (typeof header !== 'string') {
+    throw new TypeError('header argument is required')
+  }
+
+  if (!field) {
+    throw new TypeError('field argument is required')
+  }
+
+  // get fields array
+  var fields = !Array.isArray(field)
+    ? parse$6(String(field))
+    : field;
+
+  // assert on invalid field names
+  for (var j = 0; j < fields.length; j++) {
+    if (!FIELD_NAME_REGEXP.test(fields[j])) {
+      throw new TypeError('field argument contains an invalid header name')
+    }
+  }
+
+  // existing, unspecified vary
+  if (header === '*') {
+    return header
+  }
+
+  // enumerate current values
+  var val = header;
+  var vals = parse$6(header.toLowerCase());
+
+  // unspecified vary
+  if (fields.indexOf('*') !== -1 || vals.indexOf('*') !== -1) {
+    return '*'
+  }
+
+  for (var i = 0; i < fields.length; i++) {
+    var fld = fields[i].toLowerCase();
+
+    // append value (case-preserving)
+    if (vals.indexOf(fld) === -1) {
+      vals.push(fld);
+      val = val
+        ? val + ', ' + fields[i]
+        : fields[i];
+    }
+  }
+
+  return val
+}
+
+/**
+ * Parse a vary header into an array.
+ *
+ * @param {String} header
+ * @return {Array}
+ * @private
+ */
+
+function parse$6 (header) {
+  var end = 0;
+  var list = [];
+  var start = 0;
+
+  // gather tokens
+  for (var i = 0, len = header.length; i < len; i++) {
+    switch (header.charCodeAt(i)) {
+      case 0x20: /*   */
+        if (start === end) {
+          start = end = i + 1;
+        }
+        break
+      case 0x2c: /* , */
+        list.push(header.substring(start, end));
+        start = end = i + 1;
+        break
+      default:
+        end = i + 1;
+        break
+    }
+  }
+
+  // final token
+  list.push(header.substring(start, end));
+
+  return list
+}
+
+/**
+ * Mark that a request is varied on a header field.
+ *
+ * @param {Object} res
+ * @param {String|Array} field
+ * @public
+ */
+
+function vary$1 (res, field) {
+  if (!res || !res.getHeader || !res.setHeader) {
+    // quack quack
+    throw new TypeError('res argument is required')
+  }
+
+  // get existing header
+  var val = res.getHeader('Vary') || '';
+  var header = Array.isArray(val)
+    ? val.join(', ')
+    : String(val);
+
+  // set new header
+  if ((val = append(header, field))) {
+    res.setHeader('Vary', val);
+  }
+}
+
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var Buffer$1 = safeBufferExports.Buffer;
+var contentDisposition = contentDispositionExports;
+var createError = httpErrorsExports;
+var deprecate = depd_1('express');
+var encodeUrl = encodeurl;
+var escapeHtml = escapeHtml_1;
+var http$3 = http$6;
+var isAbsolute$2 = utils$3.isAbsolute;
+var onFinished = onFinishedExports;
+var path$i = require$$0$c;
+var statuses = statuses$3;
+var merge$2 = utilsMergeExports;
+var sign = cookieSignature.sign;
+var normalizeType = utils$3.normalizeType;
+var normalizeTypes = utils$3.normalizeTypes;
+var setCharset = utils$3.setCharset;
+var cookie = cookie$1;
+var send = sendExports;
+var extname = path$i.extname;
+var mime$1 = send.mime;
+var resolve$1 = path$i.resolve;
+var vary = varyExports;
+
+/**
+ * Response prototype.
+ * @public
+ */
+
+var res$2 = Object.create(http$3.ServerResponse.prototype);
+
+/**
+ * Module exports.
+ * @public
+ */
+
+var response$1 = res$2;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var charsetRegExp = /;\s*charset\s*=/;
+
+/**
+ * Set status `code`.
+ *
+ * @param {Number} code
+ * @return {ServerResponse}
+ * @public
+ */
+
+res$2.status = function status(code) {
+  if ((typeof code === 'string' || Math.floor(code) !== code) && code > 99 && code < 1000) {
+    deprecate('res.status(' + JSON.stringify(code) + '): use res.status(' + Math.floor(code) + ') instead');
+  }
+  this.statusCode = code;
+  return this;
+};
+
+/**
+ * Set Link header field with the given `links`.
+ *
+ * Examples:
+ *
+ *    res.links({
+ *      next: 'http://api.example.com/users?page=2',
+ *      last: 'http://api.example.com/users?page=5'
+ *    });
+ *
+ * @param {Object} links
+ * @return {ServerResponse}
+ * @public
+ */
+
+res$2.links = function(links){
+  var link = this.get('Link') || '';
+  if (link) link += ', ';
+  return this.set('Link', link + Object.keys(links).map(function(rel){
+    return '<' + links[rel] + '>; rel="' + rel + '"';
+  }).join(', '));
+};
+
+/**
+ * Send a response.
+ *
+ * Examples:
+ *
+ *     res.send(Buffer.from('wahoo'));
+ *     res.send({ some: 'json' });
+ *     res.send('<p>some html</p>');
+ *
+ * @param {string|number|boolean|object|Buffer} body
+ * @public
+ */
+
+res$2.send = function send(body) {
+  var chunk = body;
+  var encoding;
+  var req = this.req;
+  var type;
+
+  // settings
+  var app = this.app;
+
+  // allow status / body
+  if (arguments.length === 2) {
+    // res.send(body, status) backwards compat
+    if (typeof arguments[0] !== 'number' && typeof arguments[1] === 'number') {
+      deprecate('res.send(body, status): Use res.status(status).send(body) instead');
+      this.statusCode = arguments[1];
+    } else {
+      deprecate('res.send(status, body): Use res.status(status).send(body) instead');
+      this.statusCode = arguments[0];
+      chunk = arguments[1];
+    }
+  }
+
+  // disambiguate res.send(status) and res.send(status, num)
+  if (typeof chunk === 'number' && arguments.length === 1) {
+    // res.send(status) will set status message as text string
+    if (!this.get('Content-Type')) {
+      this.type('txt');
+    }
+
+    deprecate('res.send(status): Use res.sendStatus(status) instead');
+    this.statusCode = chunk;
+    chunk = statuses.message[chunk];
+  }
+
+  switch (typeof chunk) {
+    // string defaulting to html
+    case 'string':
+      if (!this.get('Content-Type')) {
+        this.type('html');
+      }
+      break;
+    case 'boolean':
+    case 'number':
+    case 'object':
+      if (chunk === null) {
+        chunk = '';
+      } else if (Buffer$1.isBuffer(chunk)) {
+        if (!this.get('Content-Type')) {
+          this.type('bin');
+        }
+      } else {
+        return this.json(chunk);
+      }
+      break;
+  }
+
+  // write strings in utf-8
+  if (typeof chunk === 'string') {
+    encoding = 'utf8';
+    type = this.get('Content-Type');
+
+    // reflect this in content-type
+    if (typeof type === 'string') {
+      this.set('Content-Type', setCharset(type, 'utf-8'));
+    }
+  }
+
+  // determine if ETag should be generated
+  var etagFn = app.get('etag fn');
+  var generateETag = !this.get('ETag') && typeof etagFn === 'function';
+
+  // populate Content-Length
+  var len;
+  if (chunk !== undefined) {
+    if (Buffer$1.isBuffer(chunk)) {
+      // get length of Buffer
+      len = chunk.length;
+    } else if (!generateETag && chunk.length < 1000) {
+      // just calculate length when no ETag + small chunk
+      len = Buffer$1.byteLength(chunk, encoding);
+    } else {
+      // convert chunk to Buffer and calculate
+      chunk = Buffer$1.from(chunk, encoding);
+      encoding = undefined;
+      len = chunk.length;
+    }
+
+    this.set('Content-Length', len);
+  }
+
+  // populate ETag
+  var etag;
+  if (generateETag && len !== undefined) {
+    if ((etag = etagFn(chunk, encoding))) {
+      this.set('ETag', etag);
+    }
+  }
+
+  // freshness
+  if (req.fresh) this.statusCode = 304;
+
+  // strip irrelevant headers
+  if (204 === this.statusCode || 304 === this.statusCode) {
+    this.removeHeader('Content-Type');
+    this.removeHeader('Content-Length');
+    this.removeHeader('Transfer-Encoding');
+    chunk = '';
+  }
+
+  // alter headers for 205
+  if (this.statusCode === 205) {
+    this.set('Content-Length', '0');
+    this.removeHeader('Transfer-Encoding');
+    chunk = '';
+  }
+
+  if (req.method === 'HEAD') {
+    // skip body for HEAD
+    this.end();
+  } else {
+    // respond
+    this.end(chunk, encoding);
+  }
+
+  return this;
+};
+
+/**
+ * Send JSON response.
+ *
+ * Examples:
+ *
+ *     res.json(null);
+ *     res.json({ user: 'tj' });
+ *
+ * @param {string|number|boolean|object} obj
+ * @public
+ */
+
+res$2.json = function json(obj) {
+  var val = obj;
+
+  // allow status / body
+  if (arguments.length === 2) {
+    // res.json(body, status) backwards compat
+    if (typeof arguments[1] === 'number') {
+      deprecate('res.json(obj, status): Use res.status(status).json(obj) instead');
+      this.statusCode = arguments[1];
+    } else {
+      deprecate('res.json(status, obj): Use res.status(status).json(obj) instead');
+      this.statusCode = arguments[0];
+      val = arguments[1];
+    }
+  }
+
+  // settings
+  var app = this.app;
+  var escape = app.get('json escape');
+  var replacer = app.get('json replacer');
+  var spaces = app.get('json spaces');
+  var body = stringify$5(val, replacer, spaces, escape);
+
+  // content-type
+  if (!this.get('Content-Type')) {
+    this.set('Content-Type', 'application/json');
+  }
+
+  return this.send(body);
+};
+
+/**
+ * Send JSON response with JSONP callback support.
+ *
+ * Examples:
+ *
+ *     res.jsonp(null);
+ *     res.jsonp({ user: 'tj' });
+ *
+ * @param {string|number|boolean|object} obj
+ * @public
+ */
+
+res$2.jsonp = function jsonp(obj) {
+  var val = obj;
+
+  // allow status / body
+  if (arguments.length === 2) {
+    // res.jsonp(body, status) backwards compat
+    if (typeof arguments[1] === 'number') {
+      deprecate('res.jsonp(obj, status): Use res.status(status).jsonp(obj) instead');
+      this.statusCode = arguments[1];
+    } else {
+      deprecate('res.jsonp(status, obj): Use res.status(status).jsonp(obj) instead');
+      this.statusCode = arguments[0];
+      val = arguments[1];
+    }
+  }
+
+  // settings
+  var app = this.app;
+  var escape = app.get('json escape');
+  var replacer = app.get('json replacer');
+  var spaces = app.get('json spaces');
+  var body = stringify$5(val, replacer, spaces, escape);
+  var callback = this.req.query[app.get('jsonp callback name')];
+
+  // content-type
+  if (!this.get('Content-Type')) {
+    this.set('X-Content-Type-Options', 'nosniff');
+    this.set('Content-Type', 'application/json');
+  }
+
+  // fixup callback
+  if (Array.isArray(callback)) {
+    callback = callback[0];
+  }
+
+  // jsonp
+  if (typeof callback === 'string' && callback.length !== 0) {
+    this.set('X-Content-Type-Options', 'nosniff');
+    this.set('Content-Type', 'text/javascript');
+
+    // restrict callback charset
+    callback = callback.replace(/[^\[\]\w$.]/g, '');
+
+    if (body === undefined) {
+      // empty argument
+      body = '';
+    } else if (typeof body === 'string') {
+      // replace chars not allowed in JavaScript that are in JSON
+      body = body
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+    }
+
+    // the /**/ is a specific security mitigation for "Rosetta Flash JSONP abuse"
+    // the typeof check is just to reduce client error noise
+    body = '/**/ typeof ' + callback + ' === \'function\' && ' + callback + '(' + body + ');';
+  }
+
+  return this.send(body);
+};
+
+/**
+ * Send given HTTP status code.
+ *
+ * Sets the response status to `statusCode` and the body of the
+ * response to the standard description from node's http.STATUS_CODES
+ * or the statusCode number if no description.
+ *
+ * Examples:
+ *
+ *     res.sendStatus(200);
+ *
+ * @param {number} statusCode
+ * @public
+ */
+
+res$2.sendStatus = function sendStatus(statusCode) {
+  var body = statuses.message[statusCode] || String(statusCode);
+
+  this.statusCode = statusCode;
+  this.type('txt');
+
+  return this.send(body);
+};
+
+/**
+ * Transfer the file at the given `path`.
+ *
+ * Automatically sets the _Content-Type_ response header field.
+ * The callback `callback(err)` is invoked when the transfer is complete
+ * or when an error occurs. Be sure to check `res.headersSent`
+ * if you wish to attempt responding, as the header and some data
+ * may have already been transferred.
+ *
+ * Options:
+ *
+ *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)
+ *   - `root`     root directory for relative filenames
+ *   - `headers`  object of headers to serve with file
+ *   - `dotfiles` serve dotfiles, defaulting to false; can be `"allow"` to send them
+ *
+ * Other options are passed along to `send`.
+ *
+ * Examples:
+ *
+ *  The following example illustrates how `res.sendFile()` may
+ *  be used as an alternative for the `static()` middleware for
+ *  dynamic situations. The code backing `res.sendFile()` is actually
+ *  the same code, so HTTP cache support etc is identical.
+ *
+ *     app.get('/user/:uid/photos/:file', function(req, res){
+ *       var uid = req.params.uid
+ *         , file = req.params.file;
+ *
+ *       req.user.mayViewFilesFrom(uid, function(yes){
+ *         if (yes) {
+ *           res.sendFile('/uploads/' + uid + '/' + file);
+ *         } else {
+ *           res.send(403, 'Sorry! you cant see that.');
+ *         }
+ *       });
+ *     });
+ *
+ * @public
+ */
+
+res$2.sendFile = function sendFile(path, options, callback) {
+  var done = callback;
+  var req = this.req;
+  var res = this;
+  var next = req.next;
+  var opts = options || {};
+
+  if (!path) {
+    throw new TypeError('path argument is required to res.sendFile');
+  }
+
+  if (typeof path !== 'string') {
+    throw new TypeError('path must be a string to res.sendFile')
+  }
+
+  // support function as second arg
+  if (typeof options === 'function') {
+    done = options;
+    opts = {};
+  }
+
+  if (!opts.root && !isAbsolute$2(path)) {
+    throw new TypeError('path must be absolute or specify root to res.sendFile');
+  }
+
+  // create file stream
+  var pathname = encodeURI(path);
+  var file = send(req, pathname, opts);
+
+  // transfer
+  sendfile(res, file, opts, function (err) {
+    if (done) return done(err);
+    if (err && err.code === 'EISDIR') return next();
+
+    // next() all but write errors
+    if (err && err.code !== 'ECONNABORTED' && err.syscall !== 'write') {
+      next(err);
+    }
+  });
+};
+
+/**
+ * Transfer the file at the given `path`.
+ *
+ * Automatically sets the _Content-Type_ response header field.
+ * The callback `callback(err)` is invoked when the transfer is complete
+ * or when an error occurs. Be sure to check `res.headersSent`
+ * if you wish to attempt responding, as the header and some data
+ * may have already been transferred.
+ *
+ * Options:
+ *
+ *   - `maxAge`   defaulting to 0 (can be string converted by `ms`)
+ *   - `root`     root directory for relative filenames
+ *   - `headers`  object of headers to serve with file
+ *   - `dotfiles` serve dotfiles, defaulting to false; can be `"allow"` to send them
+ *
+ * Other options are passed along to `send`.
+ *
+ * Examples:
+ *
+ *  The following example illustrates how `res.sendfile()` may
+ *  be used as an alternative for the `static()` middleware for
+ *  dynamic situations. The code backing `res.sendfile()` is actually
+ *  the same code, so HTTP cache support etc is identical.
+ *
+ *     app.get('/user/:uid/photos/:file', function(req, res){
+ *       var uid = req.params.uid
+ *         , file = req.params.file;
+ *
+ *       req.user.mayViewFilesFrom(uid, function(yes){
+ *         if (yes) {
+ *           res.sendfile('/uploads/' + uid + '/' + file);
+ *         } else {
+ *           res.send(403, 'Sorry! you cant see that.');
+ *         }
+ *       });
+ *     });
+ *
+ * @public
+ */
+
+res$2.sendfile = function (path, options, callback) {
+  var done = callback;
+  var req = this.req;
+  var res = this;
+  var next = req.next;
+  var opts = options || {};
+
+  // support function as second arg
+  if (typeof options === 'function') {
+    done = options;
+    opts = {};
+  }
+
+  // create file stream
+  var file = send(req, path, opts);
+
+  // transfer
+  sendfile(res, file, opts, function (err) {
+    if (done) return done(err);
+    if (err && err.code === 'EISDIR') return next();
+
+    // next() all but write errors
+    if (err && err.code !== 'ECONNABORTED' && err.syscall !== 'write') {
+      next(err);
+    }
+  });
+};
+
+res$2.sendfile = deprecate.function(res$2.sendfile,
+  'res.sendfile: Use res.sendFile instead');
+
+/**
+ * Transfer the file at the given `path` as an attachment.
+ *
+ * Optionally providing an alternate attachment `filename`,
+ * and optional callback `callback(err)`. The callback is invoked
+ * when the data transfer is complete, or when an error has
+ * occurred. Be sure to check `res.headersSent` if you plan to respond.
+ *
+ * Optionally providing an `options` object to use with `res.sendFile()`.
+ * This function will set the `Content-Disposition` header, overriding
+ * any `Content-Disposition` header passed as header options in order
+ * to set the attachment and filename.
+ *
+ * This method uses `res.sendFile()`.
+ *
+ * @public
+ */
+
+res$2.download = function download (path, filename, options, callback) {
+  var done = callback;
+  var name = filename;
+  var opts = options || null;
+
+  // support function as second or third arg
+  if (typeof filename === 'function') {
+    done = filename;
+    name = null;
+    opts = null;
+  } else if (typeof options === 'function') {
+    done = options;
+    opts = null;
+  }
+
+  // support optional filename, where options may be in it's place
+  if (typeof filename === 'object' &&
+    (typeof options === 'function' || options === undefined)) {
+    name = null;
+    opts = filename;
+  }
+
+  // set Content-Disposition when file is sent
+  var headers = {
+    'Content-Disposition': contentDisposition(name || path)
+  };
+
+  // merge user-provided headers
+  if (opts && opts.headers) {
+    var keys = Object.keys(opts.headers);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      if (key.toLowerCase() !== 'content-disposition') {
+        headers[key] = opts.headers[key];
+      }
+    }
+  }
+
+  // merge user-provided options
+  opts = Object.create(opts);
+  opts.headers = headers;
+
+  // Resolve the full path for sendFile
+  var fullPath = !opts.root
+    ? resolve$1(path)
+    : path;
+
+  // send file
+  return this.sendFile(fullPath, opts, done)
+};
+
+/**
+ * Set _Content-Type_ response header with `type` through `mime.lookup()`
+ * when it does not contain "/", or set the Content-Type to `type` otherwise.
+ *
+ * Examples:
+ *
+ *     res.type('.html');
+ *     res.type('html');
+ *     res.type('json');
+ *     res.type('application/json');
+ *     res.type('png');
+ *
+ * @param {String} type
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.contentType =
+res$2.type = function contentType(type) {
+  var ct = type.indexOf('/') === -1
+    ? mime$1.lookup(type)
+    : type;
+
+  return this.set('Content-Type', ct);
+};
+
+/**
+ * Respond to the Acceptable formats using an `obj`
+ * of mime-type callbacks.
+ *
+ * This method uses `req.accepted`, an array of
+ * acceptable types ordered by their quality values.
+ * When "Accept" is not present the _first_ callback
+ * is invoked, otherwise the first match is used. When
+ * no match is performed the server responds with
+ * 406 "Not Acceptable".
+ *
+ * Content-Type is set for you, however if you choose
+ * you may alter this within the callback using `res.type()`
+ * or `res.set('Content-Type', ...)`.
+ *
+ *    res.format({
+ *      'text/plain': function(){
+ *        res.send('hey');
+ *      },
+ *
+ *      'text/html': function(){
+ *        res.send('<p>hey</p>');
+ *      },
+ *
+ *      'application/json': function () {
+ *        res.send({ message: 'hey' });
+ *      }
+ *    });
+ *
+ * In addition to canonicalized MIME types you may
+ * also use extnames mapped to these types:
+ *
+ *    res.format({
+ *      text: function(){
+ *        res.send('hey');
+ *      },
+ *
+ *      html: function(){
+ *        res.send('<p>hey</p>');
+ *      },
+ *
+ *      json: function(){
+ *        res.send({ message: 'hey' });
+ *      }
+ *    });
+ *
+ * By default Express passes an `Error`
+ * with a `.status` of 406 to `next(err)`
+ * if a match is not made. If you provide
+ * a `.default` callback it will be invoked
+ * instead.
+ *
+ * @param {Object} obj
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.format = function(obj){
+  var req = this.req;
+  var next = req.next;
+
+  var keys = Object.keys(obj)
+    .filter(function (v) { return v !== 'default' });
+
+  var key = keys.length > 0
+    ? req.accepts(keys)
+    : false;
+
+  this.vary("Accept");
+
+  if (key) {
+    this.set('Content-Type', normalizeType(key).value);
+    obj[key](req, this, next);
+  } else if (obj.default) {
+    obj.default(req, this, next);
+  } else {
+    next(createError(406, {
+      types: normalizeTypes(keys).map(function (o) { return o.value })
+    }));
+  }
+
+  return this;
+};
+
+/**
+ * Set _Content-Disposition_ header to _attachment_ with optional `filename`.
+ *
+ * @param {String} filename
+ * @return {ServerResponse}
+ * @public
+ */
+
+res$2.attachment = function attachment(filename) {
+  if (filename) {
+    this.type(extname(filename));
+  }
+
+  this.set('Content-Disposition', contentDisposition(filename));
+
+  return this;
+};
+
+/**
+ * Append additional header `field` with value `val`.
+ *
+ * Example:
+ *
+ *    res.append('Link', ['<http://localhost/>', '<http://localhost:3000/>']);
+ *    res.append('Set-Cookie', 'foo=bar; Path=/; HttpOnly');
+ *    res.append('Warning', '199 Miscellaneous warning');
+ *
+ * @param {String} field
+ * @param {String|Array} val
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.append = function append(field, val) {
+  var prev = this.get(field);
+  var value = val;
+
+  if (prev) {
+    // concat the new and prev vals
+    value = Array.isArray(prev) ? prev.concat(val)
+      : Array.isArray(val) ? [prev].concat(val)
+        : [prev, val];
+  }
+
+  return this.set(field, value);
+};
+
+/**
+ * Set header `field` to `val`, or pass
+ * an object of header fields.
+ *
+ * Examples:
+ *
+ *    res.set('Foo', ['bar', 'baz']);
+ *    res.set('Accept', 'application/json');
+ *    res.set({ Accept: 'text/plain', 'X-API-Key': 'tobi' });
+ *
+ * Aliased as `res.header()`.
+ *
+ * @param {String|Object} field
+ * @param {String|Array} val
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.set =
+res$2.header = function header(field, val) {
+  if (arguments.length === 2) {
+    var value = Array.isArray(val)
+      ? val.map(String)
+      : String(val);
+
+    // add charset to content-type
+    if (field.toLowerCase() === 'content-type') {
+      if (Array.isArray(value)) {
+        throw new TypeError('Content-Type cannot be set to an Array');
+      }
+      if (!charsetRegExp.test(value)) {
+        var charset = mime$1.charsets.lookup(value.split(';')[0]);
+        if (charset) value += '; charset=' + charset.toLowerCase();
+      }
+    }
+
+    this.setHeader(field, value);
+  } else {
+    for (var key in field) {
+      this.set(key, field[key]);
+    }
+  }
+  return this;
+};
+
+/**
+ * Get value for header `field`.
+ *
+ * @param {String} field
+ * @return {String}
+ * @public
+ */
+
+res$2.get = function(field){
+  return this.getHeader(field);
+};
+
+/**
+ * Clear cookie `name`.
+ *
+ * @param {String} name
+ * @param {Object} [options]
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.clearCookie = function clearCookie(name, options) {
+  var opts = merge$2({ expires: new Date(1), path: '/' }, options);
+
+  return this.cookie(name, '', opts);
+};
+
+/**
+ * Set cookie `name` to `value`, with the given `options`.
+ *
+ * Options:
+ *
+ *    - `maxAge`   max-age in milliseconds, converted to `expires`
+ *    - `signed`   sign the cookie
+ *    - `path`     defaults to "/"
+ *
+ * Examples:
+ *
+ *    // "Remember Me" for 15 minutes
+ *    res.cookie('rememberme', '1', { expires: new Date(Date.now() + 900000), httpOnly: true });
+ *
+ *    // same as above
+ *    res.cookie('rememberme', '1', { maxAge: 900000, httpOnly: true })
+ *
+ * @param {String} name
+ * @param {String|Object} value
+ * @param {Object} [options]
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.cookie = function (name, value, options) {
+  var opts = merge$2({}, options);
+  var secret = this.req.secret;
+  var signed = opts.signed;
+
+  if (signed && !secret) {
+    throw new Error('cookieParser("secret") required for signed cookies');
+  }
+
+  var val = typeof value === 'object'
+    ? 'j:' + JSON.stringify(value)
+    : String(value);
+
+  if (signed) {
+    val = 's:' + sign(val, secret);
+  }
+
+  if (opts.maxAge != null) {
+    var maxAge = opts.maxAge - 0;
+
+    if (!isNaN(maxAge)) {
+      opts.expires = new Date(Date.now() + maxAge);
+      opts.maxAge = Math.floor(maxAge / 1000);
+    }
+  }
+
+  if (opts.path == null) {
+    opts.path = '/';
+  }
+
+  this.append('Set-Cookie', cookie.serialize(name, String(val), opts));
+
+  return this;
+};
+
+/**
+ * Set the location header to `url`.
+ *
+ * The given `url` can also be "back", which redirects
+ * to the _Referrer_ or _Referer_ headers or "/".
+ *
+ * Examples:
+ *
+ *    res.location('/foo/bar').;
+ *    res.location('http://example.com');
+ *    res.location('../login');
+ *
+ * @param {String} url
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.location = function location(url) {
+  var loc = url;
+
+  // "back" is an alias for the referrer
+  if (url === 'back') {
+    loc = this.req.get('Referrer') || '/';
+  }
+
+  // set location
+  return this.set('Location', encodeUrl(loc));
+};
+
+/**
+ * Redirect to the given `url` with optional response `status`
+ * defaulting to 302.
+ *
+ * The resulting `url` is determined by `res.location()`, so
+ * it will play nicely with mounted apps, relative paths,
+ * `"back"` etc.
+ *
+ * Examples:
+ *
+ *    res.redirect('/foo/bar');
+ *    res.redirect('http://example.com');
+ *    res.redirect(301, 'http://example.com');
+ *    res.redirect('../login'); // /blog/post/1 -> /blog/login
+ *
+ * @public
+ */
+
+res$2.redirect = function redirect(url) {
+  var address = url;
+  var body;
+  var status = 302;
+
+  // allow status / url
+  if (arguments.length === 2) {
+    if (typeof arguments[0] === 'number') {
+      status = arguments[0];
+      address = arguments[1];
+    } else {
+      deprecate('res.redirect(url, status): Use res.redirect(status, url) instead');
+      status = arguments[1];
+    }
+  }
+
+  // Set location header
+  address = this.location(address).get('Location');
+
+  // Support text/{plain,html} by default
+  this.format({
+    text: function(){
+      body = statuses.message[status] + '. Redirecting to ' + address;
+    },
+
+    html: function(){
+      var u = escapeHtml(address);
+      body = '<p>' + statuses.message[status] + '. Redirecting to <a href="' + u + '">' + u + '</a></p>';
+    },
+
+    default: function(){
+      body = '';
+    }
+  });
+
+  // Respond
+  this.statusCode = status;
+  this.set('Content-Length', Buffer$1.byteLength(body));
+
+  if (this.req.method === 'HEAD') {
+    this.end();
+  } else {
+    this.end(body);
+  }
+};
+
+/**
+ * Add `field` to Vary. If already present in the Vary set, then
+ * this call is simply ignored.
+ *
+ * @param {Array|String} field
+ * @return {ServerResponse} for chaining
+ * @public
+ */
+
+res$2.vary = function(field){
+  // checks for back-compat
+  if (!field || (Array.isArray(field) && !field.length)) {
+    deprecate('res.vary(): Provide a field name');
+    return this;
+  }
+
+  vary(this, field);
+
+  return this;
+};
+
+/**
+ * Render `view` with the given `options` and optional callback `fn`.
+ * When a callback function is given a response will _not_ be made
+ * automatically, otherwise a response of _200_ and _text/html_ is given.
+ *
+ * Options:
+ *
+ *  - `cache`     boolean hinting to the engine it should cache
+ *  - `filename`  filename of the view being rendered
+ *
+ * @public
+ */
+
+res$2.render = function render(view, options, callback) {
+  var app = this.req.app;
+  var done = callback;
+  var opts = options || {};
+  var req = this.req;
+  var self = this;
+
+  // support callback function as second arg
+  if (typeof options === 'function') {
+    done = options;
+    opts = {};
+  }
+
+  // merge res.locals
+  opts._locals = self.locals;
+
+  // default callback to respond
+  done = done || function (err, str) {
+    if (err) return req.next(err);
+    self.send(str);
+  };
+
+  // render
+  app.render(view, opts, done);
+};
+
+// pipe the send file stream
+function sendfile(res, file, options, callback) {
+  var done = false;
+  var streaming;
+
+  // request aborted
+  function onaborted() {
+    if (done) return;
+    done = true;
+
+    var err = new Error('Request aborted');
+    err.code = 'ECONNABORTED';
+    callback(err);
+  }
+
+  // directory
+  function ondirectory() {
+    if (done) return;
+    done = true;
+
+    var err = new Error('EISDIR, read');
+    err.code = 'EISDIR';
+    callback(err);
+  }
+
+  // errors
+  function onerror(err) {
+    if (done) return;
+    done = true;
+    callback(err);
+  }
+
+  // ended
+  function onend() {
+    if (done) return;
+    done = true;
+    callback();
+  }
+
+  // file
+  function onfile() {
+    streaming = false;
+  }
+
+  // finished
+  function onfinish(err) {
+    if (err && err.code === 'ECONNRESET') return onaborted();
+    if (err) return onerror(err);
+    if (done) return;
+
+    setImmediate(function () {
+      if (streaming !== false && !done) {
+        onaborted();
+        return;
+      }
+
+      if (done) return;
+      done = true;
+      callback();
+    });
+  }
+
+  // streaming
+  function onstream() {
+    streaming = true;
+  }
+
+  file.on('directory', ondirectory);
+  file.on('end', onend);
+  file.on('error', onerror);
+  file.on('file', onfile);
+  file.on('stream', onstream);
+  onFinished(res, onfinish);
+
+  if (options.headers) {
+    // set headers on successful transfer
+    file.on('headers', function headers(res) {
+      var obj = options.headers;
+      var keys = Object.keys(obj);
+
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        res.setHeader(k, obj[k]);
+      }
+    });
+  }
+
+  // pipe
+  file.pipe(res);
+}
+
+/**
+ * Stringify JSON, like JSON.stringify, but v8 optimized, with the
+ * ability to escape characters that can trigger HTML sniffing.
+ *
+ * @param {*} value
+ * @param {function} replacer
+ * @param {number} spaces
+ * @param {boolean} escape
+ * @returns {string}
+ * @private
+ */
+
+function stringify$5 (value, replacer, spaces, escape) {
+  // v8 checks arguments.length for optimizing simple call
+  // https://bugs.chromium.org/p/v8/issues/detail?id=4730
+  var json = replacer || spaces
+    ? JSON.stringify(value, replacer, spaces)
+    : JSON.stringify(value);
+
+  if (escape && typeof json === 'string') {
+    json = json.replace(/[<>&]/g, function (c) {
+      switch (c.charCodeAt(0)) {
+        case 0x3c:
+          return '\\u003c'
+        case 0x3e:
+          return '\\u003e'
+        case 0x26:
+          return '\\u0026'
+        /* istanbul ignore next: unreachable default */
+        default:
+          return c
+      }
+    });
+  }
+
+  return json
+}
+
+var serveStaticExports = {};
+var serveStatic = {
+  get exports(){ return serveStaticExports; },
+  set exports(v){ serveStaticExports = v; },
+};
+
+/*!
+ * serve-static
+ * Copyright(c) 2010 Sencha Inc.
+ * Copyright(c) 2011 TJ Holowaychuk
+ * Copyright(c) 2014-2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+var hasRequiredServeStatic;
+
+function requireServeStatic () {
+	if (hasRequiredServeStatic) return serveStaticExports;
+	hasRequiredServeStatic = 1;
+
+	/**
+	 * Module dependencies.
+	 * @private
+	 */
+
+	var encodeUrl = encodeurl;
+	var escapeHtml = escapeHtml_1;
+	var parseUrl = parseurlExports;
+	var resolve = require$$0$c.resolve;
+	var send = sendExports;
+	var url = Url$2;
+
+	/**
+	 * Module exports.
+	 * @public
+	 */
+
+	serveStatic.exports = serveStatic$1;
+	serveStaticExports.mime = send.mime;
+
+	/**
+	 * @param {string} root
+	 * @param {object} [options]
+	 * @return {function}
+	 * @public
+	 */
+
+	function serveStatic$1 (root, options) {
+	  if (!root) {
+	    throw new TypeError('root path required')
+	  }
+
+	  if (typeof root !== 'string') {
+	    throw new TypeError('root path must be a string')
+	  }
+
+	  // copy options object
+	  var opts = Object.create(options || null);
+
+	  // fall-though
+	  var fallthrough = opts.fallthrough !== false;
+
+	  // default redirect
+	  var redirect = opts.redirect !== false;
+
+	  // headers listener
+	  var setHeaders = opts.setHeaders;
+
+	  if (setHeaders && typeof setHeaders !== 'function') {
+	    throw new TypeError('option setHeaders must be function')
+	  }
+
+	  // setup options for send
+	  opts.maxage = opts.maxage || opts.maxAge || 0;
+	  opts.root = resolve(root);
+
+	  // construct directory listener
+	  var onDirectory = redirect
+	    ? createRedirectDirectoryListener()
+	    : createNotFoundDirectoryListener();
+
+	  return function serveStatic (req, res, next) {
+	    if (req.method !== 'GET' && req.method !== 'HEAD') {
+	      if (fallthrough) {
+	        return next()
+	      }
+
+	      // method not allowed
+	      res.statusCode = 405;
+	      res.setHeader('Allow', 'GET, HEAD');
+	      res.setHeader('Content-Length', '0');
+	      res.end();
+	      return
+	    }
+
+	    var forwardError = !fallthrough;
+	    var originalUrl = parseUrl.original(req);
+	    var path = parseUrl(req).pathname;
+
+	    // make sure redirect occurs at mount
+	    if (path === '/' && originalUrl.pathname.substr(-1) !== '/') {
+	      path = '';
+	    }
+
+	    // create send stream
+	    var stream = send(req, path, opts);
+
+	    // add directory handler
+	    stream.on('directory', onDirectory);
+
+	    // add headers listener
+	    if (setHeaders) {
+	      stream.on('headers', setHeaders);
+	    }
+
+	    // add file listener for fallthrough
+	    if (fallthrough) {
+	      stream.on('file', function onFile () {
+	        // once file is determined, always forward error
+	        forwardError = true;
+	      });
+	    }
+
+	    // forward errors
+	    stream.on('error', function error (err) {
+	      if (forwardError || !(err.statusCode < 500)) {
+	        next(err);
+	        return
+	      }
+
+	      next();
+	    });
+
+	    // pipe
+	    stream.pipe(res);
+	  }
+	}
+
+	/**
+	 * Collapse all leading slashes into a single slash
+	 * @private
+	 */
+	function collapseLeadingSlashes (str) {
+	  for (var i = 0; i < str.length; i++) {
+	    if (str.charCodeAt(i) !== 0x2f /* / */) {
+	      break
+	    }
+	  }
+
+	  return i > 1
+	    ? '/' + str.substr(i)
+	    : str
+	}
+
+	/**
+	 * Create a minimal HTML document.
+	 *
+	 * @param {string} title
+	 * @param {string} body
+	 * @private
+	 */
+
+	function createHtmlDocument (title, body) {
+	  return '<!DOCTYPE html>\n' +
+	    '<html lang="en">\n' +
+	    '<head>\n' +
+	    '<meta charset="utf-8">\n' +
+	    '<title>' + title + '</title>\n' +
+	    '</head>\n' +
+	    '<body>\n' +
+	    '<pre>' + body + '</pre>\n' +
+	    '</body>\n' +
+	    '</html>\n'
+	}
+
+	/**
+	 * Create a directory listener that just 404s.
+	 * @private
+	 */
+
+	function createNotFoundDirectoryListener () {
+	  return function notFound () {
+	    this.error(404);
+	  }
+	}
+
+	/**
+	 * Create a directory listener that performs a redirect.
+	 * @private
+	 */
+
+	function createRedirectDirectoryListener () {
+	  return function redirect (res) {
+	    if (this.hasTrailingSlash()) {
+	      this.error(404);
+	      return
+	    }
+
+	    // get original URL
+	    var originalUrl = parseUrl.original(this.req);
+
+	    // append trailing slash
+	    originalUrl.path = null;
+	    originalUrl.pathname = collapseLeadingSlashes(originalUrl.pathname + '/');
+
+	    // reformat the URL
+	    var loc = encodeUrl(url.format(originalUrl));
+	    var doc = createHtmlDocument('Redirecting', 'Redirecting to <a href="' + escapeHtml(loc) + '">' +
+	      escapeHtml(loc) + '</a>');
+
+	    // send redirect response
+	    res.statusCode = 301;
+	    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+	    res.setHeader('Content-Length', Buffer.byteLength(doc));
+	    res.setHeader('Content-Security-Policy', "default-src 'none'");
+	    res.setHeader('X-Content-Type-Options', 'nosniff');
+	    res.setHeader('Location', loc);
+	    res.end(doc);
+	  }
+	}
+	return serveStaticExports;
+}
+
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (module, exports) {
+
+	/**
+	 * Module dependencies.
+	 */
+
+	var bodyParser = bodyParserExports;
+	var EventEmitter = require$$0$f.EventEmitter;
+	var mixin = mergeDescriptors;
+	var proto = applicationExports;
+	var Route = route;
+	var Router = routerExports;
+	var req = request;
+	var res = response$1;
+
+	/**
+	 * Expose `createApplication()`.
+	 */
+
+	exports = module.exports = createApplication;
+
+	/**
+	 * Create an express application.
+	 *
+	 * @return {Function}
+	 * @api public
+	 */
+
+	function createApplication() {
+	  var app = function(req, res, next) {
+	    app.handle(req, res, next);
+	  };
+
+	  mixin(app, EventEmitter.prototype, false);
+	  mixin(app, proto, false);
+
+	  // expose the prototype that will get set on requests
+	  app.request = Object.create(req, {
+	    app: { configurable: true, enumerable: true, writable: true, value: app }
+	  });
+
+	  // expose the prototype that will get set on responses
+	  app.response = Object.create(res, {
+	    app: { configurable: true, enumerable: true, writable: true, value: app }
+	  });
+
+	  app.init();
+	  return app;
+	}
+
+	/**
+	 * Expose the prototypes.
+	 */
+
+	exports.application = proto;
+	exports.request = req;
+	exports.response = res;
+
+	/**
+	 * Expose constructors.
+	 */
+
+	exports.Route = Route;
+	exports.Router = Router;
+
+	/**
+	 * Expose middleware
+	 */
+
+	exports.json = bodyParser.json;
+	exports.query = query;
+	exports.raw = bodyParser.raw;
+	exports.static = requireServeStatic();
+	exports.text = bodyParser.text;
+	exports.urlencoded = bodyParser.urlencoded;
+
+	/**
+	 * Replace removed middleware with an appropriate error message.
+	 */
+
+	var removedMiddlewares = [
+	  'bodyParser',
+	  'compress',
+	  'cookieSession',
+	  'session',
+	  'logger',
+	  'cookieParser',
+	  'favicon',
+	  'responseTime',
+	  'errorHandler',
+	  'timeout',
+	  'methodOverride',
+	  'vhost',
+	  'csrf',
+	  'directory',
+	  'limit',
+	  'multipart',
+	  'staticCache'
+	];
+
+	removedMiddlewares.forEach(function (name) {
+	  Object.defineProperty(exports, name, {
+	    get: function () {
+	      throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');
+	    },
+	    configurable: true
+	  });
+	});
+} (express, expressExports));
+
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+(function (module) {
+
+	module.exports = expressExports;
+} (express$1));
+
+var loggingMiddleware = {};
+
+var loggerExports$1 = {};
+var logger$2 = {
+  get exports(){ return loggerExports$1; },
+  set exports(v){ loggerExports$1 = v; },
+};
+
+var err$1 = errSerializer$3;
+
+const { toString: toString$4 } = Object.prototype;
+const seen$1 = Symbol('circular-ref-tag');
+const rawSymbol$5 = Symbol('pino-raw-err-ref');
+const pinoErrProto$1 = Object.create({}, {
+  type: {
+    enumerable: true,
+    writable: true,
+    value: undefined
+  },
+  message: {
+    enumerable: true,
+    writable: true,
+    value: undefined
+  },
+  stack: {
+    enumerable: true,
+    writable: true,
+    value: undefined
+  },
+  raw: {
+    enumerable: false,
+    get: function () {
+      return this[rawSymbol$5]
+    },
+    set: function (val) {
+      this[rawSymbol$5] = val;
+    }
+  }
+});
+Object.defineProperty(pinoErrProto$1, rawSymbol$5, {
+  writable: true,
+  value: {}
+});
+
+function errSerializer$3 (err) {
+  if (!(err instanceof Error)) {
+    return err
+  }
+
+  err[seen$1] = undefined; // tag to prevent re-looking at this
+  const _err = Object.create(pinoErrProto$1);
+  _err.type = toString$4.call(err.constructor) === '[object Function]'
+    ? err.constructor.name
+    : err.name;
+  _err.message = err.message;
+  _err.stack = err.stack;
+  for (const key in err) {
+    if (_err[key] === undefined) {
+      const val = err[key];
+      if (val instanceof Error) {
+        /* eslint-disable no-prototype-builtins */
+        if (!val.hasOwnProperty(seen$1)) {
+          _err[key] = errSerializer$3(val);
+        }
+      } else {
+        _err[key] = val;
+      }
+    }
+  }
+
+  delete err[seen$1]; // clean up tag in case err is serialized again later
+  _err.raw = err;
+  return _err
+}
+
+var req$1 = {
+  mapHttpRequest: mapHttpRequest$2,
+  reqSerializer: reqSerializer$1
+};
+
+const rawSymbol$4 = Symbol('pino-raw-req-ref');
+const pinoReqProto$1 = Object.create({}, {
+  id: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  method: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  url: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  query: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  params: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  headers: {
+    enumerable: true,
+    writable: true,
+    value: {}
+  },
+  remoteAddress: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  remotePort: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  raw: {
+    enumerable: false,
+    get: function () {
+      return this[rawSymbol$4]
+    },
+    set: function (val) {
+      this[rawSymbol$4] = val;
+    }
+  }
+});
+Object.defineProperty(pinoReqProto$1, rawSymbol$4, {
+  writable: true,
+  value: {}
+});
+
+function reqSerializer$1 (req) {
+  // req.info is for hapi compat.
+  const connection = req.info || req.socket;
+  const _req = Object.create(pinoReqProto$1);
+  _req.id = (typeof req.id === 'function' ? req.id() : (req.id || (req.info ? req.info.id : undefined)));
+  _req.method = req.method;
+  // req.originalUrl is for expressjs compat.
+  if (req.originalUrl) {
+    _req.url = req.originalUrl;
+    _req.query = req.query;
+    _req.params = req.params;
+  } else {
+    // req.url.path is  for hapi compat.
+    _req.url = req.path || (req.url ? (req.url.path || req.url) : undefined);
+  }
+  _req.headers = req.headers;
+  _req.remoteAddress = connection && connection.remoteAddress;
+  _req.remotePort = connection && connection.remotePort;
+  // req.raw is  for hapi compat/equivalence
+  _req.raw = req.raw || req;
+  return _req
+}
+
+function mapHttpRequest$2 (req) {
+  return {
+    req: reqSerializer$1(req)
+  }
+}
+
+var res$1 = {
+  mapHttpResponse: mapHttpResponse$2,
+  resSerializer: resSerializer$1
+};
+
+const rawSymbol$3 = Symbol('pino-raw-res-ref');
+const pinoResProto$1 = Object.create({}, {
+  statusCode: {
+    enumerable: true,
+    writable: true,
+    value: 0
+  },
+  headers: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  raw: {
+    enumerable: false,
+    get: function () {
+      return this[rawSymbol$3]
+    },
+    set: function (val) {
+      this[rawSymbol$3] = val;
+    }
+  }
+});
+Object.defineProperty(pinoResProto$1, rawSymbol$3, {
+  writable: true,
+  value: {}
+});
+
+function resSerializer$1 (res) {
+  const _res = Object.create(pinoResProto$1);
+  _res.statusCode = res.statusCode;
+  _res.headers = res.getHeaders ? res.getHeaders() : res._headers;
+  _res.raw = res;
+  return _res
+}
+
+function mapHttpResponse$2 (res) {
+  return {
+    res: resSerializer$1(res)
+  }
+}
+
+const errSerializer$2 = err$1;
+const reqSerializers$1 = req$1;
+const resSerializers$1 = res$1;
+
+var pinoStdSerializers$1 = {
+  err: errSerializer$2,
+  mapHttpRequest: reqSerializers$1.mapHttpRequest,
+  mapHttpResponse: resSerializers$1.mapHttpResponse,
+  req: reqSerializers$1.reqSerializer,
+  res: resSerializers$1.resSerializer,
+
+  wrapErrorSerializer: function wrapErrorSerializer (customSerializer) {
+    if (customSerializer === errSerializer$2) return customSerializer
+    return function wrapErrSerializer (err) {
+      return customSerializer(errSerializer$2(err))
+    }
+  },
+
+  wrapRequestSerializer: function wrapRequestSerializer (customSerializer) {
+    if (customSerializer === reqSerializers$1.reqSerializer) return customSerializer
+    return function wrappedReqSerializer (req) {
+      return customSerializer(reqSerializers$1.reqSerializer(req))
+    }
+  },
+
+  wrapResponseSerializer: function wrapResponseSerializer (customSerializer) {
+    if (customSerializer === resSerializers$1.resSerializer) return customSerializer
+    return function wrappedResSerializer (res) {
+      return customSerializer(resSerializers$1.resSerializer(res))
+    }
+  }
+};
+
+/*
+Copyright (c) 2014 Petka Antonov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
