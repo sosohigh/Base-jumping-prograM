@@ -184168,3 +184168,2170 @@ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+function Url() {
+    //For more efficient internal representation and laziness.
+    //The non-underscore versions of these properties are accessor functions
+    //defined on the prototype.
+    this._protocol = null;
+    this._href = "";
+    this._port = -1;
+    this._query = null;
+
+    this.auth = null;
+    this.slashes = null;
+    this.host = null;
+    this.hostname = null;
+    this.hash = null;
+    this.search = null;
+    this.pathname = null;
+
+    this._prependSlash = false;
+}
+
+var querystring$3 = require$$8$1;
+
+Url.queryString = querystring$3;
+
+Url.prototype.parse =
+function Url$parse(str, parseQueryString, hostDenotesSlash, disableAutoEscapeChars) {
+    if (typeof str !== "string") {
+        throw new TypeError("Parameter 'url' must be a string, not " +
+            typeof str);
+    }
+    var start = 0;
+    var end = str.length - 1;
+
+    //Trim leading and trailing ws
+    while (str.charCodeAt(start) <= 0x20 /*' '*/) start++;
+    while (str.charCodeAt(end) <= 0x20 /*' '*/) end--;
+
+    start = this._parseProtocol(str, start, end);
+
+    //Javascript doesn't have host
+    if (this._protocol !== "javascript") {
+        start = this._parseHost(str, start, end, hostDenotesSlash);
+        var proto = this._protocol;
+        if (!this.hostname &&
+            (this.slashes || (proto && !slashProtocols[proto]))) {
+            this.hostname = this.host = "";
+        }
+    }
+
+    if (start <= end) {
+        var ch = str.charCodeAt(start);
+
+        if (ch === 0x2F /*'/'*/ || ch === 0x5C /*'\'*/) {
+            this._parsePath(str, start, end, disableAutoEscapeChars);
+        }
+        else if (ch === 0x3F /*'?'*/) {
+            this._parseQuery(str, start, end, disableAutoEscapeChars);
+        }
+        else if (ch === 0x23 /*'#'*/) {
+          this._parseHash(str, start, end, disableAutoEscapeChars);
+        }
+        else if (this._protocol !== "javascript") {
+            this._parsePath(str, start, end, disableAutoEscapeChars);
+        }
+        else { //For javascript the pathname is just the rest of it
+            this.pathname = str.slice(start, end + 1 );
+        }
+
+    }
+
+    if (!this.pathname && this.hostname &&
+        this._slashProtocols[this._protocol]) {
+        this.pathname = "/";
+    }
+
+    if (parseQueryString) {
+        var search = this.search;
+        if (search == null) {
+            search = this.search = "";
+        }
+        if (search.charCodeAt(0) === 0x3F /*'?'*/) {
+            search = search.slice(1);
+        }
+        //This calls a setter function, there is no .query data property
+        this.query = Url.queryString.parse(search);
+    }
+};
+
+Url.prototype.resolve = function Url$resolve(relative) {
+    return this.resolveObject(Url.parse(relative, false, true)).format();
+};
+
+Url.prototype.format = function Url$format() {
+    var auth = this.auth || "";
+
+    if (auth) {
+        auth = encodeURIComponent(auth);
+        auth = auth.replace(/%3A/i, ":");
+        auth += "@";
+    }
+
+    var protocol = this.protocol || "";
+    var pathname = this.pathname || "";
+    var hash = this.hash || "";
+    var search = this.search || "";
+    var query = "";
+    var hostname = this.hostname || "";
+    var port = this.port || "";
+    var host = false;
+    var scheme = "";
+
+    //Cache the result of the getter function
+    var q = this.query;
+    if (q && typeof q === "object") {
+        query = Url.queryString.stringify(q);
+    }
+
+    if (!search) {
+        search = query ? "?" + query : "";
+    }
+
+    if (protocol && protocol.charCodeAt(protocol.length - 1) !== 0x3A /*':'*/)
+        protocol += ":";
+
+    if (this.host) {
+        host = auth + this.host;
+    }
+    else if (hostname) {
+        var ip6 = hostname.indexOf(":") > -1;
+        if (ip6) hostname = "[" + hostname + "]";
+        host = auth + hostname + (port ? ":" + port : "");
+    }
+
+    var slashes = this.slashes ||
+        ((!protocol ||
+        slashProtocols[protocol]) && host !== false);
+
+
+    if (protocol) scheme = protocol + (slashes ? "//" : "");
+    else if (slashes) scheme = "//";
+
+    if (slashes && pathname && pathname.charCodeAt(0) !== 0x2F /*'/'*/) {
+        pathname = "/" + pathname;
+    }
+    if (search && search.charCodeAt(0) !== 0x3F /*'?'*/)
+        search = "?" + search;
+    if (hash && hash.charCodeAt(0) !== 0x23 /*'#'*/)
+        hash = "#" + hash;
+
+    pathname = escapePathName(pathname);
+    search = escapeSearch(search);
+
+    return scheme + (host === false ? "" : host) + pathname + search + hash;
+};
+
+Url.prototype.resolveObject = function Url$resolveObject(relative) {
+    if (typeof relative === "string")
+        relative = Url.parse(relative, false, true);
+
+    var result = this._clone();
+
+    // hash is always overridden, no matter what.
+    // even href="" will remove it.
+    result.hash = relative.hash;
+
+    // if the relative url is empty, then there"s nothing left to do here.
+    if (!relative.href) {
+        result._href = "";
+        return result;
+    }
+
+    // hrefs like //foo/bar always cut to the protocol.
+    if (relative.slashes && !relative._protocol) {
+        relative._copyPropsTo(result, true);
+
+        if (slashProtocols[result._protocol] &&
+            result.hostname && !result.pathname) {
+            result.pathname = "/";
+        }
+        result._href = "";
+        return result;
+    }
+
+    if (relative._protocol && relative._protocol !== result._protocol) {
+        // if it"s a known url protocol, then changing
+        // the protocol does weird things
+        // first, if it"s not file:, then we MUST have a host,
+        // and if there was a path
+        // to begin with, then we MUST have a path.
+        // if it is file:, then the host is dropped,
+        // because that"s known to be hostless.
+        // anything else is assumed to be absolute.
+        if (!slashProtocols[relative._protocol]) {
+            relative._copyPropsTo(result, false);
+            result._href = "";
+            return result;
+        }
+
+        result._protocol = relative._protocol;
+        if (!relative.host && relative._protocol !== "javascript") {
+            var relPath = (relative.pathname || "").split("/");
+            while (relPath.length && !(relative.host = relPath.shift()));
+            if (!relative.host) relative.host = "";
+            if (!relative.hostname) relative.hostname = "";
+            if (relPath[0] !== "") relPath.unshift("");
+            if (relPath.length < 2) relPath.unshift("");
+            result.pathname = relPath.join("/");
+        } else {
+            result.pathname = relative.pathname;
+        }
+
+        result.search = relative.search;
+        result.host = relative.host || "";
+        result.auth = relative.auth;
+        result.hostname = relative.hostname || relative.host;
+        result._port = relative._port;
+        result.slashes = result.slashes || relative.slashes;
+        result._href = "";
+        return result;
+    }
+
+    var isSourceAbs =
+        (result.pathname && result.pathname.charCodeAt(0) === 0x2F /*'/'*/);
+    var isRelAbs = (
+            relative.host ||
+            (relative.pathname &&
+            relative.pathname.charCodeAt(0) === 0x2F /*'/'*/)
+        );
+    var mustEndAbs = (isRelAbs || isSourceAbs ||
+                        (result.host && relative.pathname));
+
+    var removeAllDots = mustEndAbs;
+
+    var srcPath = result.pathname && result.pathname.split("/") || [];
+    var relPath = relative.pathname && relative.pathname.split("/") || [];
+    var psychotic = result._protocol && !slashProtocols[result._protocol];
+
+    // if the url is a non-slashed url, then relative
+    // links like ../.. should be able
+    // to crawl up to the hostname, as well.  This is strange.
+    // result.protocol has already been set by now.
+    // Later on, put the first path part into the host field.
+    if (psychotic) {
+        result.hostname = "";
+        result._port = -1;
+        if (result.host) {
+            if (srcPath[0] === "") srcPath[0] = result.host;
+            else srcPath.unshift(result.host);
+        }
+        result.host = "";
+        if (relative._protocol) {
+            relative.hostname = "";
+            relative._port = -1;
+            if (relative.host) {
+                if (relPath[0] === "") relPath[0] = relative.host;
+                else relPath.unshift(relative.host);
+            }
+            relative.host = "";
+        }
+        mustEndAbs = mustEndAbs && (relPath[0] === "" || srcPath[0] === "");
+    }
+
+    if (isRelAbs) {
+        // it"s absolute.
+        result.host = relative.host ?
+            relative.host : result.host;
+        result.hostname = relative.hostname ?
+            relative.hostname : result.hostname;
+        result.search = relative.search;
+        srcPath = relPath;
+        // fall through to the dot-handling below.
+    } else if (relPath.length) {
+        // it"s relative
+        // throw away the existing file, and take the new path instead.
+        if (!srcPath) srcPath = [];
+        srcPath.pop();
+        srcPath = srcPath.concat(relPath);
+        result.search = relative.search;
+    } else if (relative.search) {
+        // just pull out the search.
+        // like href="?foo".
+        // Put this after the other two cases because it simplifies the booleans
+        if (psychotic) {
+            result.hostname = result.host = srcPath.shift();
+            //occationaly the auth can get stuck only in host
+            //this especialy happens in cases like
+            //url.resolveObject("mailto:local1@domain1", "local2@domain2")
+            var authInHost = result.host && result.host.indexOf("@") > 0 ?
+                result.host.split("@") : false;
+            if (authInHost) {
+                result.auth = authInHost.shift();
+                result.host = result.hostname = authInHost.shift();
+            }
+        }
+        result.search = relative.search;
+        result._href = "";
+        return result;
+    }
+
+    if (!srcPath.length) {
+        // no path at all.  easy.
+        // we"ve already handled the other stuff above.
+        result.pathname = null;
+        result._href = "";
+        return result;
+    }
+
+    // if a url ENDs in . or .., then it must get a trailing slash.
+    // however, if it ends in anything else non-slashy,
+    // then it must NOT get a trailing slash.
+    var last = srcPath.slice(-1)[0];
+    var hasTrailingSlash = (
+        (result.host || relative.host) && (last === "." || last === "..") ||
+        last === "");
+
+    // strip single dots, resolve double dots to parent dir
+    // if the path tries to go above the root, `up` ends up > 0
+    var up = 0;
+    for (var i = srcPath.length; i >= 0; i--) {
+        last = srcPath[i];
+        if (last === ".") {
+            srcPath.splice(i, 1);
+        } else if (last === "..") {
+            srcPath.splice(i, 1);
+            up++;
+        } else if (up) {
+            srcPath.splice(i, 1);
+            up--;
+        }
+    }
+
+    // if the path is allowed to go above the root, restore leading ..s
+    if (!mustEndAbs && !removeAllDots) {
+        for (; up--; up) {
+            srcPath.unshift("..");
+        }
+    }
+
+    if (mustEndAbs && srcPath[0] !== "" &&
+        (!srcPath[0] || srcPath[0].charCodeAt(0) !== 0x2F /*'/'*/)) {
+        srcPath.unshift("");
+    }
+
+    if (hasTrailingSlash && (srcPath.join("/").substr(-1) !== "/")) {
+        srcPath.push("");
+    }
+
+    var isAbsolute = srcPath[0] === "" ||
+        (srcPath[0] && srcPath[0].charCodeAt(0) === 0x2F /*'/'*/);
+
+    // put the host back
+    if (psychotic) {
+        result.hostname = result.host = isAbsolute ? "" :
+            srcPath.length ? srcPath.shift() : "";
+        //occationaly the auth can get stuck only in host
+        //this especialy happens in cases like
+        //url.resolveObject("mailto:local1@domain1", "local2@domain2")
+        var authInHost = result.host && result.host.indexOf("@") > 0 ?
+            result.host.split("@") : false;
+        if (authInHost) {
+            result.auth = authInHost.shift();
+            result.host = result.hostname = authInHost.shift();
+        }
+    }
+
+    mustEndAbs = mustEndAbs || (result.host && srcPath.length);
+
+    if (mustEndAbs && !isAbsolute) {
+        srcPath.unshift("");
+    }
+
+    result.pathname = srcPath.length === 0 ? null : srcPath.join("/");
+    result.auth = relative.auth || result.auth;
+    result.slashes = result.slashes || relative.slashes;
+    result._href = "";
+    return result;
+};
+
+var punycode$2 = require$$0$l;
+Url.prototype._hostIdna = function Url$_hostIdna(hostname) {
+    // IDNA Support: Returns a punycoded representation of "domain".
+    // It only converts parts of the domain name that
+    // have non-ASCII characters, i.e. it doesn't matter if
+    // you call it with a domain that already is ASCII-only.
+    return punycode$2.toASCII(hostname);
+};
+
+var escapePathName = Url.prototype._escapePathName =
+function Url$_escapePathName(pathname) {
+    if (!containsCharacter2(pathname, 0x23 /*'#'*/, 0x3F /*'?'*/)) {
+        return pathname;
+    }
+    //Avoid closure creation to keep this inlinable
+    return _escapePath(pathname);
+};
+
+var escapeSearch = Url.prototype._escapeSearch =
+function Url$_escapeSearch(search) {
+    if (!containsCharacter2(search, 0x23 /*'#'*/, -1)) return search;
+    //Avoid closure creation to keep this inlinable
+    return _escapeSearch(search);
+};
+
+Url.prototype._parseProtocol = function Url$_parseProtocol(str, start, end) {
+    var doLowerCase = false;
+    var protocolCharacters = this._protocolCharacters;
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x3A /*':'*/) {
+            var protocol = str.slice(start, i);
+            if (doLowerCase) protocol = protocol.toLowerCase();
+            this._protocol = protocol;
+            return i + 1;
+        }
+        else if (protocolCharacters[ch] === 1) {
+            if (ch < 0x61 /*'a'*/)
+                doLowerCase = true;
+        }
+        else {
+            return start;
+        }
+
+    }
+    return start;
+};
+
+Url.prototype._parseAuth = function Url$_parseAuth(str, start, end, decode) {
+    var auth = str.slice(start, end + 1);
+    if (decode) {
+        auth = decodeURIComponent(auth);
+    }
+    this.auth = auth;
+};
+
+Url.prototype._parsePort = function Url$_parsePort(str, start, end) {
+    //Internal format is integer for more efficient parsing
+    //and for efficient trimming of leading zeros
+    var port = 0;
+    //Distinguish between :0 and : (no port number at all)
+    var hadChars = false;
+    var validPort = true;
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (0x30 /*'0'*/ <= ch && ch <= 0x39 /*'9'*/) {
+            port = (10 * port) + (ch - 0x30 /*'0'*/);
+            hadChars = true;
+        }
+        else {
+            validPort = false;
+            if (ch === 0x5C/*'\'*/ || ch === 0x2F/*'/'*/) {
+                validPort = true;
+            }
+            break;
+        }
+
+    }
+    if ((port === 0 && !hadChars) || !validPort) {
+        if (!validPort) {
+            this._port = -2;
+        }
+        return 0;
+    }
+
+    this._port = port;
+    return i - start;
+};
+
+Url.prototype._parseHost =
+function Url$_parseHost(str, start, end, slashesDenoteHost) {
+    var hostEndingCharacters = this._hostEndingCharacters;
+    var first = str.charCodeAt(start);
+    var second = str.charCodeAt(start + 1);
+    if ((first === 0x2F /*'/'*/ || first === 0x5C /*'\'*/) &&
+        (second === 0x2F /*'/'*/ || second === 0x5C /*'\'*/)) {
+        this.slashes = true;
+
+        //The string starts with //
+        if (start === 0) {
+            //The string is just "//"
+            if (end < 2) return start;
+            //If slashes do not denote host and there is no auth,
+            //there is no host when the string starts with //
+            var hasAuth =
+                containsCharacter(str, 0x40 /*'@'*/, 2, hostEndingCharacters);
+            if (!hasAuth && !slashesDenoteHost) {
+                this.slashes = null;
+                return start;
+            }
+        }
+        //There is a host that starts after the //
+        start += 2;
+    }
+    //If there is no slashes, there is no hostname if
+    //1. there was no protocol at all
+    else if (!this._protocol ||
+        //2. there was a protocol that requires slashes
+        //e.g. in 'http:asd' 'asd' is not a hostname
+        slashProtocols[this._protocol]
+    ) {
+        return start;
+    }
+
+    var doLowerCase = false;
+    var idna = false;
+    var hostNameStart = start;
+    var hostNameEnd = end;
+    var portLength = 0;
+    var charsAfterDot = 0;
+    var authNeedsDecoding = false;
+
+    var j = -1;
+
+    //Find the last occurrence of an @-sign until hostending character is met
+    //also mark if decoding is needed for the auth portion
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x40 /*'@'*/) {
+            j = i;
+        }
+        //This check is very, very cheap. Unneeded decodeURIComponent is very
+        //very expensive
+        else if (ch === 0x25 /*'%'*/) {
+            authNeedsDecoding = true;
+        }
+        else if (hostEndingCharacters[ch] === 1) {
+            break;
+        }
+    }
+
+    //@-sign was found at index j, everything to the left from it
+    //is auth part
+    if (j > -1) {
+        this._parseAuth(str, start, j - 1, authNeedsDecoding);
+        //hostname starts after the last @-sign
+        start = hostNameStart = j + 1;
+    }
+
+    //Host name is starting with a [
+    if (str.charCodeAt(start) === 0x5B /*'['*/) {
+        for (var i = start + 1; i <= end; ++i) {
+            var ch = str.charCodeAt(i);
+
+            //Assume valid IP6 is between the brackets
+            if (ch === 0x5D /*']'*/) {
+                if (str.charCodeAt(i + 1) === 0x3A /*':'*/) {
+                    portLength = this._parsePort(str, i + 2, end) + 1;
+                }
+                var hostname = str.slice(start + 1, i).toLowerCase();
+                this.hostname = hostname;
+                this.host = this._port > 0 ?
+                    "[" + hostname + "]:" + this._port :
+                    "[" + hostname + "]";
+                this.pathname = "/";
+                return i + portLength + 1;
+            }
+        }
+        //Empty hostname, [ starts a path
+        return start;
+    }
+
+    for (var i = start; i <= end; ++i) {
+        if (charsAfterDot > 62) {
+            this.hostname = this.host = str.slice(start, i);
+            return i;
+        }
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x3A /*':'*/) {
+            portLength = this._parsePort(str, i + 1, end) + 1;
+            hostNameEnd = i - 1;
+            break;
+        }
+        else if (ch < 0x61 /*'a'*/) {
+            if (ch === 0x2E /*'.'*/) {
+                //Node.js ignores this error
+                /*
+                if (lastCh === DOT || lastCh === -1) {
+                    this.hostname = this.host = "";
+                    return start;
+                }
+                */
+                charsAfterDot = -1;
+            }
+            else if (0x41 /*'A'*/ <= ch && ch <= 0x5A /*'Z'*/) {
+                doLowerCase = true;
+            }
+            //Valid characters other than ASCII letters -, _, +, 0-9
+            else if (!(ch === 0x2D /*'-'*/ ||
+                       ch === 0x5F /*'_'*/ ||
+                       ch === 0x2B /*'+'*/ ||
+                       (0x30 /*'0'*/ <= ch && ch <= 0x39 /*'9'*/))
+                ) {
+                if (hostEndingCharacters[ch] === 0 &&
+                    this._noPrependSlashHostEnders[ch] === 0) {
+                    this._prependSlash = true;
+                }
+                hostNameEnd = i - 1;
+                break;
+            }
+        }
+        else if (ch >= 0x7B /*'{'*/) {
+            if (ch <= 0x7E /*'~'*/) {
+                if (this._noPrependSlashHostEnders[ch] === 0) {
+                    this._prependSlash = true;
+                }
+                hostNameEnd = i - 1;
+                break;
+            }
+            idna = true;
+        }
+        charsAfterDot++;
+    }
+
+    //Node.js ignores this error
+    /*
+    if (lastCh === DOT) {
+        hostNameEnd--;
+    }
+    */
+
+    if (hostNameEnd + 1 !== start &&
+        hostNameEnd - hostNameStart <= 256) {
+        var hostname = str.slice(hostNameStart, hostNameEnd + 1);
+        if (doLowerCase) hostname = hostname.toLowerCase();
+        if (idna) hostname = this._hostIdna(hostname);
+        this.hostname = hostname;
+        this.host = this._port > 0 ? hostname + ":" + this._port : hostname;
+    }
+
+    return hostNameEnd + 1 + portLength;
+
+};
+
+Url.prototype._copyPropsTo = function Url$_copyPropsTo(input, noProtocol) {
+    if (!noProtocol) {
+        input._protocol = this._protocol;
+    }
+    input._href = this._href;
+    input._port = this._port;
+    input._prependSlash = this._prependSlash;
+    input.auth = this.auth;
+    input.slashes = this.slashes;
+    input.host = this.host;
+    input.hostname = this.hostname;
+    input.hash = this.hash;
+    input.search = this.search;
+    input.pathname = this.pathname;
+};
+
+Url.prototype._clone = function Url$_clone() {
+    var ret = new Url();
+    ret._protocol = this._protocol;
+    ret._href = this._href;
+    ret._port = this._port;
+    ret._prependSlash = this._prependSlash;
+    ret.auth = this.auth;
+    ret.slashes = this.slashes;
+    ret.host = this.host;
+    ret.hostname = this.hostname;
+    ret.hash = this.hash;
+    ret.search = this.search;
+    ret.pathname = this.pathname;
+    return ret;
+};
+
+Url.prototype._getComponentEscaped =
+function Url$_getComponentEscaped(str, start, end, isAfterQuery) {
+    var cur = start;
+    var i = start;
+    var ret = "";
+    var autoEscapeMap = isAfterQuery ?
+        this._afterQueryAutoEscapeMap : this._autoEscapeMap;
+    for (; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+        var escaped = autoEscapeMap[ch];
+
+        if (escaped !== "" && escaped !== undefined) {
+            if (cur < i) ret += str.slice(cur, i);
+            ret += escaped;
+            cur = i + 1;
+        }
+    }
+    if (cur < i + 1) ret += str.slice(cur, i);
+    return ret;
+};
+
+Url.prototype._parsePath =
+function Url$_parsePath(str, start, end, disableAutoEscapeChars) {
+    var pathStart = start;
+    var pathEnd = end;
+    var escape = false;
+    var autoEscapeCharacters = this._autoEscapeCharacters;
+    var prePath = this._port === -2 ? "/:" : "";
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+        if (ch === 0x23 /*'#'*/) {
+          this._parseHash(str, i, end, disableAutoEscapeChars);
+            pathEnd = i - 1;
+            break;
+        }
+        else if (ch === 0x3F /*'?'*/) {
+            this._parseQuery(str, i, end, disableAutoEscapeChars);
+            pathEnd = i - 1;
+            break;
+        }
+        else if (!disableAutoEscapeChars && !escape && autoEscapeCharacters[ch] === 1) {
+            escape = true;
+        }
+    }
+
+    if (pathStart > pathEnd) {
+        this.pathname = prePath === "" ? "/" : prePath;
+        return;
+    }
+
+    var path;
+    if (escape) {
+        path = this._getComponentEscaped(str, pathStart, pathEnd, false);
+    }
+    else {
+        path = str.slice(pathStart, pathEnd + 1);
+    }
+    this.pathname = prePath === ""
+        ? (this._prependSlash ? "/" + path : path)
+        : prePath + path;
+};
+
+Url.prototype._parseQuery = function Url$_parseQuery(str, start, end, disableAutoEscapeChars) {
+    var queryStart = start;
+    var queryEnd = end;
+    var escape = false;
+    var autoEscapeCharacters = this._autoEscapeCharacters;
+
+    for (var i = start; i <= end; ++i) {
+        var ch = str.charCodeAt(i);
+
+        if (ch === 0x23 /*'#'*/) {
+            this._parseHash(str, i, end, disableAutoEscapeChars);
+            queryEnd = i - 1;
+            break;
+        }
+        else if (!disableAutoEscapeChars && !escape && autoEscapeCharacters[ch] === 1) {
+            escape = true;
+        }
+    }
+
+    if (queryStart > queryEnd) {
+        this.search = "";
+        return;
+    }
+
+    var query;
+    if (escape) {
+        query = this._getComponentEscaped(str, queryStart, queryEnd, true);
+    }
+    else {
+        query = str.slice(queryStart, queryEnd + 1);
+    }
+    this.search = query;
+};
+
+Url.prototype._parseHash = function Url$_parseHash(str, start, end, disableAutoEscapeChars) {
+    if (start > end) {
+        this.hash = "";
+        return;
+    }
+
+    this.hash = disableAutoEscapeChars ?
+        str.slice(start, end + 1) : this._getComponentEscaped(str, start, end, true);
+};
+
+Object.defineProperty(Url.prototype, "port", {
+    get: function() {
+        if (this._port >= 0) {
+            return ("" + this._port);
+        }
+        return null;
+    },
+    set: function(v) {
+        if (v == null) {
+            this._port = -1;
+        }
+        else {
+            this._port = parseInt(v, 10);
+        }
+    }
+});
+
+Object.defineProperty(Url.prototype, "query", {
+    get: function() {
+        var query = this._query;
+        if (query != null) {
+            return query;
+        }
+        var search = this.search;
+
+        if (search) {
+            if (search.charCodeAt(0) === 0x3F /*'?'*/) {
+                search = search.slice(1);
+            }
+            if (search !== "") {
+                this._query = search;
+                return search;
+            }
+        }
+        return search;
+    },
+    set: function(v) {
+        this._query = v;
+    }
+});
+
+Object.defineProperty(Url.prototype, "path", {
+    get: function() {
+        var p = this.pathname || "";
+        var s = this.search || "";
+        if (p || s) {
+            return p + s;
+        }
+        return (p == null && s) ? ("/" + s) : null;
+    },
+    set: function() {}
+});
+
+Object.defineProperty(Url.prototype, "protocol", {
+    get: function() {
+        var proto = this._protocol;
+        return proto ? proto + ":" : proto;
+    },
+    set: function(v) {
+        if (typeof v === "string") {
+            var end = v.length - 1;
+            if (v.charCodeAt(end) === 0x3A /*':'*/) {
+                this._protocol = v.slice(0, end);
+            }
+            else {
+                this._protocol = v;
+            }
+        }
+        else if (v == null) {
+            this._protocol = null;
+        }
+    }
+});
+
+Object.defineProperty(Url.prototype, "href", {
+    get: function() {
+        var href = this._href;
+        if (!href) {
+            href = this._href = this.format();
+        }
+        return href;
+    },
+    set: function(v) {
+        this._href = v;
+    }
+});
+
+Url.parse = function Url$Parse(str, parseQueryString, hostDenotesSlash, disableAutoEscapeChars) {
+    if (str instanceof Url) return str;
+    var ret = new Url();
+    ret.parse(str, !!parseQueryString, !!hostDenotesSlash, !!disableAutoEscapeChars);
+    return ret;
+};
+
+Url.format = function Url$Format(obj) {
+    if (typeof obj === "string") {
+        obj = Url.parse(obj);
+    }
+    if (!(obj instanceof Url)) {
+        return Url.prototype.format.call(obj);
+    }
+    return obj.format();
+};
+
+Url.resolve = function Url$Resolve(source, relative) {
+    return Url.parse(source, false, true).resolve(relative);
+};
+
+Url.resolveObject = function Url$ResolveObject(source, relative) {
+    if (!source) return relative;
+    return Url.parse(source, false, true).resolveObject(relative);
+};
+
+function _escapePath(pathname) {
+    return pathname.replace(/[?#]/g, function(match) {
+        return encodeURIComponent(match);
+    });
+}
+
+function _escapeSearch(search) {
+    return search.replace(/#/g, function(match) {
+        return encodeURIComponent(match);
+    });
+}
+
+//Search `char1` (integer code for a character) in `string`
+//starting from `fromIndex` and ending at `string.length - 1`
+//or when a stop character is found
+function containsCharacter(string, char1, fromIndex, stopCharacterTable) {
+    var len = string.length;
+    for (var i = fromIndex; i < len; ++i) {
+        var ch = string.charCodeAt(i);
+
+        if (ch === char1) {
+            return true;
+        }
+        else if (stopCharacterTable[ch] === 1) {
+            return false;
+        }
+    }
+    return false;
+}
+
+//See if `char1` or `char2` (integer codes for characters)
+//is contained in `string`
+function containsCharacter2(string, char1, char2) {
+    for (var i = 0, len = string.length; i < len; ++i) {
+        var ch = string.charCodeAt(i);
+        if (ch === char1 || ch === char2) return true;
+    }
+    return false;
+}
+
+//Makes an array of 128 uint8's which represent boolean values.
+//Spec is an array of ascii code points or ascii code point ranges
+//ranges are expressed as [start, end]
+
+//Create a table with the characters 0x30-0x39 (decimals '0' - '9') and
+//0x7A (lowercaseletter 'z') as `true`:
+//
+//var a = makeAsciiTable([[0x30, 0x39], 0x7A]);
+//a[0x30]; //1
+//a[0x15]; //0
+//a[0x35]; //1
+function makeAsciiTable(spec) {
+    var ret = new Uint8Array(128);
+    spec.forEach(function(item){
+        if (typeof item === "number") {
+            ret[item] = 1;
+        }
+        else {
+            var start = item[0];
+            var end = item[1];
+            for (var j = start; j <= end; ++j) {
+                ret[j] = 1;
+            }
+        }
+    });
+
+    return ret;
+}
+
+
+var autoEscape = ["<", ">", "\"", "`", " ", "\r", "\n",
+    "\t", "{", "}", "|", "\\", "^", "`", "'"];
+
+var autoEscapeMap = new Array(128);
+
+
+
+for (var i$4 = 0, len = autoEscapeMap.length; i$4 < len; ++i$4) {
+    autoEscapeMap[i$4] = "";
+}
+
+for (var i$4 = 0, len = autoEscape.length; i$4 < len; ++i$4) {
+    var c = autoEscape[i$4];
+    var esc = encodeURIComponent(c);
+    if (esc === c) {
+        esc = escape(c);
+    }
+    autoEscapeMap[c.charCodeAt(0)] = esc;
+}
+var afterQueryAutoEscapeMap = autoEscapeMap.slice();
+autoEscapeMap[0x5C /*'\'*/] = "/";
+
+var slashProtocols = Url.prototype._slashProtocols = {
+    http: true,
+    https: true,
+    gopher: true,
+    file: true,
+    ftp: true,
+
+    "http:": true,
+    "https:": true,
+    "gopher:": true,
+    "file:": true,
+    "ftp:": true
+};
+
+Url.prototype._protocolCharacters = makeAsciiTable([
+    [0x61 /*'a'*/, 0x7A /*'z'*/],
+    [0x41 /*'A'*/, 0x5A /*'Z'*/],
+    0x2E /*'.'*/, 0x2B /*'+'*/, 0x2D /*'-'*/
+]);
+
+Url.prototype._hostEndingCharacters = makeAsciiTable([
+    0x23 /*'#'*/, 0x3F /*'?'*/, 0x2F /*'/'*/, 0x5C /*'\'*/
+]);
+
+Url.prototype._autoEscapeCharacters = makeAsciiTable(
+    autoEscape.map(function(v) {
+        return v.charCodeAt(0);
+    })
+);
+
+//If these characters end a host name, the path will not be prepended a /
+Url.prototype._noPrependSlashHostEnders = makeAsciiTable(
+    [
+        "<", ">", "'", "`", " ", "\r",
+        "\n", "\t", "{", "}", "|",
+        "^", "`", "\"", "%", ";"
+    ].map(function(v) {
+        return v.charCodeAt(0);
+    })
+);
+
+Url.prototype._autoEscapeMap = autoEscapeMap;
+Url.prototype._afterQueryAutoEscapeMap = afterQueryAutoEscapeMap;
+
+var urlparser = Url;
+
+Url.replace = function Url$Replace() {
+    require.cache.url = {
+        exports: Url
+    };
+};
+
+var pino$4 = pinoExports$1;
+var serializers$1 = pinoStdSerializers$1;
+var URL$3 = urlparser;
+var startTime = Symbol('startTime');
+
+function pinoLogger (opts, stream) {
+  if (opts && opts._writableState) {
+    stream = opts;
+    opts = null;
+  }
+
+  opts = Object.assign({}, opts);
+
+  opts.customAttributeKeys = opts.customAttributeKeys || {};
+  var reqKey = opts.customAttributeKeys.req || 'req';
+  var resKey = opts.customAttributeKeys.res || 'res';
+  var errKey = opts.customAttributeKeys.err || 'err';
+  var requestIdKey = opts.customAttributeKeys.reqId || 'reqId';
+  var responseTimeKey = opts.customAttributeKeys.responseTime || 'responseTime';
+  delete opts.customAttributeKeys;
+
+  var customProps = opts.customProps || opts.reqCustomProps || {};
+
+  opts.wrapSerializers = 'wrapSerializers' in opts ? opts.wrapSerializers : true;
+  if (opts.wrapSerializers) {
+    opts.serializers = Object.assign({}, opts.serializers);
+    var requestSerializer = opts.serializers[reqKey] || opts.serializers.req || serializers$1.req;
+    var responseSerializer = opts.serializers[resKey] || opts.serializers.res || serializers$1.res;
+    var errorSerializer = opts.serializers[errKey] || opts.serializers.err || serializers$1.err;
+    opts.serializers[reqKey] = serializers$1.wrapRequestSerializer(requestSerializer);
+    opts.serializers[resKey] = serializers$1.wrapResponseSerializer(responseSerializer);
+    opts.serializers[errKey] = serializers$1.wrapErrorSerializer(errorSerializer);
+  }
+  delete opts.wrapSerializers;
+
+  if (opts.useLevel && opts.customLogLevel) {
+    throw new Error("You can't pass 'useLevel' and 'customLogLevel' together")
+  }
+
+  var useLevel = opts.useLevel || 'info';
+  var customLogLevel = opts.customLogLevel;
+  delete opts.useLevel;
+  delete opts.customLogLevel;
+
+  var theStream = opts.stream || stream;
+  delete opts.stream;
+
+  var autoLogging = (opts.autoLogging !== false);
+  var autoLoggingIgnore = opts.autoLogging && opts.autoLogging.ignore ? opts.autoLogging.ignore : null;
+  var autoLoggingIgnorePaths = (opts.autoLogging && opts.autoLogging.ignorePaths) ? opts.autoLogging.ignorePaths : [];
+  var autoLoggingGetPath = opts.autoLogging && opts.autoLogging.getPath ? opts.autoLogging.getPath : null;
+  delete opts.autoLogging;
+
+  var successMessage = opts.customSuccessMessage || function () { return 'request completed' };
+  var errorMessage = opts.customErrorMessage || function () { return 'request errored' };
+  delete opts.customSuccessfulMessage;
+  delete opts.customErroredMessage;
+
+  var quietReqLogger = !!opts.quietReqLogger;
+
+  var logger = wrapChild(opts, theStream);
+  var genReqId = reqIdGenFactory(opts.genReqId);
+  loggingMiddleware.logger = logger;
+  return loggingMiddleware
+
+  function onResFinished (err) {
+    this.removeListener('error', onResFinished);
+    this.removeListener('finish', onResFinished);
+
+    var log = this.log;
+    var responseTime = Date.now() - this[startTime];
+    var level = customLogLevel ? customLogLevel(this, err) : useLevel;
+
+    if (err || this.err || this.statusCode >= 500) {
+      var error = err || this.err || new Error('failed with status code ' + this.statusCode);
+
+      log[level]({
+        [resKey]: this,
+        [errKey]: error,
+        [responseTimeKey]: responseTime
+      }, errorMessage(error, this));
+      return
+    }
+
+    log[level]({
+      [resKey]: this,
+      [responseTimeKey]: responseTime
+    }, successMessage(this));
+  }
+
+  function loggingMiddleware (req, res, next) {
+    var shouldLogSuccess = true;
+
+    req.id = genReqId(req);
+
+    var log = quietReqLogger ? logger.child({ [requestIdKey]: req.id }) : logger;
+
+    var fullReqLogger = log.child({ [reqKey]: req });
+    var customPropBindings = (typeof customProps === 'function') ? customProps(req, res) : customProps;
+    fullReqLogger = fullReqLogger.child(customPropBindings);
+
+    res.log = fullReqLogger;
+    req.log = quietReqLogger ? log : fullReqLogger;
+
+    res[startTime] = res[startTime] || Date.now();
+
+    if (autoLogging) {
+      if (autoLoggingIgnorePaths.length) {
+        var url;
+        if (autoLoggingGetPath) {
+          url = URL$3.parse(autoLoggingGetPath(req));
+        } else {
+          url = URL$3.parse(req.url);
+        }
+
+        const isPathIgnored = autoLoggingIgnorePaths.find(ignorePath => {
+          if (ignorePath instanceof RegExp) {
+            return ignorePath.test(url.pathname)
+          }
+
+          return ignorePath === url.pathname
+        });
+
+        shouldLogSuccess = !isPathIgnored;
+      }
+
+      if (autoLoggingIgnore !== null && shouldLogSuccess === true) {
+        const isIgnored = autoLoggingIgnore !== null && autoLoggingIgnore(req);
+        shouldLogSuccess = !isIgnored;
+      }
+
+      if (shouldLogSuccess) {
+        res.on('finish', onResFinished);
+      }
+
+      res.on('error', onResFinished);
+    }
+
+    if (next) {
+      next();
+    }
+  }
+}
+
+function wrapChild (opts, stream) {
+  var prevLogger = opts.logger;
+  var prevGenReqId = opts.genReqId;
+  var logger = null;
+
+  if (prevLogger) {
+    opts.logger = undefined;
+    opts.genReqId = undefined;
+    logger = prevLogger.child({}, opts);
+    opts.logger = prevLogger;
+    opts.genReqId = prevGenReqId;
+  } else {
+    logger = pino$4(opts, stream);
+  }
+
+  return logger
+}
+
+function reqIdGenFactory (func) {
+  if (typeof func === 'function') return func
+  var maxInt = 2147483647;
+  var nextReqId = 0;
+  return function genReqId (req) {
+    return req.id || (nextReqId = (nextReqId + 1) & maxInt)
+  }
+}
+
+logger$2.exports = pinoLogger;
+loggerExports$1.stdSerializers = {
+  err: serializers$1.err,
+  req: serializers$1.req,
+  res: serializers$1.res
+};
+loggerExports$1.startTime = startTime;
+
+// Unique ID creation requires a high quality random # generator. In the browser we therefore
+// require the crypto API and do not support built-in fallback to lower quality random number
+// generators (like Math.random()).
+var getRandomValues$2;
+var rnds8$2 = new Uint8Array(16);
+function rng$2() {
+  // lazy load so that environments that need to polyfill have a chance to do so
+  if (!getRandomValues$2) {
+    // getRandomValues needs to be invoked in a context where "this" is a Crypto implementation. Also,
+    // find the complete implementation of crypto (msCrypto) on IE11.
+    getRandomValues$2 = typeof crypto !== 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto) || typeof msCrypto !== 'undefined' && typeof msCrypto.getRandomValues === 'function' && msCrypto.getRandomValues.bind(msCrypto);
+
+    if (!getRandomValues$2) {
+      throw new Error('crypto.getRandomValues() not supported. See https://github.com/uuidjs/uuid#getrandomvalues-not-supported');
+    }
+  }
+
+  return getRandomValues$2(rnds8$2);
+}
+
+var REGEX$1 = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i;
+
+function validate$2(uuid) {
+  return typeof uuid === 'string' && REGEX$1.test(uuid);
+}
+
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+
+var byteToHex$2 = [];
+
+for (var i$3 = 0; i$3 < 256; ++i$3) {
+  byteToHex$2.push((i$3 + 0x100).toString(16).substr(1));
+}
+
+function stringify$4(arr) {
+  var offset = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+  // Note: Be careful editing this code!  It's been tuned for performance
+  // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
+  var uuid = (byteToHex$2[arr[offset + 0]] + byteToHex$2[arr[offset + 1]] + byteToHex$2[arr[offset + 2]] + byteToHex$2[arr[offset + 3]] + '-' + byteToHex$2[arr[offset + 4]] + byteToHex$2[arr[offset + 5]] + '-' + byteToHex$2[arr[offset + 6]] + byteToHex$2[arr[offset + 7]] + '-' + byteToHex$2[arr[offset + 8]] + byteToHex$2[arr[offset + 9]] + '-' + byteToHex$2[arr[offset + 10]] + byteToHex$2[arr[offset + 11]] + byteToHex$2[arr[offset + 12]] + byteToHex$2[arr[offset + 13]] + byteToHex$2[arr[offset + 14]] + byteToHex$2[arr[offset + 15]]).toLowerCase(); // Consistency check for valid UUID.  If this throws, it's likely due to one
+  // of the following:
+  // - One or more input array values don't map to a hex octet (leading to
+  // "undefined" in the uuid)
+  // - Invalid input values for the RFC `version` or `variant` fields
+
+  if (!validate$2(uuid)) {
+    throw TypeError('Stringified UUID is invalid');
+  }
+
+  return uuid;
+}
+
+//
+// Inspired by https://github.com/LiosK/UUID.js
+// and http://docs.python.org/library/uuid.html
+
+var _nodeId$1;
+
+var _clockseq$1; // Previous uuid creation time
+
+
+var _lastMSecs$1 = 0;
+var _lastNSecs$1 = 0; // See https://github.com/uuidjs/uuid for API details
+
+function v1$1(options, buf, offset) {
+  var i = buf && offset || 0;
+  var b = buf || new Array(16);
+  options = options || {};
+  var node = options.node || _nodeId$1;
+  var clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq$1; // node and clockseq need to be initialized to random values if they're not
+  // specified.  We do this lazily to minimize issues related to insufficient
+  // system entropy.  See #189
+
+  if (node == null || clockseq == null) {
+    var seedBytes = options.random || (options.rng || rng$2)();
+
+    if (node == null) {
+      // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
+      node = _nodeId$1 = [seedBytes[0] | 0x01, seedBytes[1], seedBytes[2], seedBytes[3], seedBytes[4], seedBytes[5]];
+    }
+
+    if (clockseq == null) {
+      // Per 4.2.2, randomize (14 bit) clockseq
+      clockseq = _clockseq$1 = (seedBytes[6] << 8 | seedBytes[7]) & 0x3fff;
+    }
+  } // UUID timestamps are 100 nano-second units since the Gregorian epoch,
+  // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
+  // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
+  // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
+
+
+  var msecs = options.msecs !== undefined ? options.msecs : Date.now(); // Per 4.2.1.2, use count of uuid's generated during the current clock
+  // cycle to simulate higher resolution clock
+
+  var nsecs = options.nsecs !== undefined ? options.nsecs : _lastNSecs$1 + 1; // Time since last uuid creation (in msecs)
+
+  var dt = msecs - _lastMSecs$1 + (nsecs - _lastNSecs$1) / 10000; // Per 4.2.1.2, Bump clockseq on clock regression
+
+  if (dt < 0 && options.clockseq === undefined) {
+    clockseq = clockseq + 1 & 0x3fff;
+  } // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
+  // time interval
+
+
+  if ((dt < 0 || msecs > _lastMSecs$1) && options.nsecs === undefined) {
+    nsecs = 0;
+  } // Per 4.2.1.2 Throw error if too many uuids are requested
+
+
+  if (nsecs >= 10000) {
+    throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
+  }
+
+  _lastMSecs$1 = msecs;
+  _lastNSecs$1 = nsecs;
+  _clockseq$1 = clockseq; // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
+
+  msecs += 12219292800000; // `time_low`
+
+  var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
+  b[i++] = tl >>> 24 & 0xff;
+  b[i++] = tl >>> 16 & 0xff;
+  b[i++] = tl >>> 8 & 0xff;
+  b[i++] = tl & 0xff; // `time_mid`
+
+  var tmh = msecs / 0x100000000 * 10000 & 0xfffffff;
+  b[i++] = tmh >>> 8 & 0xff;
+  b[i++] = tmh & 0xff; // `time_high_and_version`
+
+  b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
+
+  b[i++] = tmh >>> 16 & 0xff; // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
+
+  b[i++] = clockseq >>> 8 | 0x80; // `clock_seq_low`
+
+  b[i++] = clockseq & 0xff; // `node`
+
+  for (var n = 0; n < 6; ++n) {
+    b[i + n] = node[n];
+  }
+
+  return buf || stringify$4(b);
+}
+
+function parse$5(uuid) {
+  if (!validate$2(uuid)) {
+    throw TypeError('Invalid UUID');
+  }
+
+  var v;
+  var arr = new Uint8Array(16); // Parse ########-....-....-....-............
+
+  arr[0] = (v = parseInt(uuid.slice(0, 8), 16)) >>> 24;
+  arr[1] = v >>> 16 & 0xff;
+  arr[2] = v >>> 8 & 0xff;
+  arr[3] = v & 0xff; // Parse ........-####-....-....-............
+
+  arr[4] = (v = parseInt(uuid.slice(9, 13), 16)) >>> 8;
+  arr[5] = v & 0xff; // Parse ........-....-####-....-............
+
+  arr[6] = (v = parseInt(uuid.slice(14, 18), 16)) >>> 8;
+  arr[7] = v & 0xff; // Parse ........-....-....-####-............
+
+  arr[8] = (v = parseInt(uuid.slice(19, 23), 16)) >>> 8;
+  arr[9] = v & 0xff; // Parse ........-....-....-....-############
+  // (Use "/" to avoid 32-bit truncation when bit-shifting high-order bytes)
+
+  arr[10] = (v = parseInt(uuid.slice(24, 36), 16)) / 0x10000000000 & 0xff;
+  arr[11] = v / 0x100000000 & 0xff;
+  arr[12] = v >>> 24 & 0xff;
+  arr[13] = v >>> 16 & 0xff;
+  arr[14] = v >>> 8 & 0xff;
+  arr[15] = v & 0xff;
+  return arr;
+}
+
+function stringToBytes$1(str) {
+  str = unescape(encodeURIComponent(str)); // UTF8 escape
+
+  var bytes = [];
+
+  for (var i = 0; i < str.length; ++i) {
+    bytes.push(str.charCodeAt(i));
+  }
+
+  return bytes;
+}
+
+var DNS$1 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+var URL$2 = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
+function v35$1 (name, version, hashfunc) {
+  function generateUUID(value, namespace, buf, offset) {
+    if (typeof value === 'string') {
+      value = stringToBytes$1(value);
+    }
+
+    if (typeof namespace === 'string') {
+      namespace = parse$5(namespace);
+    }
+
+    if (namespace.length !== 16) {
+      throw TypeError('Namespace must be array-like (16 iterable integer values, 0-255)');
+    } // Compute hash of namespace and value, Per 4.3
+    // Future: Use spread syntax when supported on all platforms, e.g. `bytes =
+    // hashfunc([...namespace, ... value])`
+
+
+    var bytes = new Uint8Array(16 + value.length);
+    bytes.set(namespace);
+    bytes.set(value, namespace.length);
+    bytes = hashfunc(bytes);
+    bytes[6] = bytes[6] & 0x0f | version;
+    bytes[8] = bytes[8] & 0x3f | 0x80;
+
+    if (buf) {
+      offset = offset || 0;
+
+      for (var i = 0; i < 16; ++i) {
+        buf[offset + i] = bytes[i];
+      }
+
+      return buf;
+    }
+
+    return stringify$4(bytes);
+  } // Function#name is not settable on some platforms (#270)
+
+
+  try {
+    generateUUID.name = name; // eslint-disable-next-line no-empty
+  } catch (err) {} // For CommonJS default export support
+
+
+  generateUUID.DNS = DNS$1;
+  generateUUID.URL = URL$2;
+  return generateUUID;
+}
+
+/*
+ * Browser-compatible JavaScript MD5
+ *
+ * Modification of JavaScript MD5
+ * https://github.com/blueimp/JavaScript-MD5
+ *
+ * Copyright 2011, Sebastian Tschan
+ * https://blueimp.net
+ *
+ * Licensed under the MIT license:
+ * https://opensource.org/licenses/MIT
+ *
+ * Based on
+ * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
+ * Digest Algorithm, as defined in RFC 1321.
+ * Version 2.2 Copyright (C) Paul Johnston 1999 - 2009
+ * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+ * Distributed under the BSD License
+ * See http://pajhome.org.uk/crypt/md5 for more info.
+ */
+function md5$1(bytes) {
+  if (typeof bytes === 'string') {
+    var msg = unescape(encodeURIComponent(bytes)); // UTF8 escape
+
+    bytes = new Uint8Array(msg.length);
+
+    for (var i = 0; i < msg.length; ++i) {
+      bytes[i] = msg.charCodeAt(i);
+    }
+  }
+
+  return md5ToHexEncodedArray$1(wordsToMd5$1(bytesToWords$1(bytes), bytes.length * 8));
+}
+/*
+ * Convert an array of little-endian words to an array of bytes
+ */
+
+
+function md5ToHexEncodedArray$1(input) {
+  var output = [];
+  var length32 = input.length * 32;
+  var hexTab = '0123456789abcdef';
+
+  for (var i = 0; i < length32; i += 8) {
+    var x = input[i >> 5] >>> i % 32 & 0xff;
+    var hex = parseInt(hexTab.charAt(x >>> 4 & 0x0f) + hexTab.charAt(x & 0x0f), 16);
+    output.push(hex);
+  }
+
+  return output;
+}
+/**
+ * Calculate output length with padding and bit length
+ */
+
+
+function getOutputLength$1(inputLength8) {
+  return (inputLength8 + 64 >>> 9 << 4) + 14 + 1;
+}
+/*
+ * Calculate the MD5 of an array of little-endian words, and a bit length.
+ */
+
+
+function wordsToMd5$1(x, len) {
+  /* append padding */
+  x[len >> 5] |= 0x80 << len % 32;
+  x[getOutputLength$1(len) - 1] = len;
+  var a = 1732584193;
+  var b = -271733879;
+  var c = -1732584194;
+  var d = 271733878;
+
+  for (var i = 0; i < x.length; i += 16) {
+    var olda = a;
+    var oldb = b;
+    var oldc = c;
+    var oldd = d;
+    a = md5ff$1(a, b, c, d, x[i], 7, -680876936);
+    d = md5ff$1(d, a, b, c, x[i + 1], 12, -389564586);
+    c = md5ff$1(c, d, a, b, x[i + 2], 17, 606105819);
+    b = md5ff$1(b, c, d, a, x[i + 3], 22, -1044525330);
+    a = md5ff$1(a, b, c, d, x[i + 4], 7, -176418897);
+    d = md5ff$1(d, a, b, c, x[i + 5], 12, 1200080426);
+    c = md5ff$1(c, d, a, b, x[i + 6], 17, -1473231341);
+    b = md5ff$1(b, c, d, a, x[i + 7], 22, -45705983);
+    a = md5ff$1(a, b, c, d, x[i + 8], 7, 1770035416);
+    d = md5ff$1(d, a, b, c, x[i + 9], 12, -1958414417);
+    c = md5ff$1(c, d, a, b, x[i + 10], 17, -42063);
+    b = md5ff$1(b, c, d, a, x[i + 11], 22, -1990404162);
+    a = md5ff$1(a, b, c, d, x[i + 12], 7, 1804603682);
+    d = md5ff$1(d, a, b, c, x[i + 13], 12, -40341101);
+    c = md5ff$1(c, d, a, b, x[i + 14], 17, -1502002290);
+    b = md5ff$1(b, c, d, a, x[i + 15], 22, 1236535329);
+    a = md5gg$1(a, b, c, d, x[i + 1], 5, -165796510);
+    d = md5gg$1(d, a, b, c, x[i + 6], 9, -1069501632);
+    c = md5gg$1(c, d, a, b, x[i + 11], 14, 643717713);
+    b = md5gg$1(b, c, d, a, x[i], 20, -373897302);
+    a = md5gg$1(a, b, c, d, x[i + 5], 5, -701558691);
+    d = md5gg$1(d, a, b, c, x[i + 10], 9, 38016083);
+    c = md5gg$1(c, d, a, b, x[i + 15], 14, -660478335);
+    b = md5gg$1(b, c, d, a, x[i + 4], 20, -405537848);
+    a = md5gg$1(a, b, c, d, x[i + 9], 5, 568446438);
+    d = md5gg$1(d, a, b, c, x[i + 14], 9, -1019803690);
+    c = md5gg$1(c, d, a, b, x[i + 3], 14, -187363961);
+    b = md5gg$1(b, c, d, a, x[i + 8], 20, 1163531501);
+    a = md5gg$1(a, b, c, d, x[i + 13], 5, -1444681467);
+    d = md5gg$1(d, a, b, c, x[i + 2], 9, -51403784);
+    c = md5gg$1(c, d, a, b, x[i + 7], 14, 1735328473);
+    b = md5gg$1(b, c, d, a, x[i + 12], 20, -1926607734);
+    a = md5hh$1(a, b, c, d, x[i + 5], 4, -378558);
+    d = md5hh$1(d, a, b, c, x[i + 8], 11, -2022574463);
+    c = md5hh$1(c, d, a, b, x[i + 11], 16, 1839030562);
+    b = md5hh$1(b, c, d, a, x[i + 14], 23, -35309556);
+    a = md5hh$1(a, b, c, d, x[i + 1], 4, -1530992060);
+    d = md5hh$1(d, a, b, c, x[i + 4], 11, 1272893353);
+    c = md5hh$1(c, d, a, b, x[i + 7], 16, -155497632);
+    b = md5hh$1(b, c, d, a, x[i + 10], 23, -1094730640);
+    a = md5hh$1(a, b, c, d, x[i + 13], 4, 681279174);
+    d = md5hh$1(d, a, b, c, x[i], 11, -358537222);
+    c = md5hh$1(c, d, a, b, x[i + 3], 16, -722521979);
+    b = md5hh$1(b, c, d, a, x[i + 6], 23, 76029189);
+    a = md5hh$1(a, b, c, d, x[i + 9], 4, -640364487);
+    d = md5hh$1(d, a, b, c, x[i + 12], 11, -421815835);
+    c = md5hh$1(c, d, a, b, x[i + 15], 16, 530742520);
+    b = md5hh$1(b, c, d, a, x[i + 2], 23, -995338651);
+    a = md5ii$1(a, b, c, d, x[i], 6, -198630844);
+    d = md5ii$1(d, a, b, c, x[i + 7], 10, 1126891415);
+    c = md5ii$1(c, d, a, b, x[i + 14], 15, -1416354905);
+    b = md5ii$1(b, c, d, a, x[i + 5], 21, -57434055);
+    a = md5ii$1(a, b, c, d, x[i + 12], 6, 1700485571);
+    d = md5ii$1(d, a, b, c, x[i + 3], 10, -1894986606);
+    c = md5ii$1(c, d, a, b, x[i + 10], 15, -1051523);
+    b = md5ii$1(b, c, d, a, x[i + 1], 21, -2054922799);
+    a = md5ii$1(a, b, c, d, x[i + 8], 6, 1873313359);
+    d = md5ii$1(d, a, b, c, x[i + 15], 10, -30611744);
+    c = md5ii$1(c, d, a, b, x[i + 6], 15, -1560198380);
+    b = md5ii$1(b, c, d, a, x[i + 13], 21, 1309151649);
+    a = md5ii$1(a, b, c, d, x[i + 4], 6, -145523070);
+    d = md5ii$1(d, a, b, c, x[i + 11], 10, -1120210379);
+    c = md5ii$1(c, d, a, b, x[i + 2], 15, 718787259);
+    b = md5ii$1(b, c, d, a, x[i + 9], 21, -343485551);
+    a = safeAdd$1(a, olda);
+    b = safeAdd$1(b, oldb);
+    c = safeAdd$1(c, oldc);
+    d = safeAdd$1(d, oldd);
+  }
+
+  return [a, b, c, d];
+}
+/*
+ * Convert an array bytes to an array of little-endian words
+ * Characters >255 have their high-byte silently ignored.
+ */
+
+
+function bytesToWords$1(input) {
+  if (input.length === 0) {
+    return [];
+  }
+
+  var length8 = input.length * 8;
+  var output = new Uint32Array(getOutputLength$1(length8));
+
+  for (var i = 0; i < length8; i += 8) {
+    output[i >> 5] |= (input[i / 8] & 0xff) << i % 32;
+  }
+
+  return output;
+}
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally
+ * to work around bugs in some JS interpreters.
+ */
+
+
+function safeAdd$1(x, y) {
+  var lsw = (x & 0xffff) + (y & 0xffff);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return msw << 16 | lsw & 0xffff;
+}
+/*
+ * Bitwise rotate a 32-bit number to the left.
+ */
+
+
+function bitRotateLeft$1(num, cnt) {
+  return num << cnt | num >>> 32 - cnt;
+}
+/*
+ * These functions implement the four basic operations the algorithm uses.
+ */
+
+
+function md5cmn$1(q, a, b, x, s, t) {
+  return safeAdd$1(bitRotateLeft$1(safeAdd$1(safeAdd$1(a, q), safeAdd$1(x, t)), s), b);
+}
+
+function md5ff$1(a, b, c, d, x, s, t) {
+  return md5cmn$1(b & c | ~b & d, a, b, x, s, t);
+}
+
+function md5gg$1(a, b, c, d, x, s, t) {
+  return md5cmn$1(b & d | c & ~d, a, b, x, s, t);
+}
+
+function md5hh$1(a, b, c, d, x, s, t) {
+  return md5cmn$1(b ^ c ^ d, a, b, x, s, t);
+}
+
+function md5ii$1(a, b, c, d, x, s, t) {
+  return md5cmn$1(c ^ (b | ~d), a, b, x, s, t);
+}
+
+var v3$2 = v35$1('v3', 0x30, md5$1);
+var v3$3 = v3$2;
+
+function v4$2(options, buf, offset) {
+  options = options || {};
+  var rnds = options.random || (options.rng || rng$2)(); // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+
+  rnds[6] = rnds[6] & 0x0f | 0x40;
+  rnds[8] = rnds[8] & 0x3f | 0x80; // Copy bytes to buffer, if provided
+
+  if (buf) {
+    offset = offset || 0;
+
+    for (var i = 0; i < 16; ++i) {
+      buf[offset + i] = rnds[i];
+    }
+
+    return buf;
+  }
+
+  return stringify$4(rnds);
+}
+
+// Adapted from Chris Veness' SHA1 code at
+// http://www.movable-type.co.uk/scripts/sha1.html
+function f$2(s, x, y, z) {
+  switch (s) {
+    case 0:
+      return x & y ^ ~x & z;
+
+    case 1:
+      return x ^ y ^ z;
+
+    case 2:
+      return x & y ^ x & z ^ y & z;
+
+    case 3:
+      return x ^ y ^ z;
+  }
+}
+
+function ROTL$1(x, n) {
+  return x << n | x >>> 32 - n;
+}
+
+function sha1$1(bytes) {
+  var K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
+  var H = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
+
+  if (typeof bytes === 'string') {
+    var msg = unescape(encodeURIComponent(bytes)); // UTF8 escape
+
+    bytes = [];
+
+    for (var i = 0; i < msg.length; ++i) {
+      bytes.push(msg.charCodeAt(i));
+    }
+  } else if (!Array.isArray(bytes)) {
+    // Convert Array-like to Array
+    bytes = Array.prototype.slice.call(bytes);
+  }
+
+  bytes.push(0x80);
+  var l = bytes.length / 4 + 2;
+  var N = Math.ceil(l / 16);
+  var M = new Array(N);
+
+  for (var _i = 0; _i < N; ++_i) {
+    var arr = new Uint32Array(16);
+
+    for (var j = 0; j < 16; ++j) {
+      arr[j] = bytes[_i * 64 + j * 4] << 24 | bytes[_i * 64 + j * 4 + 1] << 16 | bytes[_i * 64 + j * 4 + 2] << 8 | bytes[_i * 64 + j * 4 + 3];
+    }
+
+    M[_i] = arr;
+  }
+
+  M[N - 1][14] = (bytes.length - 1) * 8 / Math.pow(2, 32);
+  M[N - 1][14] = Math.floor(M[N - 1][14]);
+  M[N - 1][15] = (bytes.length - 1) * 8 & 0xffffffff;
+
+  for (var _i2 = 0; _i2 < N; ++_i2) {
+    var W = new Uint32Array(80);
+
+    for (var t = 0; t < 16; ++t) {
+      W[t] = M[_i2][t];
+    }
+
+    for (var _t = 16; _t < 80; ++_t) {
+      W[_t] = ROTL$1(W[_t - 3] ^ W[_t - 8] ^ W[_t - 14] ^ W[_t - 16], 1);
+    }
+
+    var a = H[0];
+    var b = H[1];
+    var c = H[2];
+    var d = H[3];
+    var e = H[4];
+
+    for (var _t2 = 0; _t2 < 80; ++_t2) {
+      var s = Math.floor(_t2 / 20);
+      var T = ROTL$1(a, 5) + f$2(s, b, c, d) + e + K[s] + W[_t2] >>> 0;
+      e = d;
+      d = c;
+      c = ROTL$1(b, 30) >>> 0;
+      b = a;
+      a = T;
+    }
+
+    H[0] = H[0] + a >>> 0;
+    H[1] = H[1] + b >>> 0;
+    H[2] = H[2] + c >>> 0;
+    H[3] = H[3] + d >>> 0;
+    H[4] = H[4] + e >>> 0;
+  }
+
+  return [H[0] >> 24 & 0xff, H[0] >> 16 & 0xff, H[0] >> 8 & 0xff, H[0] & 0xff, H[1] >> 24 & 0xff, H[1] >> 16 & 0xff, H[1] >> 8 & 0xff, H[1] & 0xff, H[2] >> 24 & 0xff, H[2] >> 16 & 0xff, H[2] >> 8 & 0xff, H[2] & 0xff, H[3] >> 24 & 0xff, H[3] >> 16 & 0xff, H[3] >> 8 & 0xff, H[3] & 0xff, H[4] >> 24 & 0xff, H[4] >> 16 & 0xff, H[4] >> 8 & 0xff, H[4] & 0xff];
+}
+
+var v5$2 = v35$1('v5', 0x50, sha1$1);
+var v5$3 = v5$2;
+
+var nil$1 = '00000000-0000-0000-0000-000000000000';
+
+function version$8(uuid) {
+  if (!validate$2(uuid)) {
+    throw TypeError('Invalid UUID');
+  }
+
+  return parseInt(uuid.substr(14, 1), 16);
+}
+
+var esmBrowser$1 = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	NIL: nil$1,
+	parse: parse$5,
+	stringify: stringify$4,
+	v1: v1$1,
+	v3: v3$3,
+	v4: v4$2,
+	v5: v5$3,
+	validate: validate$2,
+	version: version$8
+});
+
+var require$$1$1 = /*@__PURE__*/getAugmentedNamespace(esmBrowser$1);
+
+var __importDefault$4 = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(loggingMiddleware, "__esModule", { value: true });
+loggingMiddleware.getLoggingMiddleware = void 0;
+const pino_http_1 = __importDefault$4(loggerExports$1);
+const uuid_1$1 = require$$1$1;
+function getLoggingMiddleware(logger, options) {
+    return (0, pino_http_1.default)({
+        ...options,
+        logger: logger.child({ name: "http" }),
+        customSuccessMessage(res) {
+            const responseTime = Date.now() - res[pino_http_1.default.startTime];
+            // @ts-ignore
+            return `${res.req.method} ${res.req.url} ${res.statusCode} - ${responseTime}ms`;
+        },
+        customErrorMessage(err, res) {
+            const responseTime = Date.now() - res[pino_http_1.default.startTime];
+            // @ts-ignore
+            return `${res.req.method} ${res.req.url} ${res.statusCode} - ${responseTime}ms`;
+        },
+        genReqId: (req) => req.headers["x-request-id"] ||
+            req.headers["x-github-delivery"] ||
+            (0, uuid_1$1.v4)(),
+    });
+}
+loggingMiddleware.getLoggingMiddleware = getLoggingMiddleware;
+
+var webhookProxy = {};
+
+var validatorExports = {};
+var validator$1 = {
+  get exports(){ return validatorExports; },
+  set exports(v){ validatorExports = v; },
+};
+
+var toDateExports = {};
+var toDate = {
+  get exports(){ return toDateExports; },
+  set exports(v){ toDateExports = v; },
+};
+
+var assertStringExports = {};
+var assertString = {
+  get exports(){ return assertStringExports; },
+  set exports(v){ assertStringExports = v; },
+};
+
+var hasRequiredAssertString;
+
+function requireAssertString () {
+	if (hasRequiredAssertString) return assertStringExports;
+	hasRequiredAssertString = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = assertString;
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		function assertString(input) {
+		  var isString = typeof input === 'string' || input instanceof String;
+
+		  if (!isString) {
+		    var invalidType = _typeof(input);
+
+		    if (input === null) invalidType = 'null';else if (invalidType === 'object') invalidType = input.constructor.name;
+		    throw new TypeError("Expected a string but received a ".concat(invalidType));
+		  }
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (assertString, assertStringExports));
+	return assertStringExports;
+}
+
+var hasRequiredToDate;
+
+function requireToDate () {
+	if (hasRequiredToDate) return toDateExports;
+	hasRequiredToDate = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = toDate;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function toDate(date) {
+		  (0, _assertString.default)(date);
+		  date = Date.parse(date);
+		  return !isNaN(date) ? new Date(date) : null;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (toDate, toDateExports));
+	return toDateExports;
+}
+
+var toFloatExports = {};
+var toFloat = {
+  get exports(){ return toFloatExports; },
+  set exports(v){ toFloatExports = v; },
+};
+
+var isFloat$1 = {};
+
+var alpha = {};
+
+var hasRequiredAlpha;
+
+function requireAlpha () {
+	if (hasRequiredAlpha) return alpha;
+	hasRequiredAlpha = 1;
+
+	Object.defineProperty(alpha, "__esModule", {
+	  value: true
+	});
+	alpha.commaDecimal = alpha.dotDecimal = alpha.bengaliLocales = alpha.farsiLocales = alpha.arabicLocales = alpha.englishLocales = alpha.decimal = alpha.alphanumeric = alpha.alpha = void 0;
+	var alpha$1 = {
+	  'en-US': /^[A-Z]+$/i,
+	  'az-AZ': /^[A-VXYZÇƏĞİıÖŞÜ]+$/i,
+	  'bg-BG': /^[А-Я]+$/i,
+	  'cs-CZ': /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+$/i,
+	  'da-DK': /^[A-ZÆØÅ]+$/i,
+	  'de-DE': /^[A-ZÄÖÜß]+$/i,
+	  'el-GR': /^[Α-ώ]+$/i,
+	  'es-ES': /^[A-ZÁÉÍÑÓÚÜ]+$/i,
+	  'fa-IR': /^[ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی]+$/i,
+	  'fi-FI': /^[A-ZÅÄÖ]+$/i,
+	  'fr-FR': /^[A-ZÀÂÆÇÉÈÊËÏÎÔŒÙÛÜŸ]+$/i,
+	  'it-IT': /^[A-ZÀÉÈÌÎÓÒÙ]+$/i,
+	  'ja-JP': /^[ぁ-んァ-ヶｦ-ﾟ一-龠ー・。、]+$/i,
+	  'nb-NO': /^[A-ZÆØÅ]+$/i,
+	  'nl-NL': /^[A-ZÁÉËÏÓÖÜÚ]+$/i,
+	  'nn-NO': /^[A-ZÆØÅ]+$/i,
+	  'hu-HU': /^[A-ZÁÉÍÓÖŐÚÜŰ]+$/i,
+	  'pl-PL': /^[A-ZĄĆĘŚŁŃÓŻŹ]+$/i,
+	  'pt-PT': /^[A-ZÃÁÀÂÄÇÉÊËÍÏÕÓÔÖÚÜ]+$/i,
+	  'ru-RU': /^[А-ЯЁ]+$/i,
+	  'sl-SI': /^[A-ZČĆĐŠŽ]+$/i,
+	  'sk-SK': /^[A-ZÁČĎÉÍŇÓŠŤÚÝŽĹŔĽÄÔ]+$/i,
+	  'sr-RS@latin': /^[A-ZČĆŽŠĐ]+$/i,
+	  'sr-RS': /^[А-ЯЂЈЉЊЋЏ]+$/i,
+	  'sv-SE': /^[A-ZÅÄÖ]+$/i,
+	  'th-TH': /^[ก-๐\s]+$/i,
+	  'tr-TR': /^[A-ZÇĞİıÖŞÜ]+$/i,
+	  'uk-UA': /^[А-ЩЬЮЯЄIЇҐі]+$/i,
+	  'vi-VN': /^[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴĐÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ]+$/i,
+	  'ko-KR': /^[ㄱ-ㅎㅏ-ㅣ가-힣]*$/,
+	  'ku-IQ': /^[ئابپتجچحخدرڕزژسشعغفڤقکگلڵمنوۆھەیێيطؤثآإأكضصةظذ]+$/i,
+	  ar: /^[ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْٰ]+$/,
+	  he: /^[א-ת]+$/,
+	  fa: /^['آاءأؤئبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهةی']+$/i,
+	  bn: /^['ঀঁংঃঅআইঈউঊঋঌএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহ়ঽািীুূৃৄেৈোৌ্ৎৗড়ঢ়য়ৠৡৢৣৰৱ৲৳৴৵৶৷৸৹৺৻']+$/,
+	  'hi-IN': /^[\u0900-\u0961]+[\u0972-\u097F]*$/i,
+	  'si-LK': /^[\u0D80-\u0DFF]+$/
+	};
+	alpha.alpha = alpha$1;
+	var alphanumeric = {
+	  'en-US': /^[0-9A-Z]+$/i,
+	  'az-AZ': /^[0-9A-VXYZÇƏĞİıÖŞÜ]+$/i,
+	  'bg-BG': /^[0-9А-Я]+$/i,
+	  'cs-CZ': /^[0-9A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+$/i,
+	  'da-DK': /^[0-9A-ZÆØÅ]+$/i,
+	  'de-DE': /^[0-9A-ZÄÖÜß]+$/i,
+	  'el-GR': /^[0-9Α-ω]+$/i,
+	  'es-ES': /^[0-9A-ZÁÉÍÑÓÚÜ]+$/i,
+	  'fi-FI': /^[0-9A-ZÅÄÖ]+$/i,
+	  'fr-FR': /^[0-9A-ZÀÂÆÇÉÈÊËÏÎÔŒÙÛÜŸ]+$/i,
+	  'it-IT': /^[0-9A-ZÀÉÈÌÎÓÒÙ]+$/i,
+	  'ja-JP': /^[0-9０-９ぁ-んァ-ヶｦ-ﾟ一-龠ー・。、]+$/i,
+	  'hu-HU': /^[0-9A-ZÁÉÍÓÖŐÚÜŰ]+$/i,
+	  'nb-NO': /^[0-9A-ZÆØÅ]+$/i,
+	  'nl-NL': /^[0-9A-ZÁÉËÏÓÖÜÚ]+$/i,
+	  'nn-NO': /^[0-9A-ZÆØÅ]+$/i,
+	  'pl-PL': /^[0-9A-ZĄĆĘŚŁŃÓŻŹ]+$/i,
+	  'pt-PT': /^[0-9A-ZÃÁÀÂÄÇÉÊËÍÏÕÓÔÖÚÜ]+$/i,
+	  'ru-RU': /^[0-9А-ЯЁ]+$/i,
+	  'sl-SI': /^[0-9A-ZČĆĐŠŽ]+$/i,
+	  'sk-SK': /^[0-9A-ZÁČĎÉÍŇÓŠŤÚÝŽĹŔĽÄÔ]+$/i,
+	  'sr-RS@latin': /^[0-9A-ZČĆŽŠĐ]+$/i,
+	  'sr-RS': /^[0-9А-ЯЂЈЉЊЋЏ]+$/i,
+	  'sv-SE': /^[0-9A-ZÅÄÖ]+$/i,
+	  'th-TH': /^[ก-๙\s]+$/i,
+	  'tr-TR': /^[0-9A-ZÇĞİıÖŞÜ]+$/i,
+	  'uk-UA': /^[0-9А-ЩЬЮЯЄIЇҐі]+$/i,
+	  'ko-KR': /^[0-9ㄱ-ㅎㅏ-ㅣ가-힣]*$/,
+	  'ku-IQ': /^[٠١٢٣٤٥٦٧٨٩0-9ئابپتجچحخدرڕزژسشعغفڤقکگلڵمنوۆھەیێيطؤثآإأكضصةظذ]+$/i,
+	  'vi-VN': /^[0-9A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴĐÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ]+$/i,
+	  ar: /^[٠١٢٣٤٥٦٧٨٩0-9ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْٰ]+$/,
+	  he: /^[0-9א-ת]+$/,
+	  fa: /^['0-9آاءأؤئبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهةی۱۲۳۴۵۶۷۸۹۰']+$/i,
+	  bn: /^['ঀঁংঃঅআইঈউঊঋঌএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহ়ঽািীুূৃৄেৈোৌ্ৎৗড়ঢ়য়ৠৡৢৣ০১২৩৪৫৬৭৮৯ৰৱ৲৳৴৵৶৷৸৹৺৻']+$/,
+	  'hi-IN': /^[\u0900-\u0963]+[\u0966-\u097F]*$/i,
+	  'si-LK': /^[0-9\u0D80-\u0DFF]+$/
+	};
+	alpha.alphanumeric = alphanumeric;
+	var decimal = {
+	  'en-US': '.',
+	  ar: '٫'
+	};
+	alpha.decimal = decimal;
+	var englishLocales = ['AU', 'GB', 'HK', 'IN', 'NZ', 'ZA', 'ZM'];
+	alpha.englishLocales = englishLocales;
+
+	for (var locale, i = 0; i < englishLocales.length; i++) {
+	  locale = "en-".concat(englishLocales[i]);
+	  alpha$1[locale] = alpha$1['en-US'];
+	  alphanumeric[locale] = alphanumeric['en-US'];
+	  decimal[locale] = decimal['en-US'];
+	} // Source: http://www.localeplanet.com/java/
+
+
+	var arabicLocales = ['AE', 'BH', 'DZ', 'EG', 'IQ', 'JO', 'KW', 'LB', 'LY', 'MA', 'QM', 'QA', 'SA', 'SD', 'SY', 'TN', 'YE'];
+	alpha.arabicLocales = arabicLocales;
+
+	for (var _locale, _i = 0; _i < arabicLocales.length; _i++) {
+	  _locale = "ar-".concat(arabicLocales[_i]);
+	  alpha$1[_locale] = alpha$1.ar;
+	  alphanumeric[_locale] = alphanumeric.ar;
+	  decimal[_locale] = decimal.ar;
+	}
+
+	var farsiLocales = ['IR', 'AF'];
+	alpha.farsiLocales = farsiLocales;
+
+	for (var _locale2, _i2 = 0; _i2 < farsiLocales.length; _i2++) {
+	  _locale2 = "fa-".concat(farsiLocales[_i2]);
+	  alphanumeric[_locale2] = alphanumeric.fa;
+	  decimal[_locale2] = decimal.ar;
+	}
+
+	var bengaliLocales = ['BD', 'IN'];
+	alpha.bengaliLocales = bengaliLocales;
+
+	for (var _locale3, _i3 = 0; _i3 < bengaliLocales.length; _i3++) {
+	  _locale3 = "bn-".concat(bengaliLocales[_i3]);
+	  alpha$1[_locale3] = alpha$1.bn;
+	  alphanumeric[_locale3] = alphanumeric.bn;
+	  decimal[_locale3] = decimal['en-US'];
+	} // Source: https://en.wikipedia.org/wiki/Decimal_mark
+
+
+	var dotDecimal = ['ar-EG', 'ar-LB', 'ar-LY'];
+	alpha.dotDecimal = dotDecimal;
+	var commaDecimal = ['bg-BG', 'cs-CZ', 'da-DK', 'de-DE', 'el-GR', 'en-ZM', 'es-ES', 'fr-CA', 'fr-FR', 'id-ID', 'it-IT', 'ku-IQ', 'hi-IN', 'hu-HU', 'nb-NO', 'nn-NO', 'nl-NL', 'pl-PL', 'pt-PT', 'ru-RU', 'si-LK', 'sl-SI', 'sr-RS@latin', 'sr-RS', 'sv-SE', 'tr-TR', 'uk-UA', 'vi-VN'];
+	alpha.commaDecimal = commaDecimal;
+
+	for (var _i4 = 0; _i4 < dotDecimal.length; _i4++) {
+	  decimal[dotDecimal[_i4]] = decimal['en-US'];
+	}
+
+	for (var _i5 = 0; _i5 < commaDecimal.length; _i5++) {
+	  decimal[commaDecimal[_i5]] = ',';
+	}
+
+	alpha$1['fr-CA'] = alpha$1['fr-FR'];
+	alphanumeric['fr-CA'] = alphanumeric['fr-FR'];
+	alpha$1['pt-BR'] = alpha$1['pt-PT'];
+	alphanumeric['pt-BR'] = alphanumeric['pt-PT'];
+	decimal['pt-BR'] = decimal['pt-PT']; // see #862
+
+	alpha$1['pl-Pl'] = alpha$1['pl-PL'];
+	alphanumeric['pl-Pl'] = alphanumeric['pl-PL'];
+	decimal['pl-Pl'] = decimal['pl-PL']; // see #1455
+
+	alpha$1['fa-AF'] = alpha$1.fa;
+	return alpha;
+}
+
+var hasRequiredIsFloat;
+
+function requireIsFloat () {
+	if (hasRequiredIsFloat) return isFloat$1;
+	hasRequiredIsFloat = 1;
+
+	Object.defineProperty(isFloat$1, "__esModule", {
+	  value: true
+	});
+	isFloat$1.default = isFloat;
+	isFloat$1.locales = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	var _alpha = requireAlpha();
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function isFloat(str, options) {
+	  (0, _assertString.default)(str);
+	  options = options || {};
+	  var float = new RegExp("^(?:[-+])?(?:[0-9]+)?(?:\\".concat(options.locale ? _alpha.decimal[options.locale] : '.', "[0-9]*)?(?:[eE][\\+\\-]?(?:[0-9]+))?$"));
+
+	  if (str === '' || str === '.' || str === ',' || str === '-' || str === '+') {
+	    return false;
+	  }
+
+	  var value = parseFloat(str.replace(',', '.'));
+	  return float.test(str) && (!options.hasOwnProperty('min') || value >= options.min) && (!options.hasOwnProperty('max') || value <= options.max) && (!options.hasOwnProperty('lt') || value < options.lt) && (!options.hasOwnProperty('gt') || value > options.gt);
+	}
+
+	var locales = Object.keys(_alpha.decimal);
+	isFloat$1.locales = locales;
+	return isFloat$1;
+}
+
+var hasRequiredToFloat;
+
+function requireToFloat () {
+	if (hasRequiredToFloat) return toFloatExports;
+	hasRequiredToFloat = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = toFloat;
+
+		var _isFloat = _interopRequireDefault(requireIsFloat());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function toFloat(str) {
+		  if (!(0, _isFloat.default)(str)) return NaN;
+		  return parseFloat(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (toFloat, toFloatExports));
+	return toFloatExports;
+}
+
+var toIntExports = {};
+var toInt = {
+  get exports(){ return toIntExports; },
+  set exports(v){ toIntExports = v; },
+};
+
+var hasRequiredToInt;
+
+function requireToInt () {
