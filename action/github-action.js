@@ -188543,3 +188543,2171 @@ function requireIsDecimal () {
 		var _assertString = _interopRequireDefault(requireAssertString());
 
 		var _includes = _interopRequireDefault(requireIncludes());
+
+		var _alpha = requireAlpha();
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function decimalRegExp(options) {
+		  var regExp = new RegExp("^[-+]?([0-9]+)?(\\".concat(_alpha.decimal[options.locale], "[0-9]{").concat(options.decimal_digits, "})").concat(options.force_decimal ? '' : '?', "$"));
+		  return regExp;
+		}
+
+		var default_decimal_options = {
+		  force_decimal: false,
+		  decimal_digits: '1,',
+		  locale: 'en-US'
+		};
+		var blacklist = ['', '-', '+'];
+
+		function isDecimal(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, default_decimal_options);
+
+		  if (options.locale in _alpha.decimal) {
+		    return !(0, _includes.default)(blacklist, str.replace(/ /g, '')) && decimalRegExp(options).test(str);
+		  }
+
+		  throw new Error("Invalid locale '".concat(options.locale, "'"));
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isDecimal, isDecimalExports));
+	return isDecimalExports;
+}
+
+var isHexadecimalExports = {};
+var isHexadecimal = {
+  get exports(){ return isHexadecimalExports; },
+  set exports(v){ isHexadecimalExports = v; },
+};
+
+var hasRequiredIsHexadecimal;
+
+function requireIsHexadecimal () {
+	if (hasRequiredIsHexadecimal) return isHexadecimalExports;
+	hasRequiredIsHexadecimal = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isHexadecimal;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var hexadecimal = /^(0x|0h)?[0-9A-F]+$/i;
+
+		function isHexadecimal(str) {
+		  (0, _assertString.default)(str);
+		  return hexadecimal.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isHexadecimal, isHexadecimalExports));
+	return isHexadecimalExports;
+}
+
+var isOctalExports = {};
+var isOctal = {
+  get exports(){ return isOctalExports; },
+  set exports(v){ isOctalExports = v; },
+};
+
+var hasRequiredIsOctal;
+
+function requireIsOctal () {
+	if (hasRequiredIsOctal) return isOctalExports;
+	hasRequiredIsOctal = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isOctal;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var octal = /^(0o)?[0-7]+$/i;
+
+		function isOctal(str) {
+		  (0, _assertString.default)(str);
+		  return octal.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isOctal, isOctalExports));
+	return isOctalExports;
+}
+
+var isDivisibleByExports = {};
+var isDivisibleBy = {
+  get exports(){ return isDivisibleByExports; },
+  set exports(v){ isDivisibleByExports = v; },
+};
+
+var hasRequiredIsDivisibleBy;
+
+function requireIsDivisibleBy () {
+	if (hasRequiredIsDivisibleBy) return isDivisibleByExports;
+	hasRequiredIsDivisibleBy = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isDivisibleBy;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _toFloat = _interopRequireDefault(requireToFloat());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isDivisibleBy(str, num) {
+		  (0, _assertString.default)(str);
+		  return (0, _toFloat.default)(str) % parseInt(num, 10) === 0;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isDivisibleBy, isDivisibleByExports));
+	return isDivisibleByExports;
+}
+
+var isHexColorExports = {};
+var isHexColor = {
+  get exports(){ return isHexColorExports; },
+  set exports(v){ isHexColorExports = v; },
+};
+
+var hasRequiredIsHexColor;
+
+function requireIsHexColor () {
+	if (hasRequiredIsHexColor) return isHexColorExports;
+	hasRequiredIsHexColor = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isHexColor;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var hexcolor = /^#?([0-9A-F]{3}|[0-9A-F]{4}|[0-9A-F]{6}|[0-9A-F]{8})$/i;
+
+		function isHexColor(str) {
+		  (0, _assertString.default)(str);
+		  return hexcolor.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isHexColor, isHexColorExports));
+	return isHexColorExports;
+}
+
+var isRgbColorExports = {};
+var isRgbColor = {
+  get exports(){ return isRgbColorExports; },
+  set exports(v){ isRgbColorExports = v; },
+};
+
+var hasRequiredIsRgbColor;
+
+function requireIsRgbColor () {
+	if (hasRequiredIsRgbColor) return isRgbColorExports;
+	hasRequiredIsRgbColor = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isRgbColor;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var rgbColor = /^rgb\((([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),){2}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\)$/;
+		var rgbaColor = /^rgba\((([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),){3}(0?\.\d|1(\.0)?|0(\.0)?)\)$/;
+		var rgbColorPercent = /^rgb\((([0-9]%|[1-9][0-9]%|100%),){2}([0-9]%|[1-9][0-9]%|100%)\)$/;
+		var rgbaColorPercent = /^rgba\((([0-9]%|[1-9][0-9]%|100%),){3}(0?\.\d|1(\.0)?|0(\.0)?)\)$/;
+
+		function isRgbColor(str) {
+		  var includePercentValues = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
+		  (0, _assertString.default)(str);
+
+		  if (!includePercentValues) {
+		    return rgbColor.test(str) || rgbaColor.test(str);
+		  }
+
+		  return rgbColor.test(str) || rgbaColor.test(str) || rgbColorPercent.test(str) || rgbaColorPercent.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isRgbColor, isRgbColorExports));
+	return isRgbColorExports;
+}
+
+var isHSLExports = {};
+var isHSL = {
+  get exports(){ return isHSLExports; },
+  set exports(v){ isHSLExports = v; },
+};
+
+var hasRequiredIsHSL;
+
+function requireIsHSL () {
+	if (hasRequiredIsHSL) return isHSLExports;
+	hasRequiredIsHSL = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isHSL;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var hslComma = /^hsla?\(((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?))(deg|grad|rad|turn)?(,(\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%){2}(,((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%?))?\)$/i;
+		var hslSpace = /^hsla?\(((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?))(deg|grad|rad|turn)?(\s(\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%){2}\s?(\/\s((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%?)\s?)?\)$/i;
+
+		function isHSL(str) {
+		  (0, _assertString.default)(str); // Strip duplicate spaces before calling the validation regex (See  #1598 for more info)
+
+		  var strippedStr = str.replace(/\s+/g, ' ').replace(/\s?(hsla?\(|\)|,)\s?/ig, '$1');
+
+		  if (strippedStr.indexOf(',') !== -1) {
+		    return hslComma.test(strippedStr);
+		  }
+
+		  return hslSpace.test(strippedStr);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isHSL, isHSLExports));
+	return isHSLExports;
+}
+
+var isISRCExports = {};
+var isISRC = {
+  get exports(){ return isISRCExports; },
+  set exports(v){ isISRCExports = v; },
+};
+
+var hasRequiredIsISRC;
+
+function requireIsISRC () {
+	if (hasRequiredIsISRC) return isISRCExports;
+	hasRequiredIsISRC = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISRC;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		// see http://isrc.ifpi.org/en/isrc-standard/code-syntax
+		var isrc = /^[A-Z]{2}[0-9A-Z]{3}\d{2}\d{5}$/;
+
+		function isISRC(str) {
+		  (0, _assertString.default)(str);
+		  return isrc.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISRC, isISRCExports));
+	return isISRCExports;
+}
+
+var isIBAN = {};
+
+var hasRequiredIsIBAN;
+
+function requireIsIBAN () {
+	if (hasRequiredIsIBAN) return isIBAN;
+	hasRequiredIsIBAN = 1;
+
+	Object.defineProperty(isIBAN, "__esModule", {
+	  value: true
+	});
+	isIBAN.default = isIBAN$1;
+	isIBAN.locales = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	/**
+	 * List of country codes with
+	 * corresponding IBAN regular expression
+	 * Reference: https://en.wikipedia.org/wiki/International_Bank_Account_Number
+	 */
+	var ibanRegexThroughCountryCode = {
+	  AD: /^(AD[0-9]{2})\d{8}[A-Z0-9]{12}$/,
+	  AE: /^(AE[0-9]{2})\d{3}\d{16}$/,
+	  AL: /^(AL[0-9]{2})\d{8}[A-Z0-9]{16}$/,
+	  AT: /^(AT[0-9]{2})\d{16}$/,
+	  AZ: /^(AZ[0-9]{2})[A-Z0-9]{4}\d{20}$/,
+	  BA: /^(BA[0-9]{2})\d{16}$/,
+	  BE: /^(BE[0-9]{2})\d{12}$/,
+	  BG: /^(BG[0-9]{2})[A-Z]{4}\d{6}[A-Z0-9]{8}$/,
+	  BH: /^(BH[0-9]{2})[A-Z]{4}[A-Z0-9]{14}$/,
+	  BR: /^(BR[0-9]{2})\d{23}[A-Z]{1}[A-Z0-9]{1}$/,
+	  BY: /^(BY[0-9]{2})[A-Z0-9]{4}\d{20}$/,
+	  CH: /^(CH[0-9]{2})\d{5}[A-Z0-9]{12}$/,
+	  CR: /^(CR[0-9]{2})\d{18}$/,
+	  CY: /^(CY[0-9]{2})\d{8}[A-Z0-9]{16}$/,
+	  CZ: /^(CZ[0-9]{2})\d{20}$/,
+	  DE: /^(DE[0-9]{2})\d{18}$/,
+	  DK: /^(DK[0-9]{2})\d{14}$/,
+	  DO: /^(DO[0-9]{2})[A-Z]{4}\d{20}$/,
+	  EE: /^(EE[0-9]{2})\d{16}$/,
+	  EG: /^(EG[0-9]{2})\d{25}$/,
+	  ES: /^(ES[0-9]{2})\d{20}$/,
+	  FI: /^(FI[0-9]{2})\d{14}$/,
+	  FO: /^(FO[0-9]{2})\d{14}$/,
+	  FR: /^(FR[0-9]{2})\d{10}[A-Z0-9]{11}\d{2}$/,
+	  GB: /^(GB[0-9]{2})[A-Z]{4}\d{14}$/,
+	  GE: /^(GE[0-9]{2})[A-Z0-9]{2}\d{16}$/,
+	  GI: /^(GI[0-9]{2})[A-Z]{4}[A-Z0-9]{15}$/,
+	  GL: /^(GL[0-9]{2})\d{14}$/,
+	  GR: /^(GR[0-9]{2})\d{7}[A-Z0-9]{16}$/,
+	  GT: /^(GT[0-9]{2})[A-Z0-9]{4}[A-Z0-9]{20}$/,
+	  HR: /^(HR[0-9]{2})\d{17}$/,
+	  HU: /^(HU[0-9]{2})\d{24}$/,
+	  IE: /^(IE[0-9]{2})[A-Z0-9]{4}\d{14}$/,
+	  IL: /^(IL[0-9]{2})\d{19}$/,
+	  IQ: /^(IQ[0-9]{2})[A-Z]{4}\d{15}$/,
+	  IR: /^(IR[0-9]{2})0\d{2}0\d{18}$/,
+	  IS: /^(IS[0-9]{2})\d{22}$/,
+	  IT: /^(IT[0-9]{2})[A-Z]{1}\d{10}[A-Z0-9]{12}$/,
+	  JO: /^(JO[0-9]{2})[A-Z]{4}\d{22}$/,
+	  KW: /^(KW[0-9]{2})[A-Z]{4}[A-Z0-9]{22}$/,
+	  KZ: /^(KZ[0-9]{2})\d{3}[A-Z0-9]{13}$/,
+	  LB: /^(LB[0-9]{2})\d{4}[A-Z0-9]{20}$/,
+	  LC: /^(LC[0-9]{2})[A-Z]{4}[A-Z0-9]{24}$/,
+	  LI: /^(LI[0-9]{2})\d{5}[A-Z0-9]{12}$/,
+	  LT: /^(LT[0-9]{2})\d{16}$/,
+	  LU: /^(LU[0-9]{2})\d{3}[A-Z0-9]{13}$/,
+	  LV: /^(LV[0-9]{2})[A-Z]{4}[A-Z0-9]{13}$/,
+	  MC: /^(MC[0-9]{2})\d{10}[A-Z0-9]{11}\d{2}$/,
+	  MD: /^(MD[0-9]{2})[A-Z0-9]{20}$/,
+	  ME: /^(ME[0-9]{2})\d{18}$/,
+	  MK: /^(MK[0-9]{2})\d{3}[A-Z0-9]{10}\d{2}$/,
+	  MR: /^(MR[0-9]{2})\d{23}$/,
+	  MT: /^(MT[0-9]{2})[A-Z]{4}\d{5}[A-Z0-9]{18}$/,
+	  MU: /^(MU[0-9]{2})[A-Z]{4}\d{19}[A-Z]{3}$/,
+	  MZ: /^(MZ[0-9]{2})\d{21}$/,
+	  NL: /^(NL[0-9]{2})[A-Z]{4}\d{10}$/,
+	  NO: /^(NO[0-9]{2})\d{11}$/,
+	  PK: /^(PK[0-9]{2})[A-Z0-9]{4}\d{16}$/,
+	  PL: /^(PL[0-9]{2})\d{24}$/,
+	  PS: /^(PS[0-9]{2})[A-Z0-9]{4}\d{21}$/,
+	  PT: /^(PT[0-9]{2})\d{21}$/,
+	  QA: /^(QA[0-9]{2})[A-Z]{4}[A-Z0-9]{21}$/,
+	  RO: /^(RO[0-9]{2})[A-Z]{4}[A-Z0-9]{16}$/,
+	  RS: /^(RS[0-9]{2})\d{18}$/,
+	  SA: /^(SA[0-9]{2})\d{2}[A-Z0-9]{18}$/,
+	  SC: /^(SC[0-9]{2})[A-Z]{4}\d{20}[A-Z]{3}$/,
+	  SE: /^(SE[0-9]{2})\d{20}$/,
+	  SI: /^(SI[0-9]{2})\d{15}$/,
+	  SK: /^(SK[0-9]{2})\d{20}$/,
+	  SM: /^(SM[0-9]{2})[A-Z]{1}\d{10}[A-Z0-9]{12}$/,
+	  SV: /^(SV[0-9]{2})[A-Z0-9]{4}\d{20}$/,
+	  TL: /^(TL[0-9]{2})\d{19}$/,
+	  TN: /^(TN[0-9]{2})\d{20}$/,
+	  TR: /^(TR[0-9]{2})\d{5}[A-Z0-9]{17}$/,
+	  UA: /^(UA[0-9]{2})\d{6}[A-Z0-9]{19}$/,
+	  VA: /^(VA[0-9]{2})\d{18}$/,
+	  VG: /^(VG[0-9]{2})[A-Z0-9]{4}\d{16}$/,
+	  XK: /^(XK[0-9]{2})\d{16}$/
+	};
+	/**
+	 * Check whether string has correct universal IBAN format
+	 * The IBAN consists of up to 34 alphanumeric characters, as follows:
+	 * Country Code using ISO 3166-1 alpha-2, two letters
+	 * check digits, two digits and
+	 * Basic Bank Account Number (BBAN), up to 30 alphanumeric characters.
+	 * NOTE: Permitted IBAN characters are: digits [0-9] and the 26 latin alphabetic [A-Z]
+	 *
+	 * @param {string} str - string under validation
+	 * @return {boolean}
+	 */
+
+	function hasValidIbanFormat(str) {
+	  // Strip white spaces and hyphens
+	  var strippedStr = str.replace(/[\s\-]+/gi, '').toUpperCase();
+	  var isoCountryCode = strippedStr.slice(0, 2).toUpperCase();
+	  return isoCountryCode in ibanRegexThroughCountryCode && ibanRegexThroughCountryCode[isoCountryCode].test(strippedStr);
+	}
+	/**
+	   * Check whether string has valid IBAN Checksum
+	   * by performing basic mod-97 operation and
+	   * the remainder should equal 1
+	   * -- Start by rearranging the IBAN by moving the four initial characters to the end of the string
+	   * -- Replace each letter in the string with two digits, A -> 10, B = 11, Z = 35
+	   * -- Interpret the string as a decimal integer and
+	   * -- compute the remainder on division by 97 (mod 97)
+	   * Reference: https://en.wikipedia.org/wiki/International_Bank_Account_Number
+	   *
+	   * @param {string} str
+	   * @return {boolean}
+	   */
+
+
+	function hasValidIbanChecksum(str) {
+	  var strippedStr = str.replace(/[^A-Z0-9]+/gi, '').toUpperCase(); // Keep only digits and A-Z latin alphabetic
+
+	  var rearranged = strippedStr.slice(4) + strippedStr.slice(0, 4);
+	  var alphaCapsReplacedWithDigits = rearranged.replace(/[A-Z]/g, function (char) {
+	    return char.charCodeAt(0) - 55;
+	  });
+	  var remainder = alphaCapsReplacedWithDigits.match(/\d{1,7}/g).reduce(function (acc, value) {
+	    return Number(acc + value) % 97;
+	  }, '');
+	  return remainder === 1;
+	}
+
+	function isIBAN$1(str) {
+	  (0, _assertString.default)(str);
+	  return hasValidIbanFormat(str) && hasValidIbanChecksum(str);
+	}
+
+	var locales = Object.keys(ibanRegexThroughCountryCode);
+	isIBAN.locales = locales;
+	return isIBAN;
+}
+
+var isBICExports = {};
+var isBIC = {
+  get exports(){ return isBICExports; },
+  set exports(v){ isBICExports = v; },
+};
+
+var isISO31661Alpha2 = {};
+
+var hasRequiredIsISO31661Alpha2;
+
+function requireIsISO31661Alpha2 () {
+	if (hasRequiredIsISO31661Alpha2) return isISO31661Alpha2;
+	hasRequiredIsISO31661Alpha2 = 1;
+
+	Object.defineProperty(isISO31661Alpha2, "__esModule", {
+	  value: true
+	});
+	isISO31661Alpha2.default = isISO31661Alpha2$1;
+	isISO31661Alpha2.CountryCodes = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	// from https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
+	var validISO31661Alpha2CountriesCodes = new Set(['AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ', 'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS', 'BT', 'BV', 'BW', 'BY', 'BZ', 'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN', 'CO', 'CR', 'CU', 'CV', 'CW', 'CX', 'CY', 'CZ', 'DE', 'DJ', 'DK', 'DM', 'DO', 'DZ', 'EC', 'EE', 'EG', 'EH', 'ER', 'ES', 'ET', 'FI', 'FJ', 'FK', 'FM', 'FO', 'FR', 'GA', 'GB', 'GD', 'GE', 'GF', 'GG', 'GH', 'GI', 'GL', 'GM', 'GN', 'GP', 'GQ', 'GR', 'GS', 'GT', 'GU', 'GW', 'GY', 'HK', 'HM', 'HN', 'HR', 'HT', 'HU', 'ID', 'IE', 'IL', 'IM', 'IN', 'IO', 'IQ', 'IR', 'IS', 'IT', 'JE', 'JM', 'JO', 'JP', 'KE', 'KG', 'KH', 'KI', 'KM', 'KN', 'KP', 'KR', 'KW', 'KY', 'KZ', 'LA', 'LB', 'LC', 'LI', 'LK', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY', 'MA', 'MC', 'MD', 'ME', 'MF', 'MG', 'MH', 'MK', 'ML', 'MM', 'MN', 'MO', 'MP', 'MQ', 'MR', 'MS', 'MT', 'MU', 'MV', 'MW', 'MX', 'MY', 'MZ', 'NA', 'NC', 'NE', 'NF', 'NG', 'NI', 'NL', 'NO', 'NP', 'NR', 'NU', 'NZ', 'OM', 'PA', 'PE', 'PF', 'PG', 'PH', 'PK', 'PL', 'PM', 'PN', 'PR', 'PS', 'PT', 'PW', 'PY', 'QA', 'RE', 'RO', 'RS', 'RU', 'RW', 'SA', 'SB', 'SC', 'SD', 'SE', 'SG', 'SH', 'SI', 'SJ', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS', 'ST', 'SV', 'SX', 'SY', 'SZ', 'TC', 'TD', 'TF', 'TG', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TN', 'TO', 'TR', 'TT', 'TV', 'TW', 'TZ', 'UA', 'UG', 'UM', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VG', 'VI', 'VN', 'VU', 'WF', 'WS', 'YE', 'YT', 'ZA', 'ZM', 'ZW']);
+
+	function isISO31661Alpha2$1(str) {
+	  (0, _assertString.default)(str);
+	  return validISO31661Alpha2CountriesCodes.has(str.toUpperCase());
+	}
+
+	var CountryCodes = validISO31661Alpha2CountriesCodes;
+	isISO31661Alpha2.CountryCodes = CountryCodes;
+	return isISO31661Alpha2;
+}
+
+var hasRequiredIsBIC;
+
+function requireIsBIC () {
+	if (hasRequiredIsBIC) return isBICExports;
+	hasRequiredIsBIC = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBIC;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isISO31661Alpha = requireIsISO31661Alpha2();
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		// https://en.wikipedia.org/wiki/ISO_9362
+		var isBICReg = /^[A-Za-z]{6}[A-Za-z0-9]{2}([A-Za-z0-9]{3})?$/;
+
+		function isBIC(str) {
+		  (0, _assertString.default)(str); // toUpperCase() should be removed when a new major version goes out that changes
+		  // the regex to [A-Z] (per the spec).
+
+		  var countryCode = str.slice(4, 6).toUpperCase();
+
+		  if (!_isISO31661Alpha.CountryCodes.has(countryCode) && countryCode !== 'XK') {
+		    return false;
+		  }
+
+		  return isBICReg.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBIC, isBICExports));
+	return isBICExports;
+}
+
+var isMD5Exports = {};
+var isMD5 = {
+  get exports(){ return isMD5Exports; },
+  set exports(v){ isMD5Exports = v; },
+};
+
+var hasRequiredIsMD5;
+
+function requireIsMD5 () {
+	if (hasRequiredIsMD5) return isMD5Exports;
+	hasRequiredIsMD5 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isMD5;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var md5 = /^[a-f0-9]{32}$/;
+
+		function isMD5(str) {
+		  (0, _assertString.default)(str);
+		  return md5.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isMD5, isMD5Exports));
+	return isMD5Exports;
+}
+
+var isHashExports = {};
+var isHash = {
+  get exports(){ return isHashExports; },
+  set exports(v){ isHashExports = v; },
+};
+
+var hasRequiredIsHash;
+
+function requireIsHash () {
+	if (hasRequiredIsHash) return isHashExports;
+	hasRequiredIsHash = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isHash;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var lengths = {
+		  md5: 32,
+		  md4: 32,
+		  sha1: 40,
+		  sha256: 64,
+		  sha384: 96,
+		  sha512: 128,
+		  ripemd128: 32,
+		  ripemd160: 40,
+		  tiger128: 32,
+		  tiger160: 40,
+		  tiger192: 48,
+		  crc32: 8,
+		  crc32b: 8
+		};
+
+		function isHash(str, algorithm) {
+		  (0, _assertString.default)(str);
+		  var hash = new RegExp("^[a-fA-F0-9]{".concat(lengths[algorithm], "}$"));
+		  return hash.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isHash, isHashExports));
+	return isHashExports;
+}
+
+var isJWTExports = {};
+var isJWT = {
+  get exports(){ return isJWTExports; },
+  set exports(v){ isJWTExports = v; },
+};
+
+var isBase64Exports$1 = {};
+var isBase64$2 = {
+  get exports(){ return isBase64Exports$1; },
+  set exports(v){ isBase64Exports$1 = v; },
+};
+
+var hasRequiredIsBase64;
+
+function requireIsBase64 () {
+	if (hasRequiredIsBase64) return isBase64Exports$1;
+	hasRequiredIsBase64 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBase64;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var notBase64 = /[^A-Z0-9+\/=]/i;
+		var urlSafeBase64 = /^[A-Z0-9_\-]*$/i;
+		var defaultBase64Options = {
+		  urlSafe: false
+		};
+
+		function isBase64(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, defaultBase64Options);
+		  var len = str.length;
+
+		  if (options.urlSafe) {
+		    return urlSafeBase64.test(str);
+		  }
+
+		  if (len % 4 !== 0 || notBase64.test(str)) {
+		    return false;
+		  }
+
+		  var firstPaddingChar = str.indexOf('=');
+		  return firstPaddingChar === -1 || firstPaddingChar === len - 1 || firstPaddingChar === len - 2 && str[len - 1] === '=';
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBase64$2, isBase64Exports$1));
+	return isBase64Exports$1;
+}
+
+var hasRequiredIsJWT;
+
+function requireIsJWT () {
+	if (hasRequiredIsJWT) return isJWTExports;
+	hasRequiredIsJWT = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isJWT;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isBase = _interopRequireDefault(requireIsBase64());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isJWT(str) {
+		  (0, _assertString.default)(str);
+		  var dotSplit = str.split('.');
+		  var len = dotSplit.length;
+
+		  if (len > 3 || len < 2) {
+		    return false;
+		  }
+
+		  return dotSplit.reduce(function (acc, currElem) {
+		    return acc && (0, _isBase.default)(currElem, {
+		      urlSafe: true
+		    });
+		  }, true);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isJWT, isJWTExports));
+	return isJWTExports;
+}
+
+var isJSONExports = {};
+var isJSON = {
+  get exports(){ return isJSONExports; },
+  set exports(v){ isJSONExports = v; },
+};
+
+var hasRequiredIsJSON;
+
+function requireIsJSON () {
+	if (hasRequiredIsJSON) return isJSONExports;
+	hasRequiredIsJSON = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isJSON;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		var default_json_options = {
+		  allow_primitives: false
+		};
+
+		function isJSON(str, options) {
+		  (0, _assertString.default)(str);
+
+		  try {
+		    options = (0, _merge.default)(options, default_json_options);
+		    var primitives = [];
+
+		    if (options.allow_primitives) {
+		      primitives = [null, false, true];
+		    }
+
+		    var obj = JSON.parse(str);
+		    return primitives.includes(obj) || !!obj && _typeof(obj) === 'object';
+		  } catch (e) {
+		    /* ignore */
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isJSON, isJSONExports));
+	return isJSONExports;
+}
+
+var isEmptyExports = {};
+var isEmpty$1 = {
+  get exports(){ return isEmptyExports; },
+  set exports(v){ isEmptyExports = v; },
+};
+
+var hasRequiredIsEmpty;
+
+function requireIsEmpty () {
+	if (hasRequiredIsEmpty) return isEmptyExports;
+	hasRequiredIsEmpty = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isEmpty;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var default_is_empty_options = {
+		  ignore_whitespace: false
+		};
+
+		function isEmpty(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, default_is_empty_options);
+		  return (options.ignore_whitespace ? str.trim().length : str.length) === 0;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isEmpty$1, isEmptyExports));
+	return isEmptyExports;
+}
+
+var isLengthExports = {};
+var isLength = {
+  get exports(){ return isLengthExports; },
+  set exports(v){ isLengthExports = v; },
+};
+
+var hasRequiredIsLength;
+
+function requireIsLength () {
+	if (hasRequiredIsLength) return isLengthExports;
+	hasRequiredIsLength = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isLength;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		/* eslint-disable prefer-rest-params */
+		function isLength(str, options) {
+		  (0, _assertString.default)(str);
+		  var min;
+		  var max;
+
+		  if (_typeof(options) === 'object') {
+		    min = options.min || 0;
+		    max = options.max;
+		  } else {
+		    // backwards compatibility: isLength(str, min [, max])
+		    min = arguments[1] || 0;
+		    max = arguments[2];
+		  }
+
+		  var presentationSequences = str.match(/(\uFE0F|\uFE0E)/g) || [];
+		  var surrogatePairs = str.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || [];
+		  var len = str.length - presentationSequences.length - surrogatePairs.length;
+		  return len >= min && (typeof max === 'undefined' || len <= max);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isLength, isLengthExports));
+	return isLengthExports;
+}
+
+var isUUIDExports = {};
+var isUUID = {
+  get exports(){ return isUUIDExports; },
+  set exports(v){ isUUIDExports = v; },
+};
+
+var hasRequiredIsUUID;
+
+function requireIsUUID () {
+	if (hasRequiredIsUUID) return isUUIDExports;
+	hasRequiredIsUUID = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isUUID;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var uuid = {
+		  1: /^[0-9A-F]{8}-[0-9A-F]{4}-1[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,
+		  2: /^[0-9A-F]{8}-[0-9A-F]{4}-2[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,
+		  3: /^[0-9A-F]{8}-[0-9A-F]{4}-3[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,
+		  4: /^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,
+		  5: /^[0-9A-F]{8}-[0-9A-F]{4}-5[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,
+		  all: /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i
+		};
+
+		function isUUID(str, version) {
+		  (0, _assertString.default)(str);
+		  var pattern = uuid[![undefined, null].includes(version) ? version : 'all'];
+		  return !!pattern && pattern.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isUUID, isUUIDExports));
+	return isUUIDExports;
+}
+
+var isMongoIdExports = {};
+var isMongoId = {
+  get exports(){ return isMongoIdExports; },
+  set exports(v){ isMongoIdExports = v; },
+};
+
+var hasRequiredIsMongoId;
+
+function requireIsMongoId () {
+	if (hasRequiredIsMongoId) return isMongoIdExports;
+	hasRequiredIsMongoId = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isMongoId;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isHexadecimal = _interopRequireDefault(requireIsHexadecimal());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isMongoId(str) {
+		  (0, _assertString.default)(str);
+		  return (0, _isHexadecimal.default)(str) && str.length === 24;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isMongoId, isMongoIdExports));
+	return isMongoIdExports;
+}
+
+var isAfterExports = {};
+var isAfter = {
+  get exports(){ return isAfterExports; },
+  set exports(v){ isAfterExports = v; },
+};
+
+var hasRequiredIsAfter;
+
+function requireIsAfter () {
+	if (hasRequiredIsAfter) return isAfterExports;
+	hasRequiredIsAfter = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isAfter;
+
+		var _toDate = _interopRequireDefault(requireToDate());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isAfter(date, options) {
+		  // For backwards compatibility:
+		  // isAfter(str [, date]), i.e. `options` could be used as argument for the legacy `date`
+		  var comparisonDate = (options === null || options === void 0 ? void 0 : options.comparisonDate) || options || Date().toString();
+		  var comparison = (0, _toDate.default)(comparisonDate);
+		  var original = (0, _toDate.default)(date);
+		  return !!(original && comparison && original > comparison);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isAfter, isAfterExports));
+	return isAfterExports;
+}
+
+var isBeforeExports = {};
+var isBefore = {
+  get exports(){ return isBeforeExports; },
+  set exports(v){ isBeforeExports = v; },
+};
+
+var hasRequiredIsBefore;
+
+function requireIsBefore () {
+	if (hasRequiredIsBefore) return isBeforeExports;
+	hasRequiredIsBefore = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBefore;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _toDate = _interopRequireDefault(requireToDate());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isBefore(str) {
+		  var date = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : String(new Date());
+		  (0, _assertString.default)(str);
+		  var comparison = (0, _toDate.default)(date);
+		  var original = (0, _toDate.default)(str);
+		  return !!(original && comparison && original < comparison);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBefore, isBeforeExports));
+	return isBeforeExports;
+}
+
+var isInExports = {};
+var isIn = {
+  get exports(){ return isInExports; },
+  set exports(v){ isInExports = v; },
+};
+
+var hasRequiredIsIn;
+
+function requireIsIn () {
+	if (hasRequiredIsIn) return isInExports;
+	hasRequiredIsIn = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isIn;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _toString = _interopRequireDefault(requireToString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		function isIn(str, options) {
+		  (0, _assertString.default)(str);
+		  var i;
+
+		  if (Object.prototype.toString.call(options) === '[object Array]') {
+		    var array = [];
+
+		    for (i in options) {
+		      // https://github.com/gotwarlost/istanbul/blob/master/ignoring-code-for-coverage.md#ignoring-code-for-coverage-purposes
+		      // istanbul ignore else
+		      if ({}.hasOwnProperty.call(options, i)) {
+		        array[i] = (0, _toString.default)(options[i]);
+		      }
+		    }
+
+		    return array.indexOf(str) >= 0;
+		  } else if (_typeof(options) === 'object') {
+		    return options.hasOwnProperty(str);
+		  } else if (options && typeof options.indexOf === 'function') {
+		    return options.indexOf(str) >= 0;
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isIn, isInExports));
+	return isInExports;
+}
+
+var isLuhnNumberExports = {};
+var isLuhnNumber = {
+  get exports(){ return isLuhnNumberExports; },
+  set exports(v){ isLuhnNumberExports = v; },
+};
+
+var hasRequiredIsLuhnNumber;
+
+function requireIsLuhnNumber () {
+	if (hasRequiredIsLuhnNumber) return isLuhnNumberExports;
+	hasRequiredIsLuhnNumber = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isLuhnNumber;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isLuhnNumber(str) {
+		  (0, _assertString.default)(str);
+		  var sanitized = str.replace(/[- ]+/g, '');
+		  var sum = 0;
+		  var digit;
+		  var tmpNum;
+		  var shouldDouble;
+
+		  for (var i = sanitized.length - 1; i >= 0; i--) {
+		    digit = sanitized.substring(i, i + 1);
+		    tmpNum = parseInt(digit, 10);
+
+		    if (shouldDouble) {
+		      tmpNum *= 2;
+
+		      if (tmpNum >= 10) {
+		        sum += tmpNum % 10 + 1;
+		      } else {
+		        sum += tmpNum;
+		      }
+		    } else {
+		      sum += tmpNum;
+		    }
+
+		    shouldDouble = !shouldDouble;
+		  }
+
+		  return !!(sum % 10 === 0 ? sanitized : false);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isLuhnNumber, isLuhnNumberExports));
+	return isLuhnNumberExports;
+}
+
+var isCreditCardExports = {};
+var isCreditCard = {
+  get exports(){ return isCreditCardExports; },
+  set exports(v){ isCreditCardExports = v; },
+};
+
+var hasRequiredIsCreditCard;
+
+function requireIsCreditCard () {
+	if (hasRequiredIsCreditCard) return isCreditCardExports;
+	hasRequiredIsCreditCard = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isCreditCard;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isLuhnNumber = _interopRequireDefault(requireIsLuhnNumber());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var cards = {
+		  amex: /^3[47][0-9]{13}$/,
+		  dinersclub: /^3(?:0[0-5]|[68][0-9])[0-9]{11}$/,
+		  discover: /^6(?:011|5[0-9][0-9])[0-9]{12,15}$/,
+		  jcb: /^(?:2131|1800|35\d{3})\d{11}$/,
+		  mastercard: /^5[1-5][0-9]{2}|(222[1-9]|22[3-9][0-9]|2[3-6][0-9]{2}|27[01][0-9]|2720)[0-9]{12}$/,
+		  // /^[25][1-7][0-9]{14}$/;
+		  unionpay: /^(6[27][0-9]{14}|^(81[0-9]{14,17}))$/,
+		  visa: /^(?:4[0-9]{12})(?:[0-9]{3,6})?$/
+		};
+		/* eslint-disable max-len */
+
+		var allCards = /^(?:4[0-9]{12}(?:[0-9]{3,6})?|5[1-5][0-9]{14}|(222[1-9]|22[3-9][0-9]|2[3-6][0-9]{2}|27[01][0-9]|2720)[0-9]{12}|6(?:011|5[0-9][0-9])[0-9]{12,15}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\d{3})\d{11}|6[27][0-9]{14}|^(81[0-9]{14,17}))$/;
+		/* eslint-enable max-len */
+
+		function isCreditCard(card) {
+		  var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+		  (0, _assertString.default)(card);
+		  var provider = options.provider;
+		  var sanitized = card.replace(/[- ]+/g, '');
+
+		  if (provider && provider.toLowerCase() in cards) {
+		    // specific provider in the list
+		    if (!cards[provider.toLowerCase()].test(sanitized)) {
+		      return false;
+		    }
+		  } else if (provider && !(provider.toLowerCase() in cards)) {
+		    /* specific provider not in the list */
+		    throw new Error("".concat(provider, " is not a valid credit card provider."));
+		  } else if (!allCards.test(sanitized)) {
+		    // no specific provider
+		    return false;
+		  }
+
+		  return (0, _isLuhnNumber.default)(card);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isCreditCard, isCreditCardExports));
+	return isCreditCardExports;
+}
+
+var isIdentityCardExports = {};
+var isIdentityCard = {
+  get exports(){ return isIdentityCardExports; },
+  set exports(v){ isIdentityCardExports = v; },
+};
+
+var hasRequiredIsIdentityCard;
+
+function requireIsIdentityCard () {
+	if (hasRequiredIsIdentityCard) return isIdentityCardExports;
+	hasRequiredIsIdentityCard = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isIdentityCard;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isInt = _interopRequireDefault(requireIsInt());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var validators = {
+		  PL: function PL(str) {
+		    (0, _assertString.default)(str);
+		    var weightOfDigits = {
+		      1: 1,
+		      2: 3,
+		      3: 7,
+		      4: 9,
+		      5: 1,
+		      6: 3,
+		      7: 7,
+		      8: 9,
+		      9: 1,
+		      10: 3,
+		      11: 0
+		    };
+
+		    if (str != null && str.length === 11 && (0, _isInt.default)(str, {
+		      allow_leading_zeroes: true
+		    })) {
+		      var digits = str.split('').slice(0, -1);
+		      var sum = digits.reduce(function (acc, digit, index) {
+		        return acc + Number(digit) * weightOfDigits[index + 1];
+		      }, 0);
+		      var modulo = sum % 10;
+		      var lastDigit = Number(str.charAt(str.length - 1));
+
+		      if (modulo === 0 && lastDigit === 0 || lastDigit === 10 - modulo) {
+		        return true;
+		      }
+		    }
+
+		    return false;
+		  },
+		  ES: function ES(str) {
+		    (0, _assertString.default)(str);
+		    var DNI = /^[0-9X-Z][0-9]{7}[TRWAGMYFPDXBNJZSQVHLCKE]$/;
+		    var charsValue = {
+		      X: 0,
+		      Y: 1,
+		      Z: 2
+		    };
+		    var controlDigits = ['T', 'R', 'W', 'A', 'G', 'M', 'Y', 'F', 'P', 'D', 'X', 'B', 'N', 'J', 'Z', 'S', 'Q', 'V', 'H', 'L', 'C', 'K', 'E']; // sanitize user input
+
+		    var sanitized = str.trim().toUpperCase(); // validate the data structure
+
+		    if (!DNI.test(sanitized)) {
+		      return false;
+		    } // validate the control digit
+
+
+		    var number = sanitized.slice(0, -1).replace(/[X,Y,Z]/g, function (char) {
+		      return charsValue[char];
+		    });
+		    return sanitized.endsWith(controlDigits[number % 23]);
+		  },
+		  FI: function FI(str) {
+		    // https://dvv.fi/en/personal-identity-code#:~:text=control%20character%20for%20a-,personal,-identity%20code%20calculated
+		    (0, _assertString.default)(str);
+
+		    if (str.length !== 11) {
+		      return false;
+		    }
+
+		    if (!str.match(/^\d{6}[\-A\+]\d{3}[0-9ABCDEFHJKLMNPRSTUVWXY]{1}$/)) {
+		      return false;
+		    }
+
+		    var checkDigits = '0123456789ABCDEFHJKLMNPRSTUVWXY';
+		    var idAsNumber = parseInt(str.slice(0, 6), 10) * 1000 + parseInt(str.slice(7, 10), 10);
+		    var remainder = idAsNumber % 31;
+		    var checkDigit = checkDigits[remainder];
+		    return checkDigit === str.slice(10, 11);
+		  },
+		  IN: function IN(str) {
+		    var DNI = /^[1-9]\d{3}\s?\d{4}\s?\d{4}$/; // multiplication table
+
+		    var d = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5], [2, 3, 4, 0, 1, 7, 8, 9, 5, 6], [3, 4, 0, 1, 2, 8, 9, 5, 6, 7], [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1], [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3], [8, 7, 6, 5, 9, 3, 2, 1, 0, 4], [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]]; // permutation table
+
+		    var p = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4], [5, 8, 0, 3, 7, 9, 6, 1, 4, 2], [8, 9, 1, 6, 0, 4, 3, 5, 2, 7], [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1], [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8]]; // sanitize user input
+
+		    var sanitized = str.trim(); // validate the data structure
+
+		    if (!DNI.test(sanitized)) {
+		      return false;
+		    }
+
+		    var c = 0;
+		    var invertedArray = sanitized.replace(/\s/g, '').split('').map(Number).reverse();
+		    invertedArray.forEach(function (val, i) {
+		      c = d[c][p[i % 8][val]];
+		    });
+		    return c === 0;
+		  },
+		  IR: function IR(str) {
+		    if (!str.match(/^\d{10}$/)) return false;
+		    str = "0000".concat(str).slice(str.length - 6);
+		    if (parseInt(str.slice(3, 9), 10) === 0) return false;
+		    var lastNumber = parseInt(str.slice(9, 10), 10);
+		    var sum = 0;
+
+		    for (var i = 0; i < 9; i++) {
+		      sum += parseInt(str.slice(i, i + 1), 10) * (10 - i);
+		    }
+
+		    sum %= 11;
+		    return sum < 2 && lastNumber === sum || sum >= 2 && lastNumber === 11 - sum;
+		  },
+		  IT: function IT(str) {
+		    if (str.length !== 9) return false;
+		    if (str === 'CA00000AA') return false; // https://it.wikipedia.org/wiki/Carta_d%27identit%C3%A0_elettronica_italiana
+
+		    return str.search(/C[A-Z][0-9]{5}[A-Z]{2}/i) > -1;
+		  },
+		  NO: function NO(str) {
+		    var sanitized = str.trim();
+		    if (isNaN(Number(sanitized))) return false;
+		    if (sanitized.length !== 11) return false;
+		    if (sanitized === '00000000000') return false; // https://no.wikipedia.org/wiki/F%C3%B8dselsnummer
+
+		    var f = sanitized.split('').map(Number);
+		    var k1 = (11 - (3 * f[0] + 7 * f[1] + 6 * f[2] + 1 * f[3] + 8 * f[4] + 9 * f[5] + 4 * f[6] + 5 * f[7] + 2 * f[8]) % 11) % 11;
+		    var k2 = (11 - (5 * f[0] + 4 * f[1] + 3 * f[2] + 2 * f[3] + 7 * f[4] + 6 * f[5] + 5 * f[6] + 4 * f[7] + 3 * f[8] + 2 * k1) % 11) % 11;
+		    if (k1 !== f[9] || k2 !== f[10]) return false;
+		    return true;
+		  },
+		  TH: function TH(str) {
+		    if (!str.match(/^[1-8]\d{12}$/)) return false; // validate check digit
+
+		    var sum = 0;
+
+		    for (var i = 0; i < 12; i++) {
+		      sum += parseInt(str[i], 10) * (13 - i);
+		    }
+
+		    return str[12] === ((11 - sum % 11) % 10).toString();
+		  },
+		  LK: function LK(str) {
+		    var old_nic = /^[1-9]\d{8}[vx]$/i;
+		    var new_nic = /^[1-9]\d{11}$/i;
+		    if (str.length === 10 && old_nic.test(str)) return true;else if (str.length === 12 && new_nic.test(str)) return true;
+		    return false;
+		  },
+		  'he-IL': function heIL(str) {
+		    var DNI = /^\d{9}$/; // sanitize user input
+
+		    var sanitized = str.trim(); // validate the data structure
+
+		    if (!DNI.test(sanitized)) {
+		      return false;
+		    }
+
+		    var id = sanitized;
+		    var sum = 0,
+		        incNum;
+
+		    for (var i = 0; i < id.length; i++) {
+		      incNum = Number(id[i]) * (i % 2 + 1); // Multiply number by 1 or 2
+
+		      sum += incNum > 9 ? incNum - 9 : incNum; // Sum the digits up and add to total
+		    }
+
+		    return sum % 10 === 0;
+		  },
+		  'ar-LY': function arLY(str) {
+		    // Libya National Identity Number NIN is 12 digits, the first digit is either 1 or 2
+		    var NIN = /^(1|2)\d{11}$/; // sanitize user input
+
+		    var sanitized = str.trim(); // validate the data structure
+
+		    if (!NIN.test(sanitized)) {
+		      return false;
+		    }
+
+		    return true;
+		  },
+		  'ar-TN': function arTN(str) {
+		    var DNI = /^\d{8}$/; // sanitize user input
+
+		    var sanitized = str.trim(); // validate the data structure
+
+		    if (!DNI.test(sanitized)) {
+		      return false;
+		    }
+
+		    return true;
+		  },
+		  'zh-CN': function zhCN(str) {
+		    var provincesAndCities = ['11', // 北京
+		    '12', // 天津
+		    '13', // 河北
+		    '14', // 山西
+		    '15', // 内蒙古
+		    '21', // 辽宁
+		    '22', // 吉林
+		    '23', // 黑龙江
+		    '31', // 上海
+		    '32', // 江苏
+		    '33', // 浙江
+		    '34', // 安徽
+		    '35', // 福建
+		    '36', // 江西
+		    '37', // 山东
+		    '41', // 河南
+		    '42', // 湖北
+		    '43', // 湖南
+		    '44', // 广东
+		    '45', // 广西
+		    '46', // 海南
+		    '50', // 重庆
+		    '51', // 四川
+		    '52', // 贵州
+		    '53', // 云南
+		    '54', // 西藏
+		    '61', // 陕西
+		    '62', // 甘肃
+		    '63', // 青海
+		    '64', // 宁夏
+		    '65', // 新疆
+		    '71', // 台湾
+		    '81', // 香港
+		    '82', // 澳门
+		    '91' // 国外
+		    ];
+		    var powers = ['7', '9', '10', '5', '8', '4', '2', '1', '6', '3', '7', '9', '10', '5', '8', '4', '2'];
+		    var parityBit = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'];
+
+		    var checkAddressCode = function checkAddressCode(addressCode) {
+		      return provincesAndCities.includes(addressCode);
+		    };
+
+		    var checkBirthDayCode = function checkBirthDayCode(birDayCode) {
+		      var yyyy = parseInt(birDayCode.substring(0, 4), 10);
+		      var mm = parseInt(birDayCode.substring(4, 6), 10);
+		      var dd = parseInt(birDayCode.substring(6), 10);
+		      var xdata = new Date(yyyy, mm - 1, dd);
+
+		      if (xdata > new Date()) {
+		        return false; // eslint-disable-next-line max-len
+		      } else if (xdata.getFullYear() === yyyy && xdata.getMonth() === mm - 1 && xdata.getDate() === dd) {
+		        return true;
+		      }
+
+		      return false;
+		    };
+
+		    var getParityBit = function getParityBit(idCardNo) {
+		      var id17 = idCardNo.substring(0, 17);
+		      var power = 0;
+
+		      for (var i = 0; i < 17; i++) {
+		        power += parseInt(id17.charAt(i), 10) * parseInt(powers[i], 10);
+		      }
+
+		      var mod = power % 11;
+		      return parityBit[mod];
+		    };
+
+		    var checkParityBit = function checkParityBit(idCardNo) {
+		      return getParityBit(idCardNo) === idCardNo.charAt(17).toUpperCase();
+		    };
+
+		    var check15IdCardNo = function check15IdCardNo(idCardNo) {
+		      var check = /^[1-9]\d{7}((0[1-9])|(1[0-2]))((0[1-9])|([1-2][0-9])|(3[0-1]))\d{3}$/.test(idCardNo);
+		      if (!check) return false;
+		      var addressCode = idCardNo.substring(0, 2);
+		      check = checkAddressCode(addressCode);
+		      if (!check) return false;
+		      var birDayCode = "19".concat(idCardNo.substring(6, 12));
+		      check = checkBirthDayCode(birDayCode);
+		      if (!check) return false;
+		      return true;
+		    };
+
+		    var check18IdCardNo = function check18IdCardNo(idCardNo) {
+		      var check = /^[1-9]\d{5}[1-9]\d{3}((0[1-9])|(1[0-2]))((0[1-9])|([1-2][0-9])|(3[0-1]))\d{3}(\d|x|X)$/.test(idCardNo);
+		      if (!check) return false;
+		      var addressCode = idCardNo.substring(0, 2);
+		      check = checkAddressCode(addressCode);
+		      if (!check) return false;
+		      var birDayCode = idCardNo.substring(6, 14);
+		      check = checkBirthDayCode(birDayCode);
+		      if (!check) return false;
+		      return checkParityBit(idCardNo);
+		    };
+
+		    var checkIdCardNo = function checkIdCardNo(idCardNo) {
+		      var check = /^\d{15}|(\d{17}(\d|x|X))$/.test(idCardNo);
+		      if (!check) return false;
+
+		      if (idCardNo.length === 15) {
+		        return check15IdCardNo(idCardNo);
+		      }
+
+		      return check18IdCardNo(idCardNo);
+		    };
+
+		    return checkIdCardNo(str);
+		  },
+		  'zh-HK': function zhHK(str) {
+		    // sanitize user input
+		    str = str.trim(); // HKID number starts with 1 or 2 letters, followed by 6 digits,
+		    // then a checksum contained in square / round brackets or nothing
+
+		    var regexHKID = /^[A-Z]{1,2}[0-9]{6}((\([0-9A]\))|(\[[0-9A]\])|([0-9A]))$/;
+		    var regexIsDigit = /^[0-9]$/; // convert the user input to all uppercase and apply regex
+
+		    str = str.toUpperCase();
+		    if (!regexHKID.test(str)) return false;
+		    str = str.replace(/\[|\]|\(|\)/g, '');
+		    if (str.length === 8) str = "3".concat(str);
+		    var checkSumVal = 0;
+
+		    for (var i = 0; i <= 7; i++) {
+		      var convertedChar = void 0;
+		      if (!regexIsDigit.test(str[i])) convertedChar = (str[i].charCodeAt(0) - 55) % 11;else convertedChar = str[i];
+		      checkSumVal += convertedChar * (9 - i);
+		    }
+
+		    checkSumVal %= 11;
+		    var checkSumConverted;
+		    if (checkSumVal === 0) checkSumConverted = '0';else if (checkSumVal === 1) checkSumConverted = 'A';else checkSumConverted = String(11 - checkSumVal);
+		    if (checkSumConverted === str[str.length - 1]) return true;
+		    return false;
+		  },
+		  'zh-TW': function zhTW(str) {
+		    var ALPHABET_CODES = {
+		      A: 10,
+		      B: 11,
+		      C: 12,
+		      D: 13,
+		      E: 14,
+		      F: 15,
+		      G: 16,
+		      H: 17,
+		      I: 34,
+		      J: 18,
+		      K: 19,
+		      L: 20,
+		      M: 21,
+		      N: 22,
+		      O: 35,
+		      P: 23,
+		      Q: 24,
+		      R: 25,
+		      S: 26,
+		      T: 27,
+		      U: 28,
+		      V: 29,
+		      W: 32,
+		      X: 30,
+		      Y: 31,
+		      Z: 33
+		    };
+		    var sanitized = str.trim().toUpperCase();
+		    if (!/^[A-Z][0-9]{9}$/.test(sanitized)) return false;
+		    return Array.from(sanitized).reduce(function (sum, number, index) {
+		      if (index === 0) {
+		        var code = ALPHABET_CODES[number];
+		        return code % 10 * 9 + Math.floor(code / 10);
+		      }
+
+		      if (index === 9) {
+		        return (10 - sum % 10 - Number(number)) % 10 === 0;
+		      }
+
+		      return sum + Number(number) * (9 - index);
+		    }, 0);
+		  }
+		};
+
+		function isIdentityCard(str, locale) {
+		  (0, _assertString.default)(str);
+
+		  if (locale in validators) {
+		    return validators[locale](str);
+		  } else if (locale === 'any') {
+		    for (var key in validators) {
+		      // https://github.com/gotwarlost/istanbul/blob/master/ignoring-code-for-coverage.md#ignoring-code-for-coverage-purposes
+		      // istanbul ignore else
+		      if (validators.hasOwnProperty(key)) {
+		        var validator = validators[key];
+
+		        if (validator(str)) {
+		          return true;
+		        }
+		      }
+		    }
+
+		    return false;
+		  }
+
+		  throw new Error("Invalid locale '".concat(locale, "'"));
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isIdentityCard, isIdentityCardExports));
+	return isIdentityCardExports;
+}
+
+var isEANExports = {};
+var isEAN = {
+  get exports(){ return isEANExports; },
+  set exports(v){ isEANExports = v; },
+};
+
+var hasRequiredIsEAN;
+
+function requireIsEAN () {
+	if (hasRequiredIsEAN) return isEANExports;
+	hasRequiredIsEAN = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isEAN;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/**
+		 * The most commonly used EAN standard is
+		 * the thirteen-digit EAN-13, while the
+		 * less commonly used 8-digit EAN-8 barcode was
+		 * introduced for use on small packages.
+		 * Also EAN/UCC-14 is used for Grouping of individual
+		 * trade items above unit level(Intermediate, Carton or Pallet).
+		 * For more info about EAN-14 checkout: https://www.gtin.info/itf-14-barcodes/
+		 * EAN consists of:
+		 * GS1 prefix, manufacturer code, product code and check digit
+		 * Reference: https://en.wikipedia.org/wiki/International_Article_Number
+		 * Reference: https://www.gtin.info/
+		 */
+
+		/**
+		 * Define EAN Lenghts; 8 for EAN-8; 13 for EAN-13; 14 for EAN-14
+		 * and Regular Expression for valid EANs (EAN-8, EAN-13, EAN-14),
+		 * with exact numberic matching of 8 or 13 or 14 digits [0-9]
+		 */
+		var LENGTH_EAN_8 = 8;
+		var LENGTH_EAN_14 = 14;
+		var validEanRegex = /^(\d{8}|\d{13}|\d{14})$/;
+		/**
+		 * Get position weight given:
+		 * EAN length and digit index/position
+		 *
+		 * @param {number} length
+		 * @param {number} index
+		 * @return {number}
+		 */
+
+		function getPositionWeightThroughLengthAndIndex(length, index) {
+		  if (length === LENGTH_EAN_8 || length === LENGTH_EAN_14) {
+		    return index % 2 === 0 ? 3 : 1;
+		  }
+
+		  return index % 2 === 0 ? 1 : 3;
+		}
+		/**
+		 * Calculate EAN Check Digit
+		 * Reference: https://en.wikipedia.org/wiki/International_Article_Number#Calculation_of_checksum_digit
+		 *
+		 * @param {string} ean
+		 * @return {number}
+		 */
+
+
+		function calculateCheckDigit(ean) {
+		  var checksum = ean.slice(0, -1).split('').map(function (char, index) {
+		    return Number(char) * getPositionWeightThroughLengthAndIndex(ean.length, index);
+		  }).reduce(function (acc, partialSum) {
+		    return acc + partialSum;
+		  }, 0);
+		  var remainder = 10 - checksum % 10;
+		  return remainder < 10 ? remainder : 0;
+		}
+		/**
+		 * Check if string is valid EAN:
+		 * Matches EAN-8/EAN-13/EAN-14 regex
+		 * Has valid check digit.
+		 *
+		 * @param {string} str
+		 * @return {boolean}
+		 */
+
+
+		function isEAN(str) {
+		  (0, _assertString.default)(str);
+		  var actualCheckDigit = Number(str.slice(-1));
+		  return validEanRegex.test(str) && actualCheckDigit === calculateCheckDigit(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isEAN, isEANExports));
+	return isEANExports;
+}
+
+var isISINExports = {};
+var isISIN = {
+  get exports(){ return isISINExports; },
+  set exports(v){ isISINExports = v; },
+};
+
+var hasRequiredIsISIN;
+
+function requireIsISIN () {
+	if (hasRequiredIsISIN) return isISINExports;
+	hasRequiredIsISIN = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISIN;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var isin = /^[A-Z]{2}[0-9A-Z]{9}[0-9]$/; // this link details how the check digit is calculated:
+		// https://www.isin.org/isin-format/. it is a little bit
+		// odd in that it works with digits, not numbers. in order
+		// to make only one pass through the ISIN characters, the
+		// each alpha character is handled as 2 characters within
+		// the loop.
+
+		function isISIN(str) {
+		  (0, _assertString.default)(str);
+
+		  if (!isin.test(str)) {
+		    return false;
+		  }
+
+		  var double = true;
+		  var sum = 0; // convert values
+
+		  for (var i = str.length - 2; i >= 0; i--) {
+		    if (str[i] >= 'A' && str[i] <= 'Z') {
+		      var value = str[i].charCodeAt(0) - 55;
+		      var lo = value % 10;
+		      var hi = Math.trunc(value / 10); // letters have two digits, so handle the low order
+		      // and high order digits separately.
+
+		      for (var _i = 0, _arr = [lo, hi]; _i < _arr.length; _i++) {
+		        var digit = _arr[_i];
+
+		        if (double) {
+		          if (digit >= 5) {
+		            sum += 1 + (digit - 5) * 2;
+		          } else {
+		            sum += digit * 2;
+		          }
+		        } else {
+		          sum += digit;
+		        }
+
+		        double = !double;
+		      }
+		    } else {
+		      var _digit = str[i].charCodeAt(0) - '0'.charCodeAt(0);
+
+		      if (double) {
+		        if (_digit >= 5) {
+		          sum += 1 + (_digit - 5) * 2;
+		        } else {
+		          sum += _digit * 2;
+		        }
+		      } else {
+		        sum += _digit;
+		      }
+
+		      double = !double;
+		    }
+		  }
+
+		  var check = Math.trunc((sum + 9) / 10) * 10 - sum;
+		  return +str[str.length - 1] === check;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISIN, isISINExports));
+	return isISINExports;
+}
+
+var isISBNExports = {};
+var isISBN = {
+  get exports(){ return isISBNExports; },
+  set exports(v){ isISBNExports = v; },
+};
+
+var hasRequiredIsISBN;
+
+function requireIsISBN () {
+	if (hasRequiredIsISBN) return isISBNExports;
+	hasRequiredIsISBN = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISBN;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var possibleIsbn10 = /^(?:[0-9]{9}X|[0-9]{10})$/;
+		var possibleIsbn13 = /^(?:[0-9]{13})$/;
+		var factor = [1, 3];
+
+		function isISBN(isbn, options) {
+		  (0, _assertString.default)(isbn); // For backwards compatibility:
+		  // isISBN(str [, version]), i.e. `options` could be used as argument for the legacy `version`
+
+		  var version = String((options === null || options === void 0 ? void 0 : options.version) || options);
+
+		  if (!(options !== null && options !== void 0 && options.version || options)) {
+		    return isISBN(isbn, {
+		      version: 10
+		    }) || isISBN(isbn, {
+		      version: 13
+		    });
+		  }
+
+		  var sanitizedIsbn = isbn.replace(/[\s-]+/g, '');
+		  var checksum = 0;
+
+		  if (version === '10') {
+		    if (!possibleIsbn10.test(sanitizedIsbn)) {
+		      return false;
+		    }
+
+		    for (var i = 0; i < version - 1; i++) {
+		      checksum += (i + 1) * sanitizedIsbn.charAt(i);
+		    }
+
+		    if (sanitizedIsbn.charAt(9) === 'X') {
+		      checksum += 10 * 10;
+		    } else {
+		      checksum += 10 * sanitizedIsbn.charAt(9);
+		    }
+
+		    if (checksum % 11 === 0) {
+		      return true;
+		    }
+		  } else if (version === '13') {
+		    if (!possibleIsbn13.test(sanitizedIsbn)) {
+		      return false;
+		    }
+
+		    for (var _i = 0; _i < 12; _i++) {
+		      checksum += factor[_i % 2] * sanitizedIsbn.charAt(_i);
+		    }
+
+		    if (sanitizedIsbn.charAt(12) - (10 - checksum % 10) % 10 === 0) {
+		      return true;
+		    }
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISBN, isISBNExports));
+	return isISBNExports;
+}
+
+var isISSNExports = {};
+var isISSN = {
+  get exports(){ return isISSNExports; },
+  set exports(v){ isISSNExports = v; },
+};
+
+var hasRequiredIsISSN;
+
+function requireIsISSN () {
+	if (hasRequiredIsISSN) return isISSNExports;
+	hasRequiredIsISSN = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISSN;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var issn = '^\\d{4}-?\\d{3}[\\dX]$';
+
+		function isISSN(str) {
+		  var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+		  (0, _assertString.default)(str);
+		  var testIssn = issn;
+		  testIssn = options.require_hyphen ? testIssn.replace('?', '') : testIssn;
+		  testIssn = options.case_sensitive ? new RegExp(testIssn) : new RegExp(testIssn, 'i');
+
+		  if (!testIssn.test(str)) {
+		    return false;
+		  }
+
+		  var digits = str.replace('-', '').toUpperCase();
+		  var checksum = 0;
+
+		  for (var i = 0; i < digits.length; i++) {
+		    var digit = digits[i];
+		    checksum += (digit === 'X' ? 10 : +digit) * (8 - i);
+		  }
+
+		  return checksum % 11 === 0;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISSN, isISSNExports));
+	return isISSNExports;
+}
+
+var isTaxIDExports = {};
+var isTaxID = {
+  get exports(){ return isTaxIDExports; },
+  set exports(v){ isTaxIDExports = v; },
+};
+
+var algorithms = {};
+
+var hasRequiredAlgorithms;
+
+function requireAlgorithms () {
+	if (hasRequiredAlgorithms) return algorithms;
+	hasRequiredAlgorithms = 1;
+
+	Object.defineProperty(algorithms, "__esModule", {
+	  value: true
+	});
+	algorithms.iso7064Check = iso7064Check;
+	algorithms.luhnCheck = luhnCheck;
+	algorithms.reverseMultiplyAndSum = reverseMultiplyAndSum;
+	algorithms.verhoeffCheck = verhoeffCheck;
+
+	/**
+	 * Algorithmic validation functions
+	 * May be used as is or implemented in the workflow of other validators.
+	 */
+
+	/*
+	 * ISO 7064 validation function
+	 * Called with a string of numbers (incl. check digit)
+	 * to validate according to ISO 7064 (MOD 11, 10).
+	 */
+	function iso7064Check(str) {
+	  var checkvalue = 10;
+
+	  for (var i = 0; i < str.length - 1; i++) {
+	    checkvalue = (parseInt(str[i], 10) + checkvalue) % 10 === 0 ? 10 * 2 % 11 : (parseInt(str[i], 10) + checkvalue) % 10 * 2 % 11;
+	  }
+
+	  checkvalue = checkvalue === 1 ? 0 : 11 - checkvalue;
+	  return checkvalue === parseInt(str[10], 10);
+	}
+	/*
+	 * Luhn (mod 10) validation function
+	 * Called with a string of numbers (incl. check digit)
+	 * to validate according to the Luhn algorithm.
+	 */
+
+
+	function luhnCheck(str) {
+	  var checksum = 0;
+	  var second = false;
+
+	  for (var i = str.length - 1; i >= 0; i--) {
+	    if (second) {
+	      var product = parseInt(str[i], 10) * 2;
+
+	      if (product > 9) {
+	        // sum digits of product and add to checksum
+	        checksum += product.toString().split('').map(function (a) {
+	          return parseInt(a, 10);
+	        }).reduce(function (a, b) {
+	          return a + b;
+	        }, 0);
+	      } else {
+	        checksum += product;
+	      }
+	    } else {
+	      checksum += parseInt(str[i], 10);
+	    }
+
+	    second = !second;
+	  }
+
+	  return checksum % 10 === 0;
+	}
+	/*
+	 * Reverse TIN multiplication and summation helper function
+	 * Called with an array of single-digit integers and a base multiplier
+	 * to calculate the sum of the digits multiplied in reverse.
+	 * Normally used in variations of MOD 11 algorithmic checks.
+	 */
+
+
+	function reverseMultiplyAndSum(digits, base) {
+	  var total = 0;
+
+	  for (var i = 0; i < digits.length; i++) {
+	    total += digits[i] * (base - i);
+	  }
+
+	  return total;
+	}
+	/*
+	 * Verhoeff validation helper function
+	 * Called with a string of numbers
+	 * to validate according to the Verhoeff algorithm.
+	 */
+
+
+	function verhoeffCheck(str) {
+	  var d_table = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 0, 6, 7, 8, 9, 5], [2, 3, 4, 0, 1, 7, 8, 9, 5, 6], [3, 4, 0, 1, 2, 8, 9, 5, 6, 7], [4, 0, 1, 2, 3, 9, 5, 6, 7, 8], [5, 9, 8, 7, 6, 0, 4, 3, 2, 1], [6, 5, 9, 8, 7, 1, 0, 4, 3, 2], [7, 6, 5, 9, 8, 2, 1, 0, 4, 3], [8, 7, 6, 5, 9, 3, 2, 1, 0, 4], [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]];
+	  var p_table = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 5, 7, 6, 2, 8, 3, 0, 9, 4], [5, 8, 0, 3, 7, 9, 6, 1, 4, 2], [8, 9, 1, 6, 0, 4, 3, 5, 2, 7], [9, 4, 5, 3, 1, 2, 6, 8, 7, 0], [4, 2, 8, 6, 5, 7, 3, 9, 0, 1], [2, 7, 9, 3, 8, 0, 6, 4, 1, 5], [7, 0, 4, 6, 9, 1, 3, 2, 5, 8]]; // Copy (to prevent replacement) and reverse
+
+	  var str_copy = str.split('').reverse().join('');
+	  var checksum = 0;
+
+	  for (var i = 0; i < str_copy.length; i++) {
+	    checksum = d_table[checksum][p_table[i % 8][parseInt(str_copy[i], 10)]];
+	  }
+
+	  return checksum === 0;
+	}
+	return algorithms;
+}
+
+var hasRequiredIsTaxID;
+
+function requireIsTaxID () {
+	if (hasRequiredIsTaxID) return isTaxIDExports;
+	hasRequiredIsTaxID = 1;
+	(function (module, exports) {
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isTaxID;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var algorithms = _interopRequireWildcard(requireAlgorithms());
+
+		var _isDate = _interopRequireDefault(requireIsDate());
+
+		function _getRequireWildcardCache() { if (typeof WeakMap !== "function") return null; var cache = new WeakMap(); _getRequireWildcardCache = function _getRequireWildcardCache() { return cache; }; return cache; }
+
+		function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } if (obj === null || _typeof(obj) !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread(); }
+
+		function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+		function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+		function _iterableToArray(iter) { if (typeof Symbol !== "undefined" && Symbol.iterator in Object(iter)) return Array.from(iter); }
+
+		function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) return _arrayLikeToArray(arr); }
+
+		function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+		/**
+		 * TIN Validation
+		 * Validates Tax Identification Numbers (TINs) from the US, EU member states and the United Kingdom.
+		 *
+		 * EU-UK:
+		 * National TIN validity is calculated using public algorithms as made available by DG TAXUD.
+		 *
+		 * See `https://ec.europa.eu/taxation_customs/tin/specs/FS-TIN%20Algorithms-Public.docx` for more information.
+		 *
+		 * US:
+		 * An Employer Identification Number (EIN), also known as a Federal Tax Identification Number,
+		 *  is used to identify a business entity.
+		 *
+		 * NOTES:
+		 *  - Prefix 47 is being reserved for future use
+		 *  - Prefixes 26, 27, 45, 46 and 47 were previously assigned by the Philadelphia campus.
+		 *
+		 * See `http://www.irs.gov/Businesses/Small-Businesses-&-Self-Employed/How-EINs-are-Assigned-and-Valid-EIN-Prefixes`
+		 * for more information.
+		 */
+		// Locale functions
+
+		/*
+		 * bg-BG validation function
+		 * (Edinen graždanski nomer (EGN/ЕГН), persons only)
+		 * Checks if birth date (first six digits) is valid and calculates check (last) digit
+		 */
+		function bgBgCheck(tin) {
+		  // Extract full year, normalize month and check birth date validity
+		  var century_year = tin.slice(0, 2);
+		  var month = parseInt(tin.slice(2, 4), 10);
+
+		  if (month > 40) {
+		    month -= 40;
+		    century_year = "20".concat(century_year);
+		  } else if (month > 20) {
+		    month -= 20;
+		    century_year = "18".concat(century_year);
+		  } else {
+		    century_year = "19".concat(century_year);
+		  }
+
+		  if (month < 10) {
+		    month = "0".concat(month);
+		  }
+
+		  var date = "".concat(century_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // split digits into an array for further processing
+
+
+		  var digits = tin.split('').map(function (a) {
+		    return parseInt(a, 10);
+		  }); // Calculate checksum by multiplying digits with fixed values
+
+		  var multip_lookup = [2, 4, 8, 5, 10, 9, 7, 3, 6];
+		  var checksum = 0;
+
+		  for (var i = 0; i < multip_lookup.length; i++) {
+		    checksum += digits[i] * multip_lookup[i];
+		  }
+
+		  checksum = checksum % 11 === 10 ? 0 : checksum % 11;
+		  return checksum === digits[9];
