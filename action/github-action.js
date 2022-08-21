@@ -192915,3 +192915,2116 @@ function requireIsDataURI () {
 	(function (module, exports) {
 
 		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isDataURI;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var validMediaType = /^[a-z]+\/[a-z0-9\-\+\._]+$/i;
+		var validAttribute = /^[a-z\-]+=[a-z0-9\-]+$/i;
+		var validData = /^[a-z0-9!\$&'\(\)\*\+,;=\-\._~:@\/\?%\s]*$/i;
+
+		function isDataURI(str) {
+		  (0, _assertString.default)(str);
+		  var data = str.split(',');
+
+		  if (data.length < 2) {
+		    return false;
+		  }
+
+		  var attributes = data.shift().trim().split(';');
+		  var schemeAndMediaType = attributes.shift();
+
+		  if (schemeAndMediaType.slice(0, 5) !== 'data:') {
+		    return false;
+		  }
+
+		  var mediaType = schemeAndMediaType.slice(5);
+
+		  if (mediaType !== '' && !validMediaType.test(mediaType)) {
+		    return false;
+		  }
+
+		  for (var i = 0; i < attributes.length; i++) {
+		    if (!(i === attributes.length - 1 && attributes[i].toLowerCase() === 'base64') && !validAttribute.test(attributes[i])) {
+		      return false;
+		    }
+		  }
+
+		  for (var _i = 0; _i < data.length; _i++) {
+		    if (!validData.test(data[_i])) {
+		      return false;
+		    }
+		  }
+
+		  return true;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isDataURI, isDataURIExports));
+	return isDataURIExports;
+}
+
+var isMagnetURIExports = {};
+var isMagnetURI = {
+  get exports(){ return isMagnetURIExports; },
+  set exports(v){ isMagnetURIExports = v; },
+};
+
+var hasRequiredIsMagnetURI;
+
+function requireIsMagnetURI () {
+	if (hasRequiredIsMagnetURI) return isMagnetURIExports;
+	hasRequiredIsMagnetURI = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isMagnetURI;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var magnetURIComponent = /(?:^magnet:\?|[^?&]&)xt(?:\.1)?=urn:(?:(?:aich|bitprint|btih|ed2k|ed2khash|kzhash|md5|sha1|tree:tiger):[a-z0-9]{32}(?:[a-z0-9]{8})?|btmh:1220[a-z0-9]{64})(?:$|&)/i;
+
+		function isMagnetURI(url) {
+		  (0, _assertString.default)(url);
+
+		  if (url.indexOf('magnet:?') !== 0) {
+		    return false;
+		  }
+
+		  return magnetURIComponent.test(url);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isMagnetURI, isMagnetURIExports));
+	return isMagnetURIExports;
+}
+
+var isMimeTypeExports = {};
+var isMimeType = {
+  get exports(){ return isMimeTypeExports; },
+  set exports(v){ isMimeTypeExports = v; },
+};
+
+var hasRequiredIsMimeType;
+
+function requireIsMimeType () {
+	if (hasRequiredIsMimeType) return isMimeTypeExports;
+	hasRequiredIsMimeType = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isMimeType;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/*
+		  Checks if the provided string matches to a correct Media type format (MIME type)
+
+		  This function only checks is the string format follows the
+		  etablished rules by the according RFC specifications.
+		  This function supports 'charset' in textual media types
+		  (https://tools.ietf.org/html/rfc6657).
+
+		  This function does not check against all the media types listed
+		  by the IANA (https://www.iana.org/assignments/media-types/media-types.xhtml)
+		  because of lightness purposes : it would require to include
+		  all these MIME types in this librairy, which would weigh it
+		  significantly. This kind of effort maybe is not worth for the use that
+		  this function has in this entire librairy.
+
+		  More informations in the RFC specifications :
+		  - https://tools.ietf.org/html/rfc2045
+		  - https://tools.ietf.org/html/rfc2046
+		  - https://tools.ietf.org/html/rfc7231#section-3.1.1.1
+		  - https://tools.ietf.org/html/rfc7231#section-3.1.1.5
+		*/
+		// Match simple MIME types
+		// NB :
+		//   Subtype length must not exceed 100 characters.
+		//   This rule does not comply to the RFC specs (what is the max length ?).
+		var mimeTypeSimple = /^(application|audio|font|image|message|model|multipart|text|video)\/[a-zA-Z0-9\.\-\+_]{1,100}$/i; // eslint-disable-line max-len
+		// Handle "charset" in "text/*"
+
+		var mimeTypeText = /^text\/[a-zA-Z0-9\.\-\+]{1,100};\s?charset=("[a-zA-Z0-9\.\-\+\s]{0,70}"|[a-zA-Z0-9\.\-\+]{0,70})(\s?\([a-zA-Z0-9\.\-\+\s]{1,20}\))?$/i; // eslint-disable-line max-len
+		// Handle "boundary" in "multipart/*"
+
+		var mimeTypeMultipart = /^multipart\/[a-zA-Z0-9\.\-\+]{1,100}(;\s?(boundary|charset)=("[a-zA-Z0-9\.\-\+\s]{0,70}"|[a-zA-Z0-9\.\-\+]{0,70})(\s?\([a-zA-Z0-9\.\-\+\s]{1,20}\))?){0,2}$/i; // eslint-disable-line max-len
+
+		function isMimeType(str) {
+		  (0, _assertString.default)(str);
+		  return mimeTypeSimple.test(str) || mimeTypeText.test(str) || mimeTypeMultipart.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isMimeType, isMimeTypeExports));
+	return isMimeTypeExports;
+}
+
+var isLatLongExports = {};
+var isLatLong = {
+  get exports(){ return isLatLongExports; },
+  set exports(v){ isLatLongExports = v; },
+};
+
+var hasRequiredIsLatLong;
+
+function requireIsLatLong () {
+	if (hasRequiredIsLatLong) return isLatLongExports;
+	hasRequiredIsLatLong = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isLatLong;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var lat = /^\(?[+-]?(90(\.0+)?|[1-8]?\d(\.\d+)?)$/;
+		var long = /^\s?[+-]?(180(\.0+)?|1[0-7]\d(\.\d+)?|\d{1,2}(\.\d+)?)\)?$/;
+		var latDMS = /^(([1-8]?\d)\D+([1-5]?\d|60)\D+([1-5]?\d|60)(\.\d+)?|90\D+0\D+0)\D+[NSns]?$/i;
+		var longDMS = /^\s*([1-7]?\d{1,2}\D+([1-5]?\d|60)\D+([1-5]?\d|60)(\.\d+)?|180\D+0\D+0)\D+[EWew]?$/i;
+		var defaultLatLongOptions = {
+		  checkDMS: false
+		};
+
+		function isLatLong(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, defaultLatLongOptions);
+		  if (!str.includes(',')) return false;
+		  var pair = str.split(',');
+		  if (pair[0].startsWith('(') && !pair[1].endsWith(')') || pair[1].endsWith(')') && !pair[0].startsWith('(')) return false;
+
+		  if (options.checkDMS) {
+		    return latDMS.test(pair[0]) && longDMS.test(pair[1]);
+		  }
+
+		  return lat.test(pair[0]) && long.test(pair[1]);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isLatLong, isLatLongExports));
+	return isLatLongExports;
+}
+
+var isPostalCode = {};
+
+var hasRequiredIsPostalCode;
+
+function requireIsPostalCode () {
+	if (hasRequiredIsPostalCode) return isPostalCode;
+	hasRequiredIsPostalCode = 1;
+
+	Object.defineProperty(isPostalCode, "__esModule", {
+	  value: true
+	});
+	isPostalCode.default = isPostalCode$1;
+	isPostalCode.locales = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	// common patterns
+	var threeDigit = /^\d{3}$/;
+	var fourDigit = /^\d{4}$/;
+	var fiveDigit = /^\d{5}$/;
+	var sixDigit = /^\d{6}$/;
+	var patterns = {
+	  AD: /^AD\d{3}$/,
+	  AT: fourDigit,
+	  AU: fourDigit,
+	  AZ: /^AZ\d{4}$/,
+	  BA: /^([7-8]\d{4}$)/,
+	  BE: fourDigit,
+	  BG: fourDigit,
+	  BR: /^\d{5}-\d{3}$/,
+	  BY: /^2[1-4]\d{4}$/,
+	  CA: /^[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][\s\-]?\d[ABCEGHJ-NPRSTV-Z]\d$/i,
+	  CH: fourDigit,
+	  CN: /^(0[1-7]|1[012356]|2[0-7]|3[0-6]|4[0-7]|5[1-7]|6[1-7]|7[1-5]|8[1345]|9[09])\d{4}$/,
+	  CZ: /^\d{3}\s?\d{2}$/,
+	  DE: fiveDigit,
+	  DK: fourDigit,
+	  DO: fiveDigit,
+	  DZ: fiveDigit,
+	  EE: fiveDigit,
+	  ES: /^(5[0-2]{1}|[0-4]{1}\d{1})\d{3}$/,
+	  FI: fiveDigit,
+	  FR: /^\d{2}\s?\d{3}$/,
+	  GB: /^(gir\s?0aa|[a-z]{1,2}\d[\da-z]?\s?(\d[a-z]{2})?)$/i,
+	  GR: /^\d{3}\s?\d{2}$/,
+	  HR: /^([1-5]\d{4}$)/,
+	  HT: /^HT\d{4}$/,
+	  HU: fourDigit,
+	  ID: fiveDigit,
+	  IE: /^(?!.*(?:o))[A-Za-z]\d[\dw]\s\w{4}$/i,
+	  IL: /^(\d{5}|\d{7})$/,
+	  IN: /^((?!10|29|35|54|55|65|66|86|87|88|89)[1-9][0-9]{5})$/,
+	  IR: /^(?!(\d)\1{3})[13-9]{4}[1346-9][013-9]{5}$/,
+	  IS: threeDigit,
+	  IT: fiveDigit,
+	  JP: /^\d{3}\-\d{4}$/,
+	  KE: fiveDigit,
+	  KR: /^(\d{5}|\d{6})$/,
+	  LI: /^(948[5-9]|949[0-7])$/,
+	  LT: /^LT\-\d{5}$/,
+	  LU: fourDigit,
+	  LV: /^LV\-\d{4}$/,
+	  LK: fiveDigit,
+	  MG: threeDigit,
+	  MX: fiveDigit,
+	  MT: /^[A-Za-z]{3}\s{0,1}\d{4}$/,
+	  MY: fiveDigit,
+	  NL: /^\d{4}\s?[a-z]{2}$/i,
+	  NO: fourDigit,
+	  NP: /^(10|21|22|32|33|34|44|45|56|57)\d{3}$|^(977)$/i,
+	  NZ: fourDigit,
+	  PL: /^\d{2}\-\d{3}$/,
+	  PR: /^00[679]\d{2}([ -]\d{4})?$/,
+	  PT: /^\d{4}\-\d{3}?$/,
+	  RO: sixDigit,
+	  RU: sixDigit,
+	  SA: fiveDigit,
+	  SE: /^[1-9]\d{2}\s?\d{2}$/,
+	  SG: sixDigit,
+	  SI: fourDigit,
+	  SK: /^\d{3}\s?\d{2}$/,
+	  TH: fiveDigit,
+	  TN: fourDigit,
+	  TW: /^\d{3}(\d{2})?$/,
+	  UA: fiveDigit,
+	  US: /^\d{5}(-\d{4})?$/,
+	  ZA: fourDigit,
+	  ZM: fiveDigit
+	};
+	var locales = Object.keys(patterns);
+	isPostalCode.locales = locales;
+
+	function isPostalCode$1(str, locale) {
+	  (0, _assertString.default)(str);
+
+	  if (locale in patterns) {
+	    return patterns[locale].test(str);
+	  } else if (locale === 'any') {
+	    for (var key in patterns) {
+	      // https://github.com/gotwarlost/istanbul/blob/master/ignoring-code-for-coverage.md#ignoring-code-for-coverage-purposes
+	      // istanbul ignore else
+	      if (patterns.hasOwnProperty(key)) {
+	        var pattern = patterns[key];
+
+	        if (pattern.test(str)) {
+	          return true;
+	        }
+	      }
+	    }
+
+	    return false;
+	  }
+
+	  throw new Error("Invalid locale '".concat(locale, "'"));
+	}
+	return isPostalCode;
+}
+
+var ltrimExports = {};
+var ltrim = {
+  get exports(){ return ltrimExports; },
+  set exports(v){ ltrimExports = v; },
+};
+
+var hasRequiredLtrim;
+
+function requireLtrim () {
+	if (hasRequiredLtrim) return ltrimExports;
+	hasRequiredLtrim = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = ltrim;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function ltrim(str, chars) {
+		  (0, _assertString.default)(str); // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions#Escaping
+
+		  var pattern = chars ? new RegExp("^[".concat(chars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "]+"), 'g') : /^\s+/g;
+		  return str.replace(pattern, '');
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (ltrim, ltrimExports));
+	return ltrimExports;
+}
+
+var rtrimExports = {};
+var rtrim = {
+  get exports(){ return rtrimExports; },
+  set exports(v){ rtrimExports = v; },
+};
+
+var hasRequiredRtrim;
+
+function requireRtrim () {
+	if (hasRequiredRtrim) return rtrimExports;
+	hasRequiredRtrim = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = rtrim;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function rtrim(str, chars) {
+		  (0, _assertString.default)(str);
+
+		  if (chars) {
+		    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions#Escaping
+		    var pattern = new RegExp("[".concat(chars.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), "]+$"), 'g');
+		    return str.replace(pattern, '');
+		  } // Use a faster and more safe than regex trim method https://blog.stevenlevithan.com/archives/faster-trim-javascript
+
+
+		  var strIndex = str.length - 1;
+
+		  while (/\s/.test(str.charAt(strIndex))) {
+		    strIndex -= 1;
+		  }
+
+		  return str.slice(0, strIndex + 1);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (rtrim, rtrimExports));
+	return rtrimExports;
+}
+
+var trimExports = {};
+var trim = {
+  get exports(){ return trimExports; },
+  set exports(v){ trimExports = v; },
+};
+
+var hasRequiredTrim;
+
+function requireTrim () {
+	if (hasRequiredTrim) return trimExports;
+	hasRequiredTrim = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = trim;
+
+		var _rtrim = _interopRequireDefault(requireRtrim());
+
+		var _ltrim = _interopRequireDefault(requireLtrim());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function trim(str, chars) {
+		  return (0, _rtrim.default)((0, _ltrim.default)(str, chars), chars);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (trim, trimExports));
+	return trimExports;
+}
+
+var _escapeExports = {};
+var _escape = {
+  get exports(){ return _escapeExports; },
+  set exports(v){ _escapeExports = v; },
+};
+
+var hasRequired_escape;
+
+function require_escape () {
+	if (hasRequired_escape) return _escapeExports;
+	hasRequired_escape = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = escape;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function escape(str) {
+		  (0, _assertString.default)(str);
+		  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\//g, '&#x2F;').replace(/\\/g, '&#x5C;').replace(/`/g, '&#96;');
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (_escape, _escapeExports));
+	return _escapeExports;
+}
+
+var _unescapeExports = {};
+var _unescape = {
+  get exports(){ return _unescapeExports; },
+  set exports(v){ _unescapeExports = v; },
+};
+
+var hasRequired_unescape;
+
+function require_unescape () {
+	if (hasRequired_unescape) return _unescapeExports;
+	hasRequired_unescape = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = unescape;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function unescape(str) {
+		  (0, _assertString.default)(str);
+		  return str.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#x2F;/g, '/').replace(/&#x5C;/g, '\\').replace(/&#96;/g, '`').replace(/&amp;/g, '&'); // &amp; replacement has to be the last one to prevent
+		  // bugs with intermediate strings containing escape sequences
+		  // See: https://github.com/validatorjs/validator.js/issues/1827
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (_unescape, _unescapeExports));
+	return _unescapeExports;
+}
+
+var stripLowExports = {};
+var stripLow = {
+  get exports(){ return stripLowExports; },
+  set exports(v){ stripLowExports = v; },
+};
+
+var blacklistExports = {};
+var blacklist = {
+  get exports(){ return blacklistExports; },
+  set exports(v){ blacklistExports = v; },
+};
+
+var hasRequiredBlacklist;
+
+function requireBlacklist () {
+	if (hasRequiredBlacklist) return blacklistExports;
+	hasRequiredBlacklist = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = blacklist;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function blacklist(str, chars) {
+		  (0, _assertString.default)(str);
+		  return str.replace(new RegExp("[".concat(chars, "]+"), 'g'), '');
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (blacklist, blacklistExports));
+	return blacklistExports;
+}
+
+var hasRequiredStripLow;
+
+function requireStripLow () {
+	if (hasRequiredStripLow) return stripLowExports;
+	hasRequiredStripLow = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = stripLow;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _blacklist = _interopRequireDefault(requireBlacklist());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function stripLow(str, keep_new_lines) {
+		  (0, _assertString.default)(str);
+		  var chars = keep_new_lines ? '\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F' : '\\x00-\\x1F\\x7F';
+		  return (0, _blacklist.default)(str, chars);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (stripLow, stripLowExports));
+	return stripLowExports;
+}
+
+var whitelistExports = {};
+var whitelist = {
+  get exports(){ return whitelistExports; },
+  set exports(v){ whitelistExports = v; },
+};
+
+var hasRequiredWhitelist;
+
+function requireWhitelist () {
+	if (hasRequiredWhitelist) return whitelistExports;
+	hasRequiredWhitelist = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = whitelist;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function whitelist(str, chars) {
+		  (0, _assertString.default)(str);
+		  return str.replace(new RegExp("[^".concat(chars, "]+"), 'g'), '');
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (whitelist, whitelistExports));
+	return whitelistExports;
+}
+
+var isWhitelistedExports = {};
+var isWhitelisted = {
+  get exports(){ return isWhitelistedExports; },
+  set exports(v){ isWhitelistedExports = v; },
+};
+
+var hasRequiredIsWhitelisted;
+
+function requireIsWhitelisted () {
+	if (hasRequiredIsWhitelisted) return isWhitelistedExports;
+	hasRequiredIsWhitelisted = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isWhitelisted;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isWhitelisted(str, chars) {
+		  (0, _assertString.default)(str);
+
+		  for (var i = str.length - 1; i >= 0; i--) {
+		    if (chars.indexOf(str[i]) === -1) {
+		      return false;
+		    }
+		  }
+
+		  return true;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isWhitelisted, isWhitelistedExports));
+	return isWhitelistedExports;
+}
+
+var normalizeEmailExports = {};
+var normalizeEmail = {
+  get exports(){ return normalizeEmailExports; },
+  set exports(v){ normalizeEmailExports = v; },
+};
+
+var hasRequiredNormalizeEmail;
+
+function requireNormalizeEmail () {
+	if (hasRequiredNormalizeEmail) return normalizeEmailExports;
+	hasRequiredNormalizeEmail = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = normalizeEmail;
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var default_normalize_email_options = {
+		  // The following options apply to all email addresses
+		  // Lowercases the local part of the email address.
+		  // Please note this may violate RFC 5321 as per http://stackoverflow.com/a/9808332/192024).
+		  // The domain is always lowercased, as per RFC 1035
+		  all_lowercase: true,
+		  // The following conversions are specific to GMail
+		  // Lowercases the local part of the GMail address (known to be case-insensitive)
+		  gmail_lowercase: true,
+		  // Removes dots from the local part of the email address, as that's ignored by GMail
+		  gmail_remove_dots: true,
+		  // Removes the subaddress (e.g. "+foo") from the email address
+		  gmail_remove_subaddress: true,
+		  // Conversts the googlemail.com domain to gmail.com
+		  gmail_convert_googlemaildotcom: true,
+		  // The following conversions are specific to Outlook.com / Windows Live / Hotmail
+		  // Lowercases the local part of the Outlook.com address (known to be case-insensitive)
+		  outlookdotcom_lowercase: true,
+		  // Removes the subaddress (e.g. "+foo") from the email address
+		  outlookdotcom_remove_subaddress: true,
+		  // The following conversions are specific to Yahoo
+		  // Lowercases the local part of the Yahoo address (known to be case-insensitive)
+		  yahoo_lowercase: true,
+		  // Removes the subaddress (e.g. "-foo") from the email address
+		  yahoo_remove_subaddress: true,
+		  // The following conversions are specific to Yandex
+		  // Lowercases the local part of the Yandex address (known to be case-insensitive)
+		  yandex_lowercase: true,
+		  // The following conversions are specific to iCloud
+		  // Lowercases the local part of the iCloud address (known to be case-insensitive)
+		  icloud_lowercase: true,
+		  // Removes the subaddress (e.g. "+foo") from the email address
+		  icloud_remove_subaddress: true
+		}; // List of domains used by iCloud
+
+		var icloud_domains = ['icloud.com', 'me.com']; // List of domains used by Outlook.com and its predecessors
+		// This list is likely incomplete.
+		// Partial reference:
+		// https://blogs.office.com/2013/04/17/outlook-com-gets-two-step-verification-sign-in-by-alias-and-new-international-domains/
+
+		var outlookdotcom_domains = ['hotmail.at', 'hotmail.be', 'hotmail.ca', 'hotmail.cl', 'hotmail.co.il', 'hotmail.co.nz', 'hotmail.co.th', 'hotmail.co.uk', 'hotmail.com', 'hotmail.com.ar', 'hotmail.com.au', 'hotmail.com.br', 'hotmail.com.gr', 'hotmail.com.mx', 'hotmail.com.pe', 'hotmail.com.tr', 'hotmail.com.vn', 'hotmail.cz', 'hotmail.de', 'hotmail.dk', 'hotmail.es', 'hotmail.fr', 'hotmail.hu', 'hotmail.id', 'hotmail.ie', 'hotmail.in', 'hotmail.it', 'hotmail.jp', 'hotmail.kr', 'hotmail.lv', 'hotmail.my', 'hotmail.ph', 'hotmail.pt', 'hotmail.sa', 'hotmail.sg', 'hotmail.sk', 'live.be', 'live.co.uk', 'live.com', 'live.com.ar', 'live.com.mx', 'live.de', 'live.es', 'live.eu', 'live.fr', 'live.it', 'live.nl', 'msn.com', 'outlook.at', 'outlook.be', 'outlook.cl', 'outlook.co.il', 'outlook.co.nz', 'outlook.co.th', 'outlook.com', 'outlook.com.ar', 'outlook.com.au', 'outlook.com.br', 'outlook.com.gr', 'outlook.com.pe', 'outlook.com.tr', 'outlook.com.vn', 'outlook.cz', 'outlook.de', 'outlook.dk', 'outlook.es', 'outlook.fr', 'outlook.hu', 'outlook.id', 'outlook.ie', 'outlook.in', 'outlook.it', 'outlook.jp', 'outlook.kr', 'outlook.lv', 'outlook.my', 'outlook.ph', 'outlook.pt', 'outlook.sa', 'outlook.sg', 'outlook.sk', 'passport.com']; // List of domains used by Yahoo Mail
+		// This list is likely incomplete
+
+		var yahoo_domains = ['rocketmail.com', 'yahoo.ca', 'yahoo.co.uk', 'yahoo.com', 'yahoo.de', 'yahoo.fr', 'yahoo.in', 'yahoo.it', 'ymail.com']; // List of domains used by yandex.ru
+
+		var yandex_domains = ['yandex.ru', 'yandex.ua', 'yandex.kz', 'yandex.com', 'yandex.by', 'ya.ru']; // replace single dots, but not multiple consecutive dots
+
+		function dotsReplacer(match) {
+		  if (match.length > 1) {
+		    return match;
+		  }
+
+		  return '';
+		}
+
+		function normalizeEmail(email, options) {
+		  options = (0, _merge.default)(options, default_normalize_email_options);
+		  var raw_parts = email.split('@');
+		  var domain = raw_parts.pop();
+		  var user = raw_parts.join('@');
+		  var parts = [user, domain]; // The domain is always lowercased, as it's case-insensitive per RFC 1035
+
+		  parts[1] = parts[1].toLowerCase();
+
+		  if (parts[1] === 'gmail.com' || parts[1] === 'googlemail.com') {
+		    // Address is GMail
+		    if (options.gmail_remove_subaddress) {
+		      parts[0] = parts[0].split('+')[0];
+		    }
+
+		    if (options.gmail_remove_dots) {
+		      // this does not replace consecutive dots like example..email@gmail.com
+		      parts[0] = parts[0].replace(/\.+/g, dotsReplacer);
+		    }
+
+		    if (!parts[0].length) {
+		      return false;
+		    }
+
+		    if (options.all_lowercase || options.gmail_lowercase) {
+		      parts[0] = parts[0].toLowerCase();
+		    }
+
+		    parts[1] = options.gmail_convert_googlemaildotcom ? 'gmail.com' : parts[1];
+		  } else if (icloud_domains.indexOf(parts[1]) >= 0) {
+		    // Address is iCloud
+		    if (options.icloud_remove_subaddress) {
+		      parts[0] = parts[0].split('+')[0];
+		    }
+
+		    if (!parts[0].length) {
+		      return false;
+		    }
+
+		    if (options.all_lowercase || options.icloud_lowercase) {
+		      parts[0] = parts[0].toLowerCase();
+		    }
+		  } else if (outlookdotcom_domains.indexOf(parts[1]) >= 0) {
+		    // Address is Outlook.com
+		    if (options.outlookdotcom_remove_subaddress) {
+		      parts[0] = parts[0].split('+')[0];
+		    }
+
+		    if (!parts[0].length) {
+		      return false;
+		    }
+
+		    if (options.all_lowercase || options.outlookdotcom_lowercase) {
+		      parts[0] = parts[0].toLowerCase();
+		    }
+		  } else if (yahoo_domains.indexOf(parts[1]) >= 0) {
+		    // Address is Yahoo
+		    if (options.yahoo_remove_subaddress) {
+		      var components = parts[0].split('-');
+		      parts[0] = components.length > 1 ? components.slice(0, -1).join('-') : components[0];
+		    }
+
+		    if (!parts[0].length) {
+		      return false;
+		    }
+
+		    if (options.all_lowercase || options.yahoo_lowercase) {
+		      parts[0] = parts[0].toLowerCase();
+		    }
+		  } else if (yandex_domains.indexOf(parts[1]) >= 0) {
+		    if (options.all_lowercase || options.yandex_lowercase) {
+		      parts[0] = parts[0].toLowerCase();
+		    }
+
+		    parts[1] = 'yandex.ru'; // all yandex domains are equal, 1st preferred
+		  } else if (options.all_lowercase) {
+		    // Any other address
+		    parts[0] = parts[0].toLowerCase();
+		  }
+
+		  return parts.join('@');
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (normalizeEmail, normalizeEmailExports));
+	return normalizeEmailExports;
+}
+
+var isSlugExports = {};
+var isSlug = {
+  get exports(){ return isSlugExports; },
+  set exports(v){ isSlugExports = v; },
+};
+
+var hasRequiredIsSlug;
+
+function requireIsSlug () {
+	if (hasRequiredIsSlug) return isSlugExports;
+	hasRequiredIsSlug = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isSlug;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var charsetRegex = /^[^\s-_](?!.*?[-_]{2,})[a-z0-9-\\][^\s]*[^-_\s]$/;
+
+		function isSlug(str) {
+		  (0, _assertString.default)(str);
+		  return charsetRegex.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isSlug, isSlugExports));
+	return isSlugExports;
+}
+
+var isLicensePlateExports = {};
+var isLicensePlate = {
+  get exports(){ return isLicensePlateExports; },
+  set exports(v){ isLicensePlateExports = v; },
+};
+
+var hasRequiredIsLicensePlate;
+
+function requireIsLicensePlate () {
+	if (hasRequiredIsLicensePlate) return isLicensePlateExports;
+	hasRequiredIsLicensePlate = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isLicensePlate;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var validators = {
+		  'cs-CZ': function csCZ(str) {
+		    return /^(([ABCDEFHIJKLMNPRSTUVXYZ]|[0-9])-?){5,8}$/.test(str);
+		  },
+		  'de-DE': function deDE(str) {
+		    return /^((A|AA|AB|AC|AE|AH|AK|AM|AN|AÖ|AP|AS|AT|AU|AW|AZ|B|BA|BB|BC|BE|BF|BH|BI|BK|BL|BM|BN|BO|BÖ|BS|BT|BZ|C|CA|CB|CE|CO|CR|CW|D|DA|DD|DE|DH|DI|DL|DM|DN|DO|DU|DW|DZ|E|EA|EB|ED|EE|EF|EG|EH|EI|EL|EM|EN|ER|ES|EU|EW|F|FB|FD|FF|FG|FI|FL|FN|FO|FR|FS|FT|FÜ|FW|FZ|G|GA|GC|GD|GE|GF|GG|GI|GK|GL|GM|GN|GÖ|GP|GR|GS|GT|GÜ|GV|GW|GZ|H|HA|HB|HC|HD|HE|HF|HG|HH|HI|HK|HL|HM|HN|HO|HP|HR|HS|HU|HV|HX|HY|HZ|IK|IL|IN|IZ|J|JE|JL|K|KA|KB|KC|KE|KF|KG|KH|KI|KK|KL|KM|KN|KO|KR|KS|KT|KU|KW|KY|L|LA|LB|LC|LD|LF|LG|LH|LI|LL|LM|LN|LÖ|LP|LR|LU|M|MA|MB|MC|MD|ME|MG|MH|MI|MK|ML|MM|MN|MO|MQ|MR|MS|MÜ|MW|MY|MZ|N|NB|ND|NE|NF|NH|NI|NK|NM|NÖ|NP|NR|NT|NU|NW|NY|NZ|OA|OB|OC|OD|OE|OF|OG|OH|OK|OL|OP|OS|OZ|P|PA|PB|PE|PF|PI|PL|PM|PN|PR|PS|PW|PZ|R|RA|RC|RD|RE|RG|RH|RI|RL|RM|RN|RO|RP|RS|RT|RU|RV|RW|RZ|S|SB|SC|SE|SG|SI|SK|SL|SM|SN|SO|SP|SR|ST|SU|SW|SY|SZ|TE|TF|TG|TO|TP|TR|TS|TT|TÜ|ÜB|UE|UH|UL|UM|UN|V|VB|VG|VK|VR|VS|W|WA|WB|WE|WF|WI|WK|WL|WM|WN|WO|WR|WS|WT|WÜ|WW|WZ|Z|ZE|ZI|ZP|ZR|ZW|ZZ)[- ]?[A-Z]{1,2}[- ]?\d{1,4}|(ABG|ABI|AIB|AIC|ALF|ALZ|ANA|ANG|ANK|APD|ARN|ART|ASL|ASZ|AUR|AZE|BAD|BAR|BBG|BCH|BED|BER|BGD|BGL|BID|BIN|BIR|BIT|BIW|BKS|BLB|BLK|BNA|BOG|BOH|BOR|BOT|BRA|BRB|BRG|BRK|BRL|BRV|BSB|BSK|BTF|BÜD|BUL|BÜR|BÜS|BÜZ|CAS|CHA|CLP|CLZ|COC|COE|CUX|DAH|DAN|DAU|DBR|DEG|DEL|DGF|DIL|DIN|DIZ|DKB|DLG|DON|DUD|DÜW|EBE|EBN|EBS|ECK|EIC|EIL|EIN|EIS|EMD|EMS|ERB|ERH|ERK|ERZ|ESB|ESW|FDB|FDS|FEU|FFB|FKB|FLÖ|FOR|FRG|FRI|FRW|FTL|FÜS|GAN|GAP|GDB|GEL|GEO|GER|GHA|GHC|GLA|GMN|GNT|GOA|GOH|GRA|GRH|GRI|GRM|GRZ|GTH|GUB|GUN|GVM|HAB|HAL|HAM|HAS|HBN|HBS|HCH|HDH|HDL|HEB|HEF|HEI|HER|HET|HGN|HGW|HHM|HIG|HIP|HMÜ|HOG|HOH|HOL|HOM|HOR|HÖS|HOT|HRO|HSK|HST|HVL|HWI|IGB|ILL|JÜL|KEH|KEL|KEM|KIB|KLE|KLZ|KÖN|KÖT|KÖZ|KRU|KÜN|KUS|KYF|LAN|LAU|LBS|LBZ|LDK|LDS|LEO|LER|LEV|LIB|LIF|LIP|LÖB|LOS|LRO|LSZ|LÜN|LUP|LWL|MAB|MAI|MAK|MAL|MED|MEG|MEI|MEK|MEL|MER|MET|MGH|MGN|MHL|MIL|MKK|MOD|MOL|MON|MOS|MSE|MSH|MSP|MST|MTK|MTL|MÜB|MÜR|MYK|MZG|NAB|NAI|NAU|NDH|NEA|NEB|NEC|NEN|NES|NEW|NMB|NMS|NOH|NOL|NOM|NOR|NVP|NWM|OAL|OBB|OBG|OCH|OHA|ÖHR|OHV|OHZ|OPR|OSL|OVI|OVL|OVP|PAF|PAN|PAR|PCH|PEG|PIR|PLÖ|PRÜ|QFT|QLB|RDG|REG|REH|REI|RID|RIE|ROD|ROF|ROK|ROL|ROS|ROT|ROW|RSL|RÜD|RÜG|SAB|SAD|SAN|SAW|SBG|SBK|SCZ|SDH|SDL|SDT|SEB|SEE|SEF|SEL|SFB|SFT|SGH|SHA|SHG|SHK|SHL|SIG|SIM|SLE|SLF|SLK|SLN|SLS|SLÜ|SLZ|SMÜ|SOB|SOG|SOK|SÖM|SON|SPB|SPN|SRB|SRO|STA|STB|STD|STE|STL|SUL|SÜW|SWA|SZB|TBB|TDO|TET|TIR|TÖL|TUT|UEM|UER|UFF|USI|VAI|VEC|VER|VIB|VIE|VIT|VOH|WAF|WAK|WAN|WAR|WAT|WBS|WDA|WEL|WEN|WER|WES|WHV|WIL|WIS|WIT|WIZ|WLG|WMS|WND|WOB|WOH|WOL|WOR|WOS|WRN|WSF|WST|WSW|WTL|WTM|WUG|WÜM|WUN|WUR|WZL|ZEL|ZIG)[- ]?(([A-Z][- ]?\d{1,4})|([A-Z]{2}[- ]?\d{1,3})))[- ]?(E|H)?$/.test(str);
+		  },
+		  'de-LI': function deLI(str) {
+		    return /^FL[- ]?\d{1,5}[UZ]?$/.test(str);
+		  },
+		  'en-IN': function enIN(str) {
+		    return /^[A-Z]{2}[ -]?[0-9]{1,2}(?:[ -]?[A-Z])(?:[ -]?[A-Z]*)?[ -]?[0-9]{4}$/.test(str);
+		  },
+		  'es-AR': function esAR(str) {
+		    return /^(([A-Z]{2} ?[0-9]{3} ?[A-Z]{2})|([A-Z]{3} ?[0-9]{3}))$/.test(str);
+		  },
+		  'fi-FI': function fiFI(str) {
+		    return /^(?=.{4,7})(([A-Z]{1,3}|[0-9]{1,3})[\s-]?([A-Z]{1,3}|[0-9]{1,5}))$/.test(str);
+		  },
+		  'hu-HU': function huHU(str) {
+		    return /^((((?!AAA)(([A-NPRSTVZWXY]{1})([A-PR-Z]{1})([A-HJ-NPR-Z]))|(A[ABC]I)|A[ABC]O|A[A-W]Q|BPI|BPO|UCO|UDO|XAO)-(?!000)\d{3})|(M\d{6})|((CK|DT|CD|HC|H[ABEFIKLMNPRSTVX]|MA|OT|R[A-Z]) \d{2}-\d{2})|(CD \d{3}-\d{3})|(C-(C|X) \d{4})|(X-(A|B|C) \d{4})|(([EPVZ]-\d{5}))|(S A[A-Z]{2} \d{2})|(SP \d{2}-\d{2}))$/.test(str);
+		  },
+		  'pt-BR': function ptBR(str) {
+		    return /^[A-Z]{3}[ -]?[0-9][A-Z][0-9]{2}|[A-Z]{3}[ -]?[0-9]{4}$/.test(str);
+		  },
+		  'pt-PT': function ptPT(str) {
+		    return /^([A-Z]{2}|[0-9]{2})[ -·]?([A-Z]{2}|[0-9]{2})[ -·]?([A-Z]{2}|[0-9]{2})$/.test(str);
+		  },
+		  'sq-AL': function sqAL(str) {
+		    return /^[A-Z]{2}[- ]?((\d{3}[- ]?(([A-Z]{2})|T))|(R[- ]?\d{3}))$/.test(str);
+		  },
+		  'sv-SE': function svSE(str) {
+		    return /^[A-HJ-PR-UW-Z]{3} ?[\d]{2}[A-HJ-PR-UW-Z1-9]$|(^[A-ZÅÄÖ ]{2,7}$)/.test(str.trim());
+		  }
+		};
+
+		function isLicensePlate(str, locale) {
+		  (0, _assertString.default)(str);
+
+		  if (locale in validators) {
+		    return validators[locale](str);
+		  } else if (locale === 'any') {
+		    for (var key in validators) {
+		      /* eslint guard-for-in: 0 */
+		      var validator = validators[key];
+
+		      if (validator(str)) {
+		        return true;
+		      }
+		    }
+
+		    return false;
+		  }
+
+		  throw new Error("Invalid locale '".concat(locale, "'"));
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isLicensePlate, isLicensePlateExports));
+	return isLicensePlateExports;
+}
+
+var isStrongPasswordExports = {};
+var isStrongPassword = {
+  get exports(){ return isStrongPasswordExports; },
+  set exports(v){ isStrongPasswordExports = v; },
+};
+
+var hasRequiredIsStrongPassword;
+
+function requireIsStrongPassword () {
+	if (hasRequiredIsStrongPassword) return isStrongPasswordExports;
+	hasRequiredIsStrongPassword = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isStrongPassword;
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var upperCaseRegex = /^[A-Z]$/;
+		var lowerCaseRegex = /^[a-z]$/;
+		var numberRegex = /^[0-9]$/;
+		var symbolRegex = /^[-#!$@£%^&*()_+|~=`{}\[\]:";'<>?,.\/ ]$/;
+		var defaultOptions = {
+		  minLength: 8,
+		  minLowercase: 1,
+		  minUppercase: 1,
+		  minNumbers: 1,
+		  minSymbols: 1,
+		  returnScore: false,
+		  pointsPerUnique: 1,
+		  pointsPerRepeat: 0.5,
+		  pointsForContainingLower: 10,
+		  pointsForContainingUpper: 10,
+		  pointsForContainingNumber: 10,
+		  pointsForContainingSymbol: 10
+		};
+		/* Counts number of occurrences of each char in a string
+		 * could be moved to util/ ?
+		*/
+
+		function countChars(str) {
+		  var result = {};
+		  Array.from(str).forEach(function (char) {
+		    var curVal = result[char];
+
+		    if (curVal) {
+		      result[char] += 1;
+		    } else {
+		      result[char] = 1;
+		    }
+		  });
+		  return result;
+		}
+		/* Return information about a password */
+
+
+		function analyzePassword(password) {
+		  var charMap = countChars(password);
+		  var analysis = {
+		    length: password.length,
+		    uniqueChars: Object.keys(charMap).length,
+		    uppercaseCount: 0,
+		    lowercaseCount: 0,
+		    numberCount: 0,
+		    symbolCount: 0
+		  };
+		  Object.keys(charMap).forEach(function (char) {
+		    /* istanbul ignore else */
+		    if (upperCaseRegex.test(char)) {
+		      analysis.uppercaseCount += charMap[char];
+		    } else if (lowerCaseRegex.test(char)) {
+		      analysis.lowercaseCount += charMap[char];
+		    } else if (numberRegex.test(char)) {
+		      analysis.numberCount += charMap[char];
+		    } else if (symbolRegex.test(char)) {
+		      analysis.symbolCount += charMap[char];
+		    }
+		  });
+		  return analysis;
+		}
+
+		function scorePassword(analysis, scoringOptions) {
+		  var points = 0;
+		  points += analysis.uniqueChars * scoringOptions.pointsPerUnique;
+		  points += (analysis.length - analysis.uniqueChars) * scoringOptions.pointsPerRepeat;
+
+		  if (analysis.lowercaseCount > 0) {
+		    points += scoringOptions.pointsForContainingLower;
+		  }
+
+		  if (analysis.uppercaseCount > 0) {
+		    points += scoringOptions.pointsForContainingUpper;
+		  }
+
+		  if (analysis.numberCount > 0) {
+		    points += scoringOptions.pointsForContainingNumber;
+		  }
+
+		  if (analysis.symbolCount > 0) {
+		    points += scoringOptions.pointsForContainingSymbol;
+		  }
+
+		  return points;
+		}
+
+		function isStrongPassword(str) {
+		  var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
+		  (0, _assertString.default)(str);
+		  var analysis = analyzePassword(str);
+		  options = (0, _merge.default)(options || {}, defaultOptions);
+
+		  if (options.returnScore) {
+		    return scorePassword(analysis, options);
+		  }
+
+		  return analysis.length >= options.minLength && analysis.lowercaseCount >= options.minLowercase && analysis.uppercaseCount >= options.minUppercase && analysis.numberCount >= options.minNumbers && analysis.symbolCount >= options.minSymbols;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isStrongPassword, isStrongPasswordExports));
+	return isStrongPasswordExports;
+}
+
+var isVAT = {};
+
+var hasRequiredIsVAT;
+
+function requireIsVAT () {
+	if (hasRequiredIsVAT) return isVAT;
+	hasRequiredIsVAT = 1;
+
+	function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+	Object.defineProperty(isVAT, "__esModule", {
+	  value: true
+	});
+	isVAT.default = isVAT$1;
+	isVAT.vatMatchers = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	var algorithms = _interopRequireWildcard(requireAlgorithms());
+
+	function _getRequireWildcardCache() { if (typeof WeakMap !== "function") return null; var cache = new WeakMap(); _getRequireWildcardCache = function _getRequireWildcardCache() { return cache; }; return cache; }
+
+	function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } if (obj === null || _typeof(obj) !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	var PT = function PT(str) {
+	  var match = str.match(/^(PT)?(\d{9})$/);
+
+	  if (!match) {
+	    return false;
+	  }
+
+	  var tin = match[2];
+	  var checksum = 11 - algorithms.reverseMultiplyAndSum(tin.split('').slice(0, 8).map(function (a) {
+	    return parseInt(a, 10);
+	  }), 9) % 11;
+
+	  if (checksum > 9) {
+	    return parseInt(tin[8], 10) === 0;
+	  }
+
+	  return checksum === parseInt(tin[8], 10);
+	};
+
+	var vatMatchers = {
+	  /**
+	   * European Union VAT identification numbers
+	   */
+	  AT: function AT(str) {
+	    return /^(AT)?U\d{8}$/.test(str);
+	  },
+	  BE: function BE(str) {
+	    return /^(BE)?\d{10}$/.test(str);
+	  },
+	  BG: function BG(str) {
+	    return /^(BG)?\d{9,10}$/.test(str);
+	  },
+	  HR: function HR(str) {
+	    return /^(HR)?\d{11}$/.test(str);
+	  },
+	  CY: function CY(str) {
+	    return /^(CY)?\w{9}$/.test(str);
+	  },
+	  CZ: function CZ(str) {
+	    return /^(CZ)?\d{8,10}$/.test(str);
+	  },
+	  DK: function DK(str) {
+	    return /^(DK)?\d{8}$/.test(str);
+	  },
+	  EE: function EE(str) {
+	    return /^(EE)?\d{9}$/.test(str);
+	  },
+	  FI: function FI(str) {
+	    return /^(FI)?\d{8}$/.test(str);
+	  },
+	  FR: function FR(str) {
+	    return /^(FR)?\w{2}\d{9}$/.test(str);
+	  },
+	  DE: function DE(str) {
+	    return /^(DE)?\d{9}$/.test(str);
+	  },
+	  EL: function EL(str) {
+	    return /^(EL)?\d{9}$/.test(str);
+	  },
+	  HU: function HU(str) {
+	    return /^(HU)?\d{8}$/.test(str);
+	  },
+	  IE: function IE(str) {
+	    return /^(IE)?\d{7}\w{1}(W)?$/.test(str);
+	  },
+	  IT: function IT(str) {
+	    return /^(IT)?\d{11}$/.test(str);
+	  },
+	  LV: function LV(str) {
+	    return /^(LV)?\d{11}$/.test(str);
+	  },
+	  LT: function LT(str) {
+	    return /^(LT)?\d{9,12}$/.test(str);
+	  },
+	  LU: function LU(str) {
+	    return /^(LU)?\d{8}$/.test(str);
+	  },
+	  MT: function MT(str) {
+	    return /^(MT)?\d{8}$/.test(str);
+	  },
+	  NL: function NL(str) {
+	    return /^(NL)?\d{9}B\d{2}$/.test(str);
+	  },
+	  PL: function PL(str) {
+	    return /^(PL)?(\d{10}|(\d{3}-\d{3}-\d{2}-\d{2})|(\d{3}-\d{2}-\d{2}-\d{3}))$/.test(str);
+	  },
+	  PT: PT,
+	  RO: function RO(str) {
+	    return /^(RO)?\d{2,10}$/.test(str);
+	  },
+	  SK: function SK(str) {
+	    return /^(SK)?\d{10}$/.test(str);
+	  },
+	  SI: function SI(str) {
+	    return /^(SI)?\d{8}$/.test(str);
+	  },
+	  ES: function ES(str) {
+	    return /^(ES)?\w\d{7}[A-Z]$/.test(str);
+	  },
+	  SE: function SE(str) {
+	    return /^(SE)?\d{12}$/.test(str);
+	  },
+
+	  /**
+	   * VAT numbers of non-EU countries
+	   */
+	  AL: function AL(str) {
+	    return /^(AL)?\w{9}[A-Z]$/.test(str);
+	  },
+	  MK: function MK(str) {
+	    return /^(MK)?\d{13}$/.test(str);
+	  },
+	  AU: function AU(str) {
+	    return /^(AU)?\d{11}$/.test(str);
+	  },
+	  BY: function BY(str) {
+	    return /^(УНП )?\d{9}$/.test(str);
+	  },
+	  CA: function CA(str) {
+	    return /^(CA)?\d{9}$/.test(str);
+	  },
+	  IS: function IS(str) {
+	    return /^(IS)?\d{5,6}$/.test(str);
+	  },
+	  IN: function IN(str) {
+	    return /^(IN)?\d{15}$/.test(str);
+	  },
+	  ID: function ID(str) {
+	    return /^(ID)?(\d{15}|(\d{2}.\d{3}.\d{3}.\d{1}-\d{3}.\d{3}))$/.test(str);
+	  },
+	  IL: function IL(str) {
+	    return /^(IL)?\d{9}$/.test(str);
+	  },
+	  KZ: function KZ(str) {
+	    return /^(KZ)?\d{9}$/.test(str);
+	  },
+	  NZ: function NZ(str) {
+	    return /^(NZ)?\d{9}$/.test(str);
+	  },
+	  NG: function NG(str) {
+	    return /^(NG)?(\d{12}|(\d{8}-\d{4}))$/.test(str);
+	  },
+	  NO: function NO(str) {
+	    return /^(NO)?\d{9}MVA$/.test(str);
+	  },
+	  PH: function PH(str) {
+	    return /^(PH)?(\d{12}|\d{3} \d{3} \d{3} \d{3})$/.test(str);
+	  },
+	  RU: function RU(str) {
+	    return /^(RU)?(\d{10}|\d{12})$/.test(str);
+	  },
+	  SM: function SM(str) {
+	    return /^(SM)?\d{5}$/.test(str);
+	  },
+	  SA: function SA(str) {
+	    return /^(SA)?\d{15}$/.test(str);
+	  },
+	  RS: function RS(str) {
+	    return /^(RS)?\d{9}$/.test(str);
+	  },
+	  CH: function CH(str) {
+	    return /^(CH)?(\d{6}|\d{9}|(\d{3}.\d{3})|(\d{3}.\d{3}.\d{3}))(TVA|MWST|IVA)$/.test(str);
+	  },
+	  TR: function TR(str) {
+	    return /^(TR)?\d{10}$/.test(str);
+	  },
+	  UA: function UA(str) {
+	    return /^(UA)?\d{12}$/.test(str);
+	  },
+	  GB: function GB(str) {
+	    return /^GB((\d{3} \d{4} ([0-8][0-9]|9[0-6]))|(\d{9} \d{3})|(((GD[0-4])|(HA[5-9]))[0-9]{2}))$/.test(str);
+	  },
+	  UZ: function UZ(str) {
+	    return /^(UZ)?\d{9}$/.test(str);
+	  },
+
+	  /**
+	   * VAT numbers of Latin American countries
+	   */
+	  AR: function AR(str) {
+	    return /^(AR)?\d{11}$/.test(str);
+	  },
+	  BO: function BO(str) {
+	    return /^(BO)?\d{7}$/.test(str);
+	  },
+	  BR: function BR(str) {
+	    return /^(BR)?((\d{2}.\d{3}.\d{3}\/\d{4}-\d{2})|(\d{3}.\d{3}.\d{3}-\d{2}))$/.test(str);
+	  },
+	  CL: function CL(str) {
+	    return /^(CL)?\d{8}-\d{1}$/.test(str);
+	  },
+	  CO: function CO(str) {
+	    return /^(CO)?\d{10}$/.test(str);
+	  },
+	  CR: function CR(str) {
+	    return /^(CR)?\d{9,12}$/.test(str);
+	  },
+	  EC: function EC(str) {
+	    return /^(EC)?\d{13}$/.test(str);
+	  },
+	  SV: function SV(str) {
+	    return /^(SV)?\d{4}-\d{6}-\d{3}-\d{1}$/.test(str);
+	  },
+	  GT: function GT(str) {
+	    return /^(GT)?\d{7}-\d{1}$/.test(str);
+	  },
+	  HN: function HN(str) {
+	    return /^(HN)?$/.test(str);
+	  },
+	  MX: function MX(str) {
+	    return /^(MX)?\w{3,4}\d{6}\w{3}$/.test(str);
+	  },
+	  NI: function NI(str) {
+	    return /^(NI)?\d{3}-\d{6}-\d{4}\w{1}$/.test(str);
+	  },
+	  PA: function PA(str) {
+	    return /^(PA)?$/.test(str);
+	  },
+	  PY: function PY(str) {
+	    return /^(PY)?\d{6,8}-\d{1}$/.test(str);
+	  },
+	  PE: function PE(str) {
+	    return /^(PE)?\d{11}$/.test(str);
+	  },
+	  DO: function DO(str) {
+	    return /^(DO)?(\d{11}|(\d{3}-\d{7}-\d{1})|[1,4,5]{1}\d{8}|([1,4,5]{1})-\d{2}-\d{5}-\d{1})$/.test(str);
+	  },
+	  UY: function UY(str) {
+	    return /^(UY)?\d{12}$/.test(str);
+	  },
+	  VE: function VE(str) {
+	    return /^(VE)?[J,G,V,E]{1}-(\d{9}|(\d{8}-\d{1}))$/.test(str);
+	  }
+	};
+	isVAT.vatMatchers = vatMatchers;
+
+	function isVAT$1(str, countryCode) {
+	  (0, _assertString.default)(str);
+	  (0, _assertString.default)(countryCode);
+
+	  if (countryCode in vatMatchers) {
+	    return vatMatchers[countryCode](str);
+	  }
+
+	  throw new Error("Invalid country code: '".concat(countryCode, "'"));
+	}
+	return isVAT;
+}
+
+var hasRequiredValidator;
+
+function requireValidator () {
+	if (hasRequiredValidator) return validatorExports;
+	hasRequiredValidator = 1;
+	(function (module, exports) {
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = void 0;
+
+		var _toDate = _interopRequireDefault(requireToDate());
+
+		var _toFloat = _interopRequireDefault(requireToFloat());
+
+		var _toInt = _interopRequireDefault(requireToInt());
+
+		var _toBoolean = _interopRequireDefault(requireToBoolean());
+
+		var _equals = _interopRequireDefault(requireEquals());
+
+		var _contains = _interopRequireDefault(requireContains());
+
+		var _matches = _interopRequireDefault(requireMatches());
+
+		var _isEmail = _interopRequireDefault(requireIsEmail());
+
+		var _isURL = _interopRequireDefault(requireIsURL());
+
+		var _isMACAddress = _interopRequireDefault(requireIsMACAddress());
+
+		var _isIP = _interopRequireDefault(requireIsIP());
+
+		var _isIPRange = _interopRequireDefault(requireIsIPRange());
+
+		var _isFQDN = _interopRequireDefault(requireIsFQDN());
+
+		var _isDate = _interopRequireDefault(requireIsDate());
+
+		var _isTime = _interopRequireDefault(requireIsTime());
+
+		var _isBoolean = _interopRequireDefault(requireIsBoolean());
+
+		var _isLocale = _interopRequireDefault(requireIsLocale());
+
+		var _isAlpha = _interopRequireWildcard(requireIsAlpha());
+
+		var _isAlphanumeric = _interopRequireWildcard(requireIsAlphanumeric());
+
+		var _isNumeric = _interopRequireDefault(requireIsNumeric());
+
+		var _isPassportNumber = _interopRequireDefault(requireIsPassportNumber());
+
+		var _isPort = _interopRequireDefault(requireIsPort());
+
+		var _isLowercase = _interopRequireDefault(requireIsLowercase());
+
+		var _isUppercase = _interopRequireDefault(requireIsUppercase());
+
+		var _isIMEI = _interopRequireDefault(requireIsIMEI());
+
+		var _isAscii = _interopRequireDefault(requireIsAscii());
+
+		var _isFullWidth = _interopRequireDefault(requireIsFullWidth());
+
+		var _isHalfWidth = _interopRequireDefault(requireIsHalfWidth());
+
+		var _isVariableWidth = _interopRequireDefault(requireIsVariableWidth());
+
+		var _isMultibyte = _interopRequireDefault(requireIsMultibyte());
+
+		var _isSemVer = _interopRequireDefault(requireIsSemVer());
+
+		var _isSurrogatePair = _interopRequireDefault(requireIsSurrogatePair());
+
+		var _isInt = _interopRequireDefault(requireIsInt());
+
+		var _isFloat = _interopRequireWildcard(requireIsFloat());
+
+		var _isDecimal = _interopRequireDefault(requireIsDecimal());
+
+		var _isHexadecimal = _interopRequireDefault(requireIsHexadecimal());
+
+		var _isOctal = _interopRequireDefault(requireIsOctal());
+
+		var _isDivisibleBy = _interopRequireDefault(requireIsDivisibleBy());
+
+		var _isHexColor = _interopRequireDefault(requireIsHexColor());
+
+		var _isRgbColor = _interopRequireDefault(requireIsRgbColor());
+
+		var _isHSL = _interopRequireDefault(requireIsHSL());
+
+		var _isISRC = _interopRequireDefault(requireIsISRC());
+
+		var _isIBAN = _interopRequireWildcard(requireIsIBAN());
+
+		var _isBIC = _interopRequireDefault(requireIsBIC());
+
+		var _isMD = _interopRequireDefault(requireIsMD5());
+
+		var _isHash = _interopRequireDefault(requireIsHash());
+
+		var _isJWT = _interopRequireDefault(requireIsJWT());
+
+		var _isJSON = _interopRequireDefault(requireIsJSON());
+
+		var _isEmpty = _interopRequireDefault(requireIsEmpty());
+
+		var _isLength = _interopRequireDefault(requireIsLength());
+
+		var _isByteLength = _interopRequireDefault(requireIsByteLength());
+
+		var _isUUID = _interopRequireDefault(requireIsUUID());
+
+		var _isMongoId = _interopRequireDefault(requireIsMongoId());
+
+		var _isAfter = _interopRequireDefault(requireIsAfter());
+
+		var _isBefore = _interopRequireDefault(requireIsBefore());
+
+		var _isIn = _interopRequireDefault(requireIsIn());
+
+		var _isLuhnNumber = _interopRequireDefault(requireIsLuhnNumber());
+
+		var _isCreditCard = _interopRequireDefault(requireIsCreditCard());
+
+		var _isIdentityCard = _interopRequireDefault(requireIsIdentityCard());
+
+		var _isEAN = _interopRequireDefault(requireIsEAN());
+
+		var _isISIN = _interopRequireDefault(requireIsISIN());
+
+		var _isISBN = _interopRequireDefault(requireIsISBN());
+
+		var _isISSN = _interopRequireDefault(requireIsISSN());
+
+		var _isTaxID = _interopRequireDefault(requireIsTaxID());
+
+		var _isMobilePhone = _interopRequireWildcard(requireIsMobilePhone());
+
+		var _isEthereumAddress = _interopRequireDefault(requireIsEthereumAddress());
+
+		var _isCurrency = _interopRequireDefault(requireIsCurrency());
+
+		var _isBtcAddress = _interopRequireDefault(requireIsBtcAddress());
+
+		var _isISO = _interopRequireDefault(requireIsISO6391());
+
+		var _isISO2 = _interopRequireDefault(requireIsISO8601());
+
+		var _isRFC = _interopRequireDefault(requireIsRFC3339());
+
+		var _isISO31661Alpha = _interopRequireDefault(requireIsISO31661Alpha2());
+
+		var _isISO31661Alpha2 = _interopRequireDefault(requireIsISO31661Alpha3());
+
+		var _isISO3 = _interopRequireDefault(requireIsISO4217());
+
+		var _isBase = _interopRequireDefault(requireIsBase32());
+
+		var _isBase2 = _interopRequireDefault(requireIsBase58());
+
+		var _isBase3 = _interopRequireDefault(requireIsBase64());
+
+		var _isDataURI = _interopRequireDefault(requireIsDataURI());
+
+		var _isMagnetURI = _interopRequireDefault(requireIsMagnetURI());
+
+		var _isMimeType = _interopRequireDefault(requireIsMimeType());
+
+		var _isLatLong = _interopRequireDefault(requireIsLatLong());
+
+		var _isPostalCode = _interopRequireWildcard(requireIsPostalCode());
+
+		var _ltrim = _interopRequireDefault(requireLtrim());
+
+		var _rtrim = _interopRequireDefault(requireRtrim());
+
+		var _trim = _interopRequireDefault(requireTrim());
+
+		var _escape = _interopRequireDefault(require_escape());
+
+		var _unescape = _interopRequireDefault(require_unescape());
+
+		var _stripLow = _interopRequireDefault(requireStripLow());
+
+		var _whitelist = _interopRequireDefault(requireWhitelist());
+
+		var _blacklist = _interopRequireDefault(requireBlacklist());
+
+		var _isWhitelisted = _interopRequireDefault(requireIsWhitelisted());
+
+		var _normalizeEmail = _interopRequireDefault(requireNormalizeEmail());
+
+		var _isSlug = _interopRequireDefault(requireIsSlug());
+
+		var _isLicensePlate = _interopRequireDefault(requireIsLicensePlate());
+
+		var _isStrongPassword = _interopRequireDefault(requireIsStrongPassword());
+
+		var _isVAT = _interopRequireDefault(requireIsVAT());
+
+		function _getRequireWildcardCache() { if (typeof WeakMap !== "function") return null; var cache = new WeakMap(); _getRequireWildcardCache = function _getRequireWildcardCache() { return cache; }; return cache; }
+
+		function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } if (obj === null || _typeof(obj) !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var version = '13.9.0';
+		var validator = {
+		  version: version,
+		  toDate: _toDate.default,
+		  toFloat: _toFloat.default,
+		  toInt: _toInt.default,
+		  toBoolean: _toBoolean.default,
+		  equals: _equals.default,
+		  contains: _contains.default,
+		  matches: _matches.default,
+		  isEmail: _isEmail.default,
+		  isURL: _isURL.default,
+		  isMACAddress: _isMACAddress.default,
+		  isIP: _isIP.default,
+		  isIPRange: _isIPRange.default,
+		  isFQDN: _isFQDN.default,
+		  isBoolean: _isBoolean.default,
+		  isIBAN: _isIBAN.default,
+		  isBIC: _isBIC.default,
+		  isAlpha: _isAlpha.default,
+		  isAlphaLocales: _isAlpha.locales,
+		  isAlphanumeric: _isAlphanumeric.default,
+		  isAlphanumericLocales: _isAlphanumeric.locales,
+		  isNumeric: _isNumeric.default,
+		  isPassportNumber: _isPassportNumber.default,
+		  isPort: _isPort.default,
+		  isLowercase: _isLowercase.default,
+		  isUppercase: _isUppercase.default,
+		  isAscii: _isAscii.default,
+		  isFullWidth: _isFullWidth.default,
+		  isHalfWidth: _isHalfWidth.default,
+		  isVariableWidth: _isVariableWidth.default,
+		  isMultibyte: _isMultibyte.default,
+		  isSemVer: _isSemVer.default,
+		  isSurrogatePair: _isSurrogatePair.default,
+		  isInt: _isInt.default,
+		  isIMEI: _isIMEI.default,
+		  isFloat: _isFloat.default,
+		  isFloatLocales: _isFloat.locales,
+		  isDecimal: _isDecimal.default,
+		  isHexadecimal: _isHexadecimal.default,
+		  isOctal: _isOctal.default,
+		  isDivisibleBy: _isDivisibleBy.default,
+		  isHexColor: _isHexColor.default,
+		  isRgbColor: _isRgbColor.default,
+		  isHSL: _isHSL.default,
+		  isISRC: _isISRC.default,
+		  isMD5: _isMD.default,
+		  isHash: _isHash.default,
+		  isJWT: _isJWT.default,
+		  isJSON: _isJSON.default,
+		  isEmpty: _isEmpty.default,
+		  isLength: _isLength.default,
+		  isLocale: _isLocale.default,
+		  isByteLength: _isByteLength.default,
+		  isUUID: _isUUID.default,
+		  isMongoId: _isMongoId.default,
+		  isAfter: _isAfter.default,
+		  isBefore: _isBefore.default,
+		  isIn: _isIn.default,
+		  isLuhnNumber: _isLuhnNumber.default,
+		  isCreditCard: _isCreditCard.default,
+		  isIdentityCard: _isIdentityCard.default,
+		  isEAN: _isEAN.default,
+		  isISIN: _isISIN.default,
+		  isISBN: _isISBN.default,
+		  isISSN: _isISSN.default,
+		  isMobilePhone: _isMobilePhone.default,
+		  isMobilePhoneLocales: _isMobilePhone.locales,
+		  isPostalCode: _isPostalCode.default,
+		  isPostalCodeLocales: _isPostalCode.locales,
+		  isEthereumAddress: _isEthereumAddress.default,
+		  isCurrency: _isCurrency.default,
+		  isBtcAddress: _isBtcAddress.default,
+		  isISO6391: _isISO.default,
+		  isISO8601: _isISO2.default,
+		  isRFC3339: _isRFC.default,
+		  isISO31661Alpha2: _isISO31661Alpha.default,
+		  isISO31661Alpha3: _isISO31661Alpha2.default,
+		  isISO4217: _isISO3.default,
+		  isBase32: _isBase.default,
+		  isBase58: _isBase2.default,
+		  isBase64: _isBase3.default,
+		  isDataURI: _isDataURI.default,
+		  isMagnetURI: _isMagnetURI.default,
+		  isMimeType: _isMimeType.default,
+		  isLatLong: _isLatLong.default,
+		  ltrim: _ltrim.default,
+		  rtrim: _rtrim.default,
+		  trim: _trim.default,
+		  escape: _escape.default,
+		  unescape: _unescape.default,
+		  stripLow: _stripLow.default,
+		  whitelist: _whitelist.default,
+		  blacklist: _blacklist.default,
+		  isWhitelisted: _isWhitelisted.default,
+		  normalizeEmail: _normalizeEmail.default,
+		  toString: toString,
+		  isSlug: _isSlug.default,
+		  isStrongPassword: _isStrongPassword.default,
+		  isTaxID: _isTaxID.default,
+		  isDate: _isDate.default,
+		  isTime: _isTime.default,
+		  isLicensePlate: _isLicensePlate.default,
+		  isVAT: _isVAT.default,
+		  ibanLocales: _isIBAN.locales
+		};
+		var _default = validator;
+		exports.default = _default;
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (validator$1, validatorExports));
+	return validatorExports;
+}
+
+var eventsource;
+var hasRequiredEventsource;
+
+function requireEventsource () {
+	if (hasRequiredEventsource) return eventsource;
+	hasRequiredEventsource = 1;
+	var parse = Url$2.parse;
+	var events = require$$0$f;
+	var https = https$3;
+	var http = http$6;
+	var util = require$$1$7;
+
+	var httpsOptions = [
+	  'pfx', 'key', 'passphrase', 'cert', 'ca', 'ciphers',
+	  'rejectUnauthorized', 'secureProtocol', 'servername', 'checkServerIdentity'
+	];
+
+	var bom = [239, 187, 191];
+	var colon = 58;
+	var space = 32;
+	var lineFeed = 10;
+	var carriageReturn = 13;
+
+	function hasBom (buf) {
+	  return bom.every(function (charCode, index) {
+	    return buf[index] === charCode
+	  })
+	}
+
+	/**
+	 * Creates a new EventSource object
+	 *
+	 * @param {String} url the URL to which to connect
+	 * @param {Object} [eventSourceInitDict] extra init params. See README for details.
+	 * @api public
+	 **/
+	function EventSource (url, eventSourceInitDict) {
+	  var readyState = EventSource.CONNECTING;
+	  var headers = eventSourceInitDict && eventSourceInitDict.headers;
+	  var hasNewOrigin = false;
+	  Object.defineProperty(this, 'readyState', {
+	    get: function () {
+	      return readyState
+	    }
+	  });
+
+	  Object.defineProperty(this, 'url', {
+	    get: function () {
+	      return url
+	    }
+	  });
+
+	  var self = this;
+	  self.reconnectInterval = 1000;
+	  self.connectionInProgress = false;
+
+	  function onConnectionClosed (message) {
+	    if (readyState === EventSource.CLOSED) return
+	    readyState = EventSource.CONNECTING;
+	    _emit('error', new Event('error', {message: message}));
+
+	    // The url may have been changed by a temporary redirect. If that's the case,
+	    // revert it now, and flag that we are no longer pointing to a new origin
+	    if (reconnectUrl) {
+	      url = reconnectUrl;
+	      reconnectUrl = null;
+	      hasNewOrigin = false;
+	    }
+	    setTimeout(function () {
+	      if (readyState !== EventSource.CONNECTING || self.connectionInProgress) {
+	        return
+	      }
+	      self.connectionInProgress = true;
+	      connect();
+	    }, self.reconnectInterval);
+	  }
+
+	  var req;
+	  var lastEventId = '';
+	  if (headers && headers['Last-Event-ID']) {
+	    lastEventId = headers['Last-Event-ID'];
+	    delete headers['Last-Event-ID'];
+	  }
+
+	  var discardTrailingNewline = false;
+	  var data = '';
+	  var eventName = '';
+
+	  var reconnectUrl = null;
+
+	  function connect () {
+	    var options = parse(url);
+	    var isSecure = options.protocol === 'https:';
+	    options.headers = { 'Cache-Control': 'no-cache', 'Accept': 'text/event-stream' };
+	    if (lastEventId) options.headers['Last-Event-ID'] = lastEventId;
+	    if (headers) {
+	      var reqHeaders = hasNewOrigin ? removeUnsafeHeaders(headers) : headers;
+	      for (var i in reqHeaders) {
+	        var header = reqHeaders[i];
+	        if (header) {
+	          options.headers[i] = header;
+	        }
+	      }
+	    }
+
+	    // Legacy: this should be specified as `eventSourceInitDict.https.rejectUnauthorized`,
+	    // but for now exists as a backwards-compatibility layer
+	    options.rejectUnauthorized = !(eventSourceInitDict && !eventSourceInitDict.rejectUnauthorized);
+
+	    if (eventSourceInitDict && eventSourceInitDict.createConnection !== undefined) {
+	      options.createConnection = eventSourceInitDict.createConnection;
+	    }
+
+	    // If specify http proxy, make the request to sent to the proxy server,
+	    // and include the original url in path and Host headers
+	    var useProxy = eventSourceInitDict && eventSourceInitDict.proxy;
+	    if (useProxy) {
+	      var proxy = parse(eventSourceInitDict.proxy);
+	      isSecure = proxy.protocol === 'https:';
+
+	      options.protocol = isSecure ? 'https:' : 'http:';
+	      options.path = url;
+	      options.headers.Host = options.host;
+	      options.hostname = proxy.hostname;
+	      options.host = proxy.host;
+	      options.port = proxy.port;
+	    }
+
+	    // If https options are specified, merge them into the request options
+	    if (eventSourceInitDict && eventSourceInitDict.https) {
+	      for (var optName in eventSourceInitDict.https) {
+	        if (httpsOptions.indexOf(optName) === -1) {
+	          continue
+	        }
+
+	        var option = eventSourceInitDict.https[optName];
+	        if (option !== undefined) {
+	          options[optName] = option;
+	        }
+	      }
+	    }
+
+	    // Pass this on to the XHR
+	    if (eventSourceInitDict && eventSourceInitDict.withCredentials !== undefined) {
+	      options.withCredentials = eventSourceInitDict.withCredentials;
+	    }
+
+	    req = (isSecure ? https : http).request(options, function (res) {
+	      self.connectionInProgress = false;
+	      // Handle HTTP errors
+	      if (res.statusCode === 500 || res.statusCode === 502 || res.statusCode === 503 || res.statusCode === 504) {
+	        _emit('error', new Event('error', {status: res.statusCode, message: res.statusMessage}));
+	        onConnectionClosed();
+	        return
+	      }
+
+	      // Handle HTTP redirects
+	      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
+	        var location = res.headers.location;
+	        if (!location) {
+	          // Server sent redirect response without Location header.
+	          _emit('error', new Event('error', {status: res.statusCode, message: res.statusMessage}));
+	          return
+	        }
+	        var prevOrigin = getOrigin(url);
+	        var nextOrigin = getOrigin(location);
+	        hasNewOrigin = prevOrigin !== nextOrigin;
+	        if (res.statusCode === 307) reconnectUrl = url;
+	        url = location;
+	        process.nextTick(connect);
+	        return
+	      }
+
+	      if (res.statusCode !== 200) {
+	        _emit('error', new Event('error', {status: res.statusCode, message: res.statusMessage}));
+	        return self.close()
+	      }
+
+	      readyState = EventSource.OPEN;
+	      res.on('close', function () {
+	        res.removeAllListeners('close');
+	        res.removeAllListeners('end');
+	        onConnectionClosed();
+	      });
+
+	      res.on('end', function () {
+	        res.removeAllListeners('close');
+	        res.removeAllListeners('end');
+	        onConnectionClosed();
+	      });
+	      _emit('open', new Event('open'));
+
+	      // text/event-stream parser adapted from webkit's
+	      // Source/WebCore/page/EventSource.cpp
+	      var isFirst = true;
+	      var buf;
+	      var startingPos = 0;
+	      var startingFieldLength = -1;
+	      res.on('data', function (chunk) {
+	        buf = buf ? Buffer.concat([buf, chunk]) : chunk;
+	        if (isFirst && hasBom(buf)) {
+	          buf = buf.slice(bom.length);
+	        }
+
+	        isFirst = false;
+	        var pos = 0;
+	        var length = buf.length;
+
+	        while (pos < length) {
+	          if (discardTrailingNewline) {
+	            if (buf[pos] === lineFeed) {
+	              ++pos;
+	            }
+	            discardTrailingNewline = false;
+	          }
+
+	          var lineLength = -1;
+	          var fieldLength = startingFieldLength;
+	          var c;
+
+	          for (var i = startingPos; lineLength < 0 && i < length; ++i) {
+	            c = buf[i];
+	            if (c === colon) {
+	              if (fieldLength < 0) {
+	                fieldLength = i - pos;
+	              }
+	            } else if (c === carriageReturn) {
+	              discardTrailingNewline = true;
+	              lineLength = i - pos;
+	            } else if (c === lineFeed) {
+	              lineLength = i - pos;
+	            }
+	          }
+
+	          if (lineLength < 0) {
+	            startingPos = length - pos;
+	            startingFieldLength = fieldLength;
+	            break
+	          } else {
+	            startingPos = 0;
+	            startingFieldLength = -1;
+	          }
+
+	          parseEventStreamLine(buf, pos, fieldLength, lineLength);
+
+	          pos += lineLength + 1;
+	        }
+
+	        if (pos === length) {
+	          buf = void 0;
+	        } else if (pos > 0) {
+	          buf = buf.slice(pos);
+	        }
+	      });
+	    });
+
+	    req.on('error', function (err) {
+	      self.connectionInProgress = false;
+	      onConnectionClosed(err.message);
+	    });
+
+	    if (req.setNoDelay) req.setNoDelay(true);
+	    req.end();
+	  }
+
+	  connect();
+
+	  function _emit () {
+	    if (self.listeners(arguments[0]).length > 0) {
+	      self.emit.apply(self, arguments);
+	    }
+	  }
+
+	  this._close = function () {
+	    if (readyState === EventSource.CLOSED) return
+	    readyState = EventSource.CLOSED;
+	    if (req.abort) req.abort();
+	    if (req.xhr && req.xhr.abort) req.xhr.abort();
+	  };
+
+	  function parseEventStreamLine (buf, pos, fieldLength, lineLength) {
+	    if (lineLength === 0) {
+	      if (data.length > 0) {
+	        var type = eventName || 'message';
+	        _emit(type, new MessageEvent(type, {
+	          data: data.slice(0, -1), // remove trailing newline
+	          lastEventId: lastEventId,
+	          origin: getOrigin(url)
+	        }));
+	        data = '';
+	      }
+	      eventName = void 0;
+	    } else if (fieldLength > 0) {
+	      var noValue = fieldLength < 0;
+	      var step = 0;
+	      var field = buf.slice(pos, pos + (noValue ? lineLength : fieldLength)).toString();
+
+	      if (noValue) {
+	        step = lineLength;
+	      } else if (buf[pos + fieldLength + 1] !== space) {
+	        step = fieldLength + 1;
+	      } else {
+	        step = fieldLength + 2;
+	      }
+	      pos += step;
+
+	      var valueLength = lineLength - step;
+	      var value = buf.slice(pos, pos + valueLength).toString();
+
+	      if (field === 'data') {
+	        data += value + '\n';
+	      } else if (field === 'event') {
+	        eventName = value;
+	      } else if (field === 'id') {
+	        lastEventId = value;
+	      } else if (field === 'retry') {
+	        var retry = parseInt(value, 10);
+	        if (!Number.isNaN(retry)) {
+	          self.reconnectInterval = retry;
+	        }
+	      }
+	    }
+	  }
+	}
+
+	eventsource = EventSource;
+
+	util.inherits(EventSource, events.EventEmitter);
+	EventSource.prototype.constructor = EventSource; // make stacktraces readable
+
+	['open', 'error', 'message'].forEach(function (method) {
+	  Object.defineProperty(EventSource.prototype, 'on' + method, {
+	    /**
+	     * Returns the current listener
+	     *
+	     * @return {Mixed} the set function or undefined
+	     * @api private
+	     */
+	    get: function get () {
+	      var listener = this.listeners(method)[0];
+	      return listener ? (listener._listener ? listener._listener : listener) : undefined
+	    },
+
+	    /**
+	     * Start listening for events
+	     *
+	     * @param {Function} listener the listener
+	     * @return {Mixed} the set function or undefined
+	     * @api private
+	     */
+	    set: function set (listener) {
+	      this.removeAllListeners(method);
+	      this.addEventListener(method, listener);
+	    }
+	  });
+	});
+
+	/**
+	 * Ready states
+	 */
+	Object.defineProperty(EventSource, 'CONNECTING', {enumerable: true, value: 0});
+	Object.defineProperty(EventSource, 'OPEN', {enumerable: true, value: 1});
+	Object.defineProperty(EventSource, 'CLOSED', {enumerable: true, value: 2});
+
+	EventSource.prototype.CONNECTING = 0;
+	EventSource.prototype.OPEN = 1;
+	EventSource.prototype.CLOSED = 2;
+
+	/**
+	 * Closes the connection, if one is made, and sets the readyState attribute to 2 (closed)
+	 *
+	 * @see https://developer.mozilla.org/en-US/docs/Web/API/EventSource/close
+	 * @api public
+	 */
+	EventSource.prototype.close = function () {
+	  this._close();
+	};
+
+	/**
+	 * Emulates the W3C Browser based WebSocket interface using addEventListener.
+	 *
+	 * @param {String} type A string representing the event type to listen out for
+	 * @param {Function} listener callback
+	 * @see https://developer.mozilla.org/en/DOM/element.addEventListener
+	 * @see http://dev.w3.org/html5/websockets/#the-websocket-interface
+	 * @api public
+	 */
+	EventSource.prototype.addEventListener = function addEventListener (type, listener) {
+	  if (typeof listener === 'function') {
+	    // store a reference so we can return the original function again
+	    listener._listener = listener;
+	    this.on(type, listener);
+	  }
+	};
+
+	/**
+	 * Emulates the W3C Browser based WebSocket interface using dispatchEvent.
+	 *
+	 * @param {Event} event An event to be dispatched
+	 * @see https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/dispatchEvent
+	 * @api public
+	 */
+	EventSource.prototype.dispatchEvent = function dispatchEvent (event) {
+	  if (!event.type) {
+	    throw new Error('UNSPECIFIED_EVENT_TYPE_ERR')
+	  }
+	  // if event is instance of an CustomEvent (or has 'details' property),
+	  // send the detail object as the payload for the event
+	  this.emit(event.type, event.detail);
+	};
+
+	/**
+	 * Emulates the W3C Browser based WebSocket interface using removeEventListener.
+	 *
+	 * @param {String} type A string representing the event type to remove
+	 * @param {Function} listener callback
+	 * @see https://developer.mozilla.org/en/DOM/element.removeEventListener
+	 * @see http://dev.w3.org/html5/websockets/#the-websocket-interface
+	 * @api public
+	 */
+	EventSource.prototype.removeEventListener = function removeEventListener (type, listener) {
+	  if (typeof listener === 'function') {
+	    listener._listener = undefined;
+	    this.removeListener(type, listener);
+	  }
+	};
+
+	/**
+	 * W3C Event
+	 *
+	 * @see http://www.w3.org/TR/DOM-Level-3-Events/#interface-Event
+	 * @api private
+	 */
+	function Event (type, optionalProperties) {
+	  Object.defineProperty(this, 'type', { writable: false, value: type, enumerable: true });
+	  if (optionalProperties) {
+	    for (var f in optionalProperties) {
