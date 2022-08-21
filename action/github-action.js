@@ -190711,3 +190711,2207 @@ function requireIsTaxID () {
 
 		  checksum = checksum % 11 === 10 ? 0 : checksum % 11;
 		  return checksum === digits[9];
+		}
+		/**
+		 * Check if an input is a valid Canadian SIN (Social Insurance Number)
+		 *
+		 * The Social Insurance Number (SIN) is a 9 digit number that
+		 * you need to work in Canada or to have access to government programs and benefits.
+		 *
+		 * https://en.wikipedia.org/wiki/Social_Insurance_Number
+		 * https://www.canada.ca/en/employment-social-development/services/sin.html
+		 * https://www.codercrunch.com/challenge/819302488/sin-validator
+		 *
+		 * @param {string} input
+		 * @return {boolean}
+		 */
+
+
+		function isCanadianSIN(input) {
+		  var digitsArray = input.split('');
+		  var even = digitsArray.filter(function (_, idx) {
+		    return idx % 2;
+		  }).map(function (i) {
+		    return Number(i) * 2;
+		  }).join('').split('');
+		  var total = digitsArray.filter(function (_, idx) {
+		    return !(idx % 2);
+		  }).concat(even).map(function (i) {
+		    return Number(i);
+		  }).reduce(function (acc, cur) {
+		    return acc + cur;
+		  });
+		  return total % 10 === 0;
+		}
+		/*
+		 * cs-CZ validation function
+		 * (Rodné číslo (RČ), persons only)
+		 * Checks if birth date (first six digits) is valid and divisibility by 11
+		 * Material not in DG TAXUD document sourced from:
+		 * -`https://lorenc.info/3MA381/overeni-spravnosti-rodneho-cisla.htm`
+		 * -`https://www.mvcr.cz/clanek/rady-a-sluzby-dokumenty-rodne-cislo.aspx`
+		 */
+
+
+		function csCzCheck(tin) {
+		  tin = tin.replace(/\W/, ''); // Extract full year from TIN length
+
+		  var full_year = parseInt(tin.slice(0, 2), 10);
+
+		  if (tin.length === 10) {
+		    if (full_year < 54) {
+		      full_year = "20".concat(full_year);
+		    } else {
+		      full_year = "19".concat(full_year);
+		    }
+		  } else {
+		    if (tin.slice(6) === '000') {
+		      return false;
+		    } // Three-zero serial not assigned before 1954
+
+
+		    if (full_year < 54) {
+		      full_year = "19".concat(full_year);
+		    } else {
+		      return false; // No 18XX years seen in any of the resources
+		    }
+		  } // Add missing zero if needed
+
+
+		  if (full_year.length === 3) {
+		    full_year = [full_year.slice(0, 2), '0', full_year.slice(2)].join('');
+		  } // Extract month from TIN and normalize
+
+
+		  var month = parseInt(tin.slice(2, 4), 10);
+
+		  if (month > 50) {
+		    month -= 50;
+		  }
+
+		  if (month > 20) {
+		    // Month-plus-twenty was only introduced in 2004
+		    if (parseInt(full_year, 10) < 2004) {
+		      return false;
+		    }
+
+		    month -= 20;
+		  }
+
+		  if (month < 10) {
+		    month = "0".concat(month);
+		  } // Check date validity
+
+
+		  var date = "".concat(full_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // Verify divisibility by 11
+
+
+		  if (tin.length === 10) {
+		    if (parseInt(tin, 10) % 11 !== 0) {
+		      // Some numbers up to and including 1985 are still valid if
+		      // check (last) digit equals 0 and modulo of first 9 digits equals 10
+		      var checkdigit = parseInt(tin.slice(0, 9), 10) % 11;
+
+		      if (parseInt(full_year, 10) < 1986 && checkdigit === 10) {
+		        if (parseInt(tin.slice(9), 10) !== 0) {
+		          return false;
+		        }
+		      } else {
+		        return false;
+		      }
+		    }
+		  }
+
+		  return true;
+		}
+		/*
+		 * de-AT validation function
+		 * (Abgabenkontonummer, persons/entities)
+		 * Verify TIN validity by calling luhnCheck()
+		 */
+
+
+		function deAtCheck(tin) {
+		  return algorithms.luhnCheck(tin);
+		}
+		/*
+		 * de-DE validation function
+		 * (Steueridentifikationsnummer (Steuer-IdNr.), persons only)
+		 * Tests for single duplicate/triplicate value, then calculates ISO 7064 check (last) digit
+		 * Partial implementation of spec (same result with both algorithms always)
+		 */
+
+
+		function deDeCheck(tin) {
+		  // Split digits into an array for further processing
+		  var digits = tin.split('').map(function (a) {
+		    return parseInt(a, 10);
+		  }); // Fill array with strings of number positions
+
+		  var occurences = [];
+
+		  for (var i = 0; i < digits.length - 1; i++) {
+		    occurences.push('');
+
+		    for (var j = 0; j < digits.length - 1; j++) {
+		      if (digits[i] === digits[j]) {
+		        occurences[i] += j;
+		      }
+		    }
+		  } // Remove digits with one occurence and test for only one duplicate/triplicate
+
+
+		  occurences = occurences.filter(function (a) {
+		    return a.length > 1;
+		  });
+
+		  if (occurences.length !== 2 && occurences.length !== 3) {
+		    return false;
+		  } // In case of triplicate value only two digits are allowed next to each other
+
+
+		  if (occurences[0].length === 3) {
+		    var trip_locations = occurences[0].split('').map(function (a) {
+		      return parseInt(a, 10);
+		    });
+		    var recurrent = 0; // Amount of neighbour occurences
+
+		    for (var _i = 0; _i < trip_locations.length - 1; _i++) {
+		      if (trip_locations[_i] + 1 === trip_locations[_i + 1]) {
+		        recurrent += 1;
+		      }
+		    }
+
+		    if (recurrent === 2) {
+		      return false;
+		    }
+		  }
+
+		  return algorithms.iso7064Check(tin);
+		}
+		/*
+		 * dk-DK validation function
+		 * (CPR-nummer (personnummer), persons only)
+		 * Checks if birth date (first six digits) is valid and assigned to century (seventh) digit,
+		 * and calculates check (last) digit
+		 */
+
+
+		function dkDkCheck(tin) {
+		  tin = tin.replace(/\W/, ''); // Extract year, check if valid for given century digit and add century
+
+		  var year = parseInt(tin.slice(4, 6), 10);
+		  var century_digit = tin.slice(6, 7);
+
+		  switch (century_digit) {
+		    case '0':
+		    case '1':
+		    case '2':
+		    case '3':
+		      year = "19".concat(year);
+		      break;
+
+		    case '4':
+		    case '9':
+		      if (year < 37) {
+		        year = "20".concat(year);
+		      } else {
+		        year = "19".concat(year);
+		      }
+
+		      break;
+
+		    default:
+		      if (year < 37) {
+		        year = "20".concat(year);
+		      } else if (year > 58) {
+		        year = "18".concat(year);
+		      } else {
+		        return false;
+		      }
+
+		      break;
+		  } // Add missing zero if needed
+
+
+		  if (year.length === 3) {
+		    year = [year.slice(0, 2), '0', year.slice(2)].join('');
+		  } // Check date validity
+
+
+		  var date = "".concat(year, "/").concat(tin.slice(2, 4), "/").concat(tin.slice(0, 2));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // Split digits into an array for further processing
+
+
+		  var digits = tin.split('').map(function (a) {
+		    return parseInt(a, 10);
+		  });
+		  var checksum = 0;
+		  var weight = 4; // Multiply by weight and add to checksum
+
+		  for (var i = 0; i < 9; i++) {
+		    checksum += digits[i] * weight;
+		    weight -= 1;
+
+		    if (weight === 1) {
+		      weight = 7;
+		    }
+		  }
+
+		  checksum %= 11;
+
+		  if (checksum === 1) {
+		    return false;
+		  }
+
+		  return checksum === 0 ? digits[9] === 0 : digits[9] === 11 - checksum;
+		}
+		/*
+		 * el-CY validation function
+		 * (Arithmos Forologikou Mitroou (AFM/ΑΦΜ), persons only)
+		 * Verify TIN validity by calculating ASCII value of check (last) character
+		 */
+
+
+		function elCyCheck(tin) {
+		  // split digits into an array for further processing
+		  var digits = tin.slice(0, 8).split('').map(function (a) {
+		    return parseInt(a, 10);
+		  });
+		  var checksum = 0; // add digits in even places
+
+		  for (var i = 1; i < digits.length; i += 2) {
+		    checksum += digits[i];
+		  } // add digits in odd places
+
+
+		  for (var _i2 = 0; _i2 < digits.length; _i2 += 2) {
+		    if (digits[_i2] < 2) {
+		      checksum += 1 - digits[_i2];
+		    } else {
+		      checksum += 2 * (digits[_i2] - 2) + 5;
+
+		      if (digits[_i2] > 4) {
+		        checksum += 2;
+		      }
+		    }
+		  }
+
+		  return String.fromCharCode(checksum % 26 + 65) === tin.charAt(8);
+		}
+		/*
+		 * el-GR validation function
+		 * (Arithmos Forologikou Mitroou (AFM/ΑΦΜ), persons/entities)
+		 * Verify TIN validity by calculating check (last) digit
+		 * Algorithm not in DG TAXUD document- sourced from:
+		 * - `http://epixeirisi.gr/%CE%9A%CE%A1%CE%99%CE%A3%CE%99%CE%9C%CE%91-%CE%98%CE%95%CE%9C%CE%91%CE%A4%CE%91-%CE%A6%CE%9F%CE%A1%CE%9F%CE%9B%CE%9F%CE%93%CE%99%CE%91%CE%A3-%CE%9A%CE%91%CE%99-%CE%9B%CE%9F%CE%93%CE%99%CE%A3%CE%A4%CE%99%CE%9A%CE%97%CE%A3/23791/%CE%91%CF%81%CE%B9%CE%B8%CE%BC%CF%8C%CF%82-%CE%A6%CE%BF%CF%81%CE%BF%CE%BB%CE%BF%CE%B3%CE%B9%CE%BA%CE%BF%CF%8D-%CE%9C%CE%B7%CF%84%CF%81%CF%8E%CE%BF%CF%85`
+		 */
+
+
+		function elGrCheck(tin) {
+		  // split digits into an array for further processing
+		  var digits = tin.split('').map(function (a) {
+		    return parseInt(a, 10);
+		  });
+		  var checksum = 0;
+
+		  for (var i = 0; i < 8; i++) {
+		    checksum += digits[i] * Math.pow(2, 8 - i);
+		  }
+
+		  return checksum % 11 % 10 === digits[8];
+		}
+		/*
+		 * en-GB validation function (should go here if needed)
+		 * (National Insurance Number (NINO) or Unique Taxpayer Reference (UTR),
+		 * persons/entities respectively)
+		 */
+
+		/*
+		 * en-IE validation function
+		 * (Personal Public Service Number (PPS No), persons only)
+		 * Verify TIN validity by calculating check (second to last) character
+		 */
+
+
+		function enIeCheck(tin) {
+		  var checksum = algorithms.reverseMultiplyAndSum(tin.split('').slice(0, 7).map(function (a) {
+		    return parseInt(a, 10);
+		  }), 8);
+
+		  if (tin.length === 9 && tin[8] !== 'W') {
+		    checksum += (tin[8].charCodeAt(0) - 64) * 9;
+		  }
+
+		  checksum %= 23;
+
+		  if (checksum === 0) {
+		    return tin[7].toUpperCase() === 'W';
+		  }
+
+		  return tin[7].toUpperCase() === String.fromCharCode(64 + checksum);
+		} // Valid US IRS campus prefixes
+
+
+		var enUsCampusPrefix = {
+		  andover: ['10', '12'],
+		  atlanta: ['60', '67'],
+		  austin: ['50', '53'],
+		  brookhaven: ['01', '02', '03', '04', '05', '06', '11', '13', '14', '16', '21', '22', '23', '25', '34', '51', '52', '54', '55', '56', '57', '58', '59', '65'],
+		  cincinnati: ['30', '32', '35', '36', '37', '38', '61'],
+		  fresno: ['15', '24'],
+		  internet: ['20', '26', '27', '45', '46', '47'],
+		  kansas: ['40', '44'],
+		  memphis: ['94', '95'],
+		  ogden: ['80', '90'],
+		  philadelphia: ['33', '39', '41', '42', '43', '46', '48', '62', '63', '64', '66', '68', '71', '72', '73', '74', '75', '76', '77', '81', '82', '83', '84', '85', '86', '87', '88', '91', '92', '93', '98', '99'],
+		  sba: ['31']
+		}; // Return an array of all US IRS campus prefixes
+
+		function enUsGetPrefixes() {
+		  var prefixes = [];
+
+		  for (var location in enUsCampusPrefix) {
+		    // https://github.com/gotwarlost/istanbul/blob/master/ignoring-code-for-coverage.md#ignoring-code-for-coverage-purposes
+		    // istanbul ignore else
+		    if (enUsCampusPrefix.hasOwnProperty(location)) {
+		      prefixes.push.apply(prefixes, _toConsumableArray(enUsCampusPrefix[location]));
+		    }
+		  }
+
+		  return prefixes;
+		}
+		/*
+		 * en-US validation function
+		 * Verify that the TIN starts with a valid IRS campus prefix
+		 */
+
+
+		function enUsCheck(tin) {
+		  return enUsGetPrefixes().indexOf(tin.slice(0, 2)) !== -1;
+		}
+		/*
+		 * es-ES validation function
+		 * (Documento Nacional de Identidad (DNI)
+		 * or Número de Identificación de Extranjero (NIE), persons only)
+		 * Verify TIN validity by calculating check (last) character
+		 */
+
+
+		function esEsCheck(tin) {
+		  // Split characters into an array for further processing
+		  var chars = tin.toUpperCase().split(''); // Replace initial letter if needed
+
+		  if (isNaN(parseInt(chars[0], 10)) && chars.length > 1) {
+		    var lead_replace = 0;
+
+		    switch (chars[0]) {
+		      case 'Y':
+		        lead_replace = 1;
+		        break;
+
+		      case 'Z':
+		        lead_replace = 2;
+		        break;
+		    }
+
+		    chars.splice(0, 1, lead_replace); // Fill with zeros if smaller than proper
+		  } else {
+		    while (chars.length < 9) {
+		      chars.unshift(0);
+		    }
+		  } // Calculate checksum and check according to lookup
+
+
+		  var lookup = ['T', 'R', 'W', 'A', 'G', 'M', 'Y', 'F', 'P', 'D', 'X', 'B', 'N', 'J', 'Z', 'S', 'Q', 'V', 'H', 'L', 'C', 'K', 'E'];
+		  chars = chars.join('');
+		  var checksum = parseInt(chars.slice(0, 8), 10) % 23;
+		  return chars[8] === lookup[checksum];
+		}
+		/*
+		 * et-EE validation function
+		 * (Isikukood (IK), persons only)
+		 * Checks if birth date (century digit and six following) is valid and calculates check (last) digit
+		 * Material not in DG TAXUD document sourced from:
+		 * - `https://www.oecd.org/tax/automatic-exchange/crs-implementation-and-assistance/tax-identification-numbers/Estonia-TIN.pdf`
+		 */
+
+
+		function etEeCheck(tin) {
+		  // Extract year and add century
+		  var full_year = tin.slice(1, 3);
+		  var century_digit = tin.slice(0, 1);
+
+		  switch (century_digit) {
+		    case '1':
+		    case '2':
+		      full_year = "18".concat(full_year);
+		      break;
+
+		    case '3':
+		    case '4':
+		      full_year = "19".concat(full_year);
+		      break;
+
+		    default:
+		      full_year = "20".concat(full_year);
+		      break;
+		  } // Check date validity
+
+
+		  var date = "".concat(full_year, "/").concat(tin.slice(3, 5), "/").concat(tin.slice(5, 7));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // Split digits into an array for further processing
+
+
+		  var digits = tin.split('').map(function (a) {
+		    return parseInt(a, 10);
+		  });
+		  var checksum = 0;
+		  var weight = 1; // Multiply by weight and add to checksum
+
+		  for (var i = 0; i < 10; i++) {
+		    checksum += digits[i] * weight;
+		    weight += 1;
+
+		    if (weight === 10) {
+		      weight = 1;
+		    }
+		  } // Do again if modulo 11 of checksum is 10
+
+
+		  if (checksum % 11 === 10) {
+		    checksum = 0;
+		    weight = 3;
+
+		    for (var _i3 = 0; _i3 < 10; _i3++) {
+		      checksum += digits[_i3] * weight;
+		      weight += 1;
+
+		      if (weight === 10) {
+		        weight = 1;
+		      }
+		    }
+
+		    if (checksum % 11 === 10) {
+		      return digits[10] === 0;
+		    }
+		  }
+
+		  return checksum % 11 === digits[10];
+		}
+		/*
+		 * fi-FI validation function
+		 * (Henkilötunnus (HETU), persons only)
+		 * Checks if birth date (first six digits plus century symbol) is valid
+		 * and calculates check (last) digit
+		 */
+
+
+		function fiFiCheck(tin) {
+		  // Extract year and add century
+		  var full_year = tin.slice(4, 6);
+		  var century_symbol = tin.slice(6, 7);
+
+		  switch (century_symbol) {
+		    case '+':
+		      full_year = "18".concat(full_year);
+		      break;
+
+		    case '-':
+		      full_year = "19".concat(full_year);
+		      break;
+
+		    default:
+		      full_year = "20".concat(full_year);
+		      break;
+		  } // Check date validity
+
+
+		  var date = "".concat(full_year, "/").concat(tin.slice(2, 4), "/").concat(tin.slice(0, 2));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // Calculate check character
+
+
+		  var checksum = parseInt(tin.slice(0, 6) + tin.slice(7, 10), 10) % 31;
+
+		  if (checksum < 10) {
+		    return checksum === parseInt(tin.slice(10), 10);
+		  }
+
+		  checksum -= 10;
+		  var letters_lookup = ['A', 'B', 'C', 'D', 'E', 'F', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y'];
+		  return letters_lookup[checksum] === tin.slice(10);
+		}
+		/*
+		 * fr/nl-BE validation function
+		 * (Numéro national (N.N.), persons only)
+		 * Checks if birth date (first six digits) is valid and calculates check (last two) digits
+		 */
+
+
+		function frBeCheck(tin) {
+		  // Zero month/day value is acceptable
+		  if (tin.slice(2, 4) !== '00' || tin.slice(4, 6) !== '00') {
+		    // Extract date from first six digits of TIN
+		    var date = "".concat(tin.slice(0, 2), "/").concat(tin.slice(2, 4), "/").concat(tin.slice(4, 6));
+
+		    if (!(0, _isDate.default)(date, 'YY/MM/DD')) {
+		      return false;
+		    }
+		  }
+
+		  var checksum = 97 - parseInt(tin.slice(0, 9), 10) % 97;
+		  var checkdigits = parseInt(tin.slice(9, 11), 10);
+
+		  if (checksum !== checkdigits) {
+		    checksum = 97 - parseInt("2".concat(tin.slice(0, 9)), 10) % 97;
+
+		    if (checksum !== checkdigits) {
+		      return false;
+		    }
+		  }
+
+		  return true;
+		}
+		/*
+		 * fr-FR validation function
+		 * (Numéro fiscal de référence (numéro SPI), persons only)
+		 * Verify TIN validity by calculating check (last three) digits
+		 */
+
+
+		function frFrCheck(tin) {
+		  tin = tin.replace(/\s/g, '');
+		  var checksum = parseInt(tin.slice(0, 10), 10) % 511;
+		  var checkdigits = parseInt(tin.slice(10, 13), 10);
+		  return checksum === checkdigits;
+		}
+		/*
+		 * fr/lb-LU validation function
+		 * (numéro d’identification personnelle, persons only)
+		 * Verify birth date validity and run Luhn and Verhoeff checks
+		 */
+
+
+		function frLuCheck(tin) {
+		  // Extract date and check validity
+		  var date = "".concat(tin.slice(0, 4), "/").concat(tin.slice(4, 6), "/").concat(tin.slice(6, 8));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // Run Luhn check
+
+
+		  if (!algorithms.luhnCheck(tin.slice(0, 12))) {
+		    return false;
+		  } // Remove Luhn check digit and run Verhoeff check
+
+
+		  return algorithms.verhoeffCheck("".concat(tin.slice(0, 11)).concat(tin[12]));
+		}
+		/*
+		 * hr-HR validation function
+		 * (Osobni identifikacijski broj (OIB), persons/entities)
+		 * Verify TIN validity by calling iso7064Check(digits)
+		 */
+
+
+		function hrHrCheck(tin) {
+		  return algorithms.iso7064Check(tin);
+		}
+		/*
+		 * hu-HU validation function
+		 * (Adóazonosító jel, persons only)
+		 * Verify TIN validity by calculating check (last) digit
+		 */
+
+
+		function huHuCheck(tin) {
+		  // split digits into an array for further processing
+		  var digits = tin.split('').map(function (a) {
+		    return parseInt(a, 10);
+		  });
+		  var checksum = 8;
+
+		  for (var i = 1; i < 9; i++) {
+		    checksum += digits[i] * (i + 1);
+		  }
+
+		  return checksum % 11 === digits[9];
+		}
+		/*
+		 * lt-LT validation function (should go here if needed)
+		 * (Asmens kodas, persons/entities respectively)
+		 * Current validation check is alias of etEeCheck- same format applies
+		 */
+
+		/*
+		 * it-IT first/last name validity check
+		 * Accepts it-IT TIN-encoded names as a three-element character array and checks their validity
+		 * Due to lack of clarity between resources ("Are only Italian consonants used?
+		 * What happens if a person has X in their name?" etc.) only two test conditions
+		 * have been implemented:
+		 * Vowels may only be followed by other vowels or an X character
+		 * and X characters after vowels may only be followed by other X characters.
+		 */
+
+
+		function itItNameCheck(name) {
+		  // true at the first occurence of a vowel
+		  var vowelflag = false; // true at the first occurence of an X AFTER vowel
+		  // (to properly handle last names with X as consonant)
+
+		  var xflag = false;
+
+		  for (var i = 0; i < 3; i++) {
+		    if (!vowelflag && /[AEIOU]/.test(name[i])) {
+		      vowelflag = true;
+		    } else if (!xflag && vowelflag && name[i] === 'X') {
+		      xflag = true;
+		    } else if (i > 0) {
+		      if (vowelflag && !xflag) {
+		        if (!/[AEIOU]/.test(name[i])) {
+		          return false;
+		        }
+		      }
+
+		      if (xflag) {
+		        if (!/X/.test(name[i])) {
+		          return false;
+		        }
+		      }
+		    }
+		  }
+
+		  return true;
+		}
+		/*
+		 * it-IT validation function
+		 * (Codice fiscale (TIN-IT), persons only)
+		 * Verify name, birth date and codice catastale validity
+		 * and calculate check character.
+		 * Material not in DG-TAXUD document sourced from:
+		 * `https://en.wikipedia.org/wiki/Italian_fiscal_code`
+		 */
+
+
+		function itItCheck(tin) {
+		  // Capitalize and split characters into an array for further processing
+		  var chars = tin.toUpperCase().split(''); // Check first and last name validity calling itItNameCheck()
+
+		  if (!itItNameCheck(chars.slice(0, 3))) {
+		    return false;
+		  }
+
+		  if (!itItNameCheck(chars.slice(3, 6))) {
+		    return false;
+		  } // Convert letters in number spaces back to numbers if any
+
+
+		  var number_locations = [6, 7, 9, 10, 12, 13, 14];
+		  var number_replace = {
+		    L: '0',
+		    M: '1',
+		    N: '2',
+		    P: '3',
+		    Q: '4',
+		    R: '5',
+		    S: '6',
+		    T: '7',
+		    U: '8',
+		    V: '9'
+		  };
+
+		  for (var _i4 = 0, _number_locations = number_locations; _i4 < _number_locations.length; _i4++) {
+		    var i = _number_locations[_i4];
+
+		    if (chars[i] in number_replace) {
+		      chars.splice(i, 1, number_replace[chars[i]]);
+		    }
+		  } // Extract month and day, and check date validity
+
+
+		  var month_replace = {
+		    A: '01',
+		    B: '02',
+		    C: '03',
+		    D: '04',
+		    E: '05',
+		    H: '06',
+		    L: '07',
+		    M: '08',
+		    P: '09',
+		    R: '10',
+		    S: '11',
+		    T: '12'
+		  };
+		  var month = month_replace[chars[8]];
+		  var day = parseInt(chars[9] + chars[10], 10);
+
+		  if (day > 40) {
+		    day -= 40;
+		  }
+
+		  if (day < 10) {
+		    day = "0".concat(day);
+		  }
+
+		  var date = "".concat(chars[6]).concat(chars[7], "/").concat(month, "/").concat(day);
+
+		  if (!(0, _isDate.default)(date, 'YY/MM/DD')) {
+		    return false;
+		  } // Calculate check character by adding up even and odd characters as numbers
+
+
+		  var checksum = 0;
+
+		  for (var _i5 = 1; _i5 < chars.length - 1; _i5 += 2) {
+		    var char_to_int = parseInt(chars[_i5], 10);
+
+		    if (isNaN(char_to_int)) {
+		      char_to_int = chars[_i5].charCodeAt(0) - 65;
+		    }
+
+		    checksum += char_to_int;
+		  }
+
+		  var odd_convert = {
+		    // Maps of characters at odd places
+		    A: 1,
+		    B: 0,
+		    C: 5,
+		    D: 7,
+		    E: 9,
+		    F: 13,
+		    G: 15,
+		    H: 17,
+		    I: 19,
+		    J: 21,
+		    K: 2,
+		    L: 4,
+		    M: 18,
+		    N: 20,
+		    O: 11,
+		    P: 3,
+		    Q: 6,
+		    R: 8,
+		    S: 12,
+		    T: 14,
+		    U: 16,
+		    V: 10,
+		    W: 22,
+		    X: 25,
+		    Y: 24,
+		    Z: 23,
+		    0: 1,
+		    1: 0
+		  };
+
+		  for (var _i6 = 0; _i6 < chars.length - 1; _i6 += 2) {
+		    var _char_to_int = 0;
+
+		    if (chars[_i6] in odd_convert) {
+		      _char_to_int = odd_convert[chars[_i6]];
+		    } else {
+		      var multiplier = parseInt(chars[_i6], 10);
+		      _char_to_int = 2 * multiplier + 1;
+
+		      if (multiplier > 4) {
+		        _char_to_int += 2;
+		      }
+		    }
+
+		    checksum += _char_to_int;
+		  }
+
+		  if (String.fromCharCode(65 + checksum % 26) !== chars[15]) {
+		    return false;
+		  }
+
+		  return true;
+		}
+		/*
+		 * lv-LV validation function
+		 * (Personas kods (PK), persons only)
+		 * Check validity of birth date and calculate check (last) digit
+		 * Support only for old format numbers (not starting with '32', issued before 2017/07/01)
+		 * Material not in DG TAXUD document sourced from:
+		 * `https://boot.ritakafija.lv/forums/index.php?/topic/88314-personas-koda-algoritms-%C4%8Deksumma/`
+		 */
+
+
+		function lvLvCheck(tin) {
+		  tin = tin.replace(/\W/, ''); // Extract date from TIN
+
+		  var day = tin.slice(0, 2);
+
+		  if (day !== '32') {
+		    // No date/checksum check if new format
+		    var month = tin.slice(2, 4);
+
+		    if (month !== '00') {
+		      // No date check if unknown month
+		      var full_year = tin.slice(4, 6);
+
+		      switch (tin[6]) {
+		        case '0':
+		          full_year = "18".concat(full_year);
+		          break;
+
+		        case '1':
+		          full_year = "19".concat(full_year);
+		          break;
+
+		        default:
+		          full_year = "20".concat(full_year);
+		          break;
+		      } // Check date validity
+
+
+		      var date = "".concat(full_year, "/").concat(tin.slice(2, 4), "/").concat(day);
+
+		      if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		        return false;
+		      }
+		    } // Calculate check digit
+
+
+		    var checksum = 1101;
+		    var multip_lookup = [1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+
+		    for (var i = 0; i < tin.length - 1; i++) {
+		      checksum -= parseInt(tin[i], 10) * multip_lookup[i];
+		    }
+
+		    return parseInt(tin[10], 10) === checksum % 11;
+		  }
+
+		  return true;
+		}
+		/*
+		 * mt-MT validation function
+		 * (Identity Card Number or Unique Taxpayer Reference, persons/entities)
+		 * Verify Identity Card Number structure (no other tests found)
+		 */
+
+
+		function mtMtCheck(tin) {
+		  if (tin.length !== 9) {
+		    // No tests for UTR
+		    var chars = tin.toUpperCase().split(''); // Fill with zeros if smaller than proper
+
+		    while (chars.length < 8) {
+		      chars.unshift(0);
+		    } // Validate format according to last character
+
+
+		    switch (tin[7]) {
+		      case 'A':
+		      case 'P':
+		        if (parseInt(chars[6], 10) === 0) {
+		          return false;
+		        }
+
+		        break;
+
+		      default:
+		        {
+		          var first_part = parseInt(chars.join('').slice(0, 5), 10);
+
+		          if (first_part > 32000) {
+		            return false;
+		          }
+
+		          var second_part = parseInt(chars.join('').slice(5, 7), 10);
+
+		          if (first_part === second_part) {
+		            return false;
+		          }
+		        }
+		    }
+		  }
+
+		  return true;
+		}
+		/*
+		 * nl-NL validation function
+		 * (Burgerservicenummer (BSN) or Rechtspersonen Samenwerkingsverbanden Informatie Nummer (RSIN),
+		 * persons/entities respectively)
+		 * Verify TIN validity by calculating check (last) digit (variant of MOD 11)
+		 */
+
+
+		function nlNlCheck(tin) {
+		  return algorithms.reverseMultiplyAndSum(tin.split('').slice(0, 8).map(function (a) {
+		    return parseInt(a, 10);
+		  }), 9) % 11 === parseInt(tin[8], 10);
+		}
+		/*
+		 * pl-PL validation function
+		 * (Powszechny Elektroniczny System Ewidencji Ludności (PESEL)
+		 * or Numer identyfikacji podatkowej (NIP), persons/entities)
+		 * Verify TIN validity by validating birth date (PESEL) and calculating check (last) digit
+		 */
+
+
+		function plPlCheck(tin) {
+		  // NIP
+		  if (tin.length === 10) {
+		    // Calculate last digit by multiplying with lookup
+		    var lookup = [6, 5, 7, 2, 3, 4, 5, 6, 7];
+		    var _checksum = 0;
+
+		    for (var i = 0; i < lookup.length; i++) {
+		      _checksum += parseInt(tin[i], 10) * lookup[i];
+		    }
+
+		    _checksum %= 11;
+
+		    if (_checksum === 10) {
+		      return false;
+		    }
+
+		    return _checksum === parseInt(tin[9], 10);
+		  } // PESEL
+		  // Extract full year using month
+
+
+		  var full_year = tin.slice(0, 2);
+		  var month = parseInt(tin.slice(2, 4), 10);
+
+		  if (month > 80) {
+		    full_year = "18".concat(full_year);
+		    month -= 80;
+		  } else if (month > 60) {
+		    full_year = "22".concat(full_year);
+		    month -= 60;
+		  } else if (month > 40) {
+		    full_year = "21".concat(full_year);
+		    month -= 40;
+		  } else if (month > 20) {
+		    full_year = "20".concat(full_year);
+		    month -= 20;
+		  } else {
+		    full_year = "19".concat(full_year);
+		  } // Add leading zero to month if needed
+
+
+		  if (month < 10) {
+		    month = "0".concat(month);
+		  } // Check date validity
+
+
+		  var date = "".concat(full_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+
+		  if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  } // Calculate last digit by mulitplying with odd one-digit numbers except 5
+
+
+		  var checksum = 0;
+		  var multiplier = 1;
+
+		  for (var _i7 = 0; _i7 < tin.length - 1; _i7++) {
+		    checksum += parseInt(tin[_i7], 10) * multiplier % 10;
+		    multiplier += 2;
+
+		    if (multiplier > 10) {
+		      multiplier = 1;
+		    } else if (multiplier === 5) {
+		      multiplier += 2;
+		    }
+		  }
+
+		  checksum = 10 - checksum % 10;
+		  return checksum === parseInt(tin[10], 10);
+		}
+		/*
+		* pt-BR validation function
+		* (Cadastro de Pessoas Físicas (CPF, persons)
+		* Cadastro Nacional de Pessoas Jurídicas (CNPJ, entities)
+		* Both inputs will be validated
+		*/
+
+
+		function ptBrCheck(tin) {
+		  if (tin.length === 11) {
+		    var _sum;
+
+		    var remainder;
+		    _sum = 0;
+		    if ( // Reject known invalid CPFs
+		    tin === '11111111111' || tin === '22222222222' || tin === '33333333333' || tin === '44444444444' || tin === '55555555555' || tin === '66666666666' || tin === '77777777777' || tin === '88888888888' || tin === '99999999999' || tin === '00000000000') return false;
+
+		    for (var i = 1; i <= 9; i++) {
+		      _sum += parseInt(tin.substring(i - 1, i), 10) * (11 - i);
+		    }
+
+		    remainder = _sum * 10 % 11;
+		    if (remainder === 10) remainder = 0;
+		    if (remainder !== parseInt(tin.substring(9, 10), 10)) return false;
+		    _sum = 0;
+
+		    for (var _i8 = 1; _i8 <= 10; _i8++) {
+		      _sum += parseInt(tin.substring(_i8 - 1, _i8), 10) * (12 - _i8);
+		    }
+
+		    remainder = _sum * 10 % 11;
+		    if (remainder === 10) remainder = 0;
+		    if (remainder !== parseInt(tin.substring(10, 11), 10)) return false;
+		    return true;
+		  }
+
+		  if ( // Reject know invalid CNPJs
+		  tin === '00000000000000' || tin === '11111111111111' || tin === '22222222222222' || tin === '33333333333333' || tin === '44444444444444' || tin === '55555555555555' || tin === '66666666666666' || tin === '77777777777777' || tin === '88888888888888' || tin === '99999999999999') {
+		    return false;
+		  }
+
+		  var length = tin.length - 2;
+		  var identifiers = tin.substring(0, length);
+		  var verificators = tin.substring(length);
+		  var sum = 0;
+		  var pos = length - 7;
+
+		  for (var _i9 = length; _i9 >= 1; _i9--) {
+		    sum += identifiers.charAt(length - _i9) * pos;
+		    pos -= 1;
+
+		    if (pos < 2) {
+		      pos = 9;
+		    }
+		  }
+
+		  var result = sum % 11 < 2 ? 0 : 11 - sum % 11;
+
+		  if (result !== parseInt(verificators.charAt(0), 10)) {
+		    return false;
+		  }
+
+		  length += 1;
+		  identifiers = tin.substring(0, length);
+		  sum = 0;
+		  pos = length - 7;
+
+		  for (var _i10 = length; _i10 >= 1; _i10--) {
+		    sum += identifiers.charAt(length - _i10) * pos;
+		    pos -= 1;
+
+		    if (pos < 2) {
+		      pos = 9;
+		    }
+		  }
+
+		  result = sum % 11 < 2 ? 0 : 11 - sum % 11;
+
+		  if (result !== parseInt(verificators.charAt(1), 10)) {
+		    return false;
+		  }
+
+		  return true;
+		}
+		/*
+		 * pt-PT validation function
+		 * (Número de identificação fiscal (NIF), persons/entities)
+		 * Verify TIN validity by calculating check (last) digit (variant of MOD 11)
+		 */
+
+
+		function ptPtCheck(tin) {
+		  var checksum = 11 - algorithms.reverseMultiplyAndSum(tin.split('').slice(0, 8).map(function (a) {
+		    return parseInt(a, 10);
+		  }), 9) % 11;
+
+		  if (checksum > 9) {
+		    return parseInt(tin[8], 10) === 0;
+		  }
+
+		  return checksum === parseInt(tin[8], 10);
+		}
+		/*
+		 * ro-RO validation function
+		 * (Cod Numeric Personal (CNP) or Cod de înregistrare fiscală (CIF),
+		 * persons only)
+		 * Verify CNP validity by calculating check (last) digit (test not found for CIF)
+		 * Material not in DG TAXUD document sourced from:
+		 * `https://en.wikipedia.org/wiki/National_identification_number#Romania`
+		 */
+
+
+		function roRoCheck(tin) {
+		  if (tin.slice(0, 4) !== '9000') {
+		    // No test found for this format
+		    // Extract full year using century digit if possible
+		    var full_year = tin.slice(1, 3);
+
+		    switch (tin[0]) {
+		      case '1':
+		      case '2':
+		        full_year = "19".concat(full_year);
+		        break;
+
+		      case '3':
+		      case '4':
+		        full_year = "18".concat(full_year);
+		        break;
+
+		      case '5':
+		      case '6':
+		        full_year = "20".concat(full_year);
+		        break;
+		    } // Check date validity
+
+
+		    var date = "".concat(full_year, "/").concat(tin.slice(3, 5), "/").concat(tin.slice(5, 7));
+
+		    if (date.length === 8) {
+		      if (!(0, _isDate.default)(date, 'YY/MM/DD')) {
+		        return false;
+		      }
+		    } else if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		      return false;
+		    } // Calculate check digit
+
+
+		    var digits = tin.split('').map(function (a) {
+		      return parseInt(a, 10);
+		    });
+		    var multipliers = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
+		    var checksum = 0;
+
+		    for (var i = 0; i < multipliers.length; i++) {
+		      checksum += digits[i] * multipliers[i];
+		    }
+
+		    if (checksum % 11 === 10) {
+		      return digits[12] === 1;
+		    }
+
+		    return digits[12] === checksum % 11;
+		  }
+
+		  return true;
+		}
+		/*
+		 * sk-SK validation function
+		 * (Rodné číslo (RČ) or bezvýznamové identifikačné číslo (BIČ), persons only)
+		 * Checks validity of pre-1954 birth numbers (rodné číslo) only
+		 * Due to the introduction of the pseudo-random BIČ it is not possible to test
+		 * post-1954 birth numbers without knowing whether they are BIČ or RČ beforehand
+		 */
+
+
+		function skSkCheck(tin) {
+		  if (tin.length === 9) {
+		    tin = tin.replace(/\W/, '');
+
+		    if (tin.slice(6) === '000') {
+		      return false;
+		    } // Three-zero serial not assigned before 1954
+		    // Extract full year from TIN length
+
+
+		    var full_year = parseInt(tin.slice(0, 2), 10);
+
+		    if (full_year > 53) {
+		      return false;
+		    }
+
+		    if (full_year < 10) {
+		      full_year = "190".concat(full_year);
+		    } else {
+		      full_year = "19".concat(full_year);
+		    } // Extract month from TIN and normalize
+
+
+		    var month = parseInt(tin.slice(2, 4), 10);
+
+		    if (month > 50) {
+		      month -= 50;
+		    }
+
+		    if (month < 10) {
+		      month = "0".concat(month);
+		    } // Check date validity
+
+
+		    var date = "".concat(full_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+
+		    if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		      return false;
+		    }
+		  }
+
+		  return true;
+		}
+		/*
+		 * sl-SI validation function
+		 * (Davčna številka, persons/entities)
+		 * Verify TIN validity by calculating check (last) digit (variant of MOD 11)
+		 */
+
+
+		function slSiCheck(tin) {
+		  var checksum = 11 - algorithms.reverseMultiplyAndSum(tin.split('').slice(0, 7).map(function (a) {
+		    return parseInt(a, 10);
+		  }), 8) % 11;
+
+		  if (checksum === 10) {
+		    return parseInt(tin[7], 10) === 0;
+		  }
+
+		  return checksum === parseInt(tin[7], 10);
+		}
+		/*
+		 * sv-SE validation function
+		 * (Personnummer or samordningsnummer, persons only)
+		 * Checks validity of birth date and calls luhnCheck() to validate check (last) digit
+		 */
+
+
+		function svSeCheck(tin) {
+		  // Make copy of TIN and normalize to two-digit year form
+		  var tin_copy = tin.slice(0);
+
+		  if (tin.length > 11) {
+		    tin_copy = tin_copy.slice(2);
+		  } // Extract date of birth
+
+
+		  var full_year = '';
+		  var month = tin_copy.slice(2, 4);
+		  var day = parseInt(tin_copy.slice(4, 6), 10);
+
+		  if (tin.length > 11) {
+		    full_year = tin.slice(0, 4);
+		  } else {
+		    full_year = tin.slice(0, 2);
+
+		    if (tin.length === 11 && day < 60) {
+		      // Extract full year from centenarian symbol
+		      // Should work just fine until year 10000 or so
+		      var current_year = new Date().getFullYear().toString();
+		      var current_century = parseInt(current_year.slice(0, 2), 10);
+		      current_year = parseInt(current_year, 10);
+
+		      if (tin[6] === '-') {
+		        if (parseInt("".concat(current_century).concat(full_year), 10) > current_year) {
+		          full_year = "".concat(current_century - 1).concat(full_year);
+		        } else {
+		          full_year = "".concat(current_century).concat(full_year);
+		        }
+		      } else {
+		        full_year = "".concat(current_century - 1).concat(full_year);
+
+		        if (current_year - parseInt(full_year, 10) < 100) {
+		          return false;
+		        }
+		      }
+		    }
+		  } // Normalize day and check date validity
+
+
+		  if (day > 60) {
+		    day -= 60;
+		  }
+
+		  if (day < 10) {
+		    day = "0".concat(day);
+		  }
+
+		  var date = "".concat(full_year, "/").concat(month, "/").concat(day);
+
+		  if (date.length === 8) {
+		    if (!(0, _isDate.default)(date, 'YY/MM/DD')) {
+		      return false;
+		    }
+		  } else if (!(0, _isDate.default)(date, 'YYYY/MM/DD')) {
+		    return false;
+		  }
+
+		  return algorithms.luhnCheck(tin.replace(/\W/, ''));
+		} // Locale lookup objects
+
+		/*
+		 * Tax id regex formats for various locales
+		 *
+		 * Where not explicitly specified in DG-TAXUD document both
+		 * uppercase and lowercase letters are acceptable.
+		 */
+
+
+		var taxIdFormat = {
+		  'bg-BG': /^\d{10}$/,
+		  'cs-CZ': /^\d{6}\/{0,1}\d{3,4}$/,
+		  'de-AT': /^\d{9}$/,
+		  'de-DE': /^[1-9]\d{10}$/,
+		  'dk-DK': /^\d{6}-{0,1}\d{4}$/,
+		  'el-CY': /^[09]\d{7}[A-Z]$/,
+		  'el-GR': /^([0-4]|[7-9])\d{8}$/,
+		  'en-CA': /^\d{9}$/,
+		  'en-GB': /^\d{10}$|^(?!GB|NK|TN|ZZ)(?![DFIQUV])[A-Z](?![DFIQUVO])[A-Z]\d{6}[ABCD ]$/i,
+		  'en-IE': /^\d{7}[A-W][A-IW]{0,1}$/i,
+		  'en-US': /^\d{2}[- ]{0,1}\d{7}$/,
+		  'es-ES': /^(\d{0,8}|[XYZKLM]\d{7})[A-HJ-NP-TV-Z]$/i,
+		  'et-EE': /^[1-6]\d{6}(00[1-9]|0[1-9][0-9]|[1-6][0-9]{2}|70[0-9]|710)\d$/,
+		  'fi-FI': /^\d{6}[-+A]\d{3}[0-9A-FHJ-NPR-Y]$/i,
+		  'fr-BE': /^\d{11}$/,
+		  'fr-FR': /^[0-3]\d{12}$|^[0-3]\d\s\d{2}(\s\d{3}){3}$/,
+		  // Conforms both to official spec and provided example
+		  'fr-LU': /^\d{13}$/,
+		  'hr-HR': /^\d{11}$/,
+		  'hu-HU': /^8\d{9}$/,
+		  'it-IT': /^[A-Z]{6}[L-NP-V0-9]{2}[A-EHLMPRST][L-NP-V0-9]{2}[A-ILMZ][L-NP-V0-9]{3}[A-Z]$/i,
+		  'lv-LV': /^\d{6}-{0,1}\d{5}$/,
+		  // Conforms both to DG TAXUD spec and original research
+		  'mt-MT': /^\d{3,7}[APMGLHBZ]$|^([1-8])\1\d{7}$/i,
+		  'nl-NL': /^\d{9}$/,
+		  'pl-PL': /^\d{10,11}$/,
+		  'pt-BR': /(?:^\d{11}$)|(?:^\d{14}$)/,
+		  'pt-PT': /^\d{9}$/,
+		  'ro-RO': /^\d{13}$/,
+		  'sk-SK': /^\d{6}\/{0,1}\d{3,4}$/,
+		  'sl-SI': /^[1-9]\d{7}$/,
+		  'sv-SE': /^(\d{6}[-+]{0,1}\d{4}|(18|19|20)\d{6}[-+]{0,1}\d{4})$/
+		}; // taxIdFormat locale aliases
+
+		taxIdFormat['lb-LU'] = taxIdFormat['fr-LU'];
+		taxIdFormat['lt-LT'] = taxIdFormat['et-EE'];
+		taxIdFormat['nl-BE'] = taxIdFormat['fr-BE'];
+		taxIdFormat['fr-CA'] = taxIdFormat['en-CA']; // Algorithmic tax id check functions for various locales
+
+		var taxIdCheck = {
+		  'bg-BG': bgBgCheck,
+		  'cs-CZ': csCzCheck,
+		  'de-AT': deAtCheck,
+		  'de-DE': deDeCheck,
+		  'dk-DK': dkDkCheck,
+		  'el-CY': elCyCheck,
+		  'el-GR': elGrCheck,
+		  'en-CA': isCanadianSIN,
+		  'en-IE': enIeCheck,
+		  'en-US': enUsCheck,
+		  'es-ES': esEsCheck,
+		  'et-EE': etEeCheck,
+		  'fi-FI': fiFiCheck,
+		  'fr-BE': frBeCheck,
+		  'fr-FR': frFrCheck,
+		  'fr-LU': frLuCheck,
+		  'hr-HR': hrHrCheck,
+		  'hu-HU': huHuCheck,
+		  'it-IT': itItCheck,
+		  'lv-LV': lvLvCheck,
+		  'mt-MT': mtMtCheck,
+		  'nl-NL': nlNlCheck,
+		  'pl-PL': plPlCheck,
+		  'pt-BR': ptBrCheck,
+		  'pt-PT': ptPtCheck,
+		  'ro-RO': roRoCheck,
+		  'sk-SK': skSkCheck,
+		  'sl-SI': slSiCheck,
+		  'sv-SE': svSeCheck
+		}; // taxIdCheck locale aliases
+
+		taxIdCheck['lb-LU'] = taxIdCheck['fr-LU'];
+		taxIdCheck['lt-LT'] = taxIdCheck['et-EE'];
+		taxIdCheck['nl-BE'] = taxIdCheck['fr-BE'];
+		taxIdCheck['fr-CA'] = taxIdCheck['en-CA']; // Regexes for locales where characters should be omitted before checking format
+
+		var allsymbols = /[-\\\/!@#$%\^&\*\(\)\+\=\[\]]+/g;
+		var sanitizeRegexes = {
+		  'de-AT': allsymbols,
+		  'de-DE': /[\/\\]/g,
+		  'fr-BE': allsymbols
+		}; // sanitizeRegexes locale aliases
+
+		sanitizeRegexes['nl-BE'] = sanitizeRegexes['fr-BE'];
+		/*
+		 * Validator function
+		 * Return true if the passed string is a valid tax identification number
+		 * for the specified locale.
+		 * Throw an error exception if the locale is not supported.
+		 */
+
+		function isTaxID(str) {
+		  var locale = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'en-US';
+		  (0, _assertString.default)(str); // Copy TIN to avoid replacement if sanitized
+
+		  var strcopy = str.slice(0);
+
+		  if (locale in taxIdFormat) {
+		    if (locale in sanitizeRegexes) {
+		      strcopy = strcopy.replace(sanitizeRegexes[locale], '');
+		    }
+
+		    if (!taxIdFormat[locale].test(strcopy)) {
+		      return false;
+		    }
+
+		    if (locale in taxIdCheck) {
+		      return taxIdCheck[locale](strcopy);
+		    } // Fallthrough; not all locales have algorithmic checks
+
+
+		    return true;
+		  }
+
+		  throw new Error("Invalid locale '".concat(locale, "'"));
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isTaxID, isTaxIDExports));
+	return isTaxIDExports;
+}
+
+var isMobilePhone = {};
+
+var hasRequiredIsMobilePhone;
+
+function requireIsMobilePhone () {
+	if (hasRequiredIsMobilePhone) return isMobilePhone;
+	hasRequiredIsMobilePhone = 1;
+
+	Object.defineProperty(isMobilePhone, "__esModule", {
+	  value: true
+	});
+	isMobilePhone.default = isMobilePhone$1;
+	isMobilePhone.locales = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	/* eslint-disable max-len */
+	var phones = {
+	  'am-AM': /^(\+?374|0)((10|[9|7][0-9])\d{6}$|[2-4]\d{7}$)/,
+	  'ar-AE': /^((\+?971)|0)?5[024568]\d{7}$/,
+	  'ar-BH': /^(\+?973)?(3|6)\d{7}$/,
+	  'ar-DZ': /^(\+?213|0)(5|6|7)\d{8}$/,
+	  'ar-LB': /^(\+?961)?((3|81)\d{6}|7\d{7})$/,
+	  'ar-EG': /^((\+?20)|0)?1[0125]\d{8}$/,
+	  'ar-IQ': /^(\+?964|0)?7[0-9]\d{8}$/,
+	  'ar-JO': /^(\+?962|0)?7[789]\d{7}$/,
+	  'ar-KW': /^(\+?965)([569]\d{7}|41\d{6})$/,
+	  'ar-LY': /^((\+?218)|0)?(9[1-6]\d{7}|[1-8]\d{7,9})$/,
+	  'ar-MA': /^(?:(?:\+|00)212|0)[5-7]\d{8}$/,
+	  'ar-OM': /^((\+|00)968)?(9[1-9])\d{6}$/,
+	  'ar-PS': /^(\+?970|0)5[6|9](\d{7})$/,
+	  'ar-SA': /^(!?(\+?966)|0)?5\d{8}$/,
+	  'ar-SY': /^(!?(\+?963)|0)?9\d{8}$/,
+	  'ar-TN': /^(\+?216)?[2459]\d{7}$/,
+	  'az-AZ': /^(\+994|0)(10|5[015]|7[07]|99)\d{7}$/,
+	  'bs-BA': /^((((\+|00)3876)|06))((([0-3]|[5-6])\d{6})|(4\d{7}))$/,
+	  'be-BY': /^(\+?375)?(24|25|29|33|44)\d{7}$/,
+	  'bg-BG': /^(\+?359|0)?8[789]\d{7}$/,
+	  'bn-BD': /^(\+?880|0)1[13456789][0-9]{8}$/,
+	  'ca-AD': /^(\+376)?[346]\d{5}$/,
+	  'cs-CZ': /^(\+?420)? ?[1-9][0-9]{2} ?[0-9]{3} ?[0-9]{3}$/,
+	  'da-DK': /^(\+?45)?\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{2}$/,
+	  'de-DE': /^((\+49|0)1)(5[0-25-9]\d|6([23]|0\d?)|7([0-57-9]|6\d))\d{7,9}$/,
+	  'de-AT': /^(\+43|0)\d{1,4}\d{3,12}$/,
+	  'de-CH': /^(\+41|0)([1-9])\d{1,9}$/,
+	  'de-LU': /^(\+352)?((6\d1)\d{6})$/,
+	  'dv-MV': /^(\+?960)?(7[2-9]|9[1-9])\d{5}$/,
+	  'el-GR': /^(\+?30|0)?6(8[5-9]|9(?![26])[0-9])\d{7}$/,
+	  'el-CY': /^(\+?357?)?(9(9|6)\d{6})$/,
+	  'en-AI': /^(\+?1|0)264(?:2(35|92)|4(?:6[1-2]|76|97)|5(?:3[6-9]|8[1-4])|7(?:2(4|9)|72))\d{4}$/,
+	  'en-AU': /^(\+?61|0)4\d{8}$/,
+	  'en-AG': /^(?:\+1|1)268(?:464|7(?:1[3-9]|[28]\d|3[0246]|64|7[0-689]))\d{4}$/,
+	  'en-BM': /^(\+?1)?441(((3|7)\d{6}$)|(5[0-3][0-9]\d{4}$)|(59\d{5}$))/,
+	  'en-BS': /^(\+?1[-\s]?|0)?\(?242\)?[-\s]?\d{3}[-\s]?\d{4}$/,
+	  'en-GB': /^(\+?44|0)7\d{9}$/,
+	  'en-GG': /^(\+?44|0)1481\d{6}$/,
+	  'en-GH': /^(\+233|0)(20|50|24|54|27|57|26|56|23|28|55|59)\d{7}$/,
+	  'en-GY': /^(\+592|0)6\d{6}$/,
+	  'en-HK': /^(\+?852[-\s]?)?[456789]\d{3}[-\s]?\d{4}$/,
+	  'en-MO': /^(\+?853[-\s]?)?[6]\d{3}[-\s]?\d{4}$/,
+	  'en-IE': /^(\+?353|0)8[356789]\d{7}$/,
+	  'en-IN': /^(\+?91|0)?[6789]\d{9}$/,
+	  'en-JM': /^(\+?876)?\d{7}$/,
+	  'en-KE': /^(\+?254|0)(7|1)\d{8}$/,
+	  'en-SS': /^(\+?211|0)(9[1257])\d{7}$/,
+	  'en-KI': /^((\+686|686)?)?( )?((6|7)(2|3|8)[0-9]{6})$/,
+	  'en-KN': /^(?:\+1|1)869(?:46\d|48[89]|55[6-8]|66\d|76[02-7])\d{4}$/,
+	  'en-LS': /^(\+?266)(22|28|57|58|59|27|52)\d{6}$/,
+	  'en-MT': /^(\+?356|0)?(99|79|77|21|27|22|25)[0-9]{6}$/,
+	  'en-MU': /^(\+?230|0)?\d{8}$/,
+	  'en-NA': /^(\+?264|0)(6|8)\d{7}$/,
+	  'en-NG': /^(\+?234|0)?[789]\d{9}$/,
+	  'en-NZ': /^(\+?64|0)[28]\d{7,9}$/,
+	  'en-PG': /^(\+?675|0)?(7\d|8[18])\d{6}$/,
+	  'en-PK': /^((00|\+)?92|0)3[0-6]\d{8}$/,
+	  'en-PH': /^(09|\+639)\d{9}$/,
+	  'en-RW': /^(\+?250|0)?[7]\d{8}$/,
+	  'en-SG': /^(\+65)?[3689]\d{7}$/,
+	  'en-SL': /^(\+?232|0)\d{8}$/,
+	  'en-TZ': /^(\+?255|0)?[67]\d{8}$/,
+	  'en-UG': /^(\+?256|0)?[7]\d{8}$/,
+	  'en-US': /^((\+1|1)?( |-)?)?(\([2-9][0-9]{2}\)|[2-9][0-9]{2})( |-)?([2-9][0-9]{2}( |-)?[0-9]{4})$/,
+	  'en-ZA': /^(\+?27|0)\d{9}$/,
+	  'en-ZM': /^(\+?26)?09[567]\d{7}$/,
+	  'en-ZW': /^(\+263)[0-9]{9}$/,
+	  'en-BW': /^(\+?267)?(7[1-8]{1})\d{6}$/,
+	  'es-AR': /^\+?549(11|[2368]\d)\d{8}$/,
+	  'es-BO': /^(\+?591)?(6|7)\d{7}$/,
+	  'es-CO': /^(\+?57)?3(0(0|1|2|4|5)|1\d|2[0-4]|5(0|1))\d{7}$/,
+	  'es-CL': /^(\+?56|0)[2-9]\d{1}\d{7}$/,
+	  'es-CR': /^(\+506)?[2-8]\d{7}$/,
+	  'es-CU': /^(\+53|0053)?5\d{7}/,
+	  'es-DO': /^(\+?1)?8[024]9\d{7}$/,
+	  'es-HN': /^(\+?504)?[9|8|3|2]\d{7}$/,
+	  'es-EC': /^(\+?593|0)([2-7]|9[2-9])\d{7}$/,
+	  'es-ES': /^(\+?34)?[6|7]\d{8}$/,
+	  'es-PE': /^(\+?51)?9\d{8}$/,
+	  'es-MX': /^(\+?52)?(1|01)?\d{10,11}$/,
+	  'es-NI': /^(\+?505)\d{7,8}$/,
+	  'es-PA': /^(\+?507)\d{7,8}$/,
+	  'es-PY': /^(\+?595|0)9[9876]\d{7}$/,
+	  'es-SV': /^(\+?503)?[67]\d{7}$/,
+	  'es-UY': /^(\+598|0)9[1-9][\d]{6}$/,
+	  'es-VE': /^(\+?58)?(2|4)\d{9}$/,
+	  'et-EE': /^(\+?372)?\s?(5|8[1-4])\s?([0-9]\s?){6,7}$/,
+	  'fa-IR': /^(\+?98[\-\s]?|0)9[0-39]\d[\-\s]?\d{3}[\-\s]?\d{4}$/,
+	  'fi-FI': /^(\+?358|0)\s?(4[0-6]|50)\s?(\d\s?){4,8}$/,
+	  'fj-FJ': /^(\+?679)?\s?\d{3}\s?\d{4}$/,
+	  'fo-FO': /^(\+?298)?\s?\d{2}\s?\d{2}\s?\d{2}$/,
+	  'fr-BF': /^(\+226|0)[67]\d{7}$/,
+	  'fr-BJ': /^(\+229)\d{8}$/,
+	  'fr-CD': /^(\+?243|0)?(8|9)\d{8}$/,
+	  'fr-CM': /^(\+?237)6[0-9]{8}$/,
+	  'fr-FR': /^(\+?33|0)[67]\d{8}$/,
+	  'fr-GF': /^(\+?594|0|00594)[67]\d{8}$/,
+	  'fr-GP': /^(\+?590|0|00590)[67]\d{8}$/,
+	  'fr-MQ': /^(\+?596|0|00596)[67]\d{8}$/,
+	  'fr-PF': /^(\+?689)?8[789]\d{6}$/,
+	  'fr-RE': /^(\+?262|0|00262)[67]\d{8}$/,
+	  'he-IL': /^(\+972|0)([23489]|5[012345689]|77)[1-9]\d{6}$/,
+	  'hu-HU': /^(\+?36|06)(20|30|31|50|70)\d{7}$/,
+	  'id-ID': /^(\+?62|0)8(1[123456789]|2[1238]|3[1238]|5[12356789]|7[78]|9[56789]|8[123456789])([\s?|\d]{5,11})$/,
+	  'ir-IR': /^(\+98|0)?9\d{9}$/,
+	  'it-IT': /^(\+?39)?\s?3\d{2} ?\d{6,7}$/,
+	  'it-SM': /^((\+378)|(0549)|(\+390549)|(\+3780549))?6\d{5,9}$/,
+	  'ja-JP': /^(\+81[ \-]?(\(0\))?|0)[6789]0[ \-]?\d{4}[ \-]?\d{4}$/,
+	  'ka-GE': /^(\+?995)?(79\d{7}|5\d{8})$/,
+	  'kk-KZ': /^(\+?7|8)?7\d{9}$/,
+	  'kl-GL': /^(\+?299)?\s?\d{2}\s?\d{2}\s?\d{2}$/,
+	  'ko-KR': /^((\+?82)[ \-]?)?0?1([0|1|6|7|8|9]{1})[ \-]?\d{3,4}[ \-]?\d{4}$/,
+	  'ky-KG': /^(\+?7\s?\+?7|0)\s?\d{2}\s?\d{3}\s?\d{4}$/,
+	  'lt-LT': /^(\+370|8)\d{8}$/,
+	  'lv-LV': /^(\+?371)2\d{7}$/,
+	  'mg-MG': /^((\+?261|0)(2|3)\d)?\d{7}$/,
+	  'mn-MN': /^(\+|00|011)?976(77|81|88|91|94|95|96|99)\d{6}$/,
+	  'my-MM': /^(\+?959|09|9)(2[5-7]|3[1-2]|4[0-5]|6[6-9]|7[5-9]|9[6-9])[0-9]{7}$/,
+	  'ms-MY': /^(\+?60|0)1(([0145](-|\s)?\d{7,8})|([236-9](-|\s)?\d{7}))$/,
+	  'mz-MZ': /^(\+?258)?8[234567]\d{7}$/,
+	  'nb-NO': /^(\+?47)?[49]\d{7}$/,
+	  'ne-NP': /^(\+?977)?9[78]\d{8}$/,
+	  'nl-BE': /^(\+?32|0)4\d{8}$/,
+	  'nl-NL': /^(((\+|00)?31\(0\))|((\+|00)?31)|0)6{1}\d{8}$/,
+	  'nl-AW': /^(\+)?297(56|59|64|73|74|99)\d{5}$/,
+	  'nn-NO': /^(\+?47)?[49]\d{7}$/,
+	  'pl-PL': /^(\+?48)? ?[5-8]\d ?\d{3} ?\d{2} ?\d{2}$/,
+	  'pt-BR': /^((\+?55\ ?[1-9]{2}\ ?)|(\+?55\ ?\([1-9]{2}\)\ ?)|(0[1-9]{2}\ ?)|(\([1-9]{2}\)\ ?)|([1-9]{2}\ ?))((\d{4}\-?\d{4})|(9[1-9]{1}\d{3}\-?\d{4}))$/,
+	  'pt-PT': /^(\+?351)?9[1236]\d{7}$/,
+	  'pt-AO': /^(\+244)\d{9}$/,
+	  'ro-MD': /^(\+?373|0)((6(0|1|2|6|7|8|9))|(7(6|7|8|9)))\d{6}$/,
+	  'ro-RO': /^(\+?40|0)\s?7\d{2}(\/|\s|\.|-)?\d{3}(\s|\.|-)?\d{3}$/,
+	  'ru-RU': /^(\+?7|8)?9\d{9}$/,
+	  'si-LK': /^(?:0|94|\+94)?(7(0|1|2|4|5|6|7|8)( |-)?)\d{7}$/,
+	  'sl-SI': /^(\+386\s?|0)(\d{1}\s?\d{3}\s?\d{2}\s?\d{2}|\d{2}\s?\d{3}\s?\d{3})$/,
+	  'sk-SK': /^(\+?421)? ?[1-9][0-9]{2} ?[0-9]{3} ?[0-9]{3}$/,
+	  'sq-AL': /^(\+355|0)6[789]\d{6}$/,
+	  'sr-RS': /^(\+3816|06)[- \d]{5,9}$/,
+	  'sv-SE': /^(\+?46|0)[\s\-]?7[\s\-]?[02369]([\s\-]?\d){7}$/,
+	  'tg-TJ': /^(\+?992)?[5][5]\d{7}$/,
+	  'th-TH': /^(\+66|66|0)\d{9}$/,
+	  'tr-TR': /^(\+?90|0)?5\d{9}$/,
+	  'tk-TM': /^(\+993|993|8)\d{8}$/,
+	  'uk-UA': /^(\+?38|8)?0\d{9}$/,
+	  'uz-UZ': /^(\+?998)?(6[125-79]|7[1-69]|88|9\d)\d{7}$/,
+	  'vi-VN': /^((\+?84)|0)((3([2-9]))|(5([25689]))|(7([0|6-9]))|(8([1-9]))|(9([0-9])))([0-9]{7})$/,
+	  'zh-CN': /^((\+|00)86)?(1[3-9]|9[28])\d{9}$/,
+	  'zh-TW': /^(\+?886\-?|0)?9\d{8}$/,
+	  'dz-BT': /^(\+?975|0)?(17|16|77|02)\d{6}$/,
+	  'ar-YE': /^(((\+|00)9677|0?7)[0137]\d{7}|((\+|00)967|0)[1-7]\d{6})$/,
+	  'ar-EH': /^(\+?212|0)[\s\-]?(5288|5289)[\s\-]?\d{5}$/,
+	  'fa-AF': /^(\+93|0)?(2{1}[0-8]{1}|[3-5]{1}[0-4]{1})(\d{7})$/
+	};
+	/* eslint-enable max-len */
+	// aliases
+
+	phones['en-CA'] = phones['en-US'];
+	phones['fr-CA'] = phones['en-CA'];
+	phones['fr-BE'] = phones['nl-BE'];
+	phones['zh-HK'] = phones['en-HK'];
+	phones['zh-MO'] = phones['en-MO'];
+	phones['ga-IE'] = phones['en-IE'];
+	phones['fr-CH'] = phones['de-CH'];
+	phones['it-CH'] = phones['fr-CH'];
+
+	function isMobilePhone$1(str, locale, options) {
+	  (0, _assertString.default)(str);
+
+	  if (options && options.strictMode && !str.startsWith('+')) {
+	    return false;
+	  }
+
+	  if (Array.isArray(locale)) {
+	    return locale.some(function (key) {
+	      // https://github.com/gotwarlost/istanbul/blob/master/ignoring-code-for-coverage.md#ignoring-code-for-coverage-purposes
+	      // istanbul ignore else
+	      if (phones.hasOwnProperty(key)) {
+	        var phone = phones[key];
+
+	        if (phone.test(str)) {
+	          return true;
+	        }
+	      }
+
+	      return false;
+	    });
+	  } else if (locale in phones) {
+	    return phones[locale].test(str); // alias falsey locale as 'any'
+	  } else if (!locale || locale === 'any') {
+	    for (var key in phones) {
+	      // istanbul ignore else
+	      if (phones.hasOwnProperty(key)) {
+	        var phone = phones[key];
+
+	        if (phone.test(str)) {
+	          return true;
+	        }
+	      }
+	    }
+
+	    return false;
+	  }
+
+	  throw new Error("Invalid locale '".concat(locale, "'"));
+	}
+
+	var locales = Object.keys(phones);
+	isMobilePhone.locales = locales;
+	return isMobilePhone;
+}
+
+var isEthereumAddressExports = {};
+var isEthereumAddress = {
+  get exports(){ return isEthereumAddressExports; },
+  set exports(v){ isEthereumAddressExports = v; },
+};
+
+var hasRequiredIsEthereumAddress;
+
+function requireIsEthereumAddress () {
+	if (hasRequiredIsEthereumAddress) return isEthereumAddressExports;
+	hasRequiredIsEthereumAddress = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isEthereumAddress;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var eth = /^(0x)[0-9a-f]{40}$/i;
+
+		function isEthereumAddress(str) {
+		  (0, _assertString.default)(str);
+		  return eth.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isEthereumAddress, isEthereumAddressExports));
+	return isEthereumAddressExports;
+}
+
+var isCurrencyExports = {};
+var isCurrency = {
+  get exports(){ return isCurrencyExports; },
+  set exports(v){ isCurrencyExports = v; },
+};
+
+var hasRequiredIsCurrency;
+
+function requireIsCurrency () {
+	if (hasRequiredIsCurrency) return isCurrencyExports;
+	hasRequiredIsCurrency = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isCurrency;
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function currencyRegex(options) {
+		  var decimal_digits = "\\d{".concat(options.digits_after_decimal[0], "}");
+		  options.digits_after_decimal.forEach(function (digit, index) {
+		    if (index !== 0) decimal_digits = "".concat(decimal_digits, "|\\d{").concat(digit, "}");
+		  });
+		  var symbol = "(".concat(options.symbol.replace(/\W/, function (m) {
+		    return "\\".concat(m);
+		  }), ")").concat(options.require_symbol ? '' : '?'),
+		      negative = '-?',
+		      whole_dollar_amount_without_sep = '[1-9]\\d*',
+		      whole_dollar_amount_with_sep = "[1-9]\\d{0,2}(\\".concat(options.thousands_separator, "\\d{3})*"),
+		      valid_whole_dollar_amounts = ['0', whole_dollar_amount_without_sep, whole_dollar_amount_with_sep],
+		      whole_dollar_amount = "(".concat(valid_whole_dollar_amounts.join('|'), ")?"),
+		      decimal_amount = "(\\".concat(options.decimal_separator, "(").concat(decimal_digits, "))").concat(options.require_decimal ? '' : '?');
+		  var pattern = whole_dollar_amount + (options.allow_decimal || options.require_decimal ? decimal_amount : ''); // default is negative sign before symbol, but there are two other options (besides parens)
+
+		  if (options.allow_negatives && !options.parens_for_negatives) {
+		    if (options.negative_sign_after_digits) {
+		      pattern += negative;
+		    } else if (options.negative_sign_before_digits) {
+		      pattern = negative + pattern;
+		    }
+		  } // South African Rand, for example, uses R 123 (space) and R-123 (no space)
+
+
+		  if (options.allow_negative_sign_placeholder) {
+		    pattern = "( (?!\\-))?".concat(pattern);
+		  } else if (options.allow_space_after_symbol) {
+		    pattern = " ?".concat(pattern);
+		  } else if (options.allow_space_after_digits) {
+		    pattern += '( (?!$))?';
+		  }
+
+		  if (options.symbol_after_digits) {
+		    pattern += symbol;
+		  } else {
+		    pattern = symbol + pattern;
+		  }
+
+		  if (options.allow_negatives) {
+		    if (options.parens_for_negatives) {
+		      pattern = "(\\(".concat(pattern, "\\)|").concat(pattern, ")");
+		    } else if (!(options.negative_sign_before_digits || options.negative_sign_after_digits)) {
+		      pattern = negative + pattern;
+		    }
+		  } // ensure there's a dollar and/or decimal amount, and that
+		  // it doesn't start with a space or a negative sign followed by a space
+
+
+		  return new RegExp("^(?!-? )(?=.*\\d)".concat(pattern, "$"));
+		}
+
+		var default_currency_options = {
+		  symbol: '$',
+		  require_symbol: false,
+		  allow_space_after_symbol: false,
+		  symbol_after_digits: false,
+		  allow_negatives: true,
+		  parens_for_negatives: false,
+		  negative_sign_before_digits: false,
+		  negative_sign_after_digits: false,
+		  allow_negative_sign_placeholder: false,
+		  thousands_separator: ',',
+		  decimal_separator: '.',
+		  allow_decimal: true,
+		  require_decimal: false,
+		  digits_after_decimal: [2],
+		  allow_space_after_digits: false
+		};
+
+		function isCurrency(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, default_currency_options);
+		  return currencyRegex(options).test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isCurrency, isCurrencyExports));
+	return isCurrencyExports;
+}
+
+var isBtcAddressExports = {};
+var isBtcAddress = {
+  get exports(){ return isBtcAddressExports; },
+  set exports(v){ isBtcAddressExports = v; },
+};
+
+var hasRequiredIsBtcAddress;
+
+function requireIsBtcAddress () {
+	if (hasRequiredIsBtcAddress) return isBtcAddressExports;
+	hasRequiredIsBtcAddress = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBtcAddress;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var bech32 = /^(bc1)[a-z0-9]{25,39}$/;
+		var base58 = /^(1|3)[A-HJ-NP-Za-km-z1-9]{25,39}$/;
+
+		function isBtcAddress(str) {
+		  (0, _assertString.default)(str);
+		  return bech32.test(str) || base58.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBtcAddress, isBtcAddressExports));
+	return isBtcAddressExports;
+}
+
+var isISO6391Exports = {};
+var isISO6391 = {
+  get exports(){ return isISO6391Exports; },
+  set exports(v){ isISO6391Exports = v; },
+};
+
+var hasRequiredIsISO6391;
+
+function requireIsISO6391 () {
+	if (hasRequiredIsISO6391) return isISO6391Exports;
+	hasRequiredIsISO6391 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISO6391;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var isISO6391Set = new Set(['aa', 'ab', 'ae', 'af', 'ak', 'am', 'an', 'ar', 'as', 'av', 'ay', 'az', 'az', 'ba', 'be', 'bg', 'bh', 'bi', 'bm', 'bn', 'bo', 'br', 'bs', 'ca', 'ce', 'ch', 'co', 'cr', 'cs', 'cu', 'cv', 'cy', 'da', 'de', 'dv', 'dz', 'ee', 'el', 'en', 'eo', 'es', 'et', 'eu', 'fa', 'ff', 'fi', 'fj', 'fo', 'fr', 'fy', 'ga', 'gd', 'gl', 'gn', 'gu', 'gv', 'ha', 'he', 'hi', 'ho', 'hr', 'ht', 'hu', 'hy', 'hz', 'ia', 'id', 'ie', 'ig', 'ii', 'ik', 'io', 'is', 'it', 'iu', 'ja', 'jv', 'ka', 'kg', 'ki', 'kj', 'kk', 'kl', 'km', 'kn', 'ko', 'kr', 'ks', 'ku', 'kv', 'kw', 'ky', 'la', 'lb', 'lg', 'li', 'ln', 'lo', 'lt', 'lu', 'lv', 'mg', 'mh', 'mi', 'mk', 'ml', 'mn', 'mr', 'ms', 'mt', 'my', 'na', 'nb', 'nd', 'ne', 'ng', 'nl', 'nn', 'no', 'nr', 'nv', 'ny', 'oc', 'oj', 'om', 'or', 'os', 'pa', 'pi', 'pl', 'ps', 'pt', 'qu', 'rm', 'rn', 'ro', 'ru', 'rw', 'sa', 'sc', 'sd', 'se', 'sg', 'si', 'sk', 'sl', 'sm', 'sn', 'so', 'sq', 'sr', 'ss', 'st', 'su', 'sv', 'sw', 'ta', 'te', 'tg', 'th', 'ti', 'tk', 'tl', 'tn', 'to', 'tr', 'ts', 'tt', 'tw', 'ty', 'ug', 'uk', 'ur', 'uz', 've', 'vi', 'vo', 'wa', 'wo', 'xh', 'yi', 'yo', 'za', 'zh', 'zu']);
+
+		function isISO6391(str) {
+		  (0, _assertString.default)(str);
+		  return isISO6391Set.has(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISO6391, isISO6391Exports));
+	return isISO6391Exports;
+}
+
+var isISO8601Exports = {};
+var isISO8601 = {
+  get exports(){ return isISO8601Exports; },
+  set exports(v){ isISO8601Exports = v; },
+};
+
+var hasRequiredIsISO8601;
+
+function requireIsISO8601 () {
+	if (hasRequiredIsISO8601) return isISO8601Exports;
+	hasRequiredIsISO8601 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISO8601;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/* eslint-disable max-len */
+		// from http://goo.gl/0ejHHW
+		var iso8601 = /^([\+-]?\d{4}(?!\d{2}\b))((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?|W([0-4]\d|5[0-3])(-?[1-7])?|(00[1-9]|0[1-9]\d|[12]\d{2}|3([0-5]\d|6[1-6])))([T\s]((([01]\d|2[0-3])((:?)[0-5]\d)?|24:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/; // same as above, except with a strict 'T' separator between date and time
+
+		var iso8601StrictSeparator = /^([\+-]?\d{4}(?!\d{2}\b))((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?|W([0-4]\d|5[0-3])(-?[1-7])?|(00[1-9]|0[1-9]\d|[12]\d{2}|3([0-5]\d|6[1-6])))([T]((([01]\d|2[0-3])((:?)[0-5]\d)?|24:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/;
+		/* eslint-enable max-len */
+
+		var isValidDate = function isValidDate(str) {
+		  // str must have passed the ISO8601 check
+		  // this check is meant to catch invalid dates
+		  // like 2009-02-31
+		  // first check for ordinal dates
+		  var ordinalMatch = str.match(/^(\d{4})-?(\d{3})([ T]{1}\.*|$)/);
+
+		  if (ordinalMatch) {
+		    var oYear = Number(ordinalMatch[1]);
+		    var oDay = Number(ordinalMatch[2]); // if is leap year
+
+		    if (oYear % 4 === 0 && oYear % 100 !== 0 || oYear % 400 === 0) return oDay <= 366;
+		    return oDay <= 365;
+		  }
+
+		  var match = str.match(/(\d{4})-?(\d{0,2})-?(\d*)/).map(Number);
+		  var year = match[1];
+		  var month = match[2];
+		  var day = match[3];
+		  var monthString = month ? "0".concat(month).slice(-2) : month;
+		  var dayString = day ? "0".concat(day).slice(-2) : day; // create a date object and compare
+
+		  var d = new Date("".concat(year, "-").concat(monthString || '01', "-").concat(dayString || '01'));
+
+		  if (month && day) {
+		    return d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month && d.getUTCDate() === day;
+		  }
+
+		  return true;
+		};
+
+		function isISO8601(str) {
+		  var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+		  (0, _assertString.default)(str);
+		  var check = options.strictSeparator ? iso8601StrictSeparator.test(str) : iso8601.test(str);
+		  if (check && options.strict) return isValidDate(str);
+		  return check;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISO8601, isISO8601Exports));
+	return isISO8601Exports;
+}
+
+var isRFC3339Exports = {};
+var isRFC3339 = {
+  get exports(){ return isRFC3339Exports; },
+  set exports(v){ isRFC3339Exports = v; },
+};
+
+var hasRequiredIsRFC3339;
+
+function requireIsRFC3339 () {
+	if (hasRequiredIsRFC3339) return isRFC3339Exports;
+	hasRequiredIsRFC3339 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isRFC3339;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/* Based on https://tools.ietf.org/html/rfc3339#section-5.6 */
+		var dateFullYear = /[0-9]{4}/;
+		var dateMonth = /(0[1-9]|1[0-2])/;
+		var dateMDay = /([12]\d|0[1-9]|3[01])/;
+		var timeHour = /([01][0-9]|2[0-3])/;
+		var timeMinute = /[0-5][0-9]/;
+		var timeSecond = /([0-5][0-9]|60)/;
+		var timeSecFrac = /(\.[0-9]+)?/;
+		var timeNumOffset = new RegExp("[-+]".concat(timeHour.source, ":").concat(timeMinute.source));
+		var timeOffset = new RegExp("([zZ]|".concat(timeNumOffset.source, ")"));
+		var partialTime = new RegExp("".concat(timeHour.source, ":").concat(timeMinute.source, ":").concat(timeSecond.source).concat(timeSecFrac.source));
+		var fullDate = new RegExp("".concat(dateFullYear.source, "-").concat(dateMonth.source, "-").concat(dateMDay.source));
+		var fullTime = new RegExp("".concat(partialTime.source).concat(timeOffset.source));
+		var rfc3339 = new RegExp("^".concat(fullDate.source, "[ tT]").concat(fullTime.source, "$"));
+
+		function isRFC3339(str) {
+		  (0, _assertString.default)(str);
+		  return rfc3339.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isRFC3339, isRFC3339Exports));
+	return isRFC3339Exports;
+}
+
+var isISO31661Alpha3Exports = {};
+var isISO31661Alpha3 = {
+  get exports(){ return isISO31661Alpha3Exports; },
+  set exports(v){ isISO31661Alpha3Exports = v; },
+};
+
+var hasRequiredIsISO31661Alpha3;
+
+function requireIsISO31661Alpha3 () {
+	if (hasRequiredIsISO31661Alpha3) return isISO31661Alpha3Exports;
+	hasRequiredIsISO31661Alpha3 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isISO31661Alpha3;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		// from https://en.wikipedia.org/wiki/ISO_3166-1_alpha-3
+		var validISO31661Alpha3CountriesCodes = new Set(['AFG', 'ALA', 'ALB', 'DZA', 'ASM', 'AND', 'AGO', 'AIA', 'ATA', 'ATG', 'ARG', 'ARM', 'ABW', 'AUS', 'AUT', 'AZE', 'BHS', 'BHR', 'BGD', 'BRB', 'BLR', 'BEL', 'BLZ', 'BEN', 'BMU', 'BTN', 'BOL', 'BES', 'BIH', 'BWA', 'BVT', 'BRA', 'IOT', 'BRN', 'BGR', 'BFA', 'BDI', 'KHM', 'CMR', 'CAN', 'CPV', 'CYM', 'CAF', 'TCD', 'CHL', 'CHN', 'CXR', 'CCK', 'COL', 'COM', 'COG', 'COD', 'COK', 'CRI', 'CIV', 'HRV', 'CUB', 'CUW', 'CYP', 'CZE', 'DNK', 'DJI', 'DMA', 'DOM', 'ECU', 'EGY', 'SLV', 'GNQ', 'ERI', 'EST', 'ETH', 'FLK', 'FRO', 'FJI', 'FIN', 'FRA', 'GUF', 'PYF', 'ATF', 'GAB', 'GMB', 'GEO', 'DEU', 'GHA', 'GIB', 'GRC', 'GRL', 'GRD', 'GLP', 'GUM', 'GTM', 'GGY', 'GIN', 'GNB', 'GUY', 'HTI', 'HMD', 'VAT', 'HND', 'HKG', 'HUN', 'ISL', 'IND', 'IDN', 'IRN', 'IRQ', 'IRL', 'IMN', 'ISR', 'ITA', 'JAM', 'JPN', 'JEY', 'JOR', 'KAZ', 'KEN', 'KIR', 'PRK', 'KOR', 'KWT', 'KGZ', 'LAO', 'LVA', 'LBN', 'LSO', 'LBR', 'LBY', 'LIE', 'LTU', 'LUX', 'MAC', 'MKD', 'MDG', 'MWI', 'MYS', 'MDV', 'MLI', 'MLT', 'MHL', 'MTQ', 'MRT', 'MUS', 'MYT', 'MEX', 'FSM', 'MDA', 'MCO', 'MNG', 'MNE', 'MSR', 'MAR', 'MOZ', 'MMR', 'NAM', 'NRU', 'NPL', 'NLD', 'NCL', 'NZL', 'NIC', 'NER', 'NGA', 'NIU', 'NFK', 'MNP', 'NOR', 'OMN', 'PAK', 'PLW', 'PSE', 'PAN', 'PNG', 'PRY', 'PER', 'PHL', 'PCN', 'POL', 'PRT', 'PRI', 'QAT', 'REU', 'ROU', 'RUS', 'RWA', 'BLM', 'SHN', 'KNA', 'LCA', 'MAF', 'SPM', 'VCT', 'WSM', 'SMR', 'STP', 'SAU', 'SEN', 'SRB', 'SYC', 'SLE', 'SGP', 'SXM', 'SVK', 'SVN', 'SLB', 'SOM', 'ZAF', 'SGS', 'SSD', 'ESP', 'LKA', 'SDN', 'SUR', 'SJM', 'SWZ', 'SWE', 'CHE', 'SYR', 'TWN', 'TJK', 'TZA', 'THA', 'TLS', 'TGO', 'TKL', 'TON', 'TTO', 'TUN', 'TUR', 'TKM', 'TCA', 'TUV', 'UGA', 'UKR', 'ARE', 'GBR', 'USA', 'UMI', 'URY', 'UZB', 'VUT', 'VEN', 'VNM', 'VGB', 'VIR', 'WLF', 'ESH', 'YEM', 'ZMB', 'ZWE']);
+
+		function isISO31661Alpha3(str) {
+		  (0, _assertString.default)(str);
+		  return validISO31661Alpha3CountriesCodes.has(str.toUpperCase());
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isISO31661Alpha3, isISO31661Alpha3Exports));
+	return isISO31661Alpha3Exports;
+}
+
+var isISO4217 = {};
+
+var hasRequiredIsISO4217;
+
+function requireIsISO4217 () {
+	if (hasRequiredIsISO4217) return isISO4217;
+	hasRequiredIsISO4217 = 1;
+
+	Object.defineProperty(isISO4217, "__esModule", {
+	  value: true
+	});
+	isISO4217.default = isISO4217$1;
+	isISO4217.CurrencyCodes = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	// from https://en.wikipedia.org/wiki/ISO_4217
+	var validISO4217CurrencyCodes = new Set(['AED', 'AFN', 'ALL', 'AMD', 'ANG', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN', 'BAM', 'BBD', 'BDT', 'BGN', 'BHD', 'BIF', 'BMD', 'BND', 'BOB', 'BOV', 'BRL', 'BSD', 'BTN', 'BWP', 'BYN', 'BZD', 'CAD', 'CDF', 'CHE', 'CHF', 'CHW', 'CLF', 'CLP', 'CNY', 'COP', 'COU', 'CRC', 'CUC', 'CUP', 'CVE', 'CZK', 'DJF', 'DKK', 'DOP', 'DZD', 'EGP', 'ERN', 'ETB', 'EUR', 'FJD', 'FKP', 'GBP', 'GEL', 'GHS', 'GIP', 'GMD', 'GNF', 'GTQ', 'GYD', 'HKD', 'HNL', 'HRK', 'HTG', 'HUF', 'IDR', 'ILS', 'INR', 'IQD', 'IRR', 'ISK', 'JMD', 'JOD', 'JPY', 'KES', 'KGS', 'KHR', 'KMF', 'KPW', 'KRW', 'KWD', 'KYD', 'KZT', 'LAK', 'LBP', 'LKR', 'LRD', 'LSL', 'LYD', 'MAD', 'MDL', 'MGA', 'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN', 'MXV', 'MYR', 'MZN', 'NAD', 'NGN', 'NIO', 'NOK', 'NPR', 'NZD', 'OMR', 'PAB', 'PEN', 'PGK', 'PHP', 'PKR', 'PLN', 'PYG', 'QAR', 'RON', 'RSD', 'RUB', 'RWF', 'SAR', 'SBD', 'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLL', 'SOS', 'SRD', 'SSP', 'STN', 'SVC', 'SYP', 'SZL', 'THB', 'TJS', 'TMT', 'TND', 'TOP', 'TRY', 'TTD', 'TWD', 'TZS', 'UAH', 'UGX', 'USD', 'USN', 'UYI', 'UYU', 'UYW', 'UZS', 'VES', 'VND', 'VUV', 'WST', 'XAF', 'XAG', 'XAU', 'XBA', 'XBB', 'XBC', 'XBD', 'XCD', 'XDR', 'XOF', 'XPD', 'XPF', 'XPT', 'XSU', 'XTS', 'XUA', 'XXX', 'YER', 'ZAR', 'ZMW', 'ZWL']);
+
+	function isISO4217$1(str) {
+	  (0, _assertString.default)(str);
+	  return validISO4217CurrencyCodes.has(str.toUpperCase());
+	}
+
+	var CurrencyCodes = validISO4217CurrencyCodes;
+	isISO4217.CurrencyCodes = CurrencyCodes;
+	return isISO4217;
+}
+
+var isBase32Exports = {};
+var isBase32 = {
+  get exports(){ return isBase32Exports; },
+  set exports(v){ isBase32Exports = v; },
+};
+
+var hasRequiredIsBase32;
+
+function requireIsBase32 () {
+	if (hasRequiredIsBase32) return isBase32Exports;
+	hasRequiredIsBase32 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBase32;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var base32 = /^[A-Z2-7]+=*$/;
+		var crockfordBase32 = /^[A-HJKMNP-TV-Z0-9]+$/;
+		var defaultBase32Options = {
+		  crockford: false
+		};
+
+		function isBase32(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, defaultBase32Options);
+
+		  if (options.crockford) {
+		    return crockfordBase32.test(str);
+		  }
+
+		  var len = str.length;
+
+		  if (len % 8 === 0 && base32.test(str)) {
+		    return true;
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBase32, isBase32Exports));
+	return isBase32Exports;
+}
+
+var isBase58Exports = {};
+var isBase58 = {
+  get exports(){ return isBase58Exports; },
+  set exports(v){ isBase58Exports = v; },
+};
+
+var hasRequiredIsBase58;
+
+function requireIsBase58 () {
+	if (hasRequiredIsBase58) return isBase58Exports;
+	hasRequiredIsBase58 = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBase58;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		// Accepted chars - 123456789ABCDEFGH JKLMN PQRSTUVWXYZabcdefghijk mnopqrstuvwxyz
+		var base58Reg = /^[A-HJ-NP-Za-km-z1-9]*$/;
+
+		function isBase58(str) {
+		  (0, _assertString.default)(str);
+
+		  if (base58Reg.test(str)) {
+		    return true;
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBase58, isBase58Exports));
+	return isBase58Exports;
+}
+
+var isDataURIExports = {};
+var isDataURI = {
+  get exports(){ return isDataURIExports; },
+  set exports(v){ isDataURIExports = v; },
+};
+
+var hasRequiredIsDataURI;
+
+function requireIsDataURI () {
+	if (hasRequiredIsDataURI) return isDataURIExports;
+	hasRequiredIsDataURI = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
