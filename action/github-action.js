@@ -186335,3 +186335,2211 @@ var toInt = {
 var hasRequiredToInt;
 
 function requireToInt () {
+	if (hasRequiredToInt) return toIntExports;
+	hasRequiredToInt = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = toInt;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function toInt(str, radix) {
+		  (0, _assertString.default)(str);
+		  return parseInt(str, radix || 10);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (toInt, toIntExports));
+	return toIntExports;
+}
+
+var toBooleanExports = {};
+var toBoolean = {
+  get exports(){ return toBooleanExports; },
+  set exports(v){ toBooleanExports = v; },
+};
+
+var hasRequiredToBoolean;
+
+function requireToBoolean () {
+	if (hasRequiredToBoolean) return toBooleanExports;
+	hasRequiredToBoolean = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = toBoolean;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function toBoolean(str, strict) {
+		  (0, _assertString.default)(str);
+
+		  if (strict) {
+		    return str === '1' || /^true$/i.test(str);
+		  }
+
+		  return str !== '0' && !/^false$/i.test(str) && str !== '';
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (toBoolean, toBooleanExports));
+	return toBooleanExports;
+}
+
+var equalsExports = {};
+var equals = {
+  get exports(){ return equalsExports; },
+  set exports(v){ equalsExports = v; },
+};
+
+var hasRequiredEquals;
+
+function requireEquals () {
+	if (hasRequiredEquals) return equalsExports;
+	hasRequiredEquals = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = equals;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function equals(str, comparison) {
+		  (0, _assertString.default)(str);
+		  return str === comparison;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (equals, equalsExports));
+	return equalsExports;
+}
+
+var containsExports = {};
+var contains = {
+  get exports(){ return containsExports; },
+  set exports(v){ containsExports = v; },
+};
+
+var toStringExports = {};
+var toString$3 = {
+  get exports(){ return toStringExports; },
+  set exports(v){ toStringExports = v; },
+};
+
+var hasRequiredToString;
+
+function requireToString () {
+	if (hasRequiredToString) return toStringExports;
+	hasRequiredToString = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = toString;
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		function toString(input) {
+		  if (_typeof(input) === 'object' && input !== null) {
+		    if (typeof input.toString === 'function') {
+		      input = input.toString();
+		    } else {
+		      input = '[object Object]';
+		    }
+		  } else if (input === null || typeof input === 'undefined' || isNaN(input) && !input.length) {
+		    input = '';
+		  }
+
+		  return String(input);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (toString$3, toStringExports));
+	return toStringExports;
+}
+
+var mergeExports = {};
+var merge$1 = {
+  get exports(){ return mergeExports; },
+  set exports(v){ mergeExports = v; },
+};
+
+var hasRequiredMerge;
+
+function requireMerge () {
+	if (hasRequiredMerge) return mergeExports;
+	hasRequiredMerge = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = merge;
+
+		function merge() {
+		  var obj = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+		  var defaults = arguments.length > 1 ? arguments[1] : undefined;
+
+		  for (var key in defaults) {
+		    if (typeof obj[key] === 'undefined') {
+		      obj[key] = defaults[key];
+		    }
+		  }
+
+		  return obj;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (merge$1, mergeExports));
+	return mergeExports;
+}
+
+var hasRequiredContains;
+
+function requireContains () {
+	if (hasRequiredContains) return containsExports;
+	hasRequiredContains = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = contains;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _toString = _interopRequireDefault(requireToString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var defaulContainsOptions = {
+		  ignoreCase: false,
+		  minOccurrences: 1
+		};
+
+		function contains(str, elem, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, defaulContainsOptions);
+
+		  if (options.ignoreCase) {
+		    return str.toLowerCase().split((0, _toString.default)(elem).toLowerCase()).length > options.minOccurrences;
+		  }
+
+		  return str.split((0, _toString.default)(elem)).length > options.minOccurrences;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (contains, containsExports));
+	return containsExports;
+}
+
+var matchesExports = {};
+var matches = {
+  get exports(){ return matchesExports; },
+  set exports(v){ matchesExports = v; },
+};
+
+var hasRequiredMatches;
+
+function requireMatches () {
+	if (hasRequiredMatches) return matchesExports;
+	hasRequiredMatches = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = matches;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function matches(str, pattern, modifiers) {
+		  (0, _assertString.default)(str);
+
+		  if (Object.prototype.toString.call(pattern) !== '[object RegExp]') {
+		    pattern = new RegExp(pattern, modifiers);
+		  }
+
+		  return !!str.match(pattern);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (matches, matchesExports));
+	return matchesExports;
+}
+
+var isEmailExports = {};
+var isEmail = {
+  get exports(){ return isEmailExports; },
+  set exports(v){ isEmailExports = v; },
+};
+
+var isByteLengthExports = {};
+var isByteLength = {
+  get exports(){ return isByteLengthExports; },
+  set exports(v){ isByteLengthExports = v; },
+};
+
+var hasRequiredIsByteLength;
+
+function requireIsByteLength () {
+	if (hasRequiredIsByteLength) return isByteLengthExports;
+	hasRequiredIsByteLength = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isByteLength;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
+
+		/* eslint-disable prefer-rest-params */
+		function isByteLength(str, options) {
+		  (0, _assertString.default)(str);
+		  var min;
+		  var max;
+
+		  if (_typeof(options) === 'object') {
+		    min = options.min || 0;
+		    max = options.max;
+		  } else {
+		    // backwards compatibility: isByteLength(str, min [, max])
+		    min = arguments[1];
+		    max = arguments[2];
+		  }
+
+		  var len = encodeURI(str).split(/%..|./).length - 1;
+		  return len >= min && (typeof max === 'undefined' || len <= max);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isByteLength, isByteLengthExports));
+	return isByteLengthExports;
+}
+
+var isFQDNExports = {};
+var isFQDN = {
+  get exports(){ return isFQDNExports; },
+  set exports(v){ isFQDNExports = v; },
+};
+
+var hasRequiredIsFQDN;
+
+function requireIsFQDN () {
+	if (hasRequiredIsFQDN) return isFQDNExports;
+	hasRequiredIsFQDN = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isFQDN;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var default_fqdn_options = {
+		  require_tld: true,
+		  allow_underscores: false,
+		  allow_trailing_dot: false,
+		  allow_numeric_tld: false,
+		  allow_wildcard: false,
+		  ignore_max_length: false
+		};
+
+		function isFQDN(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, default_fqdn_options);
+		  /* Remove the optional trailing dot before checking validity */
+
+		  if (options.allow_trailing_dot && str[str.length - 1] === '.') {
+		    str = str.substring(0, str.length - 1);
+		  }
+		  /* Remove the optional wildcard before checking validity */
+
+
+		  if (options.allow_wildcard === true && str.indexOf('*.') === 0) {
+		    str = str.substring(2);
+		  }
+
+		  var parts = str.split('.');
+		  var tld = parts[parts.length - 1];
+
+		  if (options.require_tld) {
+		    // disallow fqdns without tld
+		    if (parts.length < 2) {
+		      return false;
+		    }
+
+		    if (!options.allow_numeric_tld && !/^([a-z\u00A1-\u00A8\u00AA-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]{2,}|xn[a-z0-9-]{2,})$/i.test(tld)) {
+		      return false;
+		    } // disallow spaces
+
+
+		    if (/\s/.test(tld)) {
+		      return false;
+		    }
+		  } // reject numeric TLDs
+
+
+		  if (!options.allow_numeric_tld && /^\d+$/.test(tld)) {
+		    return false;
+		  }
+
+		  return parts.every(function (part) {
+		    if (part.length > 63 && !options.ignore_max_length) {
+		      return false;
+		    }
+
+		    if (!/^[a-z_\u00a1-\uffff0-9-]+$/i.test(part)) {
+		      return false;
+		    } // disallow full-width chars
+
+
+		    if (/[\uff01-\uff5e]/.test(part)) {
+		      return false;
+		    } // disallow parts starting or ending with hyphen
+
+
+		    if (/^-|-$/.test(part)) {
+		      return false;
+		    }
+
+		    if (!options.allow_underscores && /_/.test(part)) {
+		      return false;
+		    }
+
+		    return true;
+		  });
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isFQDN, isFQDNExports));
+	return isFQDNExports;
+}
+
+var isIPExports = {};
+var isIP = {
+  get exports(){ return isIPExports; },
+  set exports(v){ isIPExports = v; },
+};
+
+var hasRequiredIsIP;
+
+function requireIsIP () {
+	if (hasRequiredIsIP) return isIPExports;
+	hasRequiredIsIP = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isIP;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/**
+		11.3.  Examples
+
+		   The following addresses
+
+		             fe80::1234 (on the 1st link of the node)
+		             ff02::5678 (on the 5th link of the node)
+		             ff08::9abc (on the 10th organization of the node)
+
+		   would be represented as follows:
+
+		             fe80::1234%1
+		             ff02::5678%5
+		             ff08::9abc%10
+
+		   (Here we assume a natural translation from a zone index to the
+		   <zone_id> part, where the Nth zone of any scope is translated into
+		   "N".)
+
+		   If we use interface names as <zone_id>, those addresses could also be
+		   represented as follows:
+
+		            fe80::1234%ne0
+		            ff02::5678%pvc1.3
+		            ff08::9abc%interface10
+
+		   where the interface "ne0" belongs to the 1st link, "pvc1.3" belongs
+		   to the 5th link, and "interface10" belongs to the 10th organization.
+		 * * */
+		var IPv4SegmentFormat = '(?:[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])';
+		var IPv4AddressFormat = "(".concat(IPv4SegmentFormat, "[.]){3}").concat(IPv4SegmentFormat);
+		var IPv4AddressRegExp = new RegExp("^".concat(IPv4AddressFormat, "$"));
+		var IPv6SegmentFormat = '(?:[0-9a-fA-F]{1,4})';
+		var IPv6AddressRegExp = new RegExp('^(' + "(?:".concat(IPv6SegmentFormat, ":){7}(?:").concat(IPv6SegmentFormat, "|:)|") + "(?:".concat(IPv6SegmentFormat, ":){6}(?:").concat(IPv4AddressFormat, "|:").concat(IPv6SegmentFormat, "|:)|") + "(?:".concat(IPv6SegmentFormat, ":){5}(?::").concat(IPv4AddressFormat, "|(:").concat(IPv6SegmentFormat, "){1,2}|:)|") + "(?:".concat(IPv6SegmentFormat, ":){4}(?:(:").concat(IPv6SegmentFormat, "){0,1}:").concat(IPv4AddressFormat, "|(:").concat(IPv6SegmentFormat, "){1,3}|:)|") + "(?:".concat(IPv6SegmentFormat, ":){3}(?:(:").concat(IPv6SegmentFormat, "){0,2}:").concat(IPv4AddressFormat, "|(:").concat(IPv6SegmentFormat, "){1,4}|:)|") + "(?:".concat(IPv6SegmentFormat, ":){2}(?:(:").concat(IPv6SegmentFormat, "){0,3}:").concat(IPv4AddressFormat, "|(:").concat(IPv6SegmentFormat, "){1,5}|:)|") + "(?:".concat(IPv6SegmentFormat, ":){1}(?:(:").concat(IPv6SegmentFormat, "){0,4}:").concat(IPv4AddressFormat, "|(:").concat(IPv6SegmentFormat, "){1,6}|:)|") + "(?::((?::".concat(IPv6SegmentFormat, "){0,5}:").concat(IPv4AddressFormat, "|(?::").concat(IPv6SegmentFormat, "){1,7}|:))") + ')(%[0-9a-zA-Z-.:]{1,})?$');
+
+		function isIP(str) {
+		  var version = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : '';
+		  (0, _assertString.default)(str);
+		  version = String(version);
+
+		  if (!version) {
+		    return isIP(str, 4) || isIP(str, 6);
+		  }
+
+		  if (version === '4') {
+		    return IPv4AddressRegExp.test(str);
+		  }
+
+		  if (version === '6') {
+		    return IPv6AddressRegExp.test(str);
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isIP, isIPExports));
+	return isIPExports;
+}
+
+var hasRequiredIsEmail;
+
+function requireIsEmail () {
+	if (hasRequiredIsEmail) return isEmailExports;
+	hasRequiredIsEmail = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isEmail;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		var _isByteLength = _interopRequireDefault(requireIsByteLength());
+
+		var _isFQDN = _interopRequireDefault(requireIsFQDN());
+
+		var _isIP = _interopRequireDefault(requireIsIP());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var default_email_options = {
+		  allow_display_name: false,
+		  require_display_name: false,
+		  allow_utf8_local_part: true,
+		  require_tld: true,
+		  blacklisted_chars: '',
+		  ignore_max_length: false,
+		  host_blacklist: [],
+		  host_whitelist: []
+		};
+		/* eslint-disable max-len */
+
+		/* eslint-disable no-control-regex */
+
+		var splitNameAddress = /^([^\x00-\x1F\x7F-\x9F\cX]+)</i;
+		var emailUserPart = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~]+$/i;
+		var gmailUserPart = /^[a-z\d]+$/;
+		var quotedEmailUser = /^([\s\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e]|(\\[\x01-\x09\x0b\x0c\x0d-\x7f]))*$/i;
+		var emailUserUtf8Part = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+$/i;
+		var quotedEmailUserUtf8 = /^([\s\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|(\\[\x01-\x09\x0b\x0c\x0d-\x7f\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))*$/i;
+		var defaultMaxEmailLength = 254;
+		/* eslint-enable max-len */
+
+		/* eslint-enable no-control-regex */
+
+		/**
+		 * Validate display name according to the RFC2822: https://tools.ietf.org/html/rfc2822#appendix-A.1.2
+		 * @param {String} display_name
+		 */
+
+		function validateDisplayName(display_name) {
+		  var display_name_without_quotes = display_name.replace(/^"(.+)"$/, '$1'); // display name with only spaces is not valid
+
+		  if (!display_name_without_quotes.trim()) {
+		    return false;
+		  } // check whether display name contains illegal character
+
+
+		  var contains_illegal = /[\.";<>]/.test(display_name_without_quotes);
+
+		  if (contains_illegal) {
+		    // if contains illegal characters,
+		    // must to be enclosed in double-quotes, otherwise it's not a valid display name
+		    if (display_name_without_quotes === display_name) {
+		      return false;
+		    } // the quotes in display name must start with character symbol \
+
+
+		    var all_start_with_back_slash = display_name_without_quotes.split('"').length === display_name_without_quotes.split('\\"').length;
+
+		    if (!all_start_with_back_slash) {
+		      return false;
+		    }
+		  }
+
+		  return true;
+		}
+
+		function isEmail(str, options) {
+		  (0, _assertString.default)(str);
+		  options = (0, _merge.default)(options, default_email_options);
+
+		  if (options.require_display_name || options.allow_display_name) {
+		    var display_email = str.match(splitNameAddress);
+
+		    if (display_email) {
+		      var display_name = display_email[1]; // Remove display name and angle brackets to get email address
+		      // Can be done in the regex but will introduce a ReDOS (See  #1597 for more info)
+
+		      str = str.replace(display_name, '').replace(/(^<|>$)/g, ''); // sometimes need to trim the last space to get the display name
+		      // because there may be a space between display name and email address
+		      // eg. myname <address@gmail.com>
+		      // the display name is `myname` instead of `myname `, so need to trim the last space
+
+		      if (display_name.endsWith(' ')) {
+		        display_name = display_name.slice(0, -1);
+		      }
+
+		      if (!validateDisplayName(display_name)) {
+		        return false;
+		      }
+		    } else if (options.require_display_name) {
+		      return false;
+		    }
+		  }
+
+		  if (!options.ignore_max_length && str.length > defaultMaxEmailLength) {
+		    return false;
+		  }
+
+		  var parts = str.split('@');
+		  var domain = parts.pop();
+		  var lower_domain = domain.toLowerCase();
+
+		  if (options.host_blacklist.includes(lower_domain)) {
+		    return false;
+		  }
+
+		  if (options.host_whitelist.length > 0 && !options.host_whitelist.includes(lower_domain)) {
+		    return false;
+		  }
+
+		  var user = parts.join('@');
+
+		  if (options.domain_specific_validation && (lower_domain === 'gmail.com' || lower_domain === 'googlemail.com')) {
+		    /*
+		      Previously we removed dots for gmail addresses before validating.
+		      This was removed because it allows `multiple..dots@gmail.com`
+		      to be reported as valid, but it is not.
+		      Gmail only normalizes single dots, removing them from here is pointless,
+		      should be done in normalizeEmail
+		    */
+		    user = user.toLowerCase(); // Removing sub-address from username before gmail validation
+
+		    var username = user.split('+')[0]; // Dots are not included in gmail length restriction
+
+		    if (!(0, _isByteLength.default)(username.replace(/\./g, ''), {
+		      min: 6,
+		      max: 30
+		    })) {
+		      return false;
+		    }
+
+		    var _user_parts = username.split('.');
+
+		    for (var i = 0; i < _user_parts.length; i++) {
+		      if (!gmailUserPart.test(_user_parts[i])) {
+		        return false;
+		      }
+		    }
+		  }
+
+		  if (options.ignore_max_length === false && (!(0, _isByteLength.default)(user, {
+		    max: 64
+		  }) || !(0, _isByteLength.default)(domain, {
+		    max: 254
+		  }))) {
+		    return false;
+		  }
+
+		  if (!(0, _isFQDN.default)(domain, {
+		    require_tld: options.require_tld,
+		    ignore_max_length: options.ignore_max_length
+		  })) {
+		    if (!options.allow_ip_domain) {
+		      return false;
+		    }
+
+		    if (!(0, _isIP.default)(domain)) {
+		      if (!domain.startsWith('[') || !domain.endsWith(']')) {
+		        return false;
+		      }
+
+		      var noBracketdomain = domain.slice(1, -1);
+
+		      if (noBracketdomain.length === 0 || !(0, _isIP.default)(noBracketdomain)) {
+		        return false;
+		      }
+		    }
+		  }
+
+		  if (user[0] === '"') {
+		    user = user.slice(1, user.length - 1);
+		    return options.allow_utf8_local_part ? quotedEmailUserUtf8.test(user) : quotedEmailUser.test(user);
+		  }
+
+		  var pattern = options.allow_utf8_local_part ? emailUserUtf8Part : emailUserPart;
+		  var user_parts = user.split('.');
+
+		  for (var _i = 0; _i < user_parts.length; _i++) {
+		    if (!pattern.test(user_parts[_i])) {
+		      return false;
+		    }
+		  }
+
+		  if (options.blacklisted_chars) {
+		    if (user.search(new RegExp("[".concat(options.blacklisted_chars, "]+"), 'g')) !== -1) return false;
+		  }
+
+		  return true;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isEmail, isEmailExports));
+	return isEmailExports;
+}
+
+var isURLExports = {};
+var isURL = {
+  get exports(){ return isURLExports; },
+  set exports(v){ isURLExports = v; },
+};
+
+var hasRequiredIsURL;
+
+function requireIsURL () {
+	if (hasRequiredIsURL) return isURLExports;
+	hasRequiredIsURL = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isURL;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isFQDN = _interopRequireDefault(requireIsFQDN());
+
+		var _isIP = _interopRequireDefault(requireIsIP());
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest(); }
+
+		function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+		function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+		function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+		function _iterableToArrayLimit(arr, i) { if (typeof Symbol === "undefined" || !(Symbol.iterator in Object(arr))) return; var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+		function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+		/*
+		options for isURL method
+
+		require_protocol - if set as true isURL will return false if protocol is not present in the URL
+		require_valid_protocol - isURL will check if the URL's protocol is present in the protocols option
+		protocols - valid protocols can be modified with this option
+		require_host - if set as false isURL will not check if host is present in the URL
+		require_port - if set as true isURL will check if port is present in the URL
+		allow_protocol_relative_urls - if set as true protocol relative URLs will be allowed
+		validate_length - if set as false isURL will skip string length validation (IE maximum is 2083)
+
+		*/
+		var default_url_options = {
+		  protocols: ['http', 'https', 'ftp'],
+		  require_tld: true,
+		  require_protocol: false,
+		  require_host: true,
+		  require_port: false,
+		  require_valid_protocol: true,
+		  allow_underscores: false,
+		  allow_trailing_dot: false,
+		  allow_protocol_relative_urls: false,
+		  allow_fragments: true,
+		  allow_query_components: true,
+		  validate_length: true
+		};
+		var wrapped_ipv6 = /^\[([^\]]+)\](?::([0-9]+))?$/;
+
+		function isRegExp(obj) {
+		  return Object.prototype.toString.call(obj) === '[object RegExp]';
+		}
+
+		function checkHost(host, matches) {
+		  for (var i = 0; i < matches.length; i++) {
+		    var match = matches[i];
+
+		    if (host === match || isRegExp(match) && match.test(host)) {
+		      return true;
+		    }
+		  }
+
+		  return false;
+		}
+
+		function isURL(url, options) {
+		  (0, _assertString.default)(url);
+
+		  if (!url || /[\s<>]/.test(url)) {
+		    return false;
+		  }
+
+		  if (url.indexOf('mailto:') === 0) {
+		    return false;
+		  }
+
+		  options = (0, _merge.default)(options, default_url_options);
+
+		  if (options.validate_length && url.length >= 2083) {
+		    return false;
+		  }
+
+		  if (!options.allow_fragments && url.includes('#')) {
+		    return false;
+		  }
+
+		  if (!options.allow_query_components && (url.includes('?') || url.includes('&'))) {
+		    return false;
+		  }
+
+		  var protocol, auth, host, hostname, port, port_str, split, ipv6;
+		  split = url.split('#');
+		  url = split.shift();
+		  split = url.split('?');
+		  url = split.shift();
+		  split = url.split('://');
+
+		  if (split.length > 1) {
+		    protocol = split.shift().toLowerCase();
+
+		    if (options.require_valid_protocol && options.protocols.indexOf(protocol) === -1) {
+		      return false;
+		    }
+		  } else if (options.require_protocol) {
+		    return false;
+		  } else if (url.slice(0, 2) === '//') {
+		    if (!options.allow_protocol_relative_urls) {
+		      return false;
+		    }
+
+		    split[0] = url.slice(2);
+		  }
+
+		  url = split.join('://');
+
+		  if (url === '') {
+		    return false;
+		  }
+
+		  split = url.split('/');
+		  url = split.shift();
+
+		  if (url === '' && !options.require_host) {
+		    return true;
+		  }
+
+		  split = url.split('@');
+
+		  if (split.length > 1) {
+		    if (options.disallow_auth) {
+		      return false;
+		    }
+
+		    if (split[0] === '') {
+		      return false;
+		    }
+
+		    auth = split.shift();
+
+		    if (auth.indexOf(':') >= 0 && auth.split(':').length > 2) {
+		      return false;
+		    }
+
+		    var _auth$split = auth.split(':'),
+		        _auth$split2 = _slicedToArray(_auth$split, 2),
+		        user = _auth$split2[0],
+		        password = _auth$split2[1];
+
+		    if (user === '' && password === '') {
+		      return false;
+		    }
+		  }
+
+		  hostname = split.join('@');
+		  port_str = null;
+		  ipv6 = null;
+		  var ipv6_match = hostname.match(wrapped_ipv6);
+
+		  if (ipv6_match) {
+		    host = '';
+		    ipv6 = ipv6_match[1];
+		    port_str = ipv6_match[2] || null;
+		  } else {
+		    split = hostname.split(':');
+		    host = split.shift();
+
+		    if (split.length) {
+		      port_str = split.join(':');
+		    }
+		  }
+
+		  if (port_str !== null && port_str.length > 0) {
+		    port = parseInt(port_str, 10);
+
+		    if (!/^[0-9]+$/.test(port_str) || port <= 0 || port > 65535) {
+		      return false;
+		    }
+		  } else if (options.require_port) {
+		    return false;
+		  }
+
+		  if (options.host_whitelist) {
+		    return checkHost(host, options.host_whitelist);
+		  }
+
+		  if (host === '' && !options.require_host) {
+		    return true;
+		  }
+
+		  if (!(0, _isIP.default)(host) && !(0, _isFQDN.default)(host, options) && (!ipv6 || !(0, _isIP.default)(ipv6, 6))) {
+		    return false;
+		  }
+
+		  host = host || ipv6;
+
+		  if (options.host_blacklist && checkHost(host, options.host_blacklist)) {
+		    return false;
+		  }
+
+		  return true;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isURL, isURLExports));
+	return isURLExports;
+}
+
+var isMACAddressExports = {};
+var isMACAddress = {
+  get exports(){ return isMACAddressExports; },
+  set exports(v){ isMACAddressExports = v; },
+};
+
+var hasRequiredIsMACAddress;
+
+function requireIsMACAddress () {
+	if (hasRequiredIsMACAddress) return isMACAddressExports;
+	hasRequiredIsMACAddress = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isMACAddress;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var macAddress48 = /^(?:[0-9a-fA-F]{2}([-:\s]))([0-9a-fA-F]{2}\1){4}([0-9a-fA-F]{2})$/;
+		var macAddress48NoSeparators = /^([0-9a-fA-F]){12}$/;
+		var macAddress48WithDots = /^([0-9a-fA-F]{4}\.){2}([0-9a-fA-F]{4})$/;
+		var macAddress64 = /^(?:[0-9a-fA-F]{2}([-:\s]))([0-9a-fA-F]{2}\1){6}([0-9a-fA-F]{2})$/;
+		var macAddress64NoSeparators = /^([0-9a-fA-F]){16}$/;
+		var macAddress64WithDots = /^([0-9a-fA-F]{4}\.){3}([0-9a-fA-F]{4})$/;
+
+		function isMACAddress(str, options) {
+		  (0, _assertString.default)(str);
+
+		  if (options !== null && options !== void 0 && options.eui) {
+		    options.eui = String(options.eui);
+		  }
+		  /**
+		   * @deprecated `no_colons` TODO: remove it in the next major
+		  */
+
+
+		  if (options !== null && options !== void 0 && options.no_colons || options !== null && options !== void 0 && options.no_separators) {
+		    if (options.eui === '48') {
+		      return macAddress48NoSeparators.test(str);
+		    }
+
+		    if (options.eui === '64') {
+		      return macAddress64NoSeparators.test(str);
+		    }
+
+		    return macAddress48NoSeparators.test(str) || macAddress64NoSeparators.test(str);
+		  }
+
+		  if ((options === null || options === void 0 ? void 0 : options.eui) === '48') {
+		    return macAddress48.test(str) || macAddress48WithDots.test(str);
+		  }
+
+		  if ((options === null || options === void 0 ? void 0 : options.eui) === '64') {
+		    return macAddress64.test(str) || macAddress64WithDots.test(str);
+		  }
+
+		  return isMACAddress(str, {
+		    eui: '48'
+		  }) || isMACAddress(str, {
+		    eui: '64'
+		  });
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isMACAddress, isMACAddressExports));
+	return isMACAddressExports;
+}
+
+var isIPRangeExports = {};
+var isIPRange = {
+  get exports(){ return isIPRangeExports; },
+  set exports(v){ isIPRangeExports = v; },
+};
+
+var hasRequiredIsIPRange;
+
+function requireIsIPRange () {
+	if (hasRequiredIsIPRange) return isIPRangeExports;
+	hasRequiredIsIPRange = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isIPRange;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isIP = _interopRequireDefault(requireIsIP());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var subnetMaybe = /^\d{1,3}$/;
+		var v4Subnet = 32;
+		var v6Subnet = 128;
+
+		function isIPRange(str) {
+		  var version = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : '';
+		  (0, _assertString.default)(str);
+		  var parts = str.split('/'); // parts[0] -> ip, parts[1] -> subnet
+
+		  if (parts.length !== 2) {
+		    return false;
+		  }
+
+		  if (!subnetMaybe.test(parts[1])) {
+		    return false;
+		  } // Disallow preceding 0 i.e. 01, 02, ...
+
+
+		  if (parts[1].length > 1 && parts[1].startsWith('0')) {
+		    return false;
+		  }
+
+		  var isValidIP = (0, _isIP.default)(parts[0], version);
+
+		  if (!isValidIP) {
+		    return false;
+		  } // Define valid subnet according to IP's version
+
+
+		  var expectedSubnet = null;
+
+		  switch (String(version)) {
+		    case '4':
+		      expectedSubnet = v4Subnet;
+		      break;
+
+		    case '6':
+		      expectedSubnet = v6Subnet;
+		      break;
+
+		    default:
+		      expectedSubnet = (0, _isIP.default)(parts[0], '6') ? v6Subnet : v4Subnet;
+		  }
+
+		  return parts[1] <= expectedSubnet && parts[1] >= 0;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isIPRange, isIPRangeExports));
+	return isIPRangeExports;
+}
+
+var isDateExports = {};
+var isDate = {
+  get exports(){ return isDateExports; },
+  set exports(v){ isDateExports = v; },
+};
+
+var hasRequiredIsDate;
+
+function requireIsDate () {
+	if (hasRequiredIsDate) return isDateExports;
+	hasRequiredIsDate = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isDate;
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest(); }
+
+		function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+		function _iterableToArrayLimit(arr, i) { if (typeof Symbol === "undefined" || !(Symbol.iterator in Object(arr))) return; var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+		function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+		function _createForOfIteratorHelper(o, allowArrayLike) { var it; if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e2) { throw _e2; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = o[Symbol.iterator](); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e3) { didErr = true; err = _e3; }, f: function f() { try { if (!normalCompletion && it.return != null) it.return(); } finally { if (didErr) throw err; } } }; }
+
+		function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+		function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+		var default_date_options = {
+		  format: 'YYYY/MM/DD',
+		  delimiters: ['/', '-'],
+		  strictMode: false
+		};
+
+		function isValidFormat(format) {
+		  return /(^(y{4}|y{2})[.\/-](m{1,2})[.\/-](d{1,2})$)|(^(m{1,2})[.\/-](d{1,2})[.\/-]((y{4}|y{2})$))|(^(d{1,2})[.\/-](m{1,2})[.\/-]((y{4}|y{2})$))/gi.test(format);
+		}
+
+		function zip(date, format) {
+		  var zippedArr = [],
+		      len = Math.min(date.length, format.length);
+
+		  for (var i = 0; i < len; i++) {
+		    zippedArr.push([date[i], format[i]]);
+		  }
+
+		  return zippedArr;
+		}
+
+		function isDate(input, options) {
+		  if (typeof options === 'string') {
+		    // Allow backward compatbility for old format isDate(input [, format])
+		    options = (0, _merge.default)({
+		      format: options
+		    }, default_date_options);
+		  } else {
+		    options = (0, _merge.default)(options, default_date_options);
+		  }
+
+		  if (typeof input === 'string' && isValidFormat(options.format)) {
+		    var formatDelimiter = options.delimiters.find(function (delimiter) {
+		      return options.format.indexOf(delimiter) !== -1;
+		    });
+		    var dateDelimiter = options.strictMode ? formatDelimiter : options.delimiters.find(function (delimiter) {
+		      return input.indexOf(delimiter) !== -1;
+		    });
+		    var dateAndFormat = zip(input.split(dateDelimiter), options.format.toLowerCase().split(formatDelimiter));
+		    var dateObj = {};
+
+		    var _iterator = _createForOfIteratorHelper(dateAndFormat),
+		        _step;
+
+		    try {
+		      for (_iterator.s(); !(_step = _iterator.n()).done;) {
+		        var _step$value = _slicedToArray(_step.value, 2),
+		            dateWord = _step$value[0],
+		            formatWord = _step$value[1];
+
+		        if (dateWord.length !== formatWord.length) {
+		          return false;
+		        }
+
+		        dateObj[formatWord.charAt(0)] = dateWord;
+		      }
+		    } catch (err) {
+		      _iterator.e(err);
+		    } finally {
+		      _iterator.f();
+		    }
+
+		    return new Date("".concat(dateObj.m, "/").concat(dateObj.d, "/").concat(dateObj.y)).getDate() === +dateObj.d;
+		  }
+
+		  if (!options.strictMode) {
+		    return Object.prototype.toString.call(input) === '[object Date]' && isFinite(input);
+		  }
+
+		  return false;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isDate, isDateExports));
+	return isDateExports;
+}
+
+var isTimeExports = {};
+var isTime = {
+  get exports(){ return isTimeExports; },
+  set exports(v){ isTimeExports = v; },
+};
+
+var hasRequiredIsTime;
+
+function requireIsTime () {
+	if (hasRequiredIsTime) return isTimeExports;
+	hasRequiredIsTime = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isTime;
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var default_time_options = {
+		  hourFormat: 'hour24',
+		  mode: 'default'
+		};
+		var formats = {
+		  hour24: {
+		    default: /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/,
+		    withSeconds: /^([01]?[0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/
+		  },
+		  hour12: {
+		    default: /^(0?[1-9]|1[0-2]):([0-5][0-9]) (A|P)M$/,
+		    withSeconds: /^(0?[1-9]|1[0-2]):([0-5][0-9]):([0-5][0-9]) (A|P)M$/
+		  }
+		};
+
+		function isTime(input, options) {
+		  options = (0, _merge.default)(options, default_time_options);
+		  if (typeof input !== 'string') return false;
+		  return formats[options.hourFormat][options.mode].test(input);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isTime, isTimeExports));
+	return isTimeExports;
+}
+
+var isBooleanExports = {};
+var isBoolean$1 = {
+  get exports(){ return isBooleanExports; },
+  set exports(v){ isBooleanExports = v; },
+};
+
+var hasRequiredIsBoolean;
+
+function requireIsBoolean () {
+	if (hasRequiredIsBoolean) return isBooleanExports;
+	hasRequiredIsBoolean = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isBoolean;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var defaultOptions = {
+		  loose: false
+		};
+		var strictBooleans = ['true', 'false', '1', '0'];
+		var looseBooleans = [].concat(strictBooleans, ['yes', 'no']);
+
+		function isBoolean(str) {
+		  var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : defaultOptions;
+		  (0, _assertString.default)(str);
+
+		  if (options.loose) {
+		    return looseBooleans.includes(str.toLowerCase());
+		  }
+
+		  return strictBooleans.includes(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isBoolean$1, isBooleanExports));
+	return isBooleanExports;
+}
+
+var isLocaleExports = {};
+var isLocale = {
+  get exports(){ return isLocaleExports; },
+  set exports(v){ isLocaleExports = v; },
+};
+
+var hasRequiredIsLocale;
+
+function requireIsLocale () {
+	if (hasRequiredIsLocale) return isLocaleExports;
+	hasRequiredIsLocale = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isLocale;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var localeReg = /^[A-Za-z]{2,4}([_-]([A-Za-z]{4}|[\d]{3}))?([_-]([A-Za-z]{2}|[\d]{3}))?$/;
+
+		function isLocale(str) {
+		  (0, _assertString.default)(str);
+
+		  if (str === 'en_US_POSIX' || str === 'ca_ES_VALENCIA') {
+		    return true;
+		  }
+
+		  return localeReg.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isLocale, isLocaleExports));
+	return isLocaleExports;
+}
+
+var isAlpha = {};
+
+var hasRequiredIsAlpha;
+
+function requireIsAlpha () {
+	if (hasRequiredIsAlpha) return isAlpha;
+	hasRequiredIsAlpha = 1;
+
+	Object.defineProperty(isAlpha, "__esModule", {
+	  value: true
+	});
+	isAlpha.default = isAlpha$1;
+	isAlpha.locales = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	var _alpha = requireAlpha();
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function isAlpha$1(_str) {
+	  var locale = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'en-US';
+	  var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+	  (0, _assertString.default)(_str);
+	  var str = _str;
+	  var ignore = options.ignore;
+
+	  if (ignore) {
+	    if (ignore instanceof RegExp) {
+	      str = str.replace(ignore, '');
+	    } else if (typeof ignore === 'string') {
+	      str = str.replace(new RegExp("[".concat(ignore.replace(/[-[\]{}()*+?.,\\^$|#\\s]/g, '\\$&'), "]"), 'g'), ''); // escape regex for ignore
+	    } else {
+	      throw new Error('ignore should be instance of a String or RegExp');
+	    }
+	  }
+
+	  if (locale in _alpha.alpha) {
+	    return _alpha.alpha[locale].test(str);
+	  }
+
+	  throw new Error("Invalid locale '".concat(locale, "'"));
+	}
+
+	var locales = Object.keys(_alpha.alpha);
+	isAlpha.locales = locales;
+	return isAlpha;
+}
+
+var isAlphanumeric = {};
+
+var hasRequiredIsAlphanumeric;
+
+function requireIsAlphanumeric () {
+	if (hasRequiredIsAlphanumeric) return isAlphanumeric;
+	hasRequiredIsAlphanumeric = 1;
+
+	Object.defineProperty(isAlphanumeric, "__esModule", {
+	  value: true
+	});
+	isAlphanumeric.default = isAlphanumeric$1;
+	isAlphanumeric.locales = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	var _alpha = requireAlpha();
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	function isAlphanumeric$1(_str) {
+	  var locale = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'en-US';
+	  var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+	  (0, _assertString.default)(_str);
+	  var str = _str;
+	  var ignore = options.ignore;
+
+	  if (ignore) {
+	    if (ignore instanceof RegExp) {
+	      str = str.replace(ignore, '');
+	    } else if (typeof ignore === 'string') {
+	      str = str.replace(new RegExp("[".concat(ignore.replace(/[-[\]{}()*+?.,\\^$|#\\s]/g, '\\$&'), "]"), 'g'), ''); // escape regex for ignore
+	    } else {
+	      throw new Error('ignore should be instance of a String or RegExp');
+	    }
+	  }
+
+	  if (locale in _alpha.alphanumeric) {
+	    return _alpha.alphanumeric[locale].test(str);
+	  }
+
+	  throw new Error("Invalid locale '".concat(locale, "'"));
+	}
+
+	var locales = Object.keys(_alpha.alphanumeric);
+	isAlphanumeric.locales = locales;
+	return isAlphanumeric;
+}
+
+var isNumericExports = {};
+var isNumeric = {
+  get exports(){ return isNumericExports; },
+  set exports(v){ isNumericExports = v; },
+};
+
+var hasRequiredIsNumeric;
+
+function requireIsNumeric () {
+	if (hasRequiredIsNumeric) return isNumericExports;
+	hasRequiredIsNumeric = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isNumeric;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _alpha = requireAlpha();
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var numericNoSymbols = /^[0-9]+$/;
+
+		function isNumeric(str, options) {
+		  (0, _assertString.default)(str);
+
+		  if (options && options.no_symbols) {
+		    return numericNoSymbols.test(str);
+		  }
+
+		  return new RegExp("^[+-]?([0-9]*[".concat((options || {}).locale ? _alpha.decimal[options.locale] : '.', "])?[0-9]+$")).test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isNumeric, isNumericExports));
+	return isNumericExports;
+}
+
+var isPassportNumberExports = {};
+var isPassportNumber = {
+  get exports(){ return isPassportNumberExports; },
+  set exports(v){ isPassportNumberExports = v; },
+};
+
+var hasRequiredIsPassportNumber;
+
+function requireIsPassportNumber () {
+	if (hasRequiredIsPassportNumber) return isPassportNumberExports;
+	hasRequiredIsPassportNumber = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isPassportNumber;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/**
+		 * Reference:
+		 * https://en.wikipedia.org/ -- Wikipedia
+		 * https://docs.microsoft.com/en-us/microsoft-365/compliance/eu-passport-number -- EU Passport Number
+		 * https://countrycode.org/ -- Country Codes
+		 */
+		var passportRegexByCountryCode = {
+		  AM: /^[A-Z]{2}\d{7}$/,
+		  // ARMENIA
+		  AR: /^[A-Z]{3}\d{6}$/,
+		  // ARGENTINA
+		  AT: /^[A-Z]\d{7}$/,
+		  // AUSTRIA
+		  AU: /^[A-Z]\d{7}$/,
+		  // AUSTRALIA
+		  AZ: /^[A-Z]{2,3}\d{7,8}$/,
+		  // AZERBAIJAN
+		  BE: /^[A-Z]{2}\d{6}$/,
+		  // BELGIUM
+		  BG: /^\d{9}$/,
+		  // BULGARIA
+		  BR: /^[A-Z]{2}\d{6}$/,
+		  // BRAZIL
+		  BY: /^[A-Z]{2}\d{7}$/,
+		  // BELARUS
+		  CA: /^[A-Z]{2}\d{6}$/,
+		  // CANADA
+		  CH: /^[A-Z]\d{7}$/,
+		  // SWITZERLAND
+		  CN: /^G\d{8}$|^E(?![IO])[A-Z0-9]\d{7}$/,
+		  // CHINA [G=Ordinary, E=Electronic] followed by 8-digits, or E followed by any UPPERCASE letter (except I and O) followed by 7 digits
+		  CY: /^[A-Z](\d{6}|\d{8})$/,
+		  // CYPRUS
+		  CZ: /^\d{8}$/,
+		  // CZECH REPUBLIC
+		  DE: /^[CFGHJKLMNPRTVWXYZ0-9]{9}$/,
+		  // GERMANY
+		  DK: /^\d{9}$/,
+		  // DENMARK
+		  DZ: /^\d{9}$/,
+		  // ALGERIA
+		  EE: /^([A-Z]\d{7}|[A-Z]{2}\d{7})$/,
+		  // ESTONIA (K followed by 7-digits), e-passports have 2 UPPERCASE followed by 7 digits
+		  ES: /^[A-Z0-9]{2}([A-Z0-9]?)\d{6}$/,
+		  // SPAIN
+		  FI: /^[A-Z]{2}\d{7}$/,
+		  // FINLAND
+		  FR: /^\d{2}[A-Z]{2}\d{5}$/,
+		  // FRANCE
+		  GB: /^\d{9}$/,
+		  // UNITED KINGDOM
+		  GR: /^[A-Z]{2}\d{7}$/,
+		  // GREECE
+		  HR: /^\d{9}$/,
+		  // CROATIA
+		  HU: /^[A-Z]{2}(\d{6}|\d{7})$/,
+		  // HUNGARY
+		  IE: /^[A-Z0-9]{2}\d{7}$/,
+		  // IRELAND
+		  IN: /^[A-Z]{1}-?\d{7}$/,
+		  // INDIA
+		  ID: /^[A-C]\d{7}$/,
+		  // INDONESIA
+		  IR: /^[A-Z]\d{8}$/,
+		  // IRAN
+		  IS: /^(A)\d{7}$/,
+		  // ICELAND
+		  IT: /^[A-Z0-9]{2}\d{7}$/,
+		  // ITALY
+		  JM: /^[Aa]\d{7}$/,
+		  // JAMAICA
+		  JP: /^[A-Z]{2}\d{7}$/,
+		  // JAPAN
+		  KR: /^[MS]\d{8}$/,
+		  // SOUTH KOREA, REPUBLIC OF KOREA, [S=PS Passports, M=PM Passports]
+		  KZ: /^[a-zA-Z]\d{7}$/,
+		  // KAZAKHSTAN
+		  LI: /^[a-zA-Z]\d{5}$/,
+		  // LIECHTENSTEIN
+		  LT: /^[A-Z0-9]{8}$/,
+		  // LITHUANIA
+		  LU: /^[A-Z0-9]{8}$/,
+		  // LUXEMBURG
+		  LV: /^[A-Z0-9]{2}\d{7}$/,
+		  // LATVIA
+		  LY: /^[A-Z0-9]{8}$/,
+		  // LIBYA
+		  MT: /^\d{7}$/,
+		  // MALTA
+		  MZ: /^([A-Z]{2}\d{7})|(\d{2}[A-Z]{2}\d{5})$/,
+		  // MOZAMBIQUE
+		  MY: /^[AHK]\d{8}$/,
+		  // MALAYSIA
+		  MX: /^\d{10,11}$/,
+		  // MEXICO
+		  NL: /^[A-Z]{2}[A-Z0-9]{6}\d$/,
+		  // NETHERLANDS
+		  NZ: /^([Ll]([Aa]|[Dd]|[Ff]|[Hh])|[Ee]([Aa]|[Pp])|[Nn])\d{6}$/,
+		  // NEW ZEALAND
+		  PH: /^([A-Z](\d{6}|\d{7}[A-Z]))|([A-Z]{2}(\d{6}|\d{7}))$/,
+		  // PHILIPPINES
+		  PK: /^[A-Z]{2}\d{7}$/,
+		  // PAKISTAN
+		  PL: /^[A-Z]{2}\d{7}$/,
+		  // POLAND
+		  PT: /^[A-Z]\d{6}$/,
+		  // PORTUGAL
+		  RO: /^\d{8,9}$/,
+		  // ROMANIA
+		  RU: /^\d{9}$/,
+		  // RUSSIAN FEDERATION
+		  SE: /^\d{8}$/,
+		  // SWEDEN
+		  SL: /^(P)[A-Z]\d{7}$/,
+		  // SLOVENIA
+		  SK: /^[0-9A-Z]\d{7}$/,
+		  // SLOVAKIA
+		  TH: /^[A-Z]{1,2}\d{6,7}$/,
+		  // THAILAND
+		  TR: /^[A-Z]\d{8}$/,
+		  // TURKEY
+		  UA: /^[A-Z]{2}\d{6}$/,
+		  // UKRAINE
+		  US: /^\d{9}$/ // UNITED STATES
+
+		};
+		/**
+		 * Check if str is a valid passport number
+		 * relative to provided ISO Country Code.
+		 *
+		 * @param {string} str
+		 * @param {string} countryCode
+		 * @return {boolean}
+		 */
+
+		function isPassportNumber(str, countryCode) {
+		  (0, _assertString.default)(str);
+		  /** Remove All Whitespaces, Convert to UPPERCASE */
+
+		  var normalizedStr = str.replace(/\s/g, '').toUpperCase();
+		  return countryCode.toUpperCase() in passportRegexByCountryCode && passportRegexByCountryCode[countryCode].test(normalizedStr);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isPassportNumber, isPassportNumberExports));
+	return isPassportNumberExports;
+}
+
+var isPortExports = {};
+var isPort = {
+  get exports(){ return isPortExports; },
+  set exports(v){ isPortExports = v; },
+};
+
+var isIntExports = {};
+var isInt = {
+  get exports(){ return isIntExports; },
+  set exports(v){ isIntExports = v; },
+};
+
+var hasRequiredIsInt;
+
+function requireIsInt () {
+	if (hasRequiredIsInt) return isIntExports;
+	hasRequiredIsInt = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isInt;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var int = /^(?:[-+]?(?:0|[1-9][0-9]*))$/;
+		var intLeadingZeroes = /^[-+]?[0-9]+$/;
+
+		function isInt(str, options) {
+		  (0, _assertString.default)(str);
+		  options = options || {}; // Get the regex to use for testing, based on whether
+		  // leading zeroes are allowed or not.
+
+		  var regex = options.hasOwnProperty('allow_leading_zeroes') && !options.allow_leading_zeroes ? int : intLeadingZeroes; // Check min/max/lt/gt
+
+		  var minCheckPassed = !options.hasOwnProperty('min') || str >= options.min;
+		  var maxCheckPassed = !options.hasOwnProperty('max') || str <= options.max;
+		  var ltCheckPassed = !options.hasOwnProperty('lt') || str < options.lt;
+		  var gtCheckPassed = !options.hasOwnProperty('gt') || str > options.gt;
+		  return regex.test(str) && minCheckPassed && maxCheckPassed && ltCheckPassed && gtCheckPassed;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isInt, isIntExports));
+	return isIntExports;
+}
+
+var hasRequiredIsPort;
+
+function requireIsPort () {
+	if (hasRequiredIsPort) return isPortExports;
+	hasRequiredIsPort = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isPort;
+
+		var _isInt = _interopRequireDefault(requireIsInt());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isPort(str) {
+		  return (0, _isInt.default)(str, {
+		    min: 0,
+		    max: 65535
+		  });
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isPort, isPortExports));
+	return isPortExports;
+}
+
+var isLowercaseExports = {};
+var isLowercase = {
+  get exports(){ return isLowercaseExports; },
+  set exports(v){ isLowercaseExports = v; },
+};
+
+var hasRequiredIsLowercase;
+
+function requireIsLowercase () {
+	if (hasRequiredIsLowercase) return isLowercaseExports;
+	hasRequiredIsLowercase = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isLowercase;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isLowercase(str) {
+		  (0, _assertString.default)(str);
+		  return str === str.toLowerCase();
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isLowercase, isLowercaseExports));
+	return isLowercaseExports;
+}
+
+var isUppercaseExports = {};
+var isUppercase = {
+  get exports(){ return isUppercaseExports; },
+  set exports(v){ isUppercaseExports = v; },
+};
+
+var hasRequiredIsUppercase;
+
+function requireIsUppercase () {
+	if (hasRequiredIsUppercase) return isUppercaseExports;
+	hasRequiredIsUppercase = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isUppercase;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isUppercase(str) {
+		  (0, _assertString.default)(str);
+		  return str === str.toUpperCase();
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isUppercase, isUppercaseExports));
+	return isUppercaseExports;
+}
+
+var isIMEIExports = {};
+var isIMEI = {
+  get exports(){ return isIMEIExports; },
+  set exports(v){ isIMEIExports = v; },
+};
+
+var hasRequiredIsIMEI;
+
+function requireIsIMEI () {
+	if (hasRequiredIsIMEI) return isIMEIExports;
+	hasRequiredIsIMEI = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isIMEI;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var imeiRegexWithoutHypens = /^[0-9]{15}$/;
+		var imeiRegexWithHypens = /^\d{2}-\d{6}-\d{6}-\d{1}$/;
+
+		function isIMEI(str, options) {
+		  (0, _assertString.default)(str);
+		  options = options || {}; // default regex for checking imei is the one without hyphens
+
+		  var imeiRegex = imeiRegexWithoutHypens;
+
+		  if (options.allow_hyphens) {
+		    imeiRegex = imeiRegexWithHypens;
+		  }
+
+		  if (!imeiRegex.test(str)) {
+		    return false;
+		  }
+
+		  str = str.replace(/-/g, '');
+		  var sum = 0,
+		      mul = 2,
+		      l = 14;
+
+		  for (var i = 0; i < l; i++) {
+		    var digit = str.substring(l - i - 1, l - i);
+		    var tp = parseInt(digit, 10) * mul;
+
+		    if (tp >= 10) {
+		      sum += tp % 10 + 1;
+		    } else {
+		      sum += tp;
+		    }
+
+		    if (mul === 1) {
+		      mul += 1;
+		    } else {
+		      mul -= 1;
+		    }
+		  }
+
+		  var chk = (10 - sum % 10) % 10;
+
+		  if (chk !== parseInt(str.substring(14, 15), 10)) {
+		    return false;
+		  }
+
+		  return true;
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isIMEI, isIMEIExports));
+	return isIMEIExports;
+}
+
+var isAsciiExports = {};
+var isAscii = {
+  get exports(){ return isAsciiExports; },
+  set exports(v){ isAsciiExports = v; },
+};
+
+var hasRequiredIsAscii;
+
+function requireIsAscii () {
+	if (hasRequiredIsAscii) return isAsciiExports;
+	hasRequiredIsAscii = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isAscii;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/* eslint-disable no-control-regex */
+		var ascii = /^[\x00-\x7F]+$/;
+		/* eslint-enable no-control-regex */
+
+		function isAscii(str) {
+		  (0, _assertString.default)(str);
+		  return ascii.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isAscii, isAsciiExports));
+	return isAsciiExports;
+}
+
+var isFullWidth = {};
+
+var hasRequiredIsFullWidth;
+
+function requireIsFullWidth () {
+	if (hasRequiredIsFullWidth) return isFullWidth;
+	hasRequiredIsFullWidth = 1;
+
+	Object.defineProperty(isFullWidth, "__esModule", {
+	  value: true
+	});
+	isFullWidth.default = isFullWidth$1;
+	isFullWidth.fullWidth = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	var fullWidth = /[^\u0020-\u007E\uFF61-\uFF9F\uFFA0-\uFFDC\uFFE8-\uFFEE0-9a-zA-Z]/;
+	isFullWidth.fullWidth = fullWidth;
+
+	function isFullWidth$1(str) {
+	  (0, _assertString.default)(str);
+	  return fullWidth.test(str);
+	}
+	return isFullWidth;
+}
+
+var isHalfWidth = {};
+
+var hasRequiredIsHalfWidth;
+
+function requireIsHalfWidth () {
+	if (hasRequiredIsHalfWidth) return isHalfWidth;
+	hasRequiredIsHalfWidth = 1;
+
+	Object.defineProperty(isHalfWidth, "__esModule", {
+	  value: true
+	});
+	isHalfWidth.default = isHalfWidth$1;
+	isHalfWidth.halfWidth = void 0;
+
+	var _assertString = _interopRequireDefault(requireAssertString());
+
+	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+	var halfWidth = /[\u0020-\u007E\uFF61-\uFF9F\uFFA0-\uFFDC\uFFE8-\uFFEE0-9a-zA-Z]/;
+	isHalfWidth.halfWidth = halfWidth;
+
+	function isHalfWidth$1(str) {
+	  (0, _assertString.default)(str);
+	  return halfWidth.test(str);
+	}
+	return isHalfWidth;
+}
+
+var isVariableWidthExports = {};
+var isVariableWidth = {
+  get exports(){ return isVariableWidthExports; },
+  set exports(v){ isVariableWidthExports = v; },
+};
+
+var hasRequiredIsVariableWidth;
+
+function requireIsVariableWidth () {
+	if (hasRequiredIsVariableWidth) return isVariableWidthExports;
+	hasRequiredIsVariableWidth = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isVariableWidth;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _isFullWidth = requireIsFullWidth();
+
+		var _isHalfWidth = requireIsHalfWidth();
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		function isVariableWidth(str) {
+		  (0, _assertString.default)(str);
+		  return _isFullWidth.fullWidth.test(str) && _isHalfWidth.halfWidth.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isVariableWidth, isVariableWidthExports));
+	return isVariableWidthExports;
+}
+
+var isMultibyteExports = {};
+var isMultibyte = {
+  get exports(){ return isMultibyteExports; },
+  set exports(v){ isMultibyteExports = v; },
+};
+
+var hasRequiredIsMultibyte;
+
+function requireIsMultibyte () {
+	if (hasRequiredIsMultibyte) return isMultibyteExports;
+	hasRequiredIsMultibyte = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isMultibyte;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/* eslint-disable no-control-regex */
+		var multibyte = /[^\x00-\x7F]/;
+		/* eslint-enable no-control-regex */
+
+		function isMultibyte(str) {
+		  (0, _assertString.default)(str);
+		  return multibyte.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isMultibyte, isMultibyteExports));
+	return isMultibyteExports;
+}
+
+var isSemVerExports = {};
+var isSemVer = {
+  get exports(){ return isSemVerExports; },
+  set exports(v){ isSemVerExports = v; },
+};
+
+var multilineRegexExports = {};
+var multilineRegex = {
+  get exports(){ return multilineRegexExports; },
+  set exports(v){ multilineRegexExports = v; },
+};
+
+var hasRequiredMultilineRegex;
+
+function requireMultilineRegex () {
+	if (hasRequiredMultilineRegex) return multilineRegexExports;
+	hasRequiredMultilineRegex = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = multilineRegexp;
+
+		/**
+		 * Build RegExp object from an array
+		 * of multiple/multi-line regexp parts
+		 *
+		 * @param {string[]} parts
+		 * @param {string} flags
+		 * @return {object} - RegExp object
+		 */
+		function multilineRegexp(parts, flags) {
+		  var regexpAsStringLiteral = parts.join('');
+		  return new RegExp(regexpAsStringLiteral, flags);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (multilineRegex, multilineRegexExports));
+	return multilineRegexExports;
+}
+
+var hasRequiredIsSemVer;
+
+function requireIsSemVer () {
+	if (hasRequiredIsSemVer) return isSemVerExports;
+	hasRequiredIsSemVer = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isSemVer;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _multilineRegex = _interopRequireDefault(requireMultilineRegex());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		/**
+		 * Regular Expression to match
+		 * semantic versioning (SemVer)
+		 * built from multi-line, multi-parts regexp
+		 * Reference: https://semver.org/
+		 */
+		var semanticVersioningRegex = (0, _multilineRegex.default)(['^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)', '(?:-((?:0|[1-9]\\d*|\\d*[a-z-][0-9a-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-z-][0-9a-z-]*))*))', '?(?:\\+([0-9a-z-]+(?:\\.[0-9a-z-]+)*))?$'], 'i');
+
+		function isSemVer(str) {
+		  (0, _assertString.default)(str);
+		  return semanticVersioningRegex.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isSemVer, isSemVerExports));
+	return isSemVerExports;
+}
+
+var isSurrogatePairExports = {};
+var isSurrogatePair = {
+  get exports(){ return isSurrogatePairExports; },
+  set exports(v){ isSurrogatePairExports = v; },
+};
+
+var hasRequiredIsSurrogatePair;
+
+function requireIsSurrogatePair () {
+	if (hasRequiredIsSurrogatePair) return isSurrogatePairExports;
+	hasRequiredIsSurrogatePair = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isSurrogatePair;
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+		var surrogatePair = /[\uD800-\uDBFF][\uDC00-\uDFFF]/;
+
+		function isSurrogatePair(str) {
+		  (0, _assertString.default)(str);
+		  return surrogatePair.test(str);
+		}
+
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (isSurrogatePair, isSurrogatePairExports));
+	return isSurrogatePairExports;
+}
+
+var isDecimalExports = {};
+var isDecimal = {
+  get exports(){ return isDecimalExports; },
+  set exports(v){ isDecimalExports = v; },
+};
+
+var includesExports = {};
+var includes = {
+  get exports(){ return includesExports; },
+  set exports(v){ includesExports = v; },
+};
+
+var hasRequiredIncludes;
+
+function requireIncludes () {
+	if (hasRequiredIncludes) return includesExports;
+	hasRequiredIncludes = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = void 0;
+
+		var includes = function includes(arr, val) {
+		  return arr.some(function (arrVal) {
+		    return val === arrVal;
+		  });
+		};
+
+		var _default = includes;
+		exports.default = _default;
+		module.exports = exports.default;
+		module.exports.default = exports.default;
+} (includes, includesExports));
+	return includesExports;
+}
+
+var hasRequiredIsDecimal;
+
+function requireIsDecimal () {
+	if (hasRequiredIsDecimal) return isDecimalExports;
+	hasRequiredIsDecimal = 1;
+	(function (module, exports) {
+
+		Object.defineProperty(exports, "__esModule", {
+		  value: true
+		});
+		exports.default = isDecimal;
+
+		var _merge = _interopRequireDefault(requireMerge());
+
+		var _assertString = _interopRequireDefault(requireAssertString());
+
+		var _includes = _interopRequireDefault(requireIncludes());
