@@ -197188,3 +197188,2191 @@ function requireMultipart$1 () {
 		    const clearMarkSymbol = (name) => {
 		      delete this[`${name}Mark`];
 		    };
+
+		    const dataCallback = (name, shouldClear) => {
+		      const markSymbol = `${name}Mark`;
+		      if (!(markSymbol in this)) {
+		        return;
+		      }
+
+		      if (!shouldClear) {
+		        this._handleCallback(name, buffer, this[markSymbol], buffer.length);
+		        setMark(name, 0);
+		      } else {
+		        this._handleCallback(name, buffer, this[markSymbol], i);
+		        clearMarkSymbol(name);
+		      }
+		    };
+
+		    for (i = 0; i < this.bufferLength; i++) {
+		      c = buffer[i];
+		      switch (state) {
+		        case STATE.PARSER_UNINITIALIZED:
+		          return i;
+		        case STATE.START:
+		          index = 0;
+		          state = STATE.START_BOUNDARY;
+		        case STATE.START_BOUNDARY:
+		          if (index === boundary.length - 2) {
+		            if (c === HYPHEN) {
+		              flags |= FBOUNDARY.LAST_BOUNDARY;
+		            } else if (c !== CR) {
+		              return i;
+		            }
+		            index++;
+		            break;
+		          } else if (index - 1 === boundary.length - 2) {
+		            if (flags & FBOUNDARY.LAST_BOUNDARY && c === HYPHEN) {
+		              this._handleCallback('end');
+		              state = STATE.END;
+		              flags = 0;
+		            } else if (!(flags & FBOUNDARY.LAST_BOUNDARY) && c === LF) {
+		              index = 0;
+		              this._handleCallback('partBegin');
+		              state = STATE.HEADER_FIELD_START;
+		            } else {
+		              return i;
+		            }
+		            break;
+		          }
+
+		          if (c !== boundary[index + 2]) {
+		            index = -2;
+		          }
+		          if (c === boundary[index + 2]) {
+		            index++;
+		          }
+		          break;
+		        case STATE.HEADER_FIELD_START:
+		          state = STATE.HEADER_FIELD;
+		          setMark('headerField');
+		          index = 0;
+		        case STATE.HEADER_FIELD:
+		          if (c === CR) {
+		            clearMarkSymbol('headerField');
+		            state = STATE.HEADERS_ALMOST_DONE;
+		            break;
+		          }
+
+		          index++;
+		          if (c === HYPHEN) {
+		            break;
+		          }
+
+		          if (c === COLON) {
+		            if (index === 1) {
+		              // empty header field
+		              return i;
+		            }
+		            dataCallback('headerField', true);
+		            state = STATE.HEADER_VALUE_START;
+		            break;
+		          }
+
+		          cl = lower(c);
+		          if (cl < A || cl > Z) {
+		            return i;
+		          }
+		          break;
+		        case STATE.HEADER_VALUE_START:
+		          if (c === SPACE) {
+		            break;
+		          }
+
+		          setMark('headerValue');
+		          state = STATE.HEADER_VALUE;
+		        case STATE.HEADER_VALUE:
+		          if (c === CR) {
+		            dataCallback('headerValue', true);
+		            this._handleCallback('headerEnd');
+		            state = STATE.HEADER_VALUE_ALMOST_DONE;
+		          }
+		          break;
+		        case STATE.HEADER_VALUE_ALMOST_DONE:
+		          if (c !== LF) {
+		            return i;
+		          }
+		          state = STATE.HEADER_FIELD_START;
+		          break;
+		        case STATE.HEADERS_ALMOST_DONE:
+		          if (c !== LF) {
+		            return i;
+		          }
+
+		          this._handleCallback('headersEnd');
+		          state = STATE.PART_DATA_START;
+		          break;
+		        case STATE.PART_DATA_START:
+		          state = STATE.PART_DATA;
+		          setMark('partData');
+		        case STATE.PART_DATA:
+		          prevIndex = index;
+
+		          if (index === 0) {
+		            // boyer-moore derrived algorithm to safely skip non-boundary data
+		            i += boundaryEnd;
+		            while (i < this.bufferLength && !(buffer[i] in boundaryChars)) {
+		              i += boundaryLength;
+		            }
+		            i -= boundaryEnd;
+		            c = buffer[i];
+		          }
+
+		          if (index < boundary.length) {
+		            if (boundary[index] === c) {
+		              if (index === 0) {
+		                dataCallback('partData', true);
+		              }
+		              index++;
+		            } else {
+		              index = 0;
+		            }
+		          } else if (index === boundary.length) {
+		            index++;
+		            if (c === CR) {
+		              // CR = part boundary
+		              flags |= FBOUNDARY.PART_BOUNDARY;
+		            } else if (c === HYPHEN) {
+		              // HYPHEN = end boundary
+		              flags |= FBOUNDARY.LAST_BOUNDARY;
+		            } else {
+		              index = 0;
+		            }
+		          } else if (index - 1 === boundary.length) {
+		            if (flags & FBOUNDARY.PART_BOUNDARY) {
+		              index = 0;
+		              if (c === LF) {
+		                // unset the PART_BOUNDARY flag
+		                flags &= ~FBOUNDARY.PART_BOUNDARY;
+		                this._handleCallback('partEnd');
+		                this._handleCallback('partBegin');
+		                state = STATE.HEADER_FIELD_START;
+		                break;
+		              }
+		            } else if (flags & FBOUNDARY.LAST_BOUNDARY) {
+		              if (c === HYPHEN) {
+		                this._handleCallback('partEnd');
+		                this._handleCallback('end');
+		                state = STATE.END;
+		                flags = 0;
+		              } else {
+		                index = 0;
+		              }
+		            } else {
+		              index = 0;
+		            }
+		          }
+
+		          if (index > 0) {
+		            // when matching a possible boundary, keep a lookbehind reference
+		            // in case it turns out to be a false lead
+		            lookbehind[index - 1] = c;
+		          } else if (prevIndex > 0) {
+		            // if our boundary turned out to be rubbish, the captured lookbehind
+		            // belongs to partData
+		            this._handleCallback('partData', lookbehind, 0, prevIndex);
+		            prevIndex = 0;
+		            setMark('partData');
+
+		            // reconsider the current character even so it interrupted the sequence
+		            // it could be the beginning of a new sequence
+		            i--;
+		          }
+
+		          break;
+		        case STATE.END:
+		          break;
+		        default:
+		          return i;
+		      }
+		    }
+
+		    dataCallback('headerField');
+		    dataCallback('headerValue');
+		    dataCallback('partData');
+
+		    this.index = index;
+		    this.state = state;
+		    this.flags = flags;
+
+		    done();
+		    return this.bufferLength;
+		  }
+
+		  explain() {
+		    return `state = ${MultipartParser.stateToString(this.state)}`;
+		  }
+		}
+
+		// eslint-disable-next-line consistent-return
+		MultipartParser.stateToString = (stateNumber) => {
+		  // eslint-disable-next-line no-restricted-syntax, guard-for-in
+		  for (const stateName in STATE) {
+		    const number = STATE[stateName];
+		    if (number === stateNumber) return stateName;
+		  }
+		};
+
+		module.exports = Object.assign(MultipartParser, { STATES: exports.STATES });
+} (Multipart, MultipartExports));
+	return MultipartExports;
+}
+
+/* eslint-disable class-methods-use-this */
+
+var Formidable;
+var hasRequiredFormidable;
+
+function requireFormidable () {
+	if (hasRequiredFormidable) return Formidable;
+	hasRequiredFormidable = 1;
+
+	const os = require$$0$h;
+	const path = require$$0$c;
+	const hexoid = require$$2$1;
+	const once = onceExports;
+	const dezalgo = requireDezalgo();
+	const { EventEmitter } = require$$0$f;
+	const { StringDecoder } = require$$1$8;
+	const qs = lib$2;
+
+	const toHexoId = hexoid(25);
+	const DEFAULT_OPTIONS = {
+	  maxFields: 1000,
+	  maxFieldsSize: 20 * 1024 * 1024,
+	  maxFileSize: 200 * 1024 * 1024,
+	  minFileSize: 1,
+	  allowEmptyFiles: true,
+	  keepExtensions: false,
+	  encoding: 'utf-8',
+	  hashAlgorithm: false,
+	  uploadDir: os.tmpdir(),
+	  multiples: false,
+	  enabledPlugins: ['octetstream', 'querystring', 'multipart', 'json'],
+	  fileWriteStreamHandler: null,
+	  defaultInvalidName: 'invalid-name',
+	  filter: function () {
+	    return true;
+	  },
+	};
+
+	const PersistentFile = requirePersistentFile();
+	const VolatileFile = requireVolatileFile();
+	const DummyParser = requireDummy();
+	const MultipartParser = requireMultipart$1();
+	const errors = requireFormidableError();
+
+	const { FormidableError } = errors;
+
+	function hasOwnProp(obj, key) {
+	  return Object.prototype.hasOwnProperty.call(obj, key);
+	}
+
+	class IncomingForm extends EventEmitter {
+	  constructor(options = {}) {
+	    super();
+
+	    this.options = { ...DEFAULT_OPTIONS, ...options };
+
+	    const dir = path.resolve(
+	      this.options.uploadDir || this.options.uploaddir || os.tmpdir(),
+	    );
+
+	    this.uploaddir = dir;
+	    this.uploadDir = dir;
+
+	    // initialize with null
+	    [
+	      'error',
+	      'headers',
+	      'type',
+	      'bytesExpected',
+	      'bytesReceived',
+	      '_parser',
+	    ].forEach((key) => {
+	      this[key] = null;
+	    });
+
+	    this._setUpRename();
+
+	    this._flushing = 0;
+	    this._fieldsSize = 0;
+	    this._fileSize = 0;
+	    this._plugins = [];
+	    this.openedFiles = [];
+
+	    this.options.enabledPlugins = []
+	      .concat(this.options.enabledPlugins)
+	      .filter(Boolean);
+
+	    if (this.options.enabledPlugins.length === 0) {
+	      throw new FormidableError(
+	        'expect at least 1 enabled builtin plugin, see options.enabledPlugins',
+	        errors.missingPlugin,
+	      );
+	    }
+
+	    this.options.enabledPlugins.forEach((pluginName) => {
+	      const plgName = pluginName.toLowerCase();
+	      // eslint-disable-next-line import/no-dynamic-require, global-require
+	      this.use(commonjsRequire(path.join(__dirname, 'plugins', `${plgName}.js`)));
+	    });
+
+	    this._setUpMaxFields();
+	  }
+
+	  use(plugin) {
+	    if (typeof plugin !== 'function') {
+	      throw new FormidableError(
+	        '.use: expect `plugin` to be a function',
+	        errors.pluginFunction,
+	      );
+	    }
+	    this._plugins.push(plugin.bind(this));
+	    return this;
+	  }
+
+	  parse(req, cb) {
+	    this.pause = () => {
+	      try {
+	        req.pause();
+	      } catch (err) {
+	        // the stream was destroyed
+	        if (!this.ended) {
+	          // before it was completed, crash & burn
+	          this._error(err);
+	        }
+	        return false;
+	      }
+	      return true;
+	    };
+
+	    this.resume = () => {
+	      try {
+	        req.resume();
+	      } catch (err) {
+	        // the stream was destroyed
+	        if (!this.ended) {
+	          // before it was completed, crash & burn
+	          this._error(err);
+	        }
+	        return false;
+	      }
+
+	      return true;
+	    };
+
+	    // Setup callback first, so we don't miss anything from data events emitted immediately.
+	    if (cb) {
+	      const callback = once(dezalgo(cb));
+	      const fields = {};
+	      let mockFields = '';
+	      const files = {};
+
+	      this.on('field', (name, value) => {
+	        if (
+	          this.options.multiples &&
+	          (this.type === 'multipart' || this.type === 'urlencoded')
+	        ) {
+	          const mObj = { [name]: value };
+	          mockFields = mockFields
+	            ? `${mockFields}&${qs.stringify(mObj)}`
+	            : `${qs.stringify(mObj)}`;
+	        } else {
+	          fields[name] = value;
+	        }
+	      });
+	      this.on('file', (name, file) => {
+	        // TODO: too much nesting
+	        if (this.options.multiples) {
+	          if (hasOwnProp(files, name)) {
+	            if (!Array.isArray(files[name])) {
+	              files[name] = [files[name]];
+	            }
+	            files[name].push(file);
+	          } else {
+	            files[name] = file;
+	          }
+	        } else {
+	          files[name] = file;
+	        }
+	      });
+	      this.on('error', (err) => {
+	        callback(err, fields, files);
+	      });
+	      this.on('end', () => {
+	        if (this.options.multiples) {
+	          Object.assign(fields, qs.parse(mockFields));
+	        }
+	        callback(null, fields, files);
+	      });
+	    }
+
+	    // Parse headers and setup the parser, ready to start listening for data.
+	    this.writeHeaders(req.headers);
+
+	    // Start listening for data.
+	    req
+	      .on('error', (err) => {
+	        this._error(err);
+	      })
+	      .on('aborted', () => {
+	        this.emit('aborted');
+	        this._error(new FormidableError('Request aborted', errors.aborted));
+	      })
+	      .on('data', (buffer) => {
+	        try {
+	          this.write(buffer);
+	        } catch (err) {
+	          this._error(err);
+	        }
+	      })
+	      .on('end', () => {
+	        if (this.error) {
+	          return;
+	        }
+	        if (this._parser) {
+	          this._parser.end();
+	        }
+	        this._maybeEnd();
+	      });
+
+	    return this;
+	  }
+
+	  writeHeaders(headers) {
+	    this.headers = headers;
+	    this._parseContentLength();
+	    this._parseContentType();
+
+	    if (!this._parser) {
+	      this._error(
+	        new FormidableError(
+	          'no parser found',
+	          errors.noParser,
+	          415, // Unsupported Media Type
+	        ),
+	      );
+	      return;
+	    }
+
+	    this._parser.once('error', (error) => {
+	      this._error(error);
+	    });
+	  }
+
+	  write(buffer) {
+	    if (this.error) {
+	      return null;
+	    }
+	    if (!this._parser) {
+	      this._error(
+	        new FormidableError('uninitialized parser', errors.uninitializedParser),
+	      );
+	      return null;
+	    }
+
+	    this.bytesReceived += buffer.length;
+	    this.emit('progress', this.bytesReceived, this.bytesExpected);
+
+	    this._parser.write(buffer);
+
+	    return this.bytesReceived;
+	  }
+
+	  pause() {
+	    // this does nothing, unless overwritten in IncomingForm.parse
+	    return false;
+	  }
+
+	  resume() {
+	    // this does nothing, unless overwritten in IncomingForm.parse
+	    return false;
+	  }
+
+	  onPart(part) {
+	    // this method can be overwritten by the user
+	    this._handlePart(part);
+	  }
+
+	  _handlePart(part) {
+	    if (part.originalFilename && typeof part.originalFilename !== 'string') {
+	      this._error(
+	        new FormidableError(
+	          `the part.originalFilename should be string when it exists`,
+	          errors.filenameNotString,
+	        ),
+	      );
+	      return;
+	    }
+
+	    // This MUST check exactly for undefined. You can not change it to !part.originalFilename.
+
+	    // todo: uncomment when switch tests to Jest
+	    // console.log(part);
+
+	    // ? NOTE(@tunnckocore): no it can be any falsey value, it most probably depends on what's returned
+	    // from somewhere else. Where recently I changed the return statements
+	    // and such thing because code style
+	    // ? NOTE(@tunnckocore): or even better, if there is no mimetype, then it's for sure a field
+	    // ? NOTE(@tunnckocore): originalFilename is an empty string when a field?
+	    if (!part.mimetype) {
+	      let value = '';
+	      const decoder = new StringDecoder(
+	        part.transferEncoding || this.options.encoding,
+	      );
+
+	      part.on('data', (buffer) => {
+	        this._fieldsSize += buffer.length;
+	        if (this._fieldsSize > this.options.maxFieldsSize) {
+	          this._error(
+	            new FormidableError(
+	              `options.maxFieldsSize (${this.options.maxFieldsSize} bytes) exceeded, received ${this._fieldsSize} bytes of field data`,
+	              errors.maxFieldsSizeExceeded,
+	              413, // Payload Too Large
+	            ),
+	          );
+	          return;
+	        }
+	        value += decoder.write(buffer);
+	      });
+
+	      part.on('end', () => {
+	        this.emit('field', part.name, value);
+	      });
+	      return;
+	    }
+
+	    if (!this.options.filter(part)) {
+	      return;
+	    }
+
+	    this._flushing += 1;
+
+	    const newFilename = this._getNewName(part);
+	    const filepath = this._joinDirectoryName(newFilename);
+	    const file = this._newFile({
+	      newFilename,
+	      filepath,
+	      originalFilename: part.originalFilename,
+	      mimetype: part.mimetype,
+	    });
+	    file.on('error', (err) => {
+	      this._error(err);
+	    });
+	    this.emit('fileBegin', part.name, file);
+
+	    file.open();
+	    this.openedFiles.push(file);
+
+	    part.on('data', (buffer) => {
+	      this._fileSize += buffer.length;
+	      if (this._fileSize < this.options.minFileSize) {
+	        this._error(
+	          new FormidableError(
+	            `options.minFileSize (${this.options.minFileSize} bytes) inferior, received ${this._fileSize} bytes of file data`,
+	            errors.smallerThanMinFileSize,
+	            400,
+	          ),
+	        );
+	        return;
+	      }
+	      if (this._fileSize > this.options.maxFileSize) {
+	        this._error(
+	          new FormidableError(
+	            `options.maxFileSize (${this.options.maxFileSize} bytes) exceeded, received ${this._fileSize} bytes of file data`,
+	            errors.biggerThanMaxFileSize,
+	            413,
+	          ),
+	        );
+	        return;
+	      }
+	      if (buffer.length === 0) {
+	        return;
+	      }
+	      this.pause();
+	      file.write(buffer, () => {
+	        this.resume();
+	      });
+	    });
+
+	    part.on('end', () => {
+	      if (!this.options.allowEmptyFiles && this._fileSize === 0) {
+	        this._error(
+	          new FormidableError(
+	            `options.allowEmptyFiles is false, file size should be greather than 0`,
+	            errors.noEmptyFiles,
+	            400,
+	          ),
+	        );
+	        return;
+	      }
+
+	      file.end(() => {
+	        this._flushing -= 1;
+	        this.emit('file', part.name, file);
+	        this._maybeEnd();
+	      });
+	    });
+	  }
+
+	  // eslint-disable-next-line max-statements
+	  _parseContentType() {
+	    if (this.bytesExpected === 0) {
+	      this._parser = new DummyParser(this, this.options);
+	      return;
+	    }
+
+	    if (!this.headers['content-type']) {
+	      this._error(
+	        new FormidableError(
+	          'bad content-type header, no content-type',
+	          errors.missingContentType,
+	          400,
+	        ),
+	      );
+	      return;
+	    }
+
+	    const results = [];
+	    new DummyParser(this, this.options);
+
+	    // eslint-disable-next-line no-plusplus
+	    for (let idx = 0; idx < this._plugins.length; idx++) {
+	      const plugin = this._plugins[idx];
+
+	      let pluginReturn = null;
+
+	      try {
+	        pluginReturn = plugin(this, this.options) || this;
+	      } catch (err) {
+	        // directly throw from the `form.parse` method;
+	        // there is no other better way, except a handle through options
+	        const error = new FormidableError(
+	          `plugin on index ${idx} failed with: ${err.message}`,
+	          errors.pluginFailed,
+	          500,
+	        );
+	        error.idx = idx;
+	        throw error;
+	      }
+
+	      Object.assign(this, pluginReturn);
+
+	      // todo: use Set/Map and pass plugin name instead of the `idx` index
+	      this.emit('plugin', idx, pluginReturn);
+	      results.push(pluginReturn);
+	    }
+
+	    this.emit('pluginsResults', results);
+
+	    // NOTE: probably not needed, because we check options.enabledPlugins in the constructor
+	    // if (results.length === 0 /* && results.length !== this._plugins.length */) {
+	    //   this._error(
+	    //     new Error(
+	    //       `bad content-type header, unknown content-type: ${this.headers['content-type']}`,
+	    //     ),
+	    //   );
+	    // }
+	  }
+
+	  _error(err, eventName = 'error') {
+	    // if (!err && this.error) {
+	    //   this.emit('error', this.error);
+	    //   return;
+	    // }
+	    if (this.error || this.ended) {
+	      return;
+	    }
+
+	    this.error = err;
+	    this.emit(eventName, err);
+
+	    if (Array.isArray(this.openedFiles)) {
+	      this.openedFiles.forEach((file) => {
+	        file.destroy();
+	      });
+	    }
+	  }
+
+	  _parseContentLength() {
+	    this.bytesReceived = 0;
+	    if (this.headers['content-length']) {
+	      this.bytesExpected = parseInt(this.headers['content-length'], 10);
+	    } else if (this.headers['transfer-encoding'] === undefined) {
+	      this.bytesExpected = 0;
+	    }
+
+	    if (this.bytesExpected !== null) {
+	      this.emit('progress', this.bytesReceived, this.bytesExpected);
+	    }
+	  }
+
+	  _newParser() {
+	    return new MultipartParser(this.options);
+	  }
+
+	  _newFile({ filepath, originalFilename, mimetype, newFilename }) {
+	    return this.options.fileWriteStreamHandler
+	      ? new VolatileFile({
+	          newFilename,
+	          filepath,
+	          originalFilename,
+	          mimetype,
+	          createFileWriteStream: this.options.fileWriteStreamHandler,
+	          hashAlgorithm: this.options.hashAlgorithm,
+	        })
+	      : new PersistentFile({
+	          newFilename,
+	          filepath,
+	          originalFilename,
+	          mimetype,
+	          hashAlgorithm: this.options.hashAlgorithm,
+	        });
+	  }
+
+	  _getFileName(headerValue) {
+	    // matches either a quoted-string or a token (RFC 2616 section 19.5.1)
+	    const m = headerValue.match(
+	      /\bfilename=("(.*?)"|([^()<>{}[\]@,;:"?=\s/\t]+))($|;\s)/i,
+	    );
+	    if (!m) return null;
+
+	    const match = m[2] || m[3] || '';
+	    let originalFilename = match.substr(match.lastIndexOf('\\') + 1);
+	    originalFilename = originalFilename.replace(/%22/g, '"');
+	    originalFilename = originalFilename.replace(/&#([\d]{4});/g, (_, code) =>
+	      String.fromCharCode(code),
+	    );
+
+	    return originalFilename;
+	  }
+
+	  _getExtension(str) {
+	    if (!str) {
+	      return '';
+	    }
+
+	    const basename = path.basename(str);
+	    const firstDot = basename.indexOf('.');
+	    const lastDot = basename.lastIndexOf('.');
+	    const extname = path.extname(basename).replace(/(\.[a-z0-9]+).*/i, '$1');
+
+	    if (firstDot === lastDot) {
+	      return extname;
+	    }
+
+	    return basename.slice(firstDot, lastDot) + extname;
+	  }
+
+
+
+	  _joinDirectoryName(name) {
+	    const newPath = path.join(this.uploadDir, name);
+
+	    // prevent directory traversal attacks
+	    if (!newPath.startsWith(this.uploadDir)) {
+	      return path.join(this.uploadDir, this.options.defaultInvalidName);
+	    }
+
+	    return newPath;
+	  }
+
+	  _setUpRename() {
+	    const hasRename = typeof this.options.filename === 'function';
+	    if (hasRename) {
+	      this._getNewName = (part) => {
+	        let ext = '';
+	        let name = this.options.defaultInvalidName;
+	        if (part.originalFilename) {
+	          // can be null
+	          ({ ext, name } = path.parse(part.originalFilename));
+	          if (this.options.keepExtensions !== true) {
+	            ext = '';
+	          }
+	        }
+	        return this.options.filename.call(this, name, ext, part, this);
+	      };
+	    } else {
+	      this._getNewName = (part) => {
+	        const name = toHexoId();
+
+	        if (part && this.options.keepExtensions) {
+	          const originalFilename = typeof part === 'string' ? part : part.originalFilename;
+	          return `${name}${this._getExtension(originalFilename)}`;
+	        }
+	    
+	        return name;
+	      };
+	    }
+	  }
+
+	  _setUpMaxFields() {
+	    if (this.options.maxFields !== 0) {
+	      let fieldsCount = 0;
+	      this.on('field', () => {
+	        fieldsCount += 1;
+	        if (fieldsCount > this.options.maxFields) {
+	          this._error(
+	            new FormidableError(
+	              `options.maxFields (${this.options.maxFields}) exceeded`,
+	              errors.maxFieldsExceeded,
+	              413,
+	            ),
+	          );
+	        }
+	      });
+	    }
+	  }
+
+	  _maybeEnd() {
+	    // console.log('ended', this.ended);
+	    // console.log('_flushing', this._flushing);
+	    // console.log('error', this.error);
+	    if (!this.ended || this._flushing || this.error) {
+	      return;
+	    }
+
+	    this.emit('end');
+	  }
+	}
+
+	IncomingForm.DEFAULT_OPTIONS = DEFAULT_OPTIONS;
+	Formidable = IncomingForm;
+	return Formidable;
+}
+
+var plugins = {};
+
+var OctetStream;
+var hasRequiredOctetStream;
+
+function requireOctetStream () {
+	if (hasRequiredOctetStream) return OctetStream;
+	hasRequiredOctetStream = 1;
+
+	const { PassThrough } = Stream$2;
+
+	class OctetStreamParser extends PassThrough {
+	  constructor(options = {}) {
+	    super();
+	    this.globalOptions = { ...options };
+	  }
+	}
+
+	OctetStream = OctetStreamParser;
+	return OctetStream;
+}
+
+/* eslint-disable no-underscore-dangle */
+
+var octetstream;
+var hasRequiredOctetstream;
+
+function requireOctetstream () {
+	if (hasRequiredOctetstream) return octetstream;
+	hasRequiredOctetstream = 1;
+
+	const OctetStreamParser = requireOctetStream();
+
+	// the `options` is also available through the `options` / `formidable.options`
+	octetstream = function plugin(formidable, options) {
+	  // the `this` context is always formidable, as the first argument of a plugin
+	  // but this allows us to customize/test each plugin
+
+	  /* istanbul ignore next */
+	  const self = this || formidable;
+
+	  if (/octet-stream/i.test(self.headers['content-type'])) {
+	    init.call(self, self, options);
+	  }
+
+	  return self;
+	};
+
+	// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+	// of the passed `options` (second) param, because when you decide
+	// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+	function init(_self, _opts) {
+	  this.type = 'octet-stream';
+	  const originalFilename = this.headers['x-file-name'];
+	  const mimetype = this.headers['content-type'];
+
+	  const thisPart = {
+	    originalFilename,
+	    mimetype,
+	  };
+	  const newFilename = this._getNewName(thisPart);
+	  const filepath = this._joinDirectoryName(newFilename);
+	  const file = this._newFile({
+	    newFilename,
+	    filepath,
+	    originalFilename,
+	    mimetype,
+	  });
+
+	  this.emit('fileBegin', originalFilename, file);
+	  file.open();
+	  this.openedFiles.push(file);
+	  this._flushing += 1;
+
+	  this._parser = new OctetStreamParser(this.options);
+
+	  // Keep track of writes that haven't finished so we don't emit the file before it's done being written
+	  let outstandingWrites = 0;
+
+	  this._parser.on('data', (buffer) => {
+	    this.pause();
+	    outstandingWrites += 1;
+
+	    file.write(buffer, () => {
+	      outstandingWrites -= 1;
+	      this.resume();
+
+	      if (this.ended) {
+	        this._parser.emit('doneWritingFile');
+	      }
+	    });
+	  });
+
+	  this._parser.on('end', () => {
+	    this._flushing -= 1;
+	    this.ended = true;
+
+	    const done = () => {
+	      file.end(() => {
+	        this.emit('file', 'file', file);
+	        this._maybeEnd();
+	      });
+	    };
+
+	    if (outstandingWrites === 0) {
+	      done();
+	    } else {
+	      this._parser.once('doneWritingFile', done);
+	    }
+	  });
+
+	  return this;
+	}
+	return octetstream;
+}
+
+/* eslint-disable no-underscore-dangle */
+
+var Querystring;
+var hasRequiredQuerystring$1;
+
+function requireQuerystring$1 () {
+	if (hasRequiredQuerystring$1) return Querystring;
+	hasRequiredQuerystring$1 = 1;
+
+	const { Transform } = Stream$2;
+	const querystring = require$$8$1;
+
+	// This is a buffering parser, not quite as nice as the multipart one.
+	// If I find time I'll rewrite this to be fully streaming as well
+	class QuerystringParser extends Transform {
+	  constructor(options = {}) {
+	    super({ readableObjectMode: true });
+	    this.globalOptions = { ...options };
+	    this.buffer = '';
+	    this.bufferLength = 0;
+	  }
+
+	  _transform(buffer, encoding, callback) {
+	    this.buffer += buffer.toString('ascii');
+	    this.bufferLength = this.buffer.length;
+	    callback();
+	  }
+
+	  _flush(callback) {
+	    const fields = querystring.parse(this.buffer, '&', '=');
+	    // eslint-disable-next-line no-restricted-syntax, guard-for-in
+	    for (const key in fields) {
+	      this.push({
+	        key,
+	        value: fields[key],
+	      });
+	    }
+	    this.buffer = '';
+	    callback();
+	  }
+	}
+
+	Querystring = QuerystringParser;
+	return Querystring;
+}
+
+/* eslint-disable no-underscore-dangle */
+
+var querystring$2;
+var hasRequiredQuerystring;
+
+function requireQuerystring () {
+	if (hasRequiredQuerystring) return querystring$2;
+	hasRequiredQuerystring = 1;
+
+	const QuerystringParser = requireQuerystring$1();
+
+	// the `options` is also available through the `this.options` / `formidable.options`
+	querystring$2 = function plugin(formidable, options) {
+	  // the `this` context is always formidable, as the first argument of a plugin
+	  // but this allows us to customize/test each plugin
+
+	  /* istanbul ignore next */
+	  const self = this || formidable;
+
+	  if (/urlencoded/i.test(self.headers['content-type'])) {
+	    init.call(self, self, options);
+	  }
+
+	  return self;
+	};
+
+	// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+	// of the passed `options` (second) param, because when you decide
+	// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+	function init(_self, _opts) {
+	  this.type = 'urlencoded';
+
+	  const parser = new QuerystringParser(this.options);
+
+	  parser.on('data', ({ key, value }) => {
+	    this.emit('field', key, value);
+	  });
+
+	  parser.once('end', () => {
+	    this.ended = true;
+	    this._maybeEnd();
+	  });
+
+	  this._parser = parser;
+
+	  return this;
+	}
+	return querystring$2;
+}
+
+/* eslint-disable no-underscore-dangle */
+
+var multipart;
+var hasRequiredMultipart;
+
+function requireMultipart () {
+	if (hasRequiredMultipart) return multipart;
+	hasRequiredMultipart = 1;
+
+	const { Stream } = Stream$2;
+	const MultipartParser = requireMultipart$1();
+	const errors = requireFormidableError();
+
+	const { FormidableError } = errors;
+
+	// the `options` is also available through the `options` / `formidable.options`
+	multipart = function plugin(formidable, options) {
+	  // the `this` context is always formidable, as the first argument of a plugin
+	  // but this allows us to customize/test each plugin
+
+	  /* istanbul ignore next */
+	  const self = this || formidable;
+
+	  // NOTE: we (currently) support both multipart/form-data and multipart/related
+	  const multipart = /multipart/i.test(self.headers['content-type']);
+
+	  if (multipart) {
+	    const m = self.headers['content-type'].match(
+	      /boundary=(?:"([^"]+)"|([^;]+))/i,
+	    );
+	    if (m) {
+	      const initMultipart = createInitMultipart(m[1] || m[2]);
+	      initMultipart.call(self, self, options); // lgtm [js/superfluous-trailing-arguments]
+	    } else {
+	      const err = new FormidableError(
+	        'bad content-type header, no multipart boundary',
+	        errors.missingMultipartBoundary,
+	        400,
+	      );
+	      self._error(err);
+	    }
+	  }
+	};
+
+	// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+	// of the passed `options` (second) param, because when you decide
+	// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+	function createInitMultipart(boundary) {
+	  return function initMultipart() {
+	    this.type = 'multipart';
+
+	    const parser = new MultipartParser(this.options);
+	    let headerField;
+	    let headerValue;
+	    let part;
+
+	    parser.initWithBoundary(boundary);
+
+	    // eslint-disable-next-line max-statements, consistent-return
+	    parser.on('data', ({ name, buffer, start, end }) => {
+	      if (name === 'partBegin') {
+	        part = new Stream();
+	        part.readable = true;
+	        part.headers = {};
+	        part.name = null;
+	        part.originalFilename = null;
+	        part.mimetype = null;
+
+	        part.transferEncoding = this.options.encoding;
+	        part.transferBuffer = '';
+
+	        headerField = '';
+	        headerValue = '';
+	      } else if (name === 'headerField') {
+	        headerField += buffer.toString(this.options.encoding, start, end);
+	      } else if (name === 'headerValue') {
+	        headerValue += buffer.toString(this.options.encoding, start, end);
+	      } else if (name === 'headerEnd') {
+	        headerField = headerField.toLowerCase();
+	        part.headers[headerField] = headerValue;
+
+	        // matches either a quoted-string or a token (RFC 2616 section 19.5.1)
+	        const m = headerValue.match(
+	          // eslint-disable-next-line no-useless-escape
+	          /\bname=("([^"]*)"|([^\(\)<>@,;:\\"\/\[\]\?=\{\}\s\t/]+))/i,
+	        );
+	        if (headerField === 'content-disposition') {
+	          if (m) {
+	            part.name = m[2] || m[3] || '';
+	          }
+
+	          part.originalFilename = this._getFileName(headerValue);
+	        } else if (headerField === 'content-type') {
+	          part.mimetype = headerValue;
+	        } else if (headerField === 'content-transfer-encoding') {
+	          part.transferEncoding = headerValue.toLowerCase();
+	        }
+
+	        headerField = '';
+	        headerValue = '';
+	      } else if (name === 'headersEnd') {
+	        switch (part.transferEncoding) {
+	          case 'binary':
+	          case '7bit':
+	          case '8bit':
+	          case 'utf-8': {
+	            const dataPropagation = (ctx) => {
+	              if (ctx.name === 'partData') {
+	                part.emit('data', ctx.buffer.slice(ctx.start, ctx.end));
+	              }
+	            };
+	            const dataStopPropagation = (ctx) => {
+	              if (ctx.name === 'partEnd') {
+	                part.emit('end');
+	                parser.off('data', dataPropagation);
+	                parser.off('data', dataStopPropagation);
+	              }
+	            };
+	            parser.on('data', dataPropagation);
+	            parser.on('data', dataStopPropagation);
+	            break;
+	          }
+	          case 'base64': {
+	            const dataPropagation = (ctx) => {
+	              if (ctx.name === 'partData') {
+	                part.transferBuffer += ctx.buffer
+	                  .slice(ctx.start, ctx.end)
+	                  .toString('ascii');
+
+	                /*
+	                  four bytes (chars) in base64 converts to three bytes in binary
+	                  encoding. So we should always work with a number of bytes that
+	                  can be divided by 4, it will result in a number of buytes that
+	                  can be divided vy 3.
+	                  */
+	                const offset = parseInt(part.transferBuffer.length / 4, 10) * 4;
+	                part.emit(
+	                  'data',
+	                  Buffer.from(
+	                    part.transferBuffer.substring(0, offset),
+	                    'base64',
+	                  ),
+	                );
+	                part.transferBuffer = part.transferBuffer.substring(offset);
+	              }
+	            };
+	            const dataStopPropagation = (ctx) => {
+	              if (ctx.name === 'partEnd') {
+	                part.emit('data', Buffer.from(part.transferBuffer, 'base64'));
+	                part.emit('end');
+	                parser.off('data', dataPropagation);
+	                parser.off('data', dataStopPropagation);
+	              }
+	            };
+	            parser.on('data', dataPropagation);
+	            parser.on('data', dataStopPropagation);
+	            break;
+	          }
+	          default:
+	            return this._error(
+	              new FormidableError(
+	                'unknown transfer-encoding',
+	                errors.unknownTransferEncoding,
+	                501,
+	              ),
+	            );
+	        }
+
+	        this.onPart(part);
+	      } else if (name === 'end') {
+	        this.ended = true;
+	        this._maybeEnd();
+	      }
+	    });
+
+	    this._parser = parser;
+	  };
+	}
+	return multipart;
+}
+
+/* eslint-disable no-underscore-dangle */
+
+var _JSON;
+var hasRequired_JSON;
+
+function require_JSON () {
+	if (hasRequired_JSON) return _JSON;
+	hasRequired_JSON = 1;
+
+	const { Transform } = Stream$2;
+
+	class JSONParser extends Transform {
+	  constructor(options = {}) {
+	    super({ readableObjectMode: true });
+	    this.chunks = [];
+	    this.globalOptions = { ...options };
+	  }
+
+	  _transform(chunk, encoding, callback) {
+	    this.chunks.push(String(chunk)); // todo consider using a string decoder
+	    callback();
+	  }
+
+	  _flush(callback) {
+	    try {
+	      const fields = JSON.parse(this.chunks.join(''));
+	      Object.keys(fields).forEach((key) => {
+	        const value = fields[key];
+	        this.push({ key, value });
+	      });
+	    } catch (e) {
+	      callback(e);
+	      return;
+	    }
+	    this.chunks = null;
+	    callback();
+	  }
+	}
+
+	_JSON = JSONParser;
+	return _JSON;
+}
+
+/* eslint-disable no-underscore-dangle */
+
+var json$2;
+var hasRequiredJson$1;
+
+function requireJson$1 () {
+	if (hasRequiredJson$1) return json$2;
+	hasRequiredJson$1 = 1;
+
+	const JSONParser = require_JSON();
+
+	// the `options` is also available through the `this.options` / `formidable.options`
+	json$2 = function plugin(formidable, options) {
+	  // the `this` context is always formidable, as the first argument of a plugin
+	  // but this allows us to customize/test each plugin
+
+	  /* istanbul ignore next */
+	  const self = this || formidable;
+
+	  if (/json/i.test(self.headers['content-type'])) {
+	    init.call(self, self, options);
+	  }
+	};
+
+	// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+	// of the passed `options` (second) param, because when you decide
+	// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+	function init(_self, _opts) {
+	  this.type = 'json';
+
+	  const parser = new JSONParser(this.options);
+
+	  parser.on('data', ({ key, value }) => {
+	    this.emit('field', key, value);
+	  });
+
+	  parser.once('end', () => {
+	    this.ended = true;
+	    this._maybeEnd();
+	  });
+
+	  this._parser = parser;
+	}
+	return json$2;
+}
+
+var hasRequiredPlugins;
+
+function requirePlugins () {
+	if (hasRequiredPlugins) return plugins;
+	hasRequiredPlugins = 1;
+	(function (exports) {
+
+		const octetstream = requireOctetstream();
+		const querystring = requireQuerystring();
+		const multipart = requireMultipart();
+		const json = requireJson$1();
+
+		Object.assign(exports, {
+		  octetstream,
+		  querystring,
+		  multipart,
+		  json,
+		});
+} (plugins));
+	return plugins;
+}
+
+var parsers$1 = {};
+
+var hasRequiredParsers$1;
+
+function requireParsers$1 () {
+	if (hasRequiredParsers$1) return parsers$1;
+	hasRequiredParsers$1 = 1;
+	(function (exports) {
+
+		const JSONParser = require_JSON();
+		const DummyParser = requireDummy();
+		const MultipartParser = requireMultipart$1();
+		const OctetStreamParser = requireOctetStream();
+		const QueryStringParser = requireQuerystring$1();
+
+		Object.assign(exports, {
+		  JSONParser,
+		  DummyParser,
+		  MultipartParser,
+		  OctetStreamParser,
+		  OctetstreamParser: OctetStreamParser,
+		  QueryStringParser,
+		  QuerystringParser: QueryStringParser,
+		});
+} (parsers$1));
+	return parsers$1;
+}
+
+var src$1;
+var hasRequiredSrc;
+
+function requireSrc () {
+	if (hasRequiredSrc) return src$1;
+	hasRequiredSrc = 1;
+
+	const PersistentFile = requirePersistentFile();
+	const VolatileFile = requireVolatileFile();
+	const Formidable = requireFormidable();
+	const FormidableError = requireFormidableError();
+
+	const plugins = requirePlugins();
+	const parsers = requireParsers$1();
+
+	// make it available without requiring the `new` keyword
+	// if you want it access `const formidable.IncomingForm` as v1
+	const formidable = (...args) => new Formidable(...args);
+
+	src$1 = Object.assign(formidable, {
+	  errors: FormidableError,
+	  File: PersistentFile,
+	  PersistentFile,
+	  VolatileFile,
+	  Formidable,
+	  formidable,
+
+	  // alias
+	  IncomingForm: Formidable,
+
+	  // parsers
+	  ...parsers,
+	  parsers,
+
+	  // misc
+	  defaultOptions: Formidable.DEFAULT_OPTIONS,
+	  enabledPlugins: Formidable.DEFAULT_OPTIONS.enabledPlugins,
+
+	  // plugins
+	  plugins: {
+	    ...plugins,
+	  },
+	});
+	return src$1;
+}
+
+var cookiejar = {};
+
+/* jshint node: true */
+
+var hasRequiredCookiejar;
+
+function requireCookiejar () {
+	if (hasRequiredCookiejar) return cookiejar;
+	hasRequiredCookiejar = 1;
+	(function () {
+
+	    function CookieAccessInfo(domain, path, secure, script) {
+	        if (this instanceof CookieAccessInfo) {
+	            this.domain = domain || undefined;
+	            this.path = path || "/";
+	            this.secure = !!secure;
+	            this.script = !!script;
+	            return this;
+	        }
+	        return new CookieAccessInfo(domain, path, secure, script);
+	    }
+	    CookieAccessInfo.All = Object.freeze(Object.create(null));
+	    cookiejar.CookieAccessInfo = CookieAccessInfo;
+
+	    function Cookie(cookiestr, request_domain, request_path) {
+	        if (cookiestr instanceof Cookie) {
+	            return cookiestr;
+	        }
+	        if (this instanceof Cookie) {
+	            this.name = null;
+	            this.value = null;
+	            this.expiration_date = Infinity;
+	            this.path = String(request_path || "/");
+	            this.explicit_path = false;
+	            this.domain = request_domain || null;
+	            this.explicit_domain = false;
+	            this.secure = false; //how to define default?
+	            this.noscript = false; //httponly
+	            if (cookiestr) {
+	                this.parse(cookiestr, request_domain, request_path);
+	            }
+	            return this;
+	        }
+	        return new Cookie(cookiestr, request_domain, request_path);
+	    }
+	    cookiejar.Cookie = Cookie;
+
+	    Cookie.prototype.toString = function toString() {
+	        var str = [this.name + "=" + this.value];
+	        if (this.expiration_date !== Infinity) {
+	            str.push("expires=" + (new Date(this.expiration_date)).toGMTString());
+	        }
+	        if (this.domain) {
+	            str.push("domain=" + this.domain);
+	        }
+	        if (this.path) {
+	            str.push("path=" + this.path);
+	        }
+	        if (this.secure) {
+	            str.push("secure");
+	        }
+	        if (this.noscript) {
+	            str.push("httponly");
+	        }
+	        return str.join("; ");
+	    };
+
+	    Cookie.prototype.toValueString = function toValueString() {
+	        return this.name + "=" + this.value;
+	    };
+
+	    var cookie_str_splitter = /[:](?=\s*[a-zA-Z0-9_\-]+\s*[=])/g;
+	    Cookie.prototype.parse = function parse(str, request_domain, request_path) {
+	        if (this instanceof Cookie) {
+	            if ( str.length > 32768 ) {
+	                console.warn("Cookie too long for parsing (>32768 characters)");
+	                return;
+	            }
+	    
+	            var parts = str.split(";").filter(function (value) {
+	                    return !!value;
+	                });
+	            var i;
+
+	            var pair = parts[0].match(/([^=]+)=([\s\S]*)/);
+	            if (!pair) {
+	                console.warn("Invalid cookie header encountered. Header: '"+str+"'");
+	                return;
+	            }
+
+	            var key = pair[1];
+	            var value = pair[2];
+	            if ( typeof key !== 'string' || key.length === 0 || typeof value !== 'string' ) {
+	                console.warn("Unable to extract values from cookie header. Cookie: '"+str+"'");
+	                return;
+	            }
+
+	            this.name = key;
+	            this.value = value;
+
+	            for (i = 1; i < parts.length; i += 1) {
+	                pair = parts[i].match(/([^=]+)(?:=([\s\S]*))?/);
+	                key = pair[1].trim().toLowerCase();
+	                value = pair[2];
+	                switch (key) {
+	                case "httponly":
+	                    this.noscript = true;
+	                    break;
+	                case "expires":
+	                    this.expiration_date = value ?
+	                            Number(Date.parse(value)) :
+	                            Infinity;
+	                    break;
+	                case "path":
+	                    this.path = value ?
+	                            value.trim() :
+	                            "";
+	                    this.explicit_path = true;
+	                    break;
+	                case "domain":
+	                    this.domain = value ?
+	                            value.trim() :
+	                            "";
+	                    this.explicit_domain = !!this.domain;
+	                    break;
+	                case "secure":
+	                    this.secure = true;
+	                    break;
+	                }
+	            }
+
+	            if (!this.explicit_path) {
+	               this.path = request_path || "/";
+	            }
+	            if (!this.explicit_domain) {
+	               this.domain = request_domain;
+	            }
+
+	            return this;
+	        }
+	        return new Cookie().parse(str, request_domain, request_path);
+	    };
+
+	    Cookie.prototype.matches = function matches(access_info) {
+	        if (access_info === CookieAccessInfo.All) {
+	          return true;
+	        }
+	        if (this.noscript && access_info.script ||
+	                this.secure && !access_info.secure ||
+	                !this.collidesWith(access_info)) {
+	            return false;
+	        }
+	        return true;
+	    };
+
+	    Cookie.prototype.collidesWith = function collidesWith(access_info) {
+	        if ((this.path && !access_info.path) || (this.domain && !access_info.domain)) {
+	            return false;
+	        }
+	        if (this.path && access_info.path.indexOf(this.path) !== 0) {
+	            return false;
+	        }
+	        if (this.explicit_path && access_info.path.indexOf( this.path ) !== 0) {
+	           return false;
+	        }
+	        var access_domain = access_info.domain && access_info.domain.replace(/^[\.]/,'');
+	        var cookie_domain = this.domain && this.domain.replace(/^[\.]/,'');
+	        if (cookie_domain === access_domain) {
+	            return true;
+	        }
+	        if (cookie_domain) {
+	            if (!this.explicit_domain) {
+	                return false; // we already checked if the domains were exactly the same
+	            }
+	            var wildcard = access_domain.indexOf(cookie_domain);
+	            if (wildcard === -1 || wildcard !== access_domain.length - cookie_domain.length) {
+	                return false;
+	            }
+	            return true;
+	        }
+	        return true;
+	    };
+
+	    function CookieJar() {
+	        var cookies, cookies_list, collidable_cookie;
+	        if (this instanceof CookieJar) {
+	            cookies = Object.create(null); //name: [Cookie]
+
+	            this.setCookie = function setCookie(cookie, request_domain, request_path) {
+	                var remove, i;
+	                cookie = new Cookie(cookie, request_domain, request_path);
+	                //Delete the cookie if the set is past the current time
+	                remove = cookie.expiration_date <= Date.now();
+	                if (cookies[cookie.name] !== undefined) {
+	                    cookies_list = cookies[cookie.name];
+	                    for (i = 0; i < cookies_list.length; i += 1) {
+	                        collidable_cookie = cookies_list[i];
+	                        if (collidable_cookie.collidesWith(cookie)) {
+	                            if (remove) {
+	                                cookies_list.splice(i, 1);
+	                                if (cookies_list.length === 0) {
+	                                    delete cookies[cookie.name];
+	                                }
+	                                return false;
+	                            }
+	                            cookies_list[i] = cookie;
+	                            return cookie;
+	                        }
+	                    }
+	                    if (remove) {
+	                        return false;
+	                    }
+	                    cookies_list.push(cookie);
+	                    return cookie;
+	                }
+	                if (remove) {
+	                    return false;
+	                }
+	                cookies[cookie.name] = [cookie];
+	                return cookies[cookie.name];
+	            };
+	            //returns a cookie
+	            this.getCookie = function getCookie(cookie_name, access_info) {
+	                var cookie, i;
+	                cookies_list = cookies[cookie_name];
+	                if (!cookies_list) {
+	                    return;
+	                }
+	                for (i = 0; i < cookies_list.length; i += 1) {
+	                    cookie = cookies_list[i];
+	                    if (cookie.expiration_date <= Date.now()) {
+	                        if (cookies_list.length === 0) {
+	                            delete cookies[cookie.name];
+	                        }
+	                        continue;
+	                    }
+
+	                    if (cookie.matches(access_info)) {
+	                        return cookie;
+	                    }
+	                }
+	            };
+	            //returns a list of cookies
+	            this.getCookies = function getCookies(access_info) {
+	                var matches = [], cookie_name, cookie;
+	                for (cookie_name in cookies) {
+	                    cookie = this.getCookie(cookie_name, access_info);
+	                    if (cookie) {
+	                        matches.push(cookie);
+	                    }
+	                }
+	                matches.toString = function toString() {
+	                    return matches.join(":");
+	                };
+	                matches.toValueString = function toValueString() {
+	                    return matches.map(function (c) {
+	                        return c.toValueString();
+	                    }).join('; ');
+	                };
+	                return matches;
+	            };
+
+	            return this;
+	        }
+	        return new CookieJar();
+	    }
+	    cookiejar.CookieJar = CookieJar;
+
+	    //returns list of cookies that were set correctly. Cookies that are expired and removed are not returned.
+	    CookieJar.prototype.setCookies = function setCookies(cookies, request_domain, request_path) {
+	        cookies = Array.isArray(cookies) ?
+	                cookies :
+	                cookies.split(cookie_str_splitter);
+	        var successful = [],
+	            i,
+	            cookie;
+	        cookies = cookies.map(function(item){
+	            return new Cookie(item, request_domain, request_path);
+	        });
+	        for (i = 0; i < cookies.length; i += 1) {
+	            cookie = cookies[i];
+	            if (this.setCookie(cookie, request_domain, request_path)) {
+	                successful.push(cookie);
+	            }
+	        }
+	        return successful;
+	    };
+	}());
+	return cookiejar;
+}
+
+var debug_1;
+var hasRequiredDebug;
+
+function requireDebug () {
+	if (hasRequiredDebug) return debug_1;
+	hasRequiredDebug = 1;
+	const debug = (
+	  typeof process === 'object' &&
+	  process.env &&
+	  process.env.NODE_DEBUG &&
+	  /\bsemver\b/i.test(process.env.NODE_DEBUG)
+	) ? (...args) => console.error('SEMVER', ...args)
+	  : () => {};
+
+	debug_1 = debug;
+	return debug_1;
+}
+
+var constants$3;
+var hasRequiredConstants;
+
+function requireConstants () {
+	if (hasRequiredConstants) return constants$3;
+	hasRequiredConstants = 1;
+	// Note: this is the semver.org version of the spec that it implements
+	// Not necessarily the package version of this code.
+	const SEMVER_SPEC_VERSION = '2.0.0';
+
+	const MAX_LENGTH = 256;
+	const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER ||
+	/* istanbul ignore next */ 9007199254740991;
+
+	// Max safe segment length for coercion.
+	const MAX_SAFE_COMPONENT_LENGTH = 16;
+
+	constants$3 = {
+	  SEMVER_SPEC_VERSION,
+	  MAX_LENGTH,
+	  MAX_SAFE_INTEGER,
+	  MAX_SAFE_COMPONENT_LENGTH,
+	};
+	return constants$3;
+}
+
+var reExports = {};
+var re = {
+  get exports(){ return reExports; },
+  set exports(v){ reExports = v; },
+};
+
+var hasRequiredRe;
+
+function requireRe () {
+	if (hasRequiredRe) return reExports;
+	hasRequiredRe = 1;
+	(function (module, exports) {
+		const { MAX_SAFE_COMPONENT_LENGTH } = requireConstants();
+		const debug = requireDebug();
+		exports = module.exports = {};
+
+		// The actual regexps go on exports.re
+		const re = exports.re = [];
+		const src = exports.src = [];
+		const t = exports.t = {};
+		let R = 0;
+
+		const createToken = (name, value, isGlobal) => {
+		  const index = R++;
+		  debug(name, index, value);
+		  t[name] = index;
+		  src[index] = value;
+		  re[index] = new RegExp(value, isGlobal ? 'g' : undefined);
+		};
+
+		// The following Regular Expressions can be used for tokenizing,
+		// validating, and parsing SemVer version strings.
+
+		// ## Numeric Identifier
+		// A single `0`, or a non-zero digit followed by zero or more digits.
+
+		createToken('NUMERICIDENTIFIER', '0|[1-9]\\d*');
+		createToken('NUMERICIDENTIFIERLOOSE', '[0-9]+');
+
+		// ## Non-numeric Identifier
+		// Zero or more digits, followed by a letter or hyphen, and then zero or
+		// more letters, digits, or hyphens.
+
+		createToken('NONNUMERICIDENTIFIER', '\\d*[a-zA-Z-][a-zA-Z0-9-]*');
+
+		// ## Main Version
+		// Three dot-separated numeric identifiers.
+
+		createToken('MAINVERSION', `(${src[t.NUMERICIDENTIFIER]})\\.` +
+		                   `(${src[t.NUMERICIDENTIFIER]})\\.` +
+		                   `(${src[t.NUMERICIDENTIFIER]})`);
+
+		createToken('MAINVERSIONLOOSE', `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` +
+		                        `(${src[t.NUMERICIDENTIFIERLOOSE]})\\.` +
+		                        `(${src[t.NUMERICIDENTIFIERLOOSE]})`);
+
+		// ## Pre-release Version Identifier
+		// A numeric identifier, or a non-numeric identifier.
+
+		createToken('PRERELEASEIDENTIFIER', `(?:${src[t.NUMERICIDENTIFIER]
+		}|${src[t.NONNUMERICIDENTIFIER]})`);
+
+		createToken('PRERELEASEIDENTIFIERLOOSE', `(?:${src[t.NUMERICIDENTIFIERLOOSE]
+		}|${src[t.NONNUMERICIDENTIFIER]})`);
+
+		// ## Pre-release Version
+		// Hyphen, followed by one or more dot-separated pre-release version
+		// identifiers.
+
+		createToken('PRERELEASE', `(?:-(${src[t.PRERELEASEIDENTIFIER]
+		}(?:\\.${src[t.PRERELEASEIDENTIFIER]})*))`);
+
+		createToken('PRERELEASELOOSE', `(?:-?(${src[t.PRERELEASEIDENTIFIERLOOSE]
+		}(?:\\.${src[t.PRERELEASEIDENTIFIERLOOSE]})*))`);
+
+		// ## Build Metadata Identifier
+		// Any combination of digits, letters, or hyphens.
+
+		createToken('BUILDIDENTIFIER', '[0-9A-Za-z-]+');
+
+		// ## Build Metadata
+		// Plus sign, followed by one or more period-separated build metadata
+		// identifiers.
+
+		createToken('BUILD', `(?:\\+(${src[t.BUILDIDENTIFIER]
+		}(?:\\.${src[t.BUILDIDENTIFIER]})*))`);
+
+		// ## Full Version String
+		// A main version, followed optionally by a pre-release version and
+		// build metadata.
+
+		// Note that the only major, minor, patch, and pre-release sections of
+		// the version string are capturing groups.  The build metadata is not a
+		// capturing group, because it should not ever be used in version
+		// comparison.
+
+		createToken('FULLPLAIN', `v?${src[t.MAINVERSION]
+		}${src[t.PRERELEASE]}?${
+		  src[t.BUILD]}?`);
+
+		createToken('FULL', `^${src[t.FULLPLAIN]}$`);
+
+		// like full, but allows v1.2.3 and =1.2.3, which people do sometimes.
+		// also, 1.0.0alpha1 (prerelease without the hyphen) which is pretty
+		// common in the npm registry.
+		createToken('LOOSEPLAIN', `[v=\\s]*${src[t.MAINVERSIONLOOSE]
+		}${src[t.PRERELEASELOOSE]}?${
+		  src[t.BUILD]}?`);
+
+		createToken('LOOSE', `^${src[t.LOOSEPLAIN]}$`);
+
+		createToken('GTLT', '((?:<|>)?=?)');
+
+		// Something like "2.*" or "1.2.x".
+		// Note that "x.x" is a valid xRange identifer, meaning "any version"
+		// Only the first item is strictly required.
+		createToken('XRANGEIDENTIFIERLOOSE', `${src[t.NUMERICIDENTIFIERLOOSE]}|x|X|\\*`);
+		createToken('XRANGEIDENTIFIER', `${src[t.NUMERICIDENTIFIER]}|x|X|\\*`);
+
+		createToken('XRANGEPLAIN', `[v=\\s]*(${src[t.XRANGEIDENTIFIER]})` +
+		                   `(?:\\.(${src[t.XRANGEIDENTIFIER]})` +
+		                   `(?:\\.(${src[t.XRANGEIDENTIFIER]})` +
+		                   `(?:${src[t.PRERELEASE]})?${
+		                     src[t.BUILD]}?` +
+		                   `)?)?`);
+
+		createToken('XRANGEPLAINLOOSE', `[v=\\s]*(${src[t.XRANGEIDENTIFIERLOOSE]})` +
+		                        `(?:\\.(${src[t.XRANGEIDENTIFIERLOOSE]})` +
+		                        `(?:\\.(${src[t.XRANGEIDENTIFIERLOOSE]})` +
+		                        `(?:${src[t.PRERELEASELOOSE]})?${
+		                          src[t.BUILD]}?` +
+		                        `)?)?`);
+
+		createToken('XRANGE', `^${src[t.GTLT]}\\s*${src[t.XRANGEPLAIN]}$`);
+		createToken('XRANGELOOSE', `^${src[t.GTLT]}\\s*${src[t.XRANGEPLAINLOOSE]}$`);
+
+		// Coercion.
+		// Extract anything that could conceivably be a part of a valid semver
+		createToken('COERCE', `${'(^|[^\\d])' +
+		              '(\\d{1,'}${MAX_SAFE_COMPONENT_LENGTH}})` +
+		              `(?:\\.(\\d{1,${MAX_SAFE_COMPONENT_LENGTH}}))?` +
+		              `(?:\\.(\\d{1,${MAX_SAFE_COMPONENT_LENGTH}}))?` +
+		              `(?:$|[^\\d])`);
+		createToken('COERCERTL', src[t.COERCE], true);
+
+		// Tilde ranges.
+		// Meaning is "reasonably at or greater than"
+		createToken('LONETILDE', '(?:~>?)');
+
+		createToken('TILDETRIM', `(\\s*)${src[t.LONETILDE]}\\s+`, true);
+		exports.tildeTrimReplace = '$1~';
+
+		createToken('TILDE', `^${src[t.LONETILDE]}${src[t.XRANGEPLAIN]}$`);
+		createToken('TILDELOOSE', `^${src[t.LONETILDE]}${src[t.XRANGEPLAINLOOSE]}$`);
+
+		// Caret ranges.
+		// Meaning is "at least and backwards compatible with"
+		createToken('LONECARET', '(?:\\^)');
+
+		createToken('CARETTRIM', `(\\s*)${src[t.LONECARET]}\\s+`, true);
+		exports.caretTrimReplace = '$1^';
+
+		createToken('CARET', `^${src[t.LONECARET]}${src[t.XRANGEPLAIN]}$`);
+		createToken('CARETLOOSE', `^${src[t.LONECARET]}${src[t.XRANGEPLAINLOOSE]}$`);
+
+		// A simple gt/lt/eq thing, or just "" to indicate "any version"
+		createToken('COMPARATORLOOSE', `^${src[t.GTLT]}\\s*(${src[t.LOOSEPLAIN]})$|^$`);
+		createToken('COMPARATOR', `^${src[t.GTLT]}\\s*(${src[t.FULLPLAIN]})$|^$`);
+
+		// An expression to strip any whitespace between the gtlt and the thing
+		// it modifies, so that `> 1.2.3` ==> `>1.2.3`
+		createToken('COMPARATORTRIM', `(\\s*)${src[t.GTLT]
+		}\\s*(${src[t.LOOSEPLAIN]}|${src[t.XRANGEPLAIN]})`, true);
+		exports.comparatorTrimReplace = '$1$2$3';
+
+		// Something like `1.2.3 - 1.2.4`
+		// Note that these all use the loose form, because they'll be
+		// checked against either the strict or loose comparator form
+		// later.
+		createToken('HYPHENRANGE', `^\\s*(${src[t.XRANGEPLAIN]})` +
+		                   `\\s+-\\s+` +
+		                   `(${src[t.XRANGEPLAIN]})` +
+		                   `\\s*$`);
+
+		createToken('HYPHENRANGELOOSE', `^\\s*(${src[t.XRANGEPLAINLOOSE]})` +
+		                        `\\s+-\\s+` +
+		                        `(${src[t.XRANGEPLAINLOOSE]})` +
+		                        `\\s*$`);
+
+		// Star ranges basically just allow anything at all.
+		createToken('STAR', '(<|>)?=?\\s*\\*');
+		// >=0.0.0 is like a star
+		createToken('GTE0', '^\\s*>=\\s*0\\.0\\.0\\s*$');
+		createToken('GTE0PRE', '^\\s*>=\\s*0\\.0\\.0-0\\s*$');
+} (re, reExports));
+	return reExports;
+}
+
+var parseOptions_1;
+var hasRequiredParseOptions;
+
+function requireParseOptions () {
+	if (hasRequiredParseOptions) return parseOptions_1;
+	hasRequiredParseOptions = 1;
+	// parse out just the options we care about so we always get a consistent
+	// obj with keys in a consistent order.
+	const opts = ['includePrerelease', 'loose', 'rtl'];
+	const parseOptions = options =>
+	  !options ? {}
+	  : typeof options !== 'object' ? { loose: true }
+	  : opts.filter(k => options[k]).reduce((o, k) => {
+	    o[k] = true;
+	    return o
+	  }, {});
+	parseOptions_1 = parseOptions;
+	return parseOptions_1;
+}
+
+var identifiers;
+var hasRequiredIdentifiers;
+
+function requireIdentifiers () {
+	if (hasRequiredIdentifiers) return identifiers;
+	hasRequiredIdentifiers = 1;
+	const numeric = /^[0-9]+$/;
+	const compareIdentifiers = (a, b) => {
+	  const anum = numeric.test(a);
+	  const bnum = numeric.test(b);
+
+	  if (anum && bnum) {
+	    a = +a;
+	    b = +b;
+	  }
+
+	  return a === b ? 0
+	    : (anum && !bnum) ? -1
+	    : (bnum && !anum) ? 1
+	    : a < b ? -1
+	    : 1
+	};
+
+	const rcompareIdentifiers = (a, b) => compareIdentifiers(b, a);
+
+	identifiers = {
+	  compareIdentifiers,
+	  rcompareIdentifiers,
+	};
+	return identifiers;
+}
+
+var semver$1;
+var hasRequiredSemver$1;
+
+function requireSemver$1 () {
+	if (hasRequiredSemver$1) return semver$1;
+	hasRequiredSemver$1 = 1;
+	const debug = requireDebug();
+	const { MAX_LENGTH, MAX_SAFE_INTEGER } = requireConstants();
+	const { re, t } = requireRe();
+
+	const parseOptions = requireParseOptions();
+	const { compareIdentifiers } = requireIdentifiers();
+	class SemVer {
+	  constructor (version, options) {
+	    options = parseOptions(options);
+
+	    if (version instanceof SemVer) {
+	      if (version.loose === !!options.loose &&
+	          version.includePrerelease === !!options.includePrerelease) {
+	        return version
+	      } else {
+	        version = version.version;
+	      }
+	    } else if (typeof version !== 'string') {
+	      throw new TypeError(`Invalid Version: ${version}`)
+	    }
+
+	    if (version.length > MAX_LENGTH) {
+	      throw new TypeError(
+	        `version is longer than ${MAX_LENGTH} characters`
+	      )
+	    }
+
+	    debug('SemVer', version, options);
+	    this.options = options;
+	    this.loose = !!options.loose;
+	    // this isn't actually relevant for versions, but keep it so that we
+	    // don't run into trouble passing this.options around.
+	    this.includePrerelease = !!options.includePrerelease;
+
+	    const m = version.trim().match(options.loose ? re[t.LOOSE] : re[t.FULL]);
+
+	    if (!m) {
+	      throw new TypeError(`Invalid Version: ${version}`)
+	    }
+
+	    this.raw = version;
+
+	    // these are actually numbers
+	    this.major = +m[1];
+	    this.minor = +m[2];
+	    this.patch = +m[3];
+
+	    if (this.major > MAX_SAFE_INTEGER || this.major < 0) {
+	      throw new TypeError('Invalid major version')
+	    }
+
+	    if (this.minor > MAX_SAFE_INTEGER || this.minor < 0) {
+	      throw new TypeError('Invalid minor version')
+	    }
+
+	    if (this.patch > MAX_SAFE_INTEGER || this.patch < 0) {
+	      throw new TypeError('Invalid patch version')
+	    }
+
+	    // numberify any prerelease numeric ids
+	    if (!m[4]) {
+	      this.prerelease = [];
+	    } else {
+	      this.prerelease = m[4].split('.').map((id) => {
+	        if (/^[0-9]+$/.test(id)) {
+	          const num = +id;
+	          if (num >= 0 && num < MAX_SAFE_INTEGER) {
+	            return num
+	          }
+	        }
+	        return id
+	      });
+	    }
+
+	    this.build = m[5] ? m[5].split('.') : [];
+	    this.format();
+	  }
+
+	  format () {
+	    this.version = `${this.major}.${this.minor}.${this.patch}`;
+	    if (this.prerelease.length) {
+	      this.version += `-${this.prerelease.join('.')}`;
+	    }
+	    return this.version
+	  }
+
+	  toString () {
+	    return this.version
+	  }
+
+	  compare (other) {
+	    debug('SemVer.compare', this.version, this.options, other);
+	    if (!(other instanceof SemVer)) {
+	      if (typeof other === 'string' && other === this.version) {
+	        return 0
+	      }
+	      other = new SemVer(other, this.options);
+	    }
+
+	    if (other.version === this.version) {
+	      return 0
+	    }
+
+	    return this.compareMain(other) || this.comparePre(other)
+	  }
+
+	  compareMain (other) {
+	    if (!(other instanceof SemVer)) {
+	      other = new SemVer(other, this.options);
+	    }
+
+	    return (
+	      compareIdentifiers(this.major, other.major) ||
+	      compareIdentifiers(this.minor, other.minor) ||
+	      compareIdentifiers(this.patch, other.patch)
+	    )
+	  }
+
+	  comparePre (other) {
+	    if (!(other instanceof SemVer)) {
+	      other = new SemVer(other, this.options);
+	    }
+
+	    // NOT having a prerelease is > having one
+	    if (this.prerelease.length && !other.prerelease.length) {
+	      return -1
+	    } else if (!this.prerelease.length && other.prerelease.length) {
+	      return 1
+	    } else if (!this.prerelease.length && !other.prerelease.length) {
+	      return 0
+	    }
+
+	    let i = 0;
+	    do {
+	      const a = this.prerelease[i];
+	      const b = other.prerelease[i];
+	      debug('prerelease compare', i, a, b);
+	      if (a === undefined && b === undefined) {
+	        return 0
+	      } else if (b === undefined) {
+	        return 1
+	      } else if (a === undefined) {
+	        return -1
+	      } else if (a === b) {
+	        continue
+	      } else {
+	        return compareIdentifiers(a, b)
+	      }
+	    } while (++i)
+	  }
+
+	  compareBuild (other) {
+	    if (!(other instanceof SemVer)) {
+	      other = new SemVer(other, this.options);
+	    }
+
+	    let i = 0;
+	    do {
+	      const a = this.build[i];
+	      const b = other.build[i];
+	      debug('prerelease compare', i, a, b);
+	      if (a === undefined && b === undefined) {
+	        return 0
+	      } else if (b === undefined) {
+	        return 1
