@@ -203700,3 +203700,2107 @@ function requireAgentBase () {
 	}
 
 	var _loop = function _loop() {
+	  var fn = _arr[_i];
+
+	  // Default setting for all requests from this agent
+	  Agent.prototype[fn] = function () {
+	    for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+	      args[_key] = arguments[_key];
+	    }
+
+	    this._defaults.push({
+	      fn: fn,
+	      args: args
+	    });
+
+	    return this;
+	  };
+	};
+
+	for (var _i = 0, _arr = ['use', 'on', 'once', 'set', 'query', 'type', 'accept', 'auth', 'withCredentials', 'sortQuery', 'retry', 'ok', 'redirects', 'timeout', 'buffer', 'serialize', 'parse', 'ca', 'key', 'pfx', 'cert', 'disableTLSCerts']; _i < _arr.length; _i++) {
+	  _loop();
+	}
+
+	Agent.prototype._setDefaults = function (request) {
+	  var _iterator = _createForOfIteratorHelper(this._defaults),
+	      _step;
+
+	  try {
+	    for (_iterator.s(); !(_step = _iterator.n()).done;) {
+	      var def = _step.value;
+	      request[def.fn].apply(request, _toConsumableArray(def.args));
+	    }
+	  } catch (err) {
+	    _iterator.e(err);
+	  } finally {
+	    _iterator.f();
+	  }
+	};
+
+	agentBase = Agent;
+	
+	return agentBase;
+}
+
+var agent;
+var hasRequiredAgent;
+
+function requireAgent () {
+	if (hasRequiredAgent) return agent;
+	hasRequiredAgent = 1;
+
+	function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it.return != null) it.return(); } finally { if (didErr) throw err; } } }; }
+
+	function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+	function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+	/**
+	 * Module dependencies.
+	 */
+	// eslint-disable-next-line node/no-deprecated-api
+	var _require = Url$2,
+	    parse = _require.parse;
+
+	var _require2 = requireCookiejar(),
+	    CookieJar = _require2.CookieJar;
+
+	var _require3 = requireCookiejar(),
+	    CookieAccessInfo = _require3.CookieAccessInfo;
+
+	var methods = methods$2;
+
+	var request = requireNode();
+
+	var AgentBase = requireAgentBase();
+	/**
+	 * Expose `Agent`.
+	 */
+
+
+	agent = Agent;
+	/**
+	 * Initialize a new `Agent`.
+	 *
+	 * @api public
+	 */
+
+	function Agent(options) {
+	  if (!(this instanceof Agent)) {
+	    return new Agent(options);
+	  }
+
+	  AgentBase.call(this);
+	  this.jar = new CookieJar();
+
+	  if (options) {
+	    if (options.ca) {
+	      this.ca(options.ca);
+	    }
+
+	    if (options.key) {
+	      this.key(options.key);
+	    }
+
+	    if (options.pfx) {
+	      this.pfx(options.pfx);
+	    }
+
+	    if (options.cert) {
+	      this.cert(options.cert);
+	    }
+
+	    if (options.rejectUnauthorized === false) {
+	      this.disableTLSCerts();
+	    }
+	  }
+	}
+
+	Agent.prototype = Object.create(AgentBase.prototype);
+	/**
+	 * Save the cookies in the given `res` to
+	 * the agent's cookie jar for persistence.
+	 *
+	 * @param {Response} res
+	 * @api private
+	 */
+
+	Agent.prototype._saveCookies = function (res) {
+	  var cookies = res.headers['set-cookie'];
+	  if (cookies) this.jar.setCookies(cookies);
+	};
+	/**
+	 * Attach cookies when available to the given `req`.
+	 *
+	 * @param {Request} req
+	 * @api private
+	 */
+
+
+	Agent.prototype._attachCookies = function (request_) {
+	  var url = parse(request_.url);
+	  var access = new CookieAccessInfo(url.hostname, url.pathname, url.protocol === 'https:');
+	  var cookies = this.jar.getCookies(access).toValueString();
+	  request_.cookies = cookies;
+	};
+
+	var _iterator = _createForOfIteratorHelper(methods),
+	    _step;
+
+	try {
+	  var _loop = function _loop() {
+	    var name = _step.value;
+	    var method = name.toUpperCase();
+
+	    Agent.prototype[name] = function (url, fn) {
+	      var request_ = new request.Request(method, url);
+	      request_.on('response', this._saveCookies.bind(this));
+	      request_.on('redirect', this._saveCookies.bind(this));
+	      request_.on('redirect', this._attachCookies.bind(this, request_));
+
+	      this._setDefaults(request_);
+
+	      this._attachCookies(request_);
+
+	      if (fn) {
+	        request_.end(fn);
+	      }
+
+	      return request_;
+	    };
+	  };
+
+	  for (_iterator.s(); !(_step = _iterator.n()).done;) {
+	    _loop();
+	  }
+	} catch (err) {
+	  _iterator.e(err);
+	} finally {
+	  _iterator.f();
+	}
+
+	Agent.prototype.del = Agent.prototype.delete;
+	
+	return agent;
+}
+
+var parsers = {};
+
+var urlencoded;
+var hasRequiredUrlencoded;
+
+function requireUrlencoded () {
+	if (hasRequiredUrlencoded) return urlencoded;
+	hasRequiredUrlencoded = 1;
+
+	/**
+	 * Module dependencies.
+	 */
+	var qs = lib$2;
+
+	urlencoded = function (res, fn) {
+	  res.text = '';
+	  res.setEncoding('ascii');
+	  res.on('data', function (chunk) {
+	    res.text += chunk;
+	  });
+	  res.on('end', function () {
+	    try {
+	      fn(null, qs.parse(res.text));
+	    } catch (err) {
+	      fn(err);
+	    }
+	  });
+	};
+	
+	return urlencoded;
+}
+
+var json$1;
+var hasRequiredJson;
+
+function requireJson () {
+	if (hasRequiredJson) return json$1;
+	hasRequiredJson = 1;
+
+	json$1 = function (res, fn) {
+	  res.text = '';
+	  res.setEncoding('utf8');
+	  res.on('data', function (chunk) {
+	    res.text += chunk;
+	  });
+	  res.on('end', function () {
+	    var body;
+	    var error;
+
+	    try {
+	      body = res.text && JSON.parse(res.text);
+	    } catch (err) {
+	      error = err; // issue #675: return the raw response if the response parsing fails
+
+	      error.rawResponse = res.text || null; // issue #876: return the http status code if the response parsing fails
+
+	      error.statusCode = res.statusCode;
+	    } finally {
+	      fn(error, body);
+	    }
+	  });
+	};
+	
+	return json$1;
+}
+
+var text;
+var hasRequiredText;
+
+function requireText () {
+	if (hasRequiredText) return text;
+	hasRequiredText = 1;
+
+	text = function (res, fn) {
+	  res.text = '';
+	  res.setEncoding('utf8');
+	  res.on('data', function (chunk) {
+	    res.text += chunk;
+	  });
+	  res.on('end', fn);
+	};
+	
+	return text;
+}
+
+var image;
+var hasRequiredImage;
+
+function requireImage () {
+	if (hasRequiredImage) return image;
+	hasRequiredImage = 1;
+
+	image = function (res, fn) {
+	  var data = []; // Binary data needs binary storage
+
+	  res.on('data', function (chunk) {
+	    data.push(chunk);
+	  });
+	  res.on('end', function () {
+	    fn(null, Buffer.concat(data));
+	  });
+	};
+	
+	return image;
+}
+
+var hasRequiredParsers;
+
+function requireParsers () {
+	if (hasRequiredParsers) return parsers;
+	hasRequiredParsers = 1;
+	(function (exports) {
+
+		exports['application/x-www-form-urlencoded'] = requireUrlencoded();
+		exports['application/json'] = requireJson();
+		exports.text = requireText();
+		exports['application/json-seq'] = exports.text;
+
+		var binary = requireImage();
+
+		exports['application/octet-stream'] = binary;
+		exports['application/pdf'] = binary;
+		exports.image = binary;
+		
+} (parsers));
+	return parsers;
+}
+
+var hasRequiredNode;
+
+function requireNode () {
+	if (hasRequiredNode) return nodeExports;
+	hasRequiredNode = 1;
+	(function (module, exports) {
+
+		function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest(); }
+
+		function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+		function _iterableToArrayLimit(arr, i) { var _i = arr == null ? null : typeof Symbol !== "undefined" && arr[Symbol.iterator] || arr["@@iterator"]; if (_i == null) return; var _arr = []; var _n = true; var _d = false; var _s, _e; try { for (_i = _i.call(arr); !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+		function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+		function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e2) { throw _e2; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e3) { didErr = true; err = _e3; }, f: function f() { try { if (!normalCompletion && it.return != null) it.return(); } finally { if (didErr) throw err; } } }; }
+
+		function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread(); }
+
+		function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+		function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+		function _iterableToArray(iter) { if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter); }
+
+		function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) return _arrayLikeToArray(arr); }
+
+		function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+		function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
+
+		/**
+		 * Module dependencies.
+		 */
+		// eslint-disable-next-line node/no-deprecated-api
+		var _require = Url$2,
+		    parse = _require.parse,
+		    format = _require.format,
+		    resolve = _require.resolve;
+
+		var Stream = Stream$2;
+
+		var https = https$3;
+
+		var http = http$6;
+
+		var fs = require$$0$e;
+
+		var zlib = zlib$2;
+
+		var util = require$$1$7;
+
+		var qs = lib$2;
+
+		var mime = requireMime();
+
+		var methods = methods$2;
+
+		var FormData = requireForm_data();
+
+		var formidable = requireSrc();
+
+		var debug = srcExports$4('superagent');
+
+		var CookieJar = requireCookiejar();
+
+		var semverGte = requireGte();
+
+		var safeStringify = fastSafeStringify;
+
+		var utils = requireUtils();
+
+		var RequestBase = requireRequestBase();
+
+		var _require2 = requireUnzip(),
+		    unzip = _require2.unzip;
+
+		var Response = requireResponse();
+
+		var mixin = utils.mixin,
+		    hasOwn = utils.hasOwn;
+		var http2;
+		if (semverGte(process.version, 'v10.10.0')) http2 = requireHttp2wrapper();
+
+		function request(method, url) {
+		  // callback
+		  if (typeof url === 'function') {
+		    return new exports.Request('GET', method).end(url);
+		  } // url first
+
+
+		  if (arguments.length === 1) {
+		    return new exports.Request('GET', method);
+		  }
+
+		  return new exports.Request(method, url);
+		}
+
+		module.exports = request;
+		exports = module.exports;
+		/**
+		 * Expose `Request`.
+		 */
+
+		exports.Request = Request;
+		/**
+		 * Expose the agent function
+		 */
+
+		exports.agent = requireAgent();
+		/**
+		 * Noop.
+		 */
+
+		function noop() {}
+		/**
+		 * Expose `Response`.
+		 */
+
+
+		exports.Response = Response;
+		/**
+		 * Define "form" mime type.
+		 */
+
+		mime.define({
+		  'application/x-www-form-urlencoded': ['form', 'urlencoded', 'form-data']
+		}, true);
+		/**
+		 * Protocol map.
+		 */
+
+		exports.protocols = {
+		  'http:': http,
+		  'https:': https,
+		  'http2:': http2
+		};
+		/**
+		 * Default serialization map.
+		 *
+		 *     superagent.serialize['application/xml'] = function(obj){
+		 *       return 'generated xml here';
+		 *     };
+		 *
+		 */
+
+		exports.serialize = {
+		  'application/x-www-form-urlencoded': qs.stringify,
+		  'application/json': safeStringify
+		};
+		/**
+		 * Default parsers.
+		 *
+		 *     superagent.parse['application/xml'] = function(res, fn){
+		 *       fn(null, res);
+		 *     };
+		 *
+		 */
+
+		exports.parse = requireParsers();
+		/**
+		 * Default buffering map. Can be used to set certain
+		 * response types to buffer/not buffer.
+		 *
+		 *     superagent.buffer['application/xml'] = true;
+		 */
+
+		exports.buffer = {};
+		/**
+		 * Initialize internal header tracking properties on a request instance.
+		 *
+		 * @param {Object} req the instance
+		 * @api private
+		 */
+
+		function _initHeaders(request_) {
+		  request_._header = {// coerces header names to lowercase
+		  };
+		  request_.header = {// preserves header name case
+		  };
+		}
+		/**
+		 * Initialize a new `Request` with the given `method` and `url`.
+		 *
+		 * @param {String} method
+		 * @param {String|Object} url
+		 * @api public
+		 */
+
+
+		function Request(method, url) {
+		  Stream.call(this);
+		  if (typeof url !== 'string') url = format(url);
+		  this._enableHttp2 = Boolean(process.env.HTTP2_TEST); // internal only
+
+		  this._agent = false;
+		  this._formData = null;
+		  this.method = method;
+		  this.url = url;
+
+		  _initHeaders(this);
+
+		  this.writable = true;
+		  this._redirects = 0;
+		  this.redirects(method === 'HEAD' ? 0 : 5);
+		  this.cookies = '';
+		  this.qs = {};
+		  this._query = [];
+		  this.qsRaw = this._query; // Unused, for backwards compatibility only
+
+		  this._redirectList = [];
+		  this._streamRequest = false;
+		  this._lookup = undefined;
+		  this.once('end', this.clearTimeout.bind(this));
+		}
+		/**
+		 * Inherit from `Stream` (which inherits from `EventEmitter`).
+		 * Mixin `RequestBase`.
+		 */
+
+
+		util.inherits(Request, Stream);
+		mixin(Request.prototype, RequestBase.prototype);
+		/**
+		 * Enable or Disable http2.
+		 *
+		 * Enable http2.
+		 *
+		 * ``` js
+		 * request.get('http://localhost/')
+		 *   .http2()
+		 *   .end(callback);
+		 *
+		 * request.get('http://localhost/')
+		 *   .http2(true)
+		 *   .end(callback);
+		 * ```
+		 *
+		 * Disable http2.
+		 *
+		 * ``` js
+		 * request = request.http2();
+		 * request.get('http://localhost/')
+		 *   .http2(false)
+		 *   .end(callback);
+		 * ```
+		 *
+		 * @param {Boolean} enable
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+		Request.prototype.http2 = function (bool) {
+		  if (exports.protocols['http2:'] === undefined) {
+		    throw new Error('superagent: this version of Node.js does not support http2');
+		  }
+
+		  this._enableHttp2 = bool === undefined ? true : bool;
+		  return this;
+		};
+		/**
+		 * Queue the given `file` as an attachment to the specified `field`,
+		 * with optional `options` (or filename).
+		 *
+		 * ``` js
+		 * request.post('http://localhost/upload')
+		 *   .attach('field', Buffer.from('<b>Hello world</b>'), 'hello.html')
+		 *   .end(callback);
+		 * ```
+		 *
+		 * A filename may also be used:
+		 *
+		 * ``` js
+		 * request.post('http://localhost/upload')
+		 *   .attach('files', 'image.jpg')
+		 *   .end(callback);
+		 * ```
+		 *
+		 * @param {String} field
+		 * @param {String|fs.ReadStream|Buffer} file
+		 * @param {String|Object} options
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.attach = function (field, file, options) {
+		  var _this = this;
+
+		  if (file) {
+		    if (this._data) {
+		      throw new Error("superagent can't mix .send() and .attach()");
+		    }
+
+		    var o = options || {};
+
+		    if (typeof options === 'string') {
+		      o = {
+		        filename: options
+		      };
+		    }
+
+		    if (typeof file === 'string') {
+		      if (!o.filename) o.filename = file;
+		      debug('creating `fs.ReadStream` instance for file: %s', file);
+		      file = fs.createReadStream(file);
+		      file.on('error', function (error) {
+		        var formData = _this._getFormData();
+
+		        formData.emit('error', error);
+		      });
+		    } else if (!o.filename && file.path) {
+		      o.filename = file.path;
+		    }
+
+		    this._getFormData().append(field, file, o);
+		  }
+
+		  return this;
+		};
+
+		Request.prototype._getFormData = function () {
+		  var _this2 = this;
+
+		  if (!this._formData) {
+		    this._formData = new FormData();
+
+		    this._formData.on('error', function (error) {
+		      debug('FormData error', error);
+
+		      if (_this2.called) {
+		        // The request has already finished and the callback was called.
+		        // Silently ignore the error.
+		        return;
+		      }
+
+		      _this2.callback(error);
+
+		      _this2.abort();
+		    });
+		  }
+
+		  return this._formData;
+		};
+		/**
+		 * Gets/sets the `Agent` to use for this HTTP request. The default (if this
+		 * function is not called) is to opt out of connection pooling (`agent: false`).
+		 *
+		 * @param {http.Agent} agent
+		 * @return {http.Agent}
+		 * @api public
+		 */
+
+
+		Request.prototype.agent = function (agent) {
+		  if (arguments.length === 0) return this._agent;
+		  this._agent = agent;
+		  return this;
+		};
+		/**
+		 * Gets/sets the `lookup` function to use custom DNS resolver.
+		 *
+		 * @param {Function} lookup
+		 * @return {Function}
+		 * @api public
+		 */
+
+
+		Request.prototype.lookup = function (lookup) {
+		  if (arguments.length === 0) return this._lookup;
+		  this._lookup = lookup;
+		  return this;
+		};
+		/**
+		 * Set _Content-Type_ response header passed through `mime.getType()`.
+		 *
+		 * Examples:
+		 *
+		 *      request.post('/')
+		 *        .type('xml')
+		 *        .send(xmlstring)
+		 *        .end(callback);
+		 *
+		 *      request.post('/')
+		 *        .type('json')
+		 *        .send(jsonstring)
+		 *        .end(callback);
+		 *
+		 *      request.post('/')
+		 *        .type('application/json')
+		 *        .send(jsonstring)
+		 *        .end(callback);
+		 *
+		 * @param {String} type
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.type = function (type) {
+		  return this.set('Content-Type', type.includes('/') ? type : mime.getType(type));
+		};
+		/**
+		 * Set _Accept_ response header passed through `mime.getType()`.
+		 *
+		 * Examples:
+		 *
+		 *      superagent.types.json = 'application/json';
+		 *
+		 *      request.get('/agent')
+		 *        .accept('json')
+		 *        .end(callback);
+		 *
+		 *      request.get('/agent')
+		 *        .accept('application/json')
+		 *        .end(callback);
+		 *
+		 * @param {String} accept
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.accept = function (type) {
+		  return this.set('Accept', type.includes('/') ? type : mime.getType(type));
+		};
+		/**
+		 * Add query-string `val`.
+		 *
+		 * Examples:
+		 *
+		 *   request.get('/shoes')
+		 *     .query('size=10')
+		 *     .query({ color: 'blue' })
+		 *
+		 * @param {Object|String} val
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.query = function (value) {
+		  if (typeof value === 'string') {
+		    this._query.push(value);
+		  } else {
+		    Object.assign(this.qs, value);
+		  }
+
+		  return this;
+		};
+		/**
+		 * Write raw `data` / `encoding` to the socket.
+		 *
+		 * @param {Buffer|String} data
+		 * @param {String} encoding
+		 * @return {Boolean}
+		 * @api public
+		 */
+
+
+		Request.prototype.write = function (data, encoding) {
+		  var request_ = this.request();
+
+		  if (!this._streamRequest) {
+		    this._streamRequest = true;
+		  }
+
+		  return request_.write(data, encoding);
+		};
+		/**
+		 * Pipe the request body to `stream`.
+		 *
+		 * @param {Stream} stream
+		 * @param {Object} options
+		 * @return {Stream}
+		 * @api public
+		 */
+
+
+		Request.prototype.pipe = function (stream, options) {
+		  this.piped = true; // HACK...
+
+		  this.buffer(false);
+		  this.end();
+		  return this._pipeContinue(stream, options);
+		};
+
+		Request.prototype._pipeContinue = function (stream, options) {
+		  var _this3 = this;
+
+		  this.req.once('response', function (res) {
+		    // redirect
+		    if (isRedirect(res.statusCode) && _this3._redirects++ !== _this3._maxRedirects) {
+		      return _this3._redirect(res) === _this3 ? _this3._pipeContinue(stream, options) : undefined;
+		    }
+
+		    _this3.res = res;
+
+		    _this3._emitResponse();
+
+		    if (_this3._aborted) return;
+
+		    if (_this3._shouldUnzip(res)) {
+		      var unzipObject = zlib.createUnzip();
+		      unzipObject.on('error', function (error) {
+		        if (error && error.code === 'Z_BUF_ERROR') {
+		          // unexpected end of file is ignored by browsers and curl
+		          stream.emit('end');
+		          return;
+		        }
+
+		        stream.emit('error', error);
+		      });
+		      res.pipe(unzipObject).pipe(stream, options);
+		    } else {
+		      res.pipe(stream, options);
+		    }
+
+		    res.once('end', function () {
+		      _this3.emit('end');
+		    });
+		  });
+		  return stream;
+		};
+		/**
+		 * Enable / disable buffering.
+		 *
+		 * @return {Boolean} [val]
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.buffer = function (value) {
+		  this._buffer = value !== false;
+		  return this;
+		};
+		/**
+		 * Redirect to `url
+		 *
+		 * @param {IncomingMessage} res
+		 * @return {Request} for chaining
+		 * @api private
+		 */
+
+
+		Request.prototype._redirect = function (res) {
+		  var url = res.headers.location;
+
+		  if (!url) {
+		    return this.callback(new Error('No location header for redirect'), res);
+		  }
+
+		  debug('redirect %s -> %s', this.url, url); // location
+
+		  url = resolve(this.url, url); // ensure the response is being consumed
+		  // this is required for Node v0.10+
+
+		  res.resume();
+		  var headers = this.req.getHeaders ? this.req.getHeaders() : this.req._headers;
+		  var changesOrigin = parse(url).host !== parse(this.url).host; // implementation of 302 following defacto standard
+
+		  if (res.statusCode === 301 || res.statusCode === 302) {
+		    // strip Content-* related fields
+		    // in case of POST etc
+		    headers = utils.cleanHeader(headers, changesOrigin); // force GET
+
+		    this.method = this.method === 'HEAD' ? 'HEAD' : 'GET'; // clear data
+
+		    this._data = null;
+		  } // 303 is always GET
+
+
+		  if (res.statusCode === 303) {
+		    // strip Content-* related fields
+		    // in case of POST etc
+		    headers = utils.cleanHeader(headers, changesOrigin); // force method
+
+		    this.method = 'GET'; // clear data
+
+		    this._data = null;
+		  } // 307 preserves method
+		  // 308 preserves method
+
+
+		  delete headers.host;
+		  delete this.req;
+		  delete this._formData; // remove all add header except User-Agent
+
+		  _initHeaders(this); // redirect
+
+
+		  this._endCalled = false;
+		  this.url = url;
+		  this.qs = {};
+		  this._query.length = 0;
+		  this.set(headers);
+		  this.emit('redirect', res);
+
+		  this._redirectList.push(this.url);
+
+		  this.end(this._callback);
+		  return this;
+		};
+		/**
+		 * Set Authorization field value with `user` and `pass`.
+		 *
+		 * Examples:
+		 *
+		 *   .auth('tobi', 'learnboost')
+		 *   .auth('tobi:learnboost')
+		 *   .auth('tobi')
+		 *   .auth(accessToken, { type: 'bearer' })
+		 *
+		 * @param {String} user
+		 * @param {String} [pass]
+		 * @param {Object} [options] options with authorization type 'basic' or 'bearer' ('basic' is default)
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.auth = function (user, pass, options) {
+		  if (arguments.length === 1) pass = '';
+
+		  if (_typeof(pass) === 'object' && pass !== null) {
+		    // pass is optional and can be replaced with options
+		    options = pass;
+		    pass = '';
+		  }
+
+		  if (!options) {
+		    options = {
+		      type: 'basic'
+		    };
+		  }
+
+		  var encoder = function encoder(string) {
+		    return Buffer.from(string).toString('base64');
+		  };
+
+		  return this._auth(user, pass, options, encoder);
+		};
+		/**
+		 * Set the certificate authority option for https request.
+		 *
+		 * @param {Buffer | Array} cert
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.ca = function (cert) {
+		  this._ca = cert;
+		  return this;
+		};
+		/**
+		 * Set the client certificate key option for https request.
+		 *
+		 * @param {Buffer | String} cert
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.key = function (cert) {
+		  this._key = cert;
+		  return this;
+		};
+		/**
+		 * Set the key, certificate, and CA certs of the client in PFX or PKCS12 format.
+		 *
+		 * @param {Buffer | String} cert
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.pfx = function (cert) {
+		  if (_typeof(cert) === 'object' && !Buffer.isBuffer(cert)) {
+		    this._pfx = cert.pfx;
+		    this._passphrase = cert.passphrase;
+		  } else {
+		    this._pfx = cert;
+		  }
+
+		  return this;
+		};
+		/**
+		 * Set the client certificate option for https request.
+		 *
+		 * @param {Buffer | String} cert
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.cert = function (cert) {
+		  this._cert = cert;
+		  return this;
+		};
+		/**
+		 * Do not reject expired or invalid TLS certs.
+		 * sets `rejectUnauthorized=true`. Be warned that this allows MITM attacks.
+		 *
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype.disableTLSCerts = function () {
+		  this._disableTLSCerts = true;
+		  return this;
+		};
+		/**
+		 * Return an http[s] request.
+		 *
+		 * @return {OutgoingMessage}
+		 * @api private
+		 */
+		// eslint-disable-next-line complexity
+
+
+		Request.prototype.request = function () {
+		  var _this4 = this;
+
+		  if (this.req) return this.req;
+		  var options = {};
+
+		  try {
+		    var query = qs.stringify(this.qs, {
+		      indices: false,
+		      strictNullHandling: true
+		    });
+
+		    if (query) {
+		      this.qs = {};
+
+		      this._query.push(query);
+		    }
+
+		    this._finalizeQueryString();
+		  } catch (err) {
+		    return this.emit('error', err);
+		  }
+
+		  var url = this.url;
+		  var retries = this._retries; // Capture backticks as-is from the final query string built above.
+		  // Note: this'll only find backticks entered in req.query(String)
+		  // calls, because qs.stringify unconditionally encodes backticks.
+
+		  var queryStringBackticks;
+
+		  if (url.includes('`')) {
+		    var queryStartIndex = url.indexOf('?');
+
+		    if (queryStartIndex !== -1) {
+		      var queryString = url.slice(queryStartIndex + 1);
+		      queryStringBackticks = queryString.match(/`|%60/g);
+		    }
+		  } // default to http://
+
+
+		  if (url.indexOf('http') !== 0) url = "http://".concat(url);
+		  url = parse(url); // See https://github.com/visionmedia/superagent/issues/1367
+
+		  if (queryStringBackticks) {
+		    var i = 0;
+		    url.query = url.query.replace(/%60/g, function () {
+		      return queryStringBackticks[i++];
+		    });
+		    url.search = "?".concat(url.query);
+		    url.path = url.pathname + url.search;
+		  } // support unix sockets
+
+
+		  if (/^https?\+unix:/.test(url.protocol) === true) {
+		    // get the protocol
+		    url.protocol = "".concat(url.protocol.split('+')[0], ":"); // get the socket, path
+
+		    var unixParts = url.path.match(/^([^/]+)(.+)$/);
+		    options.socketPath = unixParts[1].replace(/%2F/g, '/');
+		    url.path = unixParts[2];
+		  } // Override IP address of a hostname
+
+
+		  if (this._connectOverride) {
+		    var _url = url,
+		        hostname = _url.hostname;
+		    var match = hostname in this._connectOverride ? this._connectOverride[hostname] : this._connectOverride['*'];
+
+		    if (match) {
+		      // backup the real host
+		      if (!this._header.host) {
+		        this.set('host', url.host);
+		      }
+
+		      var newHost;
+		      var newPort;
+
+		      if (_typeof(match) === 'object') {
+		        newHost = match.host;
+		        newPort = match.port;
+		      } else {
+		        newHost = match;
+		        newPort = url.port;
+		      } // wrap [ipv6]
+
+
+		      url.host = /:/.test(newHost) ? "[".concat(newHost, "]") : newHost;
+
+		      if (newPort) {
+		        url.host += ":".concat(newPort);
+		        url.port = newPort;
+		      }
+
+		      url.hostname = newHost;
+		    }
+		  } // options
+
+
+		  options.method = this.method;
+		  options.port = url.port;
+		  options.path = url.path;
+		  options.host = url.hostname;
+		  options.ca = this._ca;
+		  options.key = this._key;
+		  options.pfx = this._pfx;
+		  options.cert = this._cert;
+		  options.passphrase = this._passphrase;
+		  options.agent = this._agent;
+		  options.lookup = this._lookup;
+		  options.rejectUnauthorized = typeof this._disableTLSCerts === 'boolean' ? !this._disableTLSCerts : process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0'; // Allows request.get('https://1.2.3.4/').set('Host', 'example.com')
+
+		  if (this._header.host) {
+		    options.servername = this._header.host.replace(/:\d+$/, '');
+		  }
+
+		  if (this._trustLocalhost && /^(?:localhost|127\.0\.0\.\d+|(0*:)+:0*1)$/.test(url.hostname)) {
+		    options.rejectUnauthorized = false;
+		  } // initiate request
+
+
+		  var module_ = this._enableHttp2 ? exports.protocols['http2:'].setProtocol(url.protocol) : exports.protocols[url.protocol]; // request
+
+		  this.req = module_.request(options);
+		  var req = this.req; // set tcp no delay
+
+		  req.setNoDelay(true);
+
+		  if (options.method !== 'HEAD') {
+		    req.setHeader('Accept-Encoding', 'gzip, deflate');
+		  }
+
+		  this.protocol = url.protocol;
+		  this.host = url.host; // expose events
+
+		  req.once('drain', function () {
+		    _this4.emit('drain');
+		  });
+		  req.on('error', function (error) {
+		    // flag abortion here for out timeouts
+		    // because node will emit a faux-error "socket hang up"
+		    // when request is aborted before a connection is made
+		    if (_this4._aborted) return; // if not the same, we are in the **old** (cancelled) request,
+		    // so need to continue (same as for above)
+
+		    if (_this4._retries !== retries) return; // if we've received a response then we don't want to let
+		    // an error in the request blow up the response
+
+		    if (_this4.response) return;
+
+		    _this4.callback(error);
+		  }); // auth
+
+		  if (url.auth) {
+		    var auth = url.auth.split(':');
+		    this.auth(auth[0], auth[1]);
+		  }
+
+		  if (this.username && this.password) {
+		    this.auth(this.username, this.password);
+		  }
+
+		  for (var key in this.header) {
+		    if (hasOwn(this.header, key)) req.setHeader(key, this.header[key]);
+		  } // add cookies
+
+
+		  if (this.cookies) {
+		    if (hasOwn(this._header, 'cookie')) {
+		      // merge
+		      var temporaryJar = new CookieJar.CookieJar();
+		      temporaryJar.setCookies(this._header.cookie.split(';'));
+		      temporaryJar.setCookies(this.cookies.split(';'));
+		      req.setHeader('Cookie', temporaryJar.getCookies(CookieJar.CookieAccessInfo.All).toValueString());
+		    } else {
+		      req.setHeader('Cookie', this.cookies);
+		    }
+		  }
+
+		  return req;
+		};
+		/**
+		 * Invoke the callback with `err` and `res`
+		 * and handle arity check.
+		 *
+		 * @param {Error} err
+		 * @param {Response} res
+		 * @api private
+		 */
+
+
+		Request.prototype.callback = function (error, res) {
+		  if (this._shouldRetry(error, res)) {
+		    return this._retry();
+		  } // Avoid the error which is emitted from 'socket hang up' to cause the fn undefined error on JS runtime.
+
+
+		  var fn = this._callback || noop;
+		  this.clearTimeout();
+		  if (this.called) return console.warn('superagent: double callback bug');
+		  this.called = true;
+
+		  if (!error) {
+		    try {
+		      if (!this._isResponseOK(res)) {
+		        var message = 'Unsuccessful HTTP response';
+
+		        if (res) {
+		          message = http.STATUS_CODES[res.status] || message;
+		        }
+
+		        error = new Error(message);
+		        error.status = res ? res.status : undefined;
+		      }
+		    } catch (err) {
+		      error = err;
+		      error.status = error.status || (res ? res.status : undefined);
+		    }
+		  } // It's important that the callback is called outside try/catch
+		  // to avoid double callback
+
+
+		  if (!error) {
+		    return fn(null, res);
+		  }
+
+		  error.response = res;
+		  if (this._maxRetries) error.retries = this._retries - 1; // only emit error event if there is a listener
+		  // otherwise we assume the callback to `.end()` will get the error
+
+		  if (error && this.listeners('error').length > 0) {
+		    this.emit('error', error);
+		  }
+
+		  fn(error, res);
+		};
+		/**
+		 * Check if `obj` is a host object,
+		 *
+		 * @param {Object} obj host object
+		 * @return {Boolean} is a host object
+		 * @api private
+		 */
+
+
+		Request.prototype._isHost = function (object) {
+		  return Buffer.isBuffer(object) || object instanceof Stream || object instanceof FormData;
+		};
+		/**
+		 * Initiate request, invoking callback `fn(err, res)`
+		 * with an instanceof `Response`.
+		 *
+		 * @param {Function} fn
+		 * @return {Request} for chaining
+		 * @api public
+		 */
+
+
+		Request.prototype._emitResponse = function (body, files) {
+		  var response = new Response(this);
+		  this.response = response;
+		  response.redirects = this._redirectList;
+
+		  if (undefined !== body) {
+		    response.body = body;
+		  }
+
+		  response.files = files;
+
+		  if (this._endCalled) {
+		    response.pipe = function () {
+		      throw new Error("end() has already been called, so it's too late to start piping");
+		    };
+		  }
+
+		  this.emit('response', response);
+		  return response;
+		};
+
+		Request.prototype.end = function (fn) {
+		  this.request();
+		  debug('%s %s', this.method, this.url);
+
+		  if (this._endCalled) {
+		    throw new Error('.end() was called twice. This is not supported in superagent');
+		  }
+
+		  this._endCalled = true; // store callback
+
+		  this._callback = fn || noop;
+
+		  this._end();
+		};
+
+		Request.prototype._end = function () {
+		  var _this5 = this;
+
+		  if (this._aborted) return this.callback(new Error('The request has been aborted even before .end() was called'));
+		  var data = this._data;
+		  var req = this.req;
+		  var method = this.method;
+
+		  this._setTimeouts(); // body
+
+
+		  if (method !== 'HEAD' && !req._headerSent) {
+		    // serialize stuff
+		    if (typeof data !== 'string') {
+		      var contentType = req.getHeader('Content-Type'); // Parse out just the content type from the header (ignore the charset)
+
+		      if (contentType) contentType = contentType.split(';')[0];
+		      var serialize = this._serializer || exports.serialize[contentType];
+
+		      if (!serialize && isJSON(contentType)) {
+		        serialize = exports.serialize['application/json'];
+		      }
+
+		      if (serialize) data = serialize(data);
+		    } // content-length
+
+
+		    if (data && !req.getHeader('Content-Length')) {
+		      req.setHeader('Content-Length', Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data));
+		    }
+		  } // response
+		  // eslint-disable-next-line complexity
+
+
+		  req.once('response', function (res) {
+		    debug('%s %s -> %s', _this5.method, _this5.url, res.statusCode);
+
+		    if (_this5._responseTimeoutTimer) {
+		      clearTimeout(_this5._responseTimeoutTimer);
+		    }
+
+		    if (_this5.piped) {
+		      return;
+		    }
+
+		    var max = _this5._maxRedirects;
+		    var mime = utils.type(res.headers['content-type'] || '') || 'text/plain';
+		    var type = mime.split('/')[0];
+		    if (type) type = type.toLowerCase().trim();
+		    var multipart = type === 'multipart';
+		    var redirect = isRedirect(res.statusCode);
+		    var responseType = _this5._responseType;
+		    _this5.res = res; // redirect
+
+		    if (redirect && _this5._redirects++ !== max) {
+		      return _this5._redirect(res);
+		    }
+
+		    if (_this5.method === 'HEAD') {
+		      _this5.emit('end');
+
+		      _this5.callback(null, _this5._emitResponse());
+
+		      return;
+		    } // zlib support
+
+
+		    if (_this5._shouldUnzip(res)) {
+		      unzip(req, res);
+		    }
+
+		    var buffer = _this5._buffer;
+
+		    if (buffer === undefined && mime in exports.buffer) {
+		      buffer = Boolean(exports.buffer[mime]);
+		    }
+
+		    var parser = _this5._parser;
+
+		    if (undefined === buffer && parser) {
+		      console.warn("A custom superagent parser has been set, but buffering strategy for the parser hasn't been configured. Call `req.buffer(true or false)` or set `superagent.buffer[mime] = true or false`");
+		      buffer = true;
+		    }
+
+		    if (!parser) {
+		      if (responseType) {
+		        parser = exports.parse.image; // It's actually a generic Buffer
+
+		        buffer = true;
+		      } else if (multipart) {
+		        var form = formidable();
+		        parser = form.parse.bind(form);
+		        buffer = true;
+		      } else if (isBinary(mime)) {
+		        parser = exports.parse.image;
+		        buffer = true; // For backwards-compatibility buffering default is ad-hoc MIME-dependent
+		      } else if (exports.parse[mime]) {
+		        parser = exports.parse[mime];
+		      } else if (type === 'text') {
+		        parser = exports.parse.text;
+		        buffer = buffer !== false; // everyone wants their own white-labeled json
+		      } else if (isJSON(mime)) {
+		        parser = exports.parse['application/json'];
+		        buffer = buffer !== false;
+		      } else if (buffer) {
+		        parser = exports.parse.text;
+		      } else if (undefined === buffer) {
+		        parser = exports.parse.image; // It's actually a generic Buffer
+
+		        buffer = true;
+		      }
+		    } // by default only buffer text/*, json and messed up thing from hell
+
+
+		    if (undefined === buffer && isText(mime) || isJSON(mime)) {
+		      buffer = true;
+		    }
+
+		    _this5._resBuffered = buffer;
+		    var parserHandlesEnd = false;
+
+		    if (buffer) {
+		      // Protectiona against zip bombs and other nuisance
+		      var responseBytesLeft = _this5._maxResponseSize || 200000000;
+		      res.on('data', function (buf) {
+		        responseBytesLeft -= buf.byteLength || buf.length > 0 ? buf.length : 0;
+
+		        if (responseBytesLeft < 0) {
+		          // This will propagate through error event
+		          var error = new Error('Maximum response size reached');
+		          error.code = 'ETOOLARGE'; // Parsers aren't required to observe error event,
+		          // so would incorrectly report success
+
+		          parserHandlesEnd = false; // Will not emit error event
+
+		          res.destroy(error); // so we do callback now
+
+		          _this5.callback(error, null);
+		        }
+		      });
+		    }
+
+		    if (parser) {
+		      try {
+		        // Unbuffered parsers are supposed to emit response early,
+		        // which is weird BTW, because response.body won't be there.
+		        parserHandlesEnd = buffer;
+		        parser(res, function (error, object, files) {
+		          if (_this5.timedout) {
+		            // Timeout has already handled all callbacks
+		            return;
+		          } // Intentional (non-timeout) abort is supposed to preserve partial response,
+		          // even if it doesn't parse.
+
+
+		          if (error && !_this5._aborted) {
+		            return _this5.callback(error);
+		          }
+
+		          if (parserHandlesEnd) {
+		            _this5.emit('end');
+
+		            _this5.callback(null, _this5._emitResponse(object, files));
+		          }
+		        });
+		      } catch (err) {
+		        _this5.callback(err);
+
+		        return;
+		      }
+		    }
+
+		    _this5.res = res; // unbuffered
+
+		    if (!buffer) {
+		      debug('unbuffered %s %s', _this5.method, _this5.url);
+
+		      _this5.callback(null, _this5._emitResponse());
+
+		      if (multipart) return; // allow multipart to handle end event
+
+		      res.once('end', function () {
+		        debug('end %s %s', _this5.method, _this5.url);
+
+		        _this5.emit('end');
+		      });
+		      return;
+		    } // terminating events
+
+
+		    res.once('error', function (error) {
+		      parserHandlesEnd = false;
+
+		      _this5.callback(error, null);
+		    });
+		    if (!parserHandlesEnd) res.once('end', function () {
+		      debug('end %s %s', _this5.method, _this5.url); // TODO: unless buffering emit earlier to stream
+
+		      _this5.emit('end');
+
+		      _this5.callback(null, _this5._emitResponse());
+		    });
+		  });
+		  this.emit('request', this);
+
+		  var getProgressMonitor = function getProgressMonitor() {
+		    var lengthComputable = true;
+		    var total = req.getHeader('Content-Length');
+		    var loaded = 0;
+		    var progress = new Stream.Transform();
+
+		    progress._transform = function (chunk, encoding, callback) {
+		      loaded += chunk.length;
+
+		      _this5.emit('progress', {
+		        direction: 'upload',
+		        lengthComputable: lengthComputable,
+		        loaded: loaded,
+		        total: total
+		      });
+
+		      callback(null, chunk);
+		    };
+
+		    return progress;
+		  };
+
+		  var bufferToChunks = function bufferToChunks(buffer) {
+		    var chunkSize = 16 * 1024; // default highWaterMark value
+
+		    var chunking = new Stream.Readable();
+		    var totalLength = buffer.length;
+		    var remainder = totalLength % chunkSize;
+		    var cutoff = totalLength - remainder;
+
+		    for (var i = 0; i < cutoff; i += chunkSize) {
+		      var chunk = buffer.slice(i, i + chunkSize);
+		      chunking.push(chunk);
+		    }
+
+		    if (remainder > 0) {
+		      var remainderBuffer = buffer.slice(-remainder);
+		      chunking.push(remainderBuffer);
+		    }
+
+		    chunking.push(null); // no more data
+
+		    return chunking;
+		  }; // if a FormData instance got created, then we send that as the request body
+
+
+		  var formData = this._formData;
+
+		  if (formData) {
+		    // set headers
+		    var headers = formData.getHeaders();
+
+		    for (var i in headers) {
+		      if (hasOwn(headers, i)) {
+		        debug('setting FormData header: "%s: %s"', i, headers[i]);
+		        req.setHeader(i, headers[i]);
+		      }
+		    } // attempt to get "Content-Length" header
+
+
+		    formData.getLength(function (error, length) {
+		      // TODO: Add chunked encoding when no length (if err)
+		      if (error) debug('formData.getLength had error', error, length);
+		      debug('got FormData Content-Length: %s', length);
+
+		      if (typeof length === 'number') {
+		        req.setHeader('Content-Length', length);
+		      }
+
+		      formData.pipe(getProgressMonitor()).pipe(req);
+		    });
+		  } else if (Buffer.isBuffer(data)) {
+		    bufferToChunks(data).pipe(getProgressMonitor()).pipe(req);
+		  } else {
+		    req.end(data);
+		  }
+		}; // Check whether response has a non-0-sized gzip-encoded body
+
+
+		Request.prototype._shouldUnzip = function (res) {
+		  if (res.statusCode === 204 || res.statusCode === 304) {
+		    // These aren't supposed to have any body
+		    return false;
+		  } // header content is a string, and distinction between 0 and no information is crucial
+
+
+		  if (res.headers['content-length'] === '0') {
+		    // We know that the body is empty (unfortunately, this check does not cover chunked encoding)
+		    return false;
+		  } // console.log(res);
+
+
+		  return /^\s*(?:deflate|gzip)\s*$/.test(res.headers['content-encoding']);
+		};
+		/**
+		 * Overrides DNS for selected hostnames. Takes object mapping hostnames to IP addresses.
+		 *
+		 * When making a request to a URL with a hostname exactly matching a key in the object,
+		 * use the given IP address to connect, instead of using DNS to resolve the hostname.
+		 *
+		 * A special host `*` matches every hostname (keep redirects in mind!)
+		 *
+		 *      request.connect({
+		 *        'test.example.com': '127.0.0.1',
+		 *        'ipv6.example.com': '::1',
+		 *      })
+		 */
+
+
+		Request.prototype.connect = function (connectOverride) {
+		  if (typeof connectOverride === 'string') {
+		    this._connectOverride = {
+		      '*': connectOverride
+		    };
+		  } else if (_typeof(connectOverride) === 'object') {
+		    this._connectOverride = connectOverride;
+		  } else {
+		    this._connectOverride = undefined;
+		  }
+
+		  return this;
+		};
+
+		Request.prototype.trustLocalhost = function (toggle) {
+		  this._trustLocalhost = toggle === undefined ? true : toggle;
+		  return this;
+		}; // generate HTTP verb methods
+
+
+		if (!methods.includes('del')) {
+		  // create a copy so we don't cause conflicts with
+		  // other packages using the methods package and
+		  // npm 3.x
+		  methods = _toConsumableArray(methods);
+		  methods.push('del');
+		}
+
+		var _iterator = _createForOfIteratorHelper(methods),
+		    _step;
+
+		try {
+		  var _loop = function _loop() {
+		    var method = _step.value;
+		    var name = method;
+		    method = method === 'del' ? 'delete' : method;
+		    method = method.toUpperCase();
+
+		    request[name] = function (url, data, fn) {
+		      var request_ = request(method, url);
+
+		      if (typeof data === 'function') {
+		        fn = data;
+		        data = null;
+		      }
+
+		      if (data) {
+		        if (method === 'GET' || method === 'HEAD') {
+		          request_.query(data);
+		        } else {
+		          request_.send(data);
+		        }
+		      }
+
+		      if (fn) request_.end(fn);
+		      return request_;
+		    };
+		  };
+
+		  for (_iterator.s(); !(_step = _iterator.n()).done;) {
+		    _loop();
+		  }
+		  /**
+		   * Check if `mime` is text and should be buffered.
+		   *
+		   * @param {String} mime
+		   * @return {Boolean}
+		   * @api public
+		   */
+
+		} catch (err) {
+		  _iterator.e(err);
+		} finally {
+		  _iterator.f();
+		}
+
+		function isText(mime) {
+		  var parts = mime.split('/');
+		  var type = parts[0];
+		  if (type) type = type.toLowerCase().trim();
+		  var subtype = parts[1];
+		  if (subtype) subtype = subtype.toLowerCase().trim();
+		  return type === 'text' || subtype === 'x-www-form-urlencoded';
+		} // This is not a catchall, but a start. It might be useful
+		// in the long run to have file that includes all binary
+		// content types from https://www.iana.org/assignments/media-types/media-types.xhtml
+
+
+		function isBinary(mime) {
+		  var _mime$split = mime.split('/'),
+		      _mime$split2 = _slicedToArray(_mime$split, 2),
+		      registry = _mime$split2[0],
+		      name = _mime$split2[1];
+
+		  if (registry) registry = registry.toLowerCase().trim();
+		  if (name) name = name.toLowerCase().trim();
+		  return ['audio', 'font', 'image', 'video'].includes(registry) || ['gz', 'gzip'].includes(name);
+		}
+		/**
+		 * Check if `mime` is json or has +json structured syntax suffix.
+		 *
+		 * @param {String} mime
+		 * @return {Boolean}
+		 * @api private
+		 */
+
+
+		function isJSON(mime) {
+		  // should match /json or +json
+		  // but not /json-seq
+		  return /[/+]json($|[^-\w])/i.test(mime);
+		}
+		/**
+		 * Check if we should follow the redirect `code`.
+		 *
+		 * @param {Number} code
+		 * @return {Boolean}
+		 * @api private
+		 */
+
+
+		function isRedirect(code) {
+		  return [301, 302, 303, 305, 307, 308].includes(code);
+		}
+		
+} (node, nodeExports));
+	return nodeExports;
+}
+
+var smeeClient;
+var hasRequiredSmeeClient;
+
+function requireSmeeClient () {
+	if (hasRequiredSmeeClient) return smeeClient;
+	hasRequiredSmeeClient = 1;
+	var __importDefault = (commonjsGlobal && commonjsGlobal.__importDefault) || function (mod) {
+	    return (mod && mod.__esModule) ? mod : { "default": mod };
+	};
+	const validator_1 = __importDefault(requireValidator());
+	const eventsource_1 = __importDefault(requireEventsource());
+	const superagent_1 = __importDefault(requireNode());
+	const url_1 = __importDefault(Url$2);
+	const querystring_1 = __importDefault(require$$8$1);
+	class Client {
+	    constructor({ source, target, logger = console }) {
+	        this.source = source;
+	        this.target = target;
+	        this.logger = logger;
+	        if (!validator_1.default.isURL(this.source)) {
+	            throw new Error('The provided URL is invalid.');
+	        }
+	    }
+	    static async createChannel() {
+	        return superagent_1.default.head('https://smee.io/new').redirects(0).catch((err) => {
+	            return err.response.headers.location;
+	        });
+	    }
+	    onmessage(msg) {
+	        const data = JSON.parse(msg.data);
+	        const target = url_1.default.parse(this.target, true);
+	        const mergedQuery = Object.assign(target.query, data.query);
+	        target.search = querystring_1.default.stringify(mergedQuery);
+	        delete data.query;
+	        const req = superagent_1.default.post(url_1.default.format(target)).send(data.body);
+	        delete data.body;
+	        Object.keys(data).forEach(key => {
+	            req.set(key, data[key]);
+	        });
+	        req.end((err, res) => {
+	            if (err) {
+	                this.logger.error(err);
+	            }
+	            else {
+	                this.logger.info(`${req.method} ${req.url} - ${res.status}`);
+	            }
+	        });
+	    }
+	    onopen() {
+	        this.logger.info('Connected', this.events.url);
+	    }
+	    onerror(err) {
+	        this.logger.error(err);
+	    }
+	    start() {
+	        const events = new eventsource_1.default(this.source);
+	        // Reconnect immediately
+	        events.reconnectInterval = 0; // This isn't a valid property of EventSource
+	        events.addEventListener('message', this.onmessage.bind(this));
+	        events.addEventListener('open', this.onopen.bind(this));
+	        events.addEventListener('error', this.onerror.bind(this));
+	        this.logger.info(`Forwarding ${this.source} to ${this.target}`);
+	        this.events = events;
+	        return events;
+	    }
+	}
+	smeeClient = Client;
+	return smeeClient;
+}
+
+Object.defineProperty(webhookProxy, "__esModule", { value: true });
+webhookProxy.createWebhookProxy = void 0;
+const createWebhookProxy = (opts) => {
+    try {
+        const SmeeClient = requireSmeeClient();
+        const smee = new SmeeClient({
+            logger: opts.logger,
+            source: opts.url,
+            target: `http://localhost:${opts.port}${opts.path}`,
+        });
+        return smee.start();
+    }
+    catch (error) {
+        opts.logger.warn("Run `npm install --save-dev smee-client` to proxy webhooks to localhost.");
+        return;
+    }
+};
+webhookProxy.createWebhookProxy = createWebhookProxy;
+
+var dist = {};
+
+var expressHandlebars = {};
+
+var handlebarsExports = {};
+var handlebars$1 = {
+  get exports(){ return handlebarsExports; },
+  set exports(v){ handlebarsExports = v; },
+};
+
+var handlebars_runtimeExports = {};
+var handlebars_runtime = {
+  get exports(){ return handlebars_runtimeExports; },
+  set exports(v){ handlebars_runtimeExports = v; },
+};
+
+var base$1 = {};
+
+var utils$1 = {};
+
+utils$1.__esModule = true;
+utils$1.extend = extend$1;
+utils$1.indexOf = indexOf;
+utils$1.escapeExpression = escapeExpression;
+utils$1.isEmpty = isEmpty;
+utils$1.createFrame = createFrame;
+utils$1.blockParams = blockParams;
+utils$1.appendContextPath = appendContextPath;
+var escape$1 = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#x27;',
+  '`': '&#x60;',
+  '=': '&#x3D;'
+};
+
+var badChars = /[&<>"'`=]/g,
+    possible = /[&<>"'`=]/;
+
+function escapeChar(chr) {
+  return escape$1[chr];
+}
+
+function extend$1(obj /* , ...source */) {
+  for (var i = 1; i < arguments.length; i++) {
+    for (var key in arguments[i]) {
+      if (Object.prototype.hasOwnProperty.call(arguments[i], key)) {
+        obj[key] = arguments[i][key];
+      }
+    }
+  }
+
+  return obj;
+}
+
+var toString$2 = Object.prototype.toString;
+
+utils$1.toString = toString$2;
+// Sourced from lodash
+// https://github.com/bestiejs/lodash/blob/master/LICENSE.txt
+/* eslint-disable func-style */
+var isFunction$1 = function isFunction(value) {
+  return typeof value === 'function';
+};
+// fallback for older versions of Chrome and Safari
+/* istanbul ignore next */
+if (isFunction$1(/x/)) {
+  utils$1.isFunction = isFunction$1 = function (value) {
+    return typeof value === 'function' && toString$2.call(value) === '[object Function]';
+  };
+}
+utils$1.isFunction = isFunction$1;
+
+/* eslint-enable func-style */
+
+/* istanbul ignore next */
+var isArray = Array.isArray || function (value) {
+  return value && typeof value === 'object' ? toString$2.call(value) === '[object Array]' : false;
+};
+
+utils$1.isArray = isArray;
+// Older IE versions do not directly support indexOf so we must implement our own, sadly.
+
+function indexOf(array, value) {
+  for (var i = 0, len = array.length; i < len; i++) {
+    if (array[i] === value) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function escapeExpression(string) {
+  if (typeof string !== 'string') {
+    // don't escape SafeStrings, since they're already safe
+    if (string && string.toHTML) {
+      return string.toHTML();
+    } else if (string == null) {
+      return '';
+    } else if (!string) {
+      return string + '';
+    }
+
+    // Force a string conversion as this will be done by the append regardless and
+    // the regex test will do this transparently behind the scenes, causing issues if
+    // an object's to string has escaped characters in it.
+    string = '' + string;
+  }
+
+  if (!possible.test(string)) {
+    return string;
+  }
+  return string.replace(badChars, escapeChar);
+}
+
+function isEmpty(value) {
+  if (!value && value !== 0) {
+    return true;
+  } else if (isArray(value) && value.length === 0) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+function createFrame(object) {
+  var frame = extend$1({}, object);
+  frame._parent = object;
+  return frame;
+}
+
+function blockParams(params, ids) {
+  params.path = ids;
+  return params;
+}
+
+function appendContextPath(contextPath, id) {
+  return (contextPath ? contextPath + '.' : '') + id;
+}
+
+var exceptionExports = {};
+var exception$1 = {
+  get exports(){ return exceptionExports; },
+  set exports(v){ exceptionExports = v; },
+};
+
+(function (module, exports) {
+
+	exports.__esModule = true;
+	var errorProps = ['description', 'fileName', 'lineNumber', 'endLineNumber', 'message', 'name', 'number', 'stack'];
+
+	function Exception(message, node) {
+	  var loc = node && node.loc,
+	      line = undefined,
+	      endLineNumber = undefined,
+	      column = undefined,
+	      endColumn = undefined;
+
+	  if (loc) {
+	    line = loc.start.line;
+	    endLineNumber = loc.end.line;
+	    column = loc.start.column;
+	    endColumn = loc.end.column;
+
+	    message += ' - ' + line + ':' + column;
+	  }
+
+	  var tmp = Error.prototype.constructor.call(this, message);
+
+	  // Unfortunately errors are not enumerable in Chrome (at least), so `for prop in tmp` doesn't work.
+	  for (var idx = 0; idx < errorProps.length; idx++) {
+	    this[errorProps[idx]] = tmp[errorProps[idx]];
+	  }
+
+	  /* istanbul ignore else */
+	  if (Error.captureStackTrace) {
+	    Error.captureStackTrace(this, Exception);
+	  }
+
+	  try {
+	    if (loc) {
+	      this.lineNumber = line;
+	      this.endLineNumber = endLineNumber;
+
+	      // Work around issue under safari where we can't directly set the column value
+	      /* istanbul ignore next */
+	      if (Object.defineProperty) {
+	        Object.defineProperty(this, 'column', {
+	          value: column,
+	          enumerable: true
+	        });
+	        Object.defineProperty(this, 'endColumn', {
+	          value: endColumn,
+	          enumerable: true
+	        });
+	      } else {
+	        this.column = column;
+	        this.endColumn = endColumn;
+	      }
+	    }
+	  } catch (nop) {
+	    /* Ignore if the browser is very particular */
+	  }
+	}
+
+	Exception.prototype = new Error();
+
+	exports['default'] = Exception;
+	module.exports = exports['default'];
+	
+} (exception$1, exceptionExports));
+
+var helpers$1 = {};
+
+var blockHelperMissingExports = {};
+var blockHelperMissing = {
+  get exports(){ return blockHelperMissingExports; },
+  set exports(v){ blockHelperMissingExports = v; },
+};
+
+(function (module, exports) {
+
+	exports.__esModule = true;
+
+	var _utils = utils$1;
+
+	exports['default'] = function (instance) {
+	  instance.registerHelper('blockHelperMissing', function (context, options) {
+	    var inverse = options.inverse,
+	        fn = options.fn;
+
+	    if (context === true) {
+	      return fn(this);
+	    } else if (context === false || context == null) {
+	      return inverse(this);
+	    } else if (_utils.isArray(context)) {
+	      if (context.length > 0) {
+	        if (options.ids) {
+	          options.ids = [options.name];
+	        }
+
+	        return instance.helpers.each(context, options);
