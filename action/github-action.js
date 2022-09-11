@@ -201485,3 +201485,2218 @@ function requireComparator () {
 	    // if it literally is just '>' or '' then allow anything.
 	    if (!m[2]) {
 	      this.semver = ANY;
+	    } else {
+	      this.semver = new SemVer(m[2], this.options.loose);
+	    }
+	  }
+
+	  toString () {
+	    return this.value
+	  }
+
+	  test (version) {
+	    debug('Comparator.test', version, this.options.loose);
+
+	    if (this.semver === ANY || version === ANY) {
+	      return true
+	    }
+
+	    if (typeof version === 'string') {
+	      try {
+	        version = new SemVer(version, this.options);
+	      } catch (er) {
+	        return false
+	      }
+	    }
+
+	    return cmp(version, this.operator, this.semver, this.options)
+	  }
+
+	  intersects (comp, options) {
+	    if (!(comp instanceof Comparator)) {
+	      throw new TypeError('a Comparator is required')
+	    }
+
+	    if (!options || typeof options !== 'object') {
+	      options = {
+	        loose: !!options,
+	        includePrerelease: false,
+	      };
+	    }
+
+	    if (this.operator === '') {
+	      if (this.value === '') {
+	        return true
+	      }
+	      return new Range(comp.value, options).test(this.value)
+	    } else if (comp.operator === '') {
+	      if (comp.value === '') {
+	        return true
+	      }
+	      return new Range(this.value, options).test(comp.semver)
+	    }
+
+	    const sameDirectionIncreasing =
+	      (this.operator === '>=' || this.operator === '>') &&
+	      (comp.operator === '>=' || comp.operator === '>');
+	    const sameDirectionDecreasing =
+	      (this.operator === '<=' || this.operator === '<') &&
+	      (comp.operator === '<=' || comp.operator === '<');
+	    const sameSemVer = this.semver.version === comp.semver.version;
+	    const differentDirectionsInclusive =
+	      (this.operator === '>=' || this.operator === '<=') &&
+	      (comp.operator === '>=' || comp.operator === '<=');
+	    const oppositeDirectionsLessThan =
+	      cmp(this.semver, '<', comp.semver, options) &&
+	      (this.operator === '>=' || this.operator === '>') &&
+	        (comp.operator === '<=' || comp.operator === '<');
+	    const oppositeDirectionsGreaterThan =
+	      cmp(this.semver, '>', comp.semver, options) &&
+	      (this.operator === '<=' || this.operator === '<') &&
+	        (comp.operator === '>=' || comp.operator === '>');
+
+	    return (
+	      sameDirectionIncreasing ||
+	      sameDirectionDecreasing ||
+	      (sameSemVer && differentDirectionsInclusive) ||
+	      oppositeDirectionsLessThan ||
+	      oppositeDirectionsGreaterThan
+	    )
+	  }
+	}
+
+	comparator = Comparator;
+
+	const parseOptions = requireParseOptions();
+	const { re, t } = requireRe();
+	const cmp = requireCmp();
+	const debug = requireDebug();
+	const SemVer = requireSemver$1();
+	const Range = requireRange();
+	return comparator;
+}
+
+var satisfies_1;
+var hasRequiredSatisfies;
+
+function requireSatisfies () {
+	if (hasRequiredSatisfies) return satisfies_1;
+	hasRequiredSatisfies = 1;
+	const Range = requireRange();
+	const satisfies = (version, range, options) => {
+	  try {
+	    range = new Range(range, options);
+	  } catch (er) {
+	    return false
+	  }
+	  return range.test(version)
+	};
+	satisfies_1 = satisfies;
+	return satisfies_1;
+}
+
+var toComparators_1;
+var hasRequiredToComparators;
+
+function requireToComparators () {
+	if (hasRequiredToComparators) return toComparators_1;
+	hasRequiredToComparators = 1;
+	const Range = requireRange();
+
+	// Mostly just for testing and legacy API reasons
+	const toComparators = (range, options) =>
+	  new Range(range, options).set
+	    .map(comp => comp.map(c => c.value).join(' ').trim().split(' '));
+
+	toComparators_1 = toComparators;
+	return toComparators_1;
+}
+
+var maxSatisfying_1;
+var hasRequiredMaxSatisfying;
+
+function requireMaxSatisfying () {
+	if (hasRequiredMaxSatisfying) return maxSatisfying_1;
+	hasRequiredMaxSatisfying = 1;
+	const SemVer = requireSemver$1();
+	const Range = requireRange();
+
+	const maxSatisfying = (versions, range, options) => {
+	  let max = null;
+	  let maxSV = null;
+	  let rangeObj = null;
+	  try {
+	    rangeObj = new Range(range, options);
+	  } catch (er) {
+	    return null
+	  }
+	  versions.forEach((v) => {
+	    if (rangeObj.test(v)) {
+	      // satisfies(v, range, options)
+	      if (!max || maxSV.compare(v) === -1) {
+	        // compare(max, v, true)
+	        max = v;
+	        maxSV = new SemVer(max, options);
+	      }
+	    }
+	  });
+	  return max
+	};
+	maxSatisfying_1 = maxSatisfying;
+	return maxSatisfying_1;
+}
+
+var minSatisfying_1;
+var hasRequiredMinSatisfying;
+
+function requireMinSatisfying () {
+	if (hasRequiredMinSatisfying) return minSatisfying_1;
+	hasRequiredMinSatisfying = 1;
+	const SemVer = requireSemver$1();
+	const Range = requireRange();
+	const minSatisfying = (versions, range, options) => {
+	  let min = null;
+	  let minSV = null;
+	  let rangeObj = null;
+	  try {
+	    rangeObj = new Range(range, options);
+	  } catch (er) {
+	    return null
+	  }
+	  versions.forEach((v) => {
+	    if (rangeObj.test(v)) {
+	      // satisfies(v, range, options)
+	      if (!min || minSV.compare(v) === 1) {
+	        // compare(min, v, true)
+	        min = v;
+	        minSV = new SemVer(min, options);
+	      }
+	    }
+	  });
+	  return min
+	};
+	minSatisfying_1 = minSatisfying;
+	return minSatisfying_1;
+}
+
+var minVersion_1;
+var hasRequiredMinVersion;
+
+function requireMinVersion () {
+	if (hasRequiredMinVersion) return minVersion_1;
+	hasRequiredMinVersion = 1;
+	const SemVer = requireSemver$1();
+	const Range = requireRange();
+	const gt = requireGt();
+
+	const minVersion = (range, loose) => {
+	  range = new Range(range, loose);
+
+	  let minver = new SemVer('0.0.0');
+	  if (range.test(minver)) {
+	    return minver
+	  }
+
+	  minver = new SemVer('0.0.0-0');
+	  if (range.test(minver)) {
+	    return minver
+	  }
+
+	  minver = null;
+	  for (let i = 0; i < range.set.length; ++i) {
+	    const comparators = range.set[i];
+
+	    let setMin = null;
+	    comparators.forEach((comparator) => {
+	      // Clone to avoid manipulating the comparator's semver object.
+	      const compver = new SemVer(comparator.semver.version);
+	      switch (comparator.operator) {
+	        case '>':
+	          if (compver.prerelease.length === 0) {
+	            compver.patch++;
+	          } else {
+	            compver.prerelease.push(0);
+	          }
+	          compver.raw = compver.format();
+	          /* fallthrough */
+	        case '':
+	        case '>=':
+	          if (!setMin || gt(compver, setMin)) {
+	            setMin = compver;
+	          }
+	          break
+	        case '<':
+	        case '<=':
+	          /* Ignore maximum versions */
+	          break
+	        /* istanbul ignore next */
+	        default:
+	          throw new Error(`Unexpected operation: ${comparator.operator}`)
+	      }
+	    });
+	    if (setMin && (!minver || gt(minver, setMin))) {
+	      minver = setMin;
+	    }
+	  }
+
+	  if (minver && range.test(minver)) {
+	    return minver
+	  }
+
+	  return null
+	};
+	minVersion_1 = minVersion;
+	return minVersion_1;
+}
+
+var valid;
+var hasRequiredValid;
+
+function requireValid () {
+	if (hasRequiredValid) return valid;
+	hasRequiredValid = 1;
+	const Range = requireRange();
+	const validRange = (range, options) => {
+	  try {
+	    // Return '*' instead of '' so that truthiness works.
+	    // This will throw if it's invalid anyway
+	    return new Range(range, options).range || '*'
+	  } catch (er) {
+	    return null
+	  }
+	};
+	valid = validRange;
+	return valid;
+}
+
+var outside_1;
+var hasRequiredOutside;
+
+function requireOutside () {
+	if (hasRequiredOutside) return outside_1;
+	hasRequiredOutside = 1;
+	const SemVer = requireSemver$1();
+	const Comparator = requireComparator();
+	const { ANY } = Comparator;
+	const Range = requireRange();
+	const satisfies = requireSatisfies();
+	const gt = requireGt();
+	const lt = requireLt();
+	const lte = requireLte();
+	const gte = requireGte();
+
+	const outside = (version, range, hilo, options) => {
+	  version = new SemVer(version, options);
+	  range = new Range(range, options);
+
+	  let gtfn, ltefn, ltfn, comp, ecomp;
+	  switch (hilo) {
+	    case '>':
+	      gtfn = gt;
+	      ltefn = lte;
+	      ltfn = lt;
+	      comp = '>';
+	      ecomp = '>=';
+	      break
+	    case '<':
+	      gtfn = lt;
+	      ltefn = gte;
+	      ltfn = gt;
+	      comp = '<';
+	      ecomp = '<=';
+	      break
+	    default:
+	      throw new TypeError('Must provide a hilo val of "<" or ">"')
+	  }
+
+	  // If it satisfies the range it is not outside
+	  if (satisfies(version, range, options)) {
+	    return false
+	  }
+
+	  // From now on, variable terms are as if we're in "gtr" mode.
+	  // but note that everything is flipped for the "ltr" function.
+
+	  for (let i = 0; i < range.set.length; ++i) {
+	    const comparators = range.set[i];
+
+	    let high = null;
+	    let low = null;
+
+	    comparators.forEach((comparator) => {
+	      if (comparator.semver === ANY) {
+	        comparator = new Comparator('>=0.0.0');
+	      }
+	      high = high || comparator;
+	      low = low || comparator;
+	      if (gtfn(comparator.semver, high.semver, options)) {
+	        high = comparator;
+	      } else if (ltfn(comparator.semver, low.semver, options)) {
+	        low = comparator;
+	      }
+	    });
+
+	    // If the edge version comparator has a operator then our version
+	    // isn't outside it
+	    if (high.operator === comp || high.operator === ecomp) {
+	      return false
+	    }
+
+	    // If the lowest version comparator has an operator and our version
+	    // is less than it then it isn't higher than the range
+	    if ((!low.operator || low.operator === comp) &&
+	        ltefn(version, low.semver)) {
+	      return false
+	    } else if (low.operator === ecomp && ltfn(version, low.semver)) {
+	      return false
+	    }
+	  }
+	  return true
+	};
+
+	outside_1 = outside;
+	return outside_1;
+}
+
+var gtr_1;
+var hasRequiredGtr;
+
+function requireGtr () {
+	if (hasRequiredGtr) return gtr_1;
+	hasRequiredGtr = 1;
+	// Determine if version is greater than all the versions possible in the range.
+	const outside = requireOutside();
+	const gtr = (version, range, options) => outside(version, range, '>', options);
+	gtr_1 = gtr;
+	return gtr_1;
+}
+
+var ltr_1;
+var hasRequiredLtr;
+
+function requireLtr () {
+	if (hasRequiredLtr) return ltr_1;
+	hasRequiredLtr = 1;
+	const outside = requireOutside();
+	// Determine if version is less than all the versions possible in the range
+	const ltr = (version, range, options) => outside(version, range, '<', options);
+	ltr_1 = ltr;
+	return ltr_1;
+}
+
+var intersects_1;
+var hasRequiredIntersects;
+
+function requireIntersects () {
+	if (hasRequiredIntersects) return intersects_1;
+	hasRequiredIntersects = 1;
+	const Range = requireRange();
+	const intersects = (r1, r2, options) => {
+	  r1 = new Range(r1, options);
+	  r2 = new Range(r2, options);
+	  return r1.intersects(r2)
+	};
+	intersects_1 = intersects;
+	return intersects_1;
+}
+
+var simplify;
+var hasRequiredSimplify;
+
+function requireSimplify () {
+	if (hasRequiredSimplify) return simplify;
+	hasRequiredSimplify = 1;
+	// given a set of versions and a range, create a "simplified" range
+	// that includes the same versions that the original range does
+	// If the original range is shorter than the simplified one, return that.
+	const satisfies = requireSatisfies();
+	const compare = requireCompare();
+	simplify = (versions, range, options) => {
+	  const set = [];
+	  let first = null;
+	  let prev = null;
+	  const v = versions.sort((a, b) => compare(a, b, options));
+	  for (const version of v) {
+	    const included = satisfies(version, range, options);
+	    if (included) {
+	      prev = version;
+	      if (!first) {
+	        first = version;
+	      }
+	    } else {
+	      if (prev) {
+	        set.push([first, prev]);
+	      }
+	      prev = null;
+	      first = null;
+	    }
+	  }
+	  if (first) {
+	    set.push([first, null]);
+	  }
+
+	  const ranges = [];
+	  for (const [min, max] of set) {
+	    if (min === max) {
+	      ranges.push(min);
+	    } else if (!max && min === v[0]) {
+	      ranges.push('*');
+	    } else if (!max) {
+	      ranges.push(`>=${min}`);
+	    } else if (min === v[0]) {
+	      ranges.push(`<=${max}`);
+	    } else {
+	      ranges.push(`${min} - ${max}`);
+	    }
+	  }
+	  const simplified = ranges.join(' || ');
+	  const original = typeof range.raw === 'string' ? range.raw : String(range);
+	  return simplified.length < original.length ? simplified : range
+	};
+	return simplify;
+}
+
+var subset_1;
+var hasRequiredSubset;
+
+function requireSubset () {
+	if (hasRequiredSubset) return subset_1;
+	hasRequiredSubset = 1;
+	const Range = requireRange();
+	const Comparator = requireComparator();
+	const { ANY } = Comparator;
+	const satisfies = requireSatisfies();
+	const compare = requireCompare();
+
+	// Complex range `r1 || r2 || ...` is a subset of `R1 || R2 || ...` iff:
+	// - Every simple range `r1, r2, ...` is a null set, OR
+	// - Every simple range `r1, r2, ...` which is not a null set is a subset of
+	//   some `R1, R2, ...`
+	//
+	// Simple range `c1 c2 ...` is a subset of simple range `C1 C2 ...` iff:
+	// - If c is only the ANY comparator
+	//   - If C is only the ANY comparator, return true
+	//   - Else if in prerelease mode, return false
+	//   - else replace c with `[>=0.0.0]`
+	// - If C is only the ANY comparator
+	//   - if in prerelease mode, return true
+	//   - else replace C with `[>=0.0.0]`
+	// - Let EQ be the set of = comparators in c
+	// - If EQ is more than one, return true (null set)
+	// - Let GT be the highest > or >= comparator in c
+	// - Let LT be the lowest < or <= comparator in c
+	// - If GT and LT, and GT.semver > LT.semver, return true (null set)
+	// - If any C is a = range, and GT or LT are set, return false
+	// - If EQ
+	//   - If GT, and EQ does not satisfy GT, return true (null set)
+	//   - If LT, and EQ does not satisfy LT, return true (null set)
+	//   - If EQ satisfies every C, return true
+	//   - Else return false
+	// - If GT
+	//   - If GT.semver is lower than any > or >= comp in C, return false
+	//   - If GT is >=, and GT.semver does not satisfy every C, return false
+	//   - If GT.semver has a prerelease, and not in prerelease mode
+	//     - If no C has a prerelease and the GT.semver tuple, return false
+	// - If LT
+	//   - If LT.semver is greater than any < or <= comp in C, return false
+	//   - If LT is <=, and LT.semver does not satisfy every C, return false
+	//   - If GT.semver has a prerelease, and not in prerelease mode
+	//     - If no C has a prerelease and the LT.semver tuple, return false
+	// - Else return true
+
+	const subset = (sub, dom, options = {}) => {
+	  if (sub === dom) {
+	    return true
+	  }
+
+	  sub = new Range(sub, options);
+	  dom = new Range(dom, options);
+	  let sawNonNull = false;
+
+	  OUTER: for (const simpleSub of sub.set) {
+	    for (const simpleDom of dom.set) {
+	      const isSub = simpleSubset(simpleSub, simpleDom, options);
+	      sawNonNull = sawNonNull || isSub !== null;
+	      if (isSub) {
+	        continue OUTER
+	      }
+	    }
+	    // the null set is a subset of everything, but null simple ranges in
+	    // a complex range should be ignored.  so if we saw a non-null range,
+	    // then we know this isn't a subset, but if EVERY simple range was null,
+	    // then it is a subset.
+	    if (sawNonNull) {
+	      return false
+	    }
+	  }
+	  return true
+	};
+
+	const simpleSubset = (sub, dom, options) => {
+	  if (sub === dom) {
+	    return true
+	  }
+
+	  if (sub.length === 1 && sub[0].semver === ANY) {
+	    if (dom.length === 1 && dom[0].semver === ANY) {
+	      return true
+	    } else if (options.includePrerelease) {
+	      sub = [new Comparator('>=0.0.0-0')];
+	    } else {
+	      sub = [new Comparator('>=0.0.0')];
+	    }
+	  }
+
+	  if (dom.length === 1 && dom[0].semver === ANY) {
+	    if (options.includePrerelease) {
+	      return true
+	    } else {
+	      dom = [new Comparator('>=0.0.0')];
+	    }
+	  }
+
+	  const eqSet = new Set();
+	  let gt, lt;
+	  for (const c of sub) {
+	    if (c.operator === '>' || c.operator === '>=') {
+	      gt = higherGT(gt, c, options);
+	    } else if (c.operator === '<' || c.operator === '<=') {
+	      lt = lowerLT(lt, c, options);
+	    } else {
+	      eqSet.add(c.semver);
+	    }
+	  }
+
+	  if (eqSet.size > 1) {
+	    return null
+	  }
+
+	  let gtltComp;
+	  if (gt && lt) {
+	    gtltComp = compare(gt.semver, lt.semver, options);
+	    if (gtltComp > 0) {
+	      return null
+	    } else if (gtltComp === 0 && (gt.operator !== '>=' || lt.operator !== '<=')) {
+	      return null
+	    }
+	  }
+
+	  // will iterate one or zero times
+	  for (const eq of eqSet) {
+	    if (gt && !satisfies(eq, String(gt), options)) {
+	      return null
+	    }
+
+	    if (lt && !satisfies(eq, String(lt), options)) {
+	      return null
+	    }
+
+	    for (const c of dom) {
+	      if (!satisfies(eq, String(c), options)) {
+	        return false
+	      }
+	    }
+
+	    return true
+	  }
+
+	  let higher, lower;
+	  let hasDomLT, hasDomGT;
+	  // if the subset has a prerelease, we need a comparator in the superset
+	  // with the same tuple and a prerelease, or it's not a subset
+	  let needDomLTPre = lt &&
+	    !options.includePrerelease &&
+	    lt.semver.prerelease.length ? lt.semver : false;
+	  let needDomGTPre = gt &&
+	    !options.includePrerelease &&
+	    gt.semver.prerelease.length ? gt.semver : false;
+	  // exception: <1.2.3-0 is the same as <1.2.3
+	  if (needDomLTPre && needDomLTPre.prerelease.length === 1 &&
+	      lt.operator === '<' && needDomLTPre.prerelease[0] === 0) {
+	    needDomLTPre = false;
+	  }
+
+	  for (const c of dom) {
+	    hasDomGT = hasDomGT || c.operator === '>' || c.operator === '>=';
+	    hasDomLT = hasDomLT || c.operator === '<' || c.operator === '<=';
+	    if (gt) {
+	      if (needDomGTPre) {
+	        if (c.semver.prerelease && c.semver.prerelease.length &&
+	            c.semver.major === needDomGTPre.major &&
+	            c.semver.minor === needDomGTPre.minor &&
+	            c.semver.patch === needDomGTPre.patch) {
+	          needDomGTPre = false;
+	        }
+	      }
+	      if (c.operator === '>' || c.operator === '>=') {
+	        higher = higherGT(gt, c, options);
+	        if (higher === c && higher !== gt) {
+	          return false
+	        }
+	      } else if (gt.operator === '>=' && !satisfies(gt.semver, String(c), options)) {
+	        return false
+	      }
+	    }
+	    if (lt) {
+	      if (needDomLTPre) {
+	        if (c.semver.prerelease && c.semver.prerelease.length &&
+	            c.semver.major === needDomLTPre.major &&
+	            c.semver.minor === needDomLTPre.minor &&
+	            c.semver.patch === needDomLTPre.patch) {
+	          needDomLTPre = false;
+	        }
+	      }
+	      if (c.operator === '<' || c.operator === '<=') {
+	        lower = lowerLT(lt, c, options);
+	        if (lower === c && lower !== lt) {
+	          return false
+	        }
+	      } else if (lt.operator === '<=' && !satisfies(lt.semver, String(c), options)) {
+	        return false
+	      }
+	    }
+	    if (!c.operator && (lt || gt) && gtltComp !== 0) {
+	      return false
+	    }
+	  }
+
+	  // if there was a < or >, and nothing in the dom, then must be false
+	  // UNLESS it was limited by another range in the other direction.
+	  // Eg, >1.0.0 <1.0.1 is still a subset of <2.0.0
+	  if (gt && hasDomLT && !lt && gtltComp !== 0) {
+	    return false
+	  }
+
+	  if (lt && hasDomGT && !gt && gtltComp !== 0) {
+	    return false
+	  }
+
+	  // we needed a prerelease range in a specific tuple, but didn't get one
+	  // then this isn't a subset.  eg >=1.2.3-pre is not a subset of >=1.0.0,
+	  // because it includes prereleases in the 1.2.3 tuple
+	  if (needDomGTPre || needDomLTPre) {
+	    return false
+	  }
+
+	  return true
+	};
+
+	// >=1.2.3 is lower than >1.2.3
+	const higherGT = (a, b, options) => {
+	  if (!a) {
+	    return b
+	  }
+	  const comp = compare(a.semver, b.semver, options);
+	  return comp > 0 ? a
+	    : comp < 0 ? b
+	    : b.operator === '>' && a.operator === '>=' ? b
+	    : a
+	};
+
+	// <=1.2.3 is higher than <1.2.3
+	const lowerLT = (a, b, options) => {
+	  if (!a) {
+	    return b
+	  }
+	  const comp = compare(a.semver, b.semver, options);
+	  return comp < 0 ? a
+	    : comp > 0 ? b
+	    : b.operator === '<' && a.operator === '<=' ? b
+	    : a
+	};
+
+	subset_1 = subset;
+	return subset_1;
+}
+
+var semver;
+var hasRequiredSemver;
+
+function requireSemver () {
+	if (hasRequiredSemver) return semver;
+	hasRequiredSemver = 1;
+	// just pre-load all the stuff that index.js lazily exports
+	const internalRe = requireRe();
+	const constants = requireConstants();
+	const SemVer = requireSemver$1();
+	const identifiers = requireIdentifiers();
+	const parse = requireParse();
+	const valid = requireValid$1();
+	const clean = requireClean();
+	const inc = requireInc();
+	const diff = requireDiff();
+	const major = requireMajor();
+	const minor = requireMinor();
+	const patch = requirePatch();
+	const prerelease = requirePrerelease();
+	const compare = requireCompare();
+	const rcompare = requireRcompare();
+	const compareLoose = requireCompareLoose();
+	const compareBuild = requireCompareBuild();
+	const sort = requireSort();
+	const rsort = requireRsort();
+	const gt = requireGt();
+	const lt = requireLt();
+	const eq = requireEq();
+	const neq = requireNeq();
+	const gte = requireGte();
+	const lte = requireLte();
+	const cmp = requireCmp();
+	const coerce = requireCoerce();
+	const Comparator = requireComparator();
+	const Range = requireRange();
+	const satisfies = requireSatisfies();
+	const toComparators = requireToComparators();
+	const maxSatisfying = requireMaxSatisfying();
+	const minSatisfying = requireMinSatisfying();
+	const minVersion = requireMinVersion();
+	const validRange = requireValid();
+	const outside = requireOutside();
+	const gtr = requireGtr();
+	const ltr = requireLtr();
+	const intersects = requireIntersects();
+	const simplifyRange = requireSimplify();
+	const subset = requireSubset();
+	semver = {
+	  parse,
+	  valid,
+	  clean,
+	  inc,
+	  diff,
+	  major,
+	  minor,
+	  patch,
+	  prerelease,
+	  compare,
+	  rcompare,
+	  compareLoose,
+	  compareBuild,
+	  sort,
+	  rsort,
+	  gt,
+	  lt,
+	  eq,
+	  neq,
+	  gte,
+	  lte,
+	  cmp,
+	  coerce,
+	  Comparator,
+	  Range,
+	  satisfies,
+	  toComparators,
+	  maxSatisfying,
+	  minSatisfying,
+	  minVersion,
+	  validRange,
+	  outside,
+	  gtr,
+	  ltr,
+	  intersects,
+	  simplifyRange,
+	  subset,
+	  SemVer,
+	  re: internalRe.re,
+	  src: internalRe.src,
+	  tokens: internalRe.t,
+	  SEMVER_SPEC_VERSION: constants.SEMVER_SPEC_VERSION,
+	  compareIdentifiers: identifiers.compareIdentifiers,
+	  rcompareIdentifiers: identifiers.rcompareIdentifiers,
+	};
+	return semver;
+}
+
+var requestBase;
+var hasRequiredRequestBase;
+
+function requireRequestBase () {
+	if (hasRequiredRequestBase) return requestBase;
+	hasRequiredRequestBase = 1;
+
+	function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (obj) { return typeof obj; } : function (obj) { return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }, _typeof(obj); }
+
+	var semver = requireSemver();
+	/**
+	 * Module of mixed-in functions shared between node and client code
+	 */
+
+
+	var _require = requireUtils(),
+	    isObject = _require.isObject,
+	    hasOwn = _require.hasOwn;
+	/**
+	 * Expose `RequestBase`.
+	 */
+
+
+	requestBase = RequestBase;
+	/**
+	 * Initialize a new `RequestBase`.
+	 *
+	 * @api public
+	 */
+
+	function RequestBase() {}
+	/**
+	 * Clear previous timeout.
+	 *
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.clearTimeout = function () {
+	  clearTimeout(this._timer);
+	  clearTimeout(this._responseTimeoutTimer);
+	  clearTimeout(this._uploadTimeoutTimer);
+	  delete this._timer;
+	  delete this._responseTimeoutTimer;
+	  delete this._uploadTimeoutTimer;
+	  return this;
+	};
+	/**
+	 * Override default response body parser
+	 *
+	 * This function will be called to convert incoming data into request.body
+	 *
+	 * @param {Function}
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.parse = function (fn) {
+	  this._parser = fn;
+	  return this;
+	};
+	/**
+	 * Set format of binary response body.
+	 * In browser valid formats are 'blob' and 'arraybuffer',
+	 * which return Blob and ArrayBuffer, respectively.
+	 *
+	 * In Node all values result in Buffer.
+	 *
+	 * Examples:
+	 *
+	 *      req.get('/')
+	 *        .responseType('blob')
+	 *        .end(callback);
+	 *
+	 * @param {String} val
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.responseType = function (value) {
+	  this._responseType = value;
+	  return this;
+	};
+	/**
+	 * Override default request body serializer
+	 *
+	 * This function will be called to convert data set via .send or .attach into payload to send
+	 *
+	 * @param {Function}
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.serialize = function (fn) {
+	  this._serializer = fn;
+	  return this;
+	};
+	/**
+	 * Set timeouts.
+	 *
+	 * - response timeout is time between sending request and receiving the first byte of the response. Includes DNS and connection time.
+	 * - deadline is the time from start of the request to receiving response body in full. If the deadline is too short large files may not load at all on slow connections.
+	 * - upload is the time  since last bit of data was sent or received. This timeout works only if deadline timeout is off
+	 *
+	 * Value of 0 or false means no timeout.
+	 *
+	 * @param {Number|Object} ms or {response, deadline}
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.timeout = function (options) {
+	  if (!options || _typeof(options) !== 'object') {
+	    this._timeout = options;
+	    this._responseTimeout = 0;
+	    this._uploadTimeout = 0;
+	    return this;
+	  }
+
+	  for (var option in options) {
+	    if (hasOwn(options, option)) {
+	      switch (option) {
+	        case 'deadline':
+	          this._timeout = options.deadline;
+	          break;
+
+	        case 'response':
+	          this._responseTimeout = options.response;
+	          break;
+
+	        case 'upload':
+	          this._uploadTimeout = options.upload;
+	          break;
+
+	        default:
+	          console.warn('Unknown timeout option', option);
+	      }
+	    }
+	  }
+
+	  return this;
+	};
+	/**
+	 * Set number of retry attempts on error.
+	 *
+	 * Failed requests will be retried 'count' times if timeout or err.code >= 500.
+	 *
+	 * @param {Number} count
+	 * @param {Function} [fn]
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.retry = function (count, fn) {
+	  // Default to 1 if no count passed or true
+	  if (arguments.length === 0 || count === true) count = 1;
+	  if (count <= 0) count = 0;
+	  this._maxRetries = count;
+	  this._retries = 0;
+	  this._retryCallback = fn;
+	  return this;
+	}; //
+	// NOTE: we do not include ESOCKETTIMEDOUT because that is from `request` package
+	//       <https://github.com/sindresorhus/got/pull/537>
+	//
+	// NOTE: we do not include EADDRINFO because it was removed from libuv in 2014
+	//       <https://github.com/libuv/libuv/commit/02e1ebd40b807be5af46343ea873331b2ee4e9c1>
+	//       <https://github.com/request/request/search?q=ESOCKETTIMEDOUT&unscoped_q=ESOCKETTIMEDOUT>
+	//
+	//
+	// TODO: expose these as configurable defaults
+	//
+
+
+	var ERROR_CODES = new Set(['ETIMEDOUT', 'ECONNRESET', 'EADDRINUSE', 'ECONNREFUSED', 'EPIPE', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN']);
+	var STATUS_CODES = new Set([408, 413, 429, 500, 502, 503, 504, 521, 522, 524]); // TODO: we would need to make this easily configurable before adding it in (e.g. some might want to add POST)
+	// const METHODS = new Set(['GET', 'PUT', 'HEAD', 'DELETE', 'OPTIONS', 'TRACE']);
+
+	/**
+	 * Determine if a request should be retried.
+	 * (Inspired by https://github.com/sindresorhus/got#retry)
+	 *
+	 * @param {Error} err an error
+	 * @param {Response} [res] response
+	 * @returns {Boolean} if segment should be retried
+	 */
+
+	RequestBase.prototype._shouldRetry = function (error, res) {
+	  if (!this._maxRetries || this._retries++ >= this._maxRetries) {
+	    return false;
+	  }
+
+	  if (this._retryCallback) {
+	    try {
+	      var override = this._retryCallback(error, res);
+
+	      if (override === true) return true;
+	      if (override === false) return false; // undefined falls back to defaults
+	    } catch (err) {
+	      console.error(err);
+	    }
+	  } // TODO: we would need to make this easily configurable before adding it in (e.g. some might want to add POST)
+
+	  /*
+	  if (
+	    this.req &&
+	    this.req.method &&
+	    !METHODS.has(this.req.method.toUpperCase())
+	  )
+	    return false;
+	  */
+
+
+	  if (res && res.status && STATUS_CODES.has(res.status)) return true;
+
+	  if (error) {
+	    if (error.code && ERROR_CODES.has(error.code)) return true; // Superagent timeout
+
+	    if (error.timeout && error.code === 'ECONNABORTED') return true;
+	    if (error.crossDomain) return true;
+	  }
+
+	  return false;
+	};
+	/**
+	 * Retry request
+	 *
+	 * @return {Request} for chaining
+	 * @api private
+	 */
+
+
+	RequestBase.prototype._retry = function () {
+	  this.clearTimeout(); // node
+
+	  if (this.req) {
+	    this.req = null;
+	    this.req = this.request();
+	  }
+
+	  this._aborted = false;
+	  this.timedout = false;
+	  this.timedoutError = null;
+	  return this._end();
+	};
+	/**
+	 * Promise support
+	 *
+	 * @param {Function} resolve
+	 * @param {Function} [reject]
+	 * @return {Request}
+	 */
+
+
+	RequestBase.prototype.then = function (resolve, reject) {
+	  var _this = this;
+
+	  if (!this._fullfilledPromise) {
+	    var self = this;
+
+	    if (this._endCalled) {
+	      console.warn('Warning: superagent request was sent twice, because both .end() and .then() were called. Never call .end() if you use promises');
+	    }
+
+	    this._fullfilledPromise = new Promise(function (resolve, reject) {
+	      self.on('abort', function () {
+	        if (_this._maxRetries && _this._maxRetries > _this._retries) {
+	          return;
+	        }
+
+	        if (_this.timedout && _this.timedoutError) {
+	          reject(_this.timedoutError);
+	          return;
+	        }
+
+	        var error = new Error('Aborted');
+	        error.code = 'ABORTED';
+	        error.status = _this.status;
+	        error.method = _this.method;
+	        error.url = _this.url;
+	        reject(error);
+	      });
+	      self.end(function (error, res) {
+	        if (error) reject(error);else resolve(res);
+	      });
+	    });
+	  }
+
+	  return this._fullfilledPromise.then(resolve, reject);
+	};
+
+	RequestBase.prototype.catch = function (callback) {
+	  return this.then(undefined, callback);
+	};
+	/**
+	 * Allow for extension
+	 */
+
+
+	RequestBase.prototype.use = function (fn) {
+	  fn(this);
+	  return this;
+	};
+
+	RequestBase.prototype.ok = function (callback) {
+	  if (typeof callback !== 'function') throw new Error('Callback required');
+	  this._okCallback = callback;
+	  return this;
+	};
+
+	RequestBase.prototype._isResponseOK = function (res) {
+	  if (!res) {
+	    return false;
+	  }
+
+	  if (this._okCallback) {
+	    return this._okCallback(res);
+	  }
+
+	  return res.status >= 200 && res.status < 300;
+	};
+	/**
+	 * Get request header `field`.
+	 * Case-insensitive.
+	 *
+	 * @param {String} field
+	 * @return {String}
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.get = function (field) {
+	  return this._header[field.toLowerCase()];
+	};
+	/**
+	 * Get case-insensitive header `field` value.
+	 * This is a deprecated internal API. Use `.get(field)` instead.
+	 *
+	 * (getHeader is no longer used internally by the superagent code base)
+	 *
+	 * @param {String} field
+	 * @return {String}
+	 * @api private
+	 * @deprecated
+	 */
+
+
+	RequestBase.prototype.getHeader = RequestBase.prototype.get;
+	/**
+	 * Set header `field` to `val`, or multiple fields with one object.
+	 * Case-insensitive.
+	 *
+	 * Examples:
+	 *
+	 *      req.get('/')
+	 *        .set('Accept', 'application/json')
+	 *        .set('X-API-Key', 'foobar')
+	 *        .end(callback);
+	 *
+	 *      req.get('/')
+	 *        .set({ Accept: 'application/json', 'X-API-Key': 'foobar' })
+	 *        .end(callback);
+	 *
+	 * @param {String|Object} field
+	 * @param {String} val
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+	RequestBase.prototype.set = function (field, value) {
+	  if (isObject(field)) {
+	    for (var key in field) {
+	      if (hasOwn(field, key)) this.set(key, field[key]);
+	    }
+
+	    return this;
+	  }
+
+	  this._header[field.toLowerCase()] = value;
+	  this.header[field] = value;
+	  return this;
+	};
+	/**
+	 * Remove header `field`.
+	 * Case-insensitive.
+	 *
+	 * Example:
+	 *
+	 *      req.get('/')
+	 *        .unset('User-Agent')
+	 *        .end(callback);
+	 *
+	 * @param {String} field field name
+	 */
+
+
+	RequestBase.prototype.unset = function (field) {
+	  delete this._header[field.toLowerCase()];
+	  delete this.header[field];
+	  return this;
+	};
+	/**
+	 * Write the field `name` and `val`, or multiple fields with one object
+	 * for "multipart/form-data" request bodies.
+	 *
+	 * ``` js
+	 * request.post('/upload')
+	 *   .field('foo', 'bar')
+	 *   .end(callback);
+	 *
+	 * request.post('/upload')
+	 *   .field({ foo: 'bar', baz: 'qux' })
+	 *   .end(callback);
+	 * ```
+	 *
+	 * @param {String|Object} name name of field
+	 * @param {String|Blob|File|Buffer|fs.ReadStream} val value of field
+	 * @param {String} options extra options, e.g. 'blob'
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.field = function (name, value, options) {
+	  // name should be either a string or an object.
+	  if (name === null || undefined === name) {
+	    throw new Error('.field(name, val) name can not be empty');
+	  }
+
+	  if (this._data) {
+	    throw new Error(".field() can't be used if .send() is used. Please use only .send() or only .field() & .attach()");
+	  }
+
+	  if (isObject(name)) {
+	    for (var key in name) {
+	      if (hasOwn(name, key)) this.field(key, name[key]);
+	    }
+
+	    return this;
+	  }
+
+	  if (Array.isArray(value)) {
+	    for (var i in value) {
+	      if (hasOwn(value, i)) this.field(name, value[i]);
+	    }
+
+	    return this;
+	  } // val should be defined now
+
+
+	  if (value === null || undefined === value) {
+	    throw new Error('.field(name, val) val can not be empty');
+	  }
+
+	  if (typeof value === 'boolean') {
+	    value = String(value);
+	  } // fix https://github.com/visionmedia/superagent/issues/1680
+
+
+	  if (options) this._getFormData().append(name, value, options);else this._getFormData().append(name, value);
+	  return this;
+	};
+	/**
+	 * Abort the request, and clear potential timeout.
+	 *
+	 * @return {Request} request
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.abort = function () {
+	  if (this._aborted) {
+	    return this;
+	  }
+
+	  this._aborted = true;
+	  if (this.xhr) this.xhr.abort(); // browser
+
+	  if (this.req) {
+	    // Node v13 has major differences in `abort()`
+	    // https://github.com/nodejs/node/blob/v12.x/lib/internal/streams/end-of-stream.js
+	    // https://github.com/nodejs/node/blob/v13.x/lib/internal/streams/end-of-stream.js
+	    // https://github.com/nodejs/node/blob/v14.x/lib/internal/streams/end-of-stream.js
+	    // (if you run a diff across these you will see the differences)
+	    //
+	    // References:
+	    // <https://github.com/nodejs/node/issues/31630>
+	    // <https://github.com/visionmedia/superagent/pull/1084/commits/dc18679a7c5ccfc6046d882015e5126888973bc8>
+	    //
+	    // Thanks to @shadowgate15 and @niftylettuce
+	    if (semver.gte(process.version, 'v13.0.0') && semver.lt(process.version, 'v14.0.0')) {
+	      // Note that the reason this doesn't work is because in v13 as compared to v14
+	      // there is no `callback = nop` set in end-of-stream.js above
+	      throw new Error('Superagent does not work in v13 properly with abort() due to Node.js core changes');
+	    } else if (semver.gte(process.version, 'v14.0.0')) {
+	      // We have to manually set `destroyed` to `true` in order for this to work
+	      // (see core internals of end-of-stream.js above in v14 branch as compared to v12)
+	      this.req.destroyed = true;
+	    }
+
+	    this.req.abort(); // node
+	  }
+
+	  this.clearTimeout();
+	  this.emit('abort');
+	  return this;
+	};
+
+	RequestBase.prototype._auth = function (user, pass, options, base64Encoder) {
+	  switch (options.type) {
+	    case 'basic':
+	      this.set('Authorization', "Basic ".concat(base64Encoder("".concat(user, ":").concat(pass))));
+	      break;
+
+	    case 'auto':
+	      this.username = user;
+	      this.password = pass;
+	      break;
+
+	    case 'bearer':
+	      // usage would be .auth(accessToken, { type: 'bearer' })
+	      this.set('Authorization', "Bearer ".concat(user));
+	      break;
+	  }
+
+	  return this;
+	};
+	/**
+	 * Enable transmission of cookies with x-domain requests.
+	 *
+	 * Note that for this to work the origin must not be
+	 * using "Access-Control-Allow-Origin" with a wildcard,
+	 * and also must set "Access-Control-Allow-Credentials"
+	 * to "true".
+	 *
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.withCredentials = function (on) {
+	  // This is browser-only functionality. Node side is no-op.
+	  if (on === undefined) on = true;
+	  this._withCredentials = on;
+	  return this;
+	};
+	/**
+	 * Set the max redirects to `n`. Does nothing in browser XHR implementation.
+	 *
+	 * @param {Number} n
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.redirects = function (n) {
+	  this._maxRedirects = n;
+	  return this;
+	};
+	/**
+	 * Maximum size of buffered response body, in bytes. Counts uncompressed size.
+	 * Default 200MB.
+	 *
+	 * @param {Number} n number of bytes
+	 * @return {Request} for chaining
+	 */
+
+
+	RequestBase.prototype.maxResponseSize = function (n) {
+	  if (typeof n !== 'number') {
+	    throw new TypeError('Invalid argument');
+	  }
+
+	  this._maxResponseSize = n;
+	  return this;
+	};
+	/**
+	 * Convert to a plain javascript object (not JSON string) of scalar properties.
+	 * Note as this method is designed to return a useful non-this value,
+	 * it cannot be chained.
+	 *
+	 * @return {Object} describing method, url, and data of this request
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.toJSON = function () {
+	  return {
+	    method: this.method,
+	    url: this.url,
+	    data: this._data,
+	    headers: this._header
+	  };
+	};
+	/**
+	 * Send `data` as the request body, defaulting the `.type()` to "json" when
+	 * an object is given.
+	 *
+	 * Examples:
+	 *
+	 *       // manual json
+	 *       request.post('/user')
+	 *         .type('json')
+	 *         .send('{"name":"tj"}')
+	 *         .end(callback)
+	 *
+	 *       // auto json
+	 *       request.post('/user')
+	 *         .send({ name: 'tj' })
+	 *         .end(callback)
+	 *
+	 *       // manual x-www-form-urlencoded
+	 *       request.post('/user')
+	 *         .type('form')
+	 *         .send('name=tj')
+	 *         .end(callback)
+	 *
+	 *       // auto x-www-form-urlencoded
+	 *       request.post('/user')
+	 *         .type('form')
+	 *         .send({ name: 'tj' })
+	 *         .end(callback)
+	 *
+	 *       // defaults to x-www-form-urlencoded
+	 *      request.post('/user')
+	 *        .send('name=tobi')
+	 *        .send('species=ferret')
+	 *        .end(callback)
+	 *
+	 * @param {String|Object} data
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+	// eslint-disable-next-line complexity
+
+
+	RequestBase.prototype.send = function (data) {
+	  var isObject_ = isObject(data);
+	  var type = this._header['content-type'];
+
+	  if (this._formData) {
+	    throw new Error(".send() can't be used if .attach() or .field() is used. Please use only .send() or only .field() & .attach()");
+	  }
+
+	  if (isObject_ && !this._data) {
+	    if (Array.isArray(data)) {
+	      this._data = [];
+	    } else if (!this._isHost(data)) {
+	      this._data = {};
+	    }
+	  } else if (data && this._data && this._isHost(this._data)) {
+	    throw new Error("Can't merge these send calls");
+	  } // merge
+
+
+	  if (isObject_ && isObject(this._data)) {
+	    for (var key in data) {
+	      if (hasOwn(data, key)) this._data[key] = data[key];
+	    }
+	  } else if (typeof data === 'string') {
+	    // default to x-www-form-urlencoded
+	    if (!type) this.type('form');
+	    type = this._header['content-type'];
+	    if (type) type = type.toLowerCase().trim();
+
+	    if (type === 'application/x-www-form-urlencoded') {
+	      this._data = this._data ? "".concat(this._data, "&").concat(data) : data;
+	    } else {
+	      this._data = (this._data || '') + data;
+	    }
+	  } else {
+	    this._data = data;
+	  }
+
+	  if (!isObject_ || this._isHost(data)) {
+	    return this;
+	  } // default to json
+
+
+	  if (!type) this.type('json');
+	  return this;
+	};
+	/**
+	 * Sort `querystring` by the sort function
+	 *
+	 *
+	 * Examples:
+	 *
+	 *       // default order
+	 *       request.get('/user')
+	 *         .query('name=Nick')
+	 *         .query('search=Manny')
+	 *         .sortQuery()
+	 *         .end(callback)
+	 *
+	 *       // customized sort function
+	 *       request.get('/user')
+	 *         .query('name=Nick')
+	 *         .query('search=Manny')
+	 *         .sortQuery(function(a, b){
+	 *           return a.length - b.length;
+	 *         })
+	 *         .end(callback)
+	 *
+	 *
+	 * @param {Function} sort
+	 * @return {Request} for chaining
+	 * @api public
+	 */
+
+
+	RequestBase.prototype.sortQuery = function (sort) {
+	  // _sort default to true but otherwise can be a function or boolean
+	  this._sort = typeof sort === 'undefined' ? true : sort;
+	  return this;
+	};
+	/**
+	 * Compose querystring to append to req.url
+	 *
+	 * @api private
+	 */
+
+
+	RequestBase.prototype._finalizeQueryString = function () {
+	  var query = this._query.join('&');
+
+	  if (query) {
+	    this.url += (this.url.includes('?') ? '&' : '?') + query;
+	  }
+
+	  this._query.length = 0; // Makes the call idempotent
+
+	  if (this._sort) {
+	    var index = this.url.indexOf('?');
+
+	    if (index >= 0) {
+	      var queryArray = this.url.slice(index + 1).split('&');
+
+	      if (typeof this._sort === 'function') {
+	        queryArray.sort(this._sort);
+	      } else {
+	        queryArray.sort();
+	      }
+
+	      this.url = this.url.slice(0, index) + '?' + queryArray.join('&');
+	    }
+	  }
+	}; // For backwards compat only
+
+
+	RequestBase.prototype._appendQueryString = function () {
+	  console.warn('Unsupported');
+	};
+	/**
+	 * Invoke callback with timeout error.
+	 *
+	 * @api private
+	 */
+
+
+	RequestBase.prototype._timeoutError = function (reason, timeout, errno) {
+	  if (this._aborted) {
+	    return;
+	  }
+
+	  var error = new Error("".concat(reason + timeout, "ms exceeded"));
+	  error.timeout = timeout;
+	  error.code = 'ECONNABORTED';
+	  error.errno = errno;
+	  this.timedout = true;
+	  this.timedoutError = error;
+	  this.abort();
+	  this.callback(error);
+	};
+
+	RequestBase.prototype._setTimeouts = function () {
+	  var self = this; // deadline
+
+	  if (this._timeout && !this._timer) {
+	    this._timer = setTimeout(function () {
+	      self._timeoutError('Timeout of ', self._timeout, 'ETIME');
+	    }, this._timeout);
+	  } // response timeout
+
+
+	  if (this._responseTimeout && !this._responseTimeoutTimer) {
+	    this._responseTimeoutTimer = setTimeout(function () {
+	      self._timeoutError('Response timeout of ', self._responseTimeout, 'ETIMEDOUT');
+	    }, this._responseTimeout);
+	  }
+	};
+	
+	return requestBase;
+}
+
+var unzip = {};
+
+var hasRequiredUnzip;
+
+function requireUnzip () {
+	if (hasRequiredUnzip) return unzip;
+	hasRequiredUnzip = 1;
+
+	/**
+	 * Module dependencies.
+	 */
+	var _require = require$$1$8,
+	    StringDecoder = _require.StringDecoder;
+
+	var Stream = Stream$2;
+
+	var zlib = zlib$2;
+	/**
+	 * Buffers response data events and re-emits when they're unzipped.
+	 *
+	 * @param {Request} req
+	 * @param {Response} res
+	 * @api private
+	 */
+
+
+	unzip.unzip = function (request, res) {
+	  var unzip = zlib.createUnzip();
+	  var stream = new Stream();
+	  var decoder; // make node responseOnEnd() happy
+
+	  stream.req = request;
+	  unzip.on('error', function (error) {
+	    if (error && error.code === 'Z_BUF_ERROR') {
+	      // unexpected end of file is ignored by browsers and curl
+	      stream.emit('end');
+	      return;
+	    }
+
+	    stream.emit('error', error);
+	  }); // pipe to unzip
+
+	  res.pipe(unzip); // override `setEncoding` to capture encoding
+
+	  res.setEncoding = function (type) {
+	    decoder = new StringDecoder(type);
+	  }; // decode upon decompressing with captured encoding
+
+
+	  unzip.on('data', function (buf) {
+	    if (decoder) {
+	      var string_ = decoder.write(buf);
+	      if (string_.length > 0) stream.emit('data', string_);
+	    } else {
+	      stream.emit('data', buf);
+	    }
+	  });
+	  unzip.on('end', function () {
+	    stream.emit('end');
+	  }); // override `on` to capture data listeners
+
+	  var _on = res.on;
+
+	  res.on = function (type, fn) {
+	    if (type === 'data' || type === 'end') {
+	      stream.on(type, fn.bind(res));
+	    } else if (type === 'error') {
+	      stream.on(type, fn.bind(res));
+
+	      _on.call(res, type, fn);
+	    } else {
+	      _on.call(res, type, fn);
+	    }
+
+	    return this;
+	  };
+	};
+	
+	return unzip;
+}
+
+var responseBase;
+var hasRequiredResponseBase;
+
+function requireResponseBase () {
+	if (hasRequiredResponseBase) return responseBase;
+	hasRequiredResponseBase = 1;
+
+	/**
+	 * Module dependencies.
+	 */
+	var utils = requireUtils();
+	/**
+	 * Expose `ResponseBase`.
+	 */
+
+
+	responseBase = ResponseBase;
+	/**
+	 * Initialize a new `ResponseBase`.
+	 *
+	 * @api public
+	 */
+
+	function ResponseBase() {}
+	/**
+	 * Get case-insensitive `field` value.
+	 *
+	 * @param {String} field
+	 * @return {String}
+	 * @api public
+	 */
+
+
+	ResponseBase.prototype.get = function (field) {
+	  return this.header[field.toLowerCase()];
+	};
+	/**
+	 * Set header related properties:
+	 *
+	 *   - `.type` the content type without params
+	 *
+	 * A response of "Content-Type: text/plain; charset=utf-8"
+	 * will provide you with a `.type` of "text/plain".
+	 *
+	 * @param {Object} header
+	 * @api private
+	 */
+
+
+	ResponseBase.prototype._setHeaderProperties = function (header) {
+	  // TODO: moar!
+	  // TODO: make this a util
+	  // content-type
+	  var ct = header['content-type'] || '';
+	  this.type = utils.type(ct); // params
+
+	  var parameters = utils.params(ct);
+
+	  for (var key in parameters) {
+	    if (Object.prototype.hasOwnProperty.call(parameters, key)) this[key] = parameters[key];
+	  }
+
+	  this.links = {}; // links
+
+	  try {
+	    if (header.link) {
+	      this.links = utils.parseLinks(header.link);
+	    }
+	  } catch (_unused) {// ignore
+	  }
+	};
+	/**
+	 * Set flags such as `.ok` based on `status`.
+	 *
+	 * For example a 2xx response will give you a `.ok` of __true__
+	 * whereas 5xx will be __false__ and `.error` will be __true__. The
+	 * `.clientError` and `.serverError` are also available to be more
+	 * specific, and `.statusType` is the class of error ranging from 1..5
+	 * sometimes useful for mapping respond colors etc.
+	 *
+	 * "sugar" properties are also defined for common cases. Currently providing:
+	 *
+	 *   - .noContent
+	 *   - .badRequest
+	 *   - .unauthorized
+	 *   - .notAcceptable
+	 *   - .notFound
+	 *
+	 * @param {Number} status
+	 * @api private
+	 */
+
+
+	ResponseBase.prototype._setStatusProperties = function (status) {
+	  var type = Math.trunc(status / 100); // status / class
+
+	  this.statusCode = status;
+	  this.status = this.statusCode;
+	  this.statusType = type; // basics
+
+	  this.info = type === 1;
+	  this.ok = type === 2;
+	  this.redirect = type === 3;
+	  this.clientError = type === 4;
+	  this.serverError = type === 5;
+	  this.error = type === 4 || type === 5 ? this.toError() : false; // sugar
+
+	  this.created = status === 201;
+	  this.accepted = status === 202;
+	  this.noContent = status === 204;
+	  this.badRequest = status === 400;
+	  this.unauthorized = status === 401;
+	  this.notAcceptable = status === 406;
+	  this.forbidden = status === 403;
+	  this.notFound = status === 404;
+	  this.unprocessableEntity = status === 422;
+	};
+	
+	return responseBase;
+}
+
+var response;
+var hasRequiredResponse;
+
+function requireResponse () {
+	if (hasRequiredResponse) return response;
+	hasRequiredResponse = 1;
+
+	/**
+	 * Module dependencies.
+	 */
+	var util = require$$1$7;
+
+	var Stream = Stream$2;
+
+	var ResponseBase = requireResponseBase();
+
+	var _require = requireUtils(),
+	    mixin = _require.mixin;
+	/**
+	 * Expose `Response`.
+	 */
+
+
+	response = Response;
+	/**
+	 * Initialize a new `Response` with the given `xhr`.
+	 *
+	 *  - set flags (.ok, .error, etc)
+	 *  - parse header
+	 *
+	 * @param {Request} req
+	 * @param {Object} options
+	 * @constructor
+	 * @extends {Stream}
+	 * @implements {ReadableStream}
+	 * @api private
+	 */
+
+	function Response(request) {
+	  Stream.call(this);
+	  this.res = request.res;
+	  var res = this.res;
+	  this.request = request;
+	  this.req = request.req;
+	  this.text = res.text;
+	  this.files = res.files || {};
+	  this.buffered = request._resBuffered;
+	  this.headers = res.headers;
+	  this.header = this.headers;
+
+	  this._setStatusProperties(res.statusCode);
+
+	  this._setHeaderProperties(this.header);
+
+	  this.setEncoding = res.setEncoding.bind(res);
+	  res.on('data', this.emit.bind(this, 'data'));
+	  res.on('end', this.emit.bind(this, 'end'));
+	  res.on('close', this.emit.bind(this, 'close'));
+	  res.on('error', this.emit.bind(this, 'error'));
+	} // Lazy access res.body.
+	// https://github.com/nodejs/node/pull/39520#issuecomment-889697136
+
+
+	Object.defineProperty(Response.prototype, 'body', {
+	  get: function get() {
+	    return this._body !== undefined ? this._body : this.res.body !== undefined ? this.res.body : {};
+	  },
+	  set: function set(value) {
+	    this._body = value;
+	  }
+	});
+	/**
+	 * Inherit from `Stream`.
+	 */
+
+	util.inherits(Response, Stream);
+	mixin(Response.prototype, ResponseBase.prototype);
+	/**
+	 * Implements methods of a `ReadableStream`
+	 */
+
+	Response.prototype.destroy = function (error) {
+	  this.res.destroy(error);
+	};
+	/**
+	 * Pause.
+	 */
+
+
+	Response.prototype.pause = function () {
+	  this.res.pause();
+	};
+	/**
+	 * Resume.
+	 */
+
+
+	Response.prototype.resume = function () {
+	  this.res.resume();
+	};
+	/**
+	 * Return an `Error` representative of this response.
+	 *
+	 * @return {Error}
+	 * @api public
+	 */
+
+
+	Response.prototype.toError = function () {
+	  var req = this.req;
+	  var method = req.method;
+	  var path = req.path;
+	  var message = "cannot ".concat(method, " ").concat(path, " (").concat(this.status, ")");
+	  var error = new Error(message);
+	  error.status = this.status;
+	  error.text = this.text;
+	  error.method = method;
+	  error.path = path;
+	  return error;
+	};
+
+	Response.prototype.setStatusProperties = function (status) {
+	  console.warn('In superagent 2.x setStatusProperties is a private method');
+	  return this._setStatusProperties(status);
+	};
+	/**
+	 * To json.
+	 *
+	 * @return {Object}
+	 * @api public
+	 */
+
+
+	Response.prototype.toJSON = function () {
+	  return {
+	    req: this.request.toJSON(),
+	    header: this.header,
+	    status: this.status,
+	    text: this.text
+	  };
+	};
+	
+	return response;
+}
+
+var http2wrapper = {};
+
+var hasRequiredHttp2wrapper;
+
+function requireHttp2wrapper () {
+	if (hasRequiredHttp2wrapper) return http2wrapper;
+	hasRequiredHttp2wrapper = 1;
+
+	function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { _defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+
+	function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
+	var Stream = Stream$2;
+
+	var util = require$$1$7;
+
+	var net = require$$4$2;
+
+	var tls = require$$1$9; // eslint-disable-next-line node/no-deprecated-api
+
+
+	var _require = Url$2,
+	    parse = _require.parse;
+
+	var process = require$$5$3;
+
+	var semverGte = requireGte();
+
+	var http2;
+	if (semverGte(process.version, 'v10.10.0')) http2 = require$$7$1;else throw new Error('superagent: this version of Node.js does not support http2');
+	var _http2$constants = http2.constants,
+	    HTTP2_HEADER_PATH = _http2$constants.HTTP2_HEADER_PATH,
+	    HTTP2_HEADER_STATUS = _http2$constants.HTTP2_HEADER_STATUS,
+	    HTTP2_HEADER_METHOD = _http2$constants.HTTP2_HEADER_METHOD,
+	    HTTP2_HEADER_AUTHORITY = _http2$constants.HTTP2_HEADER_AUTHORITY,
+	    HTTP2_HEADER_HOST = _http2$constants.HTTP2_HEADER_HOST,
+	    HTTP2_HEADER_SET_COOKIE = _http2$constants.HTTP2_HEADER_SET_COOKIE,
+	    NGHTTP2_CANCEL = _http2$constants.NGHTTP2_CANCEL;
+
+	function setProtocol(protocol) {
+	  return {
+	    request: function request(options) {
+	      return new Request(protocol, options);
+	    }
+	  };
+	}
+
+	function Request(protocol, options) {
+	  var _this = this;
+
+	  Stream.call(this);
+	  var defaultPort = protocol === 'https:' ? 443 : 80;
+	  var defaultHost = 'localhost';
+	  var port = options.port || defaultPort;
+	  var host = options.host || defaultHost;
+	  delete options.port;
+	  delete options.host;
+	  this.method = options.method;
+	  this.path = options.path;
+	  this.protocol = protocol;
+	  this.host = host;
+	  delete options.method;
+	  delete options.path;
+
+	  var sessionOptions = _objectSpread({}, options);
+
+	  if (options.socketPath) {
+	    sessionOptions.socketPath = options.socketPath;
+	    sessionOptions.createConnection = this.createUnixConnection.bind(this);
+	  }
+
+	  this._headers = {};
+	  var session = http2.connect("".concat(protocol, "//").concat(host, ":").concat(port), sessionOptions);
+	  this.setHeader('host', "".concat(host, ":").concat(port));
+	  session.on('error', function (error) {
+	    return _this.emit('error', error);
+	  });
+	  this.session = session;
+	}
+	/**
+	 * Inherit from `Stream` (which inherits from `EventEmitter`).
+	 */
+
+
+	util.inherits(Request, Stream);
+
+	Request.prototype.createUnixConnection = function (authority, options) {
+	  switch (this.protocol) {
+	    case 'http:':
+	      return net.connect(options.socketPath);
+
+	    case 'https:':
+	      options.ALPNProtocols = ['h2'];
+	      options.servername = this.host;
+	      options.allowHalfOpen = true;
+	      return tls.connect(options.socketPath, options);
+
+	    default:
+	      throw new Error('Unsupported protocol', this.protocol);
+	  }
+	}; // eslint-disable-next-line no-unused-vars
+
+
+	Request.prototype.setNoDelay = function (bool) {// We can not use setNoDelay with HTTP/2.
+	  // Node 10 limits http2session.socket methods to ones safe to use with HTTP/2.
+	  // See also https://nodejs.org/api/http2.html#http2_http2session_socket
+	};
+
+	Request.prototype.getFrame = function () {
+	  var _method,
+	      _this2 = this;
+
+	  if (this.frame) {
+	    return this.frame;
+	  }
+
+	  var method = (_method = {}, _defineProperty(_method, HTTP2_HEADER_PATH, this.path), _defineProperty(_method, HTTP2_HEADER_METHOD, this.method), _method);
+	  var headers = this.mapToHttp2Header(this._headers);
+	  headers = Object.assign(headers, method);
+	  var frame = this.session.request(headers); // eslint-disable-next-line no-unused-vars
+
+	  frame.once('response', function (headers, flags) {
+	    headers = _this2.mapToHttpHeader(headers);
+	    frame.headers = headers;
+	    frame.statusCode = headers[HTTP2_HEADER_STATUS];
+	    frame.status = frame.statusCode;
+
+	    _this2.emit('response', frame);
+	  });
+	  this._headerSent = true;
+	  frame.once('drain', function () {
+	    return _this2.emit('drain');
+	  });
+	  frame.on('error', function (error) {
+	    return _this2.emit('error', error);
+	  });
+	  frame.on('close', function () {
+	    return _this2.session.close();
+	  });
+	  this.frame = frame;
+	  return frame;
+	};
+
+	Request.prototype.mapToHttpHeader = function (headers) {
+	  var keys = Object.keys(headers);
+	  var http2Headers = {};
+
+	  for (var _i = 0, _keys = keys; _i < _keys.length; _i++) {
+	    var key = _keys[_i];
+	    var value = headers[key];
+	    key = key.toLowerCase();
+
+	    switch (key) {
+	      case HTTP2_HEADER_SET_COOKIE:
+	        value = Array.isArray(value) ? value : [value];
+	        break;
+	    }
+
+	    http2Headers[key] = value;
+	  }
+
+	  return http2Headers;
+	};
+
+	Request.prototype.mapToHttp2Header = function (headers) {
+	  var keys = Object.keys(headers);
+	  var http2Headers = {};
+
+	  for (var _i2 = 0, _keys2 = keys; _i2 < _keys2.length; _i2++) {
+	    var key = _keys2[_i2];
+	    var value = headers[key];
+	    key = key.toLowerCase();
+
+	    switch (key) {
+	      case HTTP2_HEADER_HOST:
+	        key = HTTP2_HEADER_AUTHORITY;
+	        value = /^http:\/\/|^https:\/\//.test(value) ? parse(value).host : value;
+	        break;
+	    }
+
+	    http2Headers[key] = value;
+	  }
+
+	  return http2Headers;
+	};
+
+	Request.prototype.setHeader = function (name, value) {
+	  this._headers[name.toLowerCase()] = value;
+	};
+
+	Request.prototype.getHeader = function (name) {
+	  return this._headers[name.toLowerCase()];
+	};
+
+	Request.prototype.write = function (data, encoding) {
+	  var frame = this.getFrame();
+	  return frame.write(data, encoding);
+	};
+
+	Request.prototype.pipe = function (stream, options) {
+	  var frame = this.getFrame();
+	  return frame.pipe(stream, options);
+	};
+
+	Request.prototype.end = function (data) {
+	  var frame = this.getFrame();
+	  frame.end(data);
+	}; // eslint-disable-next-line no-unused-vars
+
+
+	Request.prototype.abort = function (data) {
+	  var frame = this.getFrame();
+	  frame.close(NGHTTP2_CANCEL);
+	  this.session.destroy();
+	};
+
+	http2wrapper.setProtocol = setProtocol;
+	
+	return http2wrapper;
+}
+
+var agentBase;
+var hasRequiredAgentBase;
+
+function requireAgentBase () {
+	if (hasRequiredAgentBase) return agentBase;
+	hasRequiredAgentBase = 1;
+
+	function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread(); }
+
+	function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+
+	function _iterableToArray(iter) { if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter); }
+
+	function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) return _arrayLikeToArray(arr); }
+
+	function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it.return != null) it.return(); } finally { if (didErr) throw err; } } }; }
+
+	function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+
+	function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
+	function Agent() {
+	  this._defaults = [];
+	}
+
+	var _loop = function _loop() {
