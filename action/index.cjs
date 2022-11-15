@@ -24806,3 +24806,2196 @@ function composeNode(state, parentIndent, nodeContext, allowToSeek, allowCompact
   if (indentStatus === 1 || CONTEXT_BLOCK_OUT === nodeContext) {
     if (CONTEXT_FLOW_IN === nodeContext || CONTEXT_FLOW_OUT === nodeContext) {
       flowIndent = parentIndent;
+    } else {
+      flowIndent = parentIndent + 1;
+    }
+
+    blockIndent = state.position - state.lineStart;
+
+    if (indentStatus === 1) {
+      if (allowBlockCollections &&
+          (readBlockSequence(state, blockIndent) ||
+           readBlockMapping(state, blockIndent, flowIndent)) ||
+          readFlowCollection(state, flowIndent)) {
+        hasContent = true;
+      } else {
+        if ((allowBlockScalars && readBlockScalar(state, flowIndent)) ||
+            readSingleQuotedScalar(state, flowIndent) ||
+            readDoubleQuotedScalar(state, flowIndent)) {
+          hasContent = true;
+
+        } else if (readAlias(state)) {
+          hasContent = true;
+
+          if (state.tag !== null || state.anchor !== null) {
+            throwError(state, 'alias node should not have any properties');
+          }
+
+        } else if (readPlainScalar(state, flowIndent, CONTEXT_FLOW_IN === nodeContext)) {
+          hasContent = true;
+
+          if (state.tag === null) {
+            state.tag = '?';
+          }
+        }
+
+        if (state.anchor !== null) {
+          state.anchorMap[state.anchor] = state.result;
+        }
+      }
+    } else if (indentStatus === 0) {
+      // Special case: block sequences are allowed to have same indentation level as the parent.
+      // http://www.yaml.org/spec/1.2/spec.html#id2799784
+      hasContent = allowBlockCollections && readBlockSequence(state, blockIndent);
+    }
+  }
+
+  if (state.tag === null) {
+    if (state.anchor !== null) {
+      state.anchorMap[state.anchor] = state.result;
+    }
+
+  } else if (state.tag === '?') {
+    // Implicit resolving is not allowed for non-scalar types, and '?'
+    // non-specific tag is only automatically assigned to plain scalars.
+    //
+    // We only need to check kind conformity in case user explicitly assigns '?'
+    // tag, for example like this: "!<?> [0]"
+    //
+    if (state.result !== null && state.kind !== 'scalar') {
+      throwError(state, 'unacceptable node kind for !<?> tag; it should be "scalar", not "' + state.kind + '"');
+    }
+
+    for (typeIndex = 0, typeQuantity = state.implicitTypes.length; typeIndex < typeQuantity; typeIndex += 1) {
+      type = state.implicitTypes[typeIndex];
+
+      if (type.resolve(state.result)) { // `state.result` updated in resolver if matched
+        state.result = type.construct(state.result);
+        state.tag = type.tag;
+        if (state.anchor !== null) {
+          state.anchorMap[state.anchor] = state.result;
+        }
+        break;
+      }
+    }
+  } else if (state.tag !== '!') {
+    if (_hasOwnProperty.call(state.typeMap[state.kind || 'fallback'], state.tag)) {
+      type = state.typeMap[state.kind || 'fallback'][state.tag];
+    } else {
+      // looking for multi type
+      type = null;
+      typeList = state.typeMap.multi[state.kind || 'fallback'];
+
+      for (typeIndex = 0, typeQuantity = typeList.length; typeIndex < typeQuantity; typeIndex += 1) {
+        if (state.tag.slice(0, typeList[typeIndex].tag.length) === typeList[typeIndex].tag) {
+          type = typeList[typeIndex];
+          break;
+        }
+      }
+    }
+
+    if (!type) {
+      throwError(state, 'unknown tag !<' + state.tag + '>');
+    }
+
+    if (state.result !== null && type.kind !== state.kind) {
+      throwError(state, 'unacceptable node kind for !<' + state.tag + '> tag; it should be "' + type.kind + '", not "' + state.kind + '"');
+    }
+
+    if (!type.resolve(state.result, state.tag)) { // `state.result` updated in resolver if matched
+      throwError(state, 'cannot resolve a node with !<' + state.tag + '> explicit tag');
+    } else {
+      state.result = type.construct(state.result, state.tag);
+      if (state.anchor !== null) {
+        state.anchorMap[state.anchor] = state.result;
+      }
+    }
+  }
+
+  if (state.listener !== null) {
+    state.listener('close', state);
+  }
+  return state.tag !== null ||  state.anchor !== null || hasContent;
+}
+
+function readDocument(state) {
+  var documentStart = state.position,
+      _position,
+      directiveName,
+      directiveArgs,
+      hasDirectives = false,
+      ch;
+
+  state.version = null;
+  state.checkLineBreaks = state.legacy;
+  state.tagMap = Object.create(null);
+  state.anchorMap = Object.create(null);
+
+  while ((ch = state.input.charCodeAt(state.position)) !== 0) {
+    skipSeparationSpace(state, true, -1);
+
+    ch = state.input.charCodeAt(state.position);
+
+    if (state.lineIndent > 0 || ch !== 0x25/* % */) {
+      break;
+    }
+
+    hasDirectives = true;
+    ch = state.input.charCodeAt(++state.position);
+    _position = state.position;
+
+    while (ch !== 0 && !is_WS_OR_EOL(ch)) {
+      ch = state.input.charCodeAt(++state.position);
+    }
+
+    directiveName = state.input.slice(_position, state.position);
+    directiveArgs = [];
+
+    if (directiveName.length < 1) {
+      throwError(state, 'directive name must not be less than one character in length');
+    }
+
+    while (ch !== 0) {
+      while (is_WHITE_SPACE(ch)) {
+        ch = state.input.charCodeAt(++state.position);
+      }
+
+      if (ch === 0x23/* # */) {
+        do { ch = state.input.charCodeAt(++state.position); }
+        while (ch !== 0 && !is_EOL(ch));
+        break;
+      }
+
+      if (is_EOL(ch)) break;
+
+      _position = state.position;
+
+      while (ch !== 0 && !is_WS_OR_EOL(ch)) {
+        ch = state.input.charCodeAt(++state.position);
+      }
+
+      directiveArgs.push(state.input.slice(_position, state.position));
+    }
+
+    if (ch !== 0) readLineBreak(state);
+
+    if (_hasOwnProperty.call(directiveHandlers, directiveName)) {
+      directiveHandlers[directiveName](state, directiveName, directiveArgs);
+    } else {
+      throwWarning(state, 'unknown document directive "' + directiveName + '"');
+    }
+  }
+
+  skipSeparationSpace(state, true, -1);
+
+  if (state.lineIndent === 0 &&
+      state.input.charCodeAt(state.position)     === 0x2D/* - */ &&
+      state.input.charCodeAt(state.position + 1) === 0x2D/* - */ &&
+      state.input.charCodeAt(state.position + 2) === 0x2D/* - */) {
+    state.position += 3;
+    skipSeparationSpace(state, true, -1);
+
+  } else if (hasDirectives) {
+    throwError(state, 'directives end mark is expected');
+  }
+
+  composeNode(state, state.lineIndent - 1, CONTEXT_BLOCK_OUT, false, true);
+  skipSeparationSpace(state, true, -1);
+
+  if (state.checkLineBreaks &&
+      PATTERN_NON_ASCII_LINE_BREAKS.test(state.input.slice(documentStart, state.position))) {
+    throwWarning(state, 'non-ASCII line breaks are interpreted as content');
+  }
+
+  state.documents.push(state.result);
+
+  if (state.position === state.lineStart && testDocumentSeparator(state)) {
+
+    if (state.input.charCodeAt(state.position) === 0x2E/* . */) {
+      state.position += 3;
+      skipSeparationSpace(state, true, -1);
+    }
+    return;
+  }
+
+  if (state.position < (state.length - 1)) {
+    throwError(state, 'end of the stream or a document separator is expected');
+  } else {
+    return;
+  }
+}
+
+
+function loadDocuments(input, options) {
+  input = String(input);
+  options = options || {};
+
+  if (input.length !== 0) {
+
+    // Add tailing `\n` if not exists
+    if (input.charCodeAt(input.length - 1) !== 0x0A/* LF */ &&
+        input.charCodeAt(input.length - 1) !== 0x0D/* CR */) {
+      input += '\n';
+    }
+
+    // Strip BOM
+    if (input.charCodeAt(0) === 0xFEFF) {
+      input = input.slice(1);
+    }
+  }
+
+  var state = new State(input, options);
+
+  var nullpos = input.indexOf('\0');
+
+  if (nullpos !== -1) {
+    state.position = nullpos;
+    throwError(state, 'null byte is not allowed in input');
+  }
+
+  // Use 0 as string terminator. That significantly simplifies bounds check.
+  state.input += '\0';
+
+  while (state.input.charCodeAt(state.position) === 0x20/* Space */) {
+    state.lineIndent += 1;
+    state.position += 1;
+  }
+
+  while (state.position < (state.length - 1)) {
+    readDocument(state);
+  }
+
+  return state.documents;
+}
+
+
+function loadAll(input, iterator, options) {
+  if (iterator !== null && typeof iterator === 'object' && typeof options === 'undefined') {
+    options = iterator;
+    iterator = null;
+  }
+
+  var documents = loadDocuments(input, options);
+
+  if (typeof iterator !== 'function') {
+    return documents;
+  }
+
+  for (var index = 0, length = documents.length; index < length; index += 1) {
+    iterator(documents[index]);
+  }
+}
+
+
+function load(input, options) {
+  var documents = loadDocuments(input, options);
+
+  if (documents.length === 0) {
+    /*eslint-disable no-undefined*/
+    return undefined;
+  } else if (documents.length === 1) {
+    return documents[0];
+  }
+  throw new YAMLException('expected a single document in the stream, but found more');
+}
+
+
+module.exports.loadAll = loadAll;
+module.exports.load    = load;
+
+
+/***/ }),
+
+/***/ 22258:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+/*eslint-disable max-len*/
+
+var YAMLException = __nccwpck_require__(30780);
+var Type          = __nccwpck_require__(57480);
+
+
+function compileList(schema, name) {
+  var result = [];
+
+  schema[name].forEach(function (currentType) {
+    var newIndex = result.length;
+
+    result.forEach(function (previousType, previousIndex) {
+      if (previousType.tag === currentType.tag &&
+          previousType.kind === currentType.kind &&
+          previousType.multi === currentType.multi) {
+
+        newIndex = previousIndex;
+      }
+    });
+
+    result[newIndex] = currentType;
+  });
+
+  return result;
+}
+
+
+function compileMap(/* lists... */) {
+  var result = {
+        scalar: {},
+        sequence: {},
+        mapping: {},
+        fallback: {},
+        multi: {
+          scalar: [],
+          sequence: [],
+          mapping: [],
+          fallback: []
+        }
+      }, index, length;
+
+  function collectType(type) {
+    if (type.multi) {
+      result.multi[type.kind].push(type);
+      result.multi['fallback'].push(type);
+    } else {
+      result[type.kind][type.tag] = result['fallback'][type.tag] = type;
+    }
+  }
+
+  for (index = 0, length = arguments.length; index < length; index += 1) {
+    arguments[index].forEach(collectType);
+  }
+  return result;
+}
+
+
+function Schema(definition) {
+  return this.extend(definition);
+}
+
+
+Schema.prototype.extend = function extend(definition) {
+  var implicit = [];
+  var explicit = [];
+
+  if (definition instanceof Type) {
+    // Schema.extend(type)
+    explicit.push(definition);
+
+  } else if (Array.isArray(definition)) {
+    // Schema.extend([ type1, type2, ... ])
+    explicit = explicit.concat(definition);
+
+  } else if (definition && (Array.isArray(definition.implicit) || Array.isArray(definition.explicit))) {
+    // Schema.extend({ explicit: [ type1, type2, ... ], implicit: [ type1, type2, ... ] })
+    if (definition.implicit) implicit = implicit.concat(definition.implicit);
+    if (definition.explicit) explicit = explicit.concat(definition.explicit);
+
+  } else {
+    throw new YAMLException('Schema.extend argument should be a Type, [ Type ], ' +
+      'or a schema definition ({ implicit: [...], explicit: [...] })');
+  }
+
+  implicit.forEach(function (type) {
+    if (!(type instanceof Type)) {
+      throw new YAMLException('Specified list of YAML types (or a single Type object) contains a non-Type object.');
+    }
+
+    if (type.loadKind && type.loadKind !== 'scalar') {
+      throw new YAMLException('There is a non-scalar type in the implicit list of a schema. Implicit resolving of such types is not supported.');
+    }
+
+    if (type.multi) {
+      throw new YAMLException('There is a multi type in the implicit list of a schema. Multi tags can only be listed as explicit.');
+    }
+  });
+
+  explicit.forEach(function (type) {
+    if (!(type instanceof Type)) {
+      throw new YAMLException('Specified list of YAML types (or a single Type object) contains a non-Type object.');
+    }
+  });
+
+  var result = Object.create(Schema.prototype);
+
+  result.implicit = (this.implicit || []).concat(implicit);
+  result.explicit = (this.explicit || []).concat(explicit);
+
+  result.compiledImplicit = compileList(result, 'implicit');
+  result.compiledExplicit = compileList(result, 'explicit');
+  result.compiledTypeMap  = compileMap(result.compiledImplicit, result.compiledExplicit);
+
+  return result;
+};
+
+
+module.exports = Schema;
+
+
+/***/ }),
+
+/***/ 90085:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+// Standard YAML's Core schema.
+// http://www.yaml.org/spec/1.2/spec.html#id2804923
+//
+// NOTE: JS-YAML does not support schema-specific tag resolution restrictions.
+// So, Core schema has no distinctions from JSON schema is JS-YAML.
+
+
+
+
+
+module.exports = __nccwpck_require__(70265);
+
+
+/***/ }),
+
+/***/ 77599:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+// JS-YAML's default schema for `safeLoad` function.
+// It is not described in the YAML specification.
+//
+// This schema is based on standard YAML's Core schema and includes most of
+// extra types described at YAML tag repository. (http://yaml.org/type/)
+
+
+
+
+
+module.exports = (__nccwpck_require__(90085).extend)({
+  implicit: [
+    __nccwpck_require__(9561),
+    __nccwpck_require__(70884)
+  ],
+  explicit: [
+    __nccwpck_require__(56942),
+    __nccwpck_require__(65894),
+    __nccwpck_require__(18978),
+    __nccwpck_require__(87424)
+  ]
+});
+
+
+/***/ }),
+
+/***/ 54323:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+// Standard YAML's Failsafe schema.
+// http://www.yaml.org/spec/1.2/spec.html#id2802346
+
+
+
+
+
+var Schema = __nccwpck_require__(22258);
+
+
+module.exports = new Schema({
+  explicit: [
+    __nccwpck_require__(32568),
+    __nccwpck_require__(89695),
+    __nccwpck_require__(74352)
+  ]
+});
+
+
+/***/ }),
+
+/***/ 70265:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+// Standard YAML's JSON schema.
+// http://www.yaml.org/spec/1.2/spec.html#id2803231
+//
+// NOTE: JS-YAML does not support schema-specific tag resolution restrictions.
+// So, this schema is not such strict as defined in the YAML specification.
+// It allows numbers in binary notaion, use `Null` and `NULL` as `null`, etc.
+
+
+
+
+
+module.exports = (__nccwpck_require__(54323).extend)({
+  implicit: [
+    __nccwpck_require__(61002),
+    __nccwpck_require__(85327),
+    __nccwpck_require__(2848),
+    __nccwpck_require__(56128)
+  ]
+});
+
+
+/***/ }),
+
+/***/ 68947:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+
+var common = __nccwpck_require__(44828);
+
+
+// get snippet for a single line, respecting maxLength
+function getLine(buffer, lineStart, lineEnd, position, maxLineLength) {
+  var head = '';
+  var tail = '';
+  var maxHalfLength = Math.floor(maxLineLength / 2) - 1;
+
+  if (position - lineStart > maxHalfLength) {
+    head = ' ... ';
+    lineStart = position - maxHalfLength + head.length;
+  }
+
+  if (lineEnd - position > maxHalfLength) {
+    tail = ' ...';
+    lineEnd = position + maxHalfLength - tail.length;
+  }
+
+  return {
+    str: head + buffer.slice(lineStart, lineEnd).replace(/\t/g, '→') + tail,
+    pos: position - lineStart + head.length // relative position
+  };
+}
+
+
+function padStart(string, max) {
+  return common.repeat(' ', max - string.length) + string;
+}
+
+
+function makeSnippet(mark, options) {
+  options = Object.create(options || null);
+
+  if (!mark.buffer) return null;
+
+  if (!options.maxLength) options.maxLength = 79;
+  if (typeof options.indent      !== 'number') options.indent      = 1;
+  if (typeof options.linesBefore !== 'number') options.linesBefore = 3;
+  if (typeof options.linesAfter  !== 'number') options.linesAfter  = 2;
+
+  var re = /\r?\n|\r|\0/g;
+  var lineStarts = [ 0 ];
+  var lineEnds = [];
+  var match;
+  var foundLineNo = -1;
+
+  while ((match = re.exec(mark.buffer))) {
+    lineEnds.push(match.index);
+    lineStarts.push(match.index + match[0].length);
+
+    if (mark.position <= match.index && foundLineNo < 0) {
+      foundLineNo = lineStarts.length - 2;
+    }
+  }
+
+  if (foundLineNo < 0) foundLineNo = lineStarts.length - 1;
+
+  var result = '', i, line;
+  var lineNoLength = Math.min(mark.line + options.linesAfter, lineEnds.length).toString().length;
+  var maxLineLength = options.maxLength - (options.indent + lineNoLength + 3);
+
+  for (i = 1; i <= options.linesBefore; i++) {
+    if (foundLineNo - i < 0) break;
+    line = getLine(
+      mark.buffer,
+      lineStarts[foundLineNo - i],
+      lineEnds[foundLineNo - i],
+      mark.position - (lineStarts[foundLineNo] - lineStarts[foundLineNo - i]),
+      maxLineLength
+    );
+    result = common.repeat(' ', options.indent) + padStart((mark.line - i + 1).toString(), lineNoLength) +
+      ' | ' + line.str + '\n' + result;
+  }
+
+  line = getLine(mark.buffer, lineStarts[foundLineNo], lineEnds[foundLineNo], mark.position, maxLineLength);
+  result += common.repeat(' ', options.indent) + padStart((mark.line + 1).toString(), lineNoLength) +
+    ' | ' + line.str + '\n';
+  result += common.repeat('-', options.indent + lineNoLength + 3 + line.pos) + '^' + '\n';
+
+  for (i = 1; i <= options.linesAfter; i++) {
+    if (foundLineNo + i >= lineEnds.length) break;
+    line = getLine(
+      mark.buffer,
+      lineStarts[foundLineNo + i],
+      lineEnds[foundLineNo + i],
+      mark.position - (lineStarts[foundLineNo] - lineStarts[foundLineNo + i]),
+      maxLineLength
+    );
+    result += common.repeat(' ', options.indent) + padStart((mark.line + i + 1).toString(), lineNoLength) +
+      ' | ' + line.str + '\n';
+  }
+
+  return result.replace(/\n$/, '');
+}
+
+
+module.exports = makeSnippet;
+
+
+/***/ }),
+
+/***/ 57480:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var YAMLException = __nccwpck_require__(30780);
+
+var TYPE_CONSTRUCTOR_OPTIONS = [
+  'kind',
+  'multi',
+  'resolve',
+  'construct',
+  'instanceOf',
+  'predicate',
+  'represent',
+  'representName',
+  'defaultStyle',
+  'styleAliases'
+];
+
+var YAML_NODE_KINDS = [
+  'scalar',
+  'sequence',
+  'mapping'
+];
+
+function compileStyleAliases(map) {
+  var result = {};
+
+  if (map !== null) {
+    Object.keys(map).forEach(function (style) {
+      map[style].forEach(function (alias) {
+        result[String(alias)] = style;
+      });
+    });
+  }
+
+  return result;
+}
+
+function Type(tag, options) {
+  options = options || {};
+
+  Object.keys(options).forEach(function (name) {
+    if (TYPE_CONSTRUCTOR_OPTIONS.indexOf(name) === -1) {
+      throw new YAMLException('Unknown option "' + name + '" is met in definition of "' + tag + '" YAML type.');
+    }
+  });
+
+  // TODO: Add tag format check.
+  this.options       = options; // keep original options in case user wants to extend this type later
+  this.tag           = tag;
+  this.kind          = options['kind']          || null;
+  this.resolve       = options['resolve']       || function () { return true; };
+  this.construct     = options['construct']     || function (data) { return data; };
+  this.instanceOf    = options['instanceOf']    || null;
+  this.predicate     = options['predicate']     || null;
+  this.represent     = options['represent']     || null;
+  this.representName = options['representName'] || null;
+  this.defaultStyle  = options['defaultStyle']  || null;
+  this.multi         = options['multi']         || false;
+  this.styleAliases  = compileStyleAliases(options['styleAliases'] || null);
+
+  if (YAML_NODE_KINDS.indexOf(this.kind) === -1) {
+    throw new YAMLException('Unknown kind "' + this.kind + '" is specified for "' + tag + '" YAML type.');
+  }
+}
+
+module.exports = Type;
+
+
+/***/ }),
+
+/***/ 56942:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+/*eslint-disable no-bitwise*/
+
+
+var Type = __nccwpck_require__(57480);
+
+
+// [ 64, 65, 66 ] -> [ padding, CR, LF ]
+var BASE64_MAP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r';
+
+
+function resolveYamlBinary(data) {
+  if (data === null) return false;
+
+  var code, idx, bitlen = 0, max = data.length, map = BASE64_MAP;
+
+  // Convert one by one.
+  for (idx = 0; idx < max; idx++) {
+    code = map.indexOf(data.charAt(idx));
+
+    // Skip CR/LF
+    if (code > 64) continue;
+
+    // Fail on illegal characters
+    if (code < 0) return false;
+
+    bitlen += 6;
+  }
+
+  // If there are any bits left, source was corrupted
+  return (bitlen % 8) === 0;
+}
+
+function constructYamlBinary(data) {
+  var idx, tailbits,
+      input = data.replace(/[\r\n=]/g, ''), // remove CR/LF & padding to simplify scan
+      max = input.length,
+      map = BASE64_MAP,
+      bits = 0,
+      result = [];
+
+  // Collect by 6*4 bits (3 bytes)
+
+  for (idx = 0; idx < max; idx++) {
+    if ((idx % 4 === 0) && idx) {
+      result.push((bits >> 16) & 0xFF);
+      result.push((bits >> 8) & 0xFF);
+      result.push(bits & 0xFF);
+    }
+
+    bits = (bits << 6) | map.indexOf(input.charAt(idx));
+  }
+
+  // Dump tail
+
+  tailbits = (max % 4) * 6;
+
+  if (tailbits === 0) {
+    result.push((bits >> 16) & 0xFF);
+    result.push((bits >> 8) & 0xFF);
+    result.push(bits & 0xFF);
+  } else if (tailbits === 18) {
+    result.push((bits >> 10) & 0xFF);
+    result.push((bits >> 2) & 0xFF);
+  } else if (tailbits === 12) {
+    result.push((bits >> 4) & 0xFF);
+  }
+
+  return new Uint8Array(result);
+}
+
+function representYamlBinary(object /*, style*/) {
+  var result = '', bits = 0, idx, tail,
+      max = object.length,
+      map = BASE64_MAP;
+
+  // Convert every three bytes to 4 ASCII characters.
+
+  for (idx = 0; idx < max; idx++) {
+    if ((idx % 3 === 0) && idx) {
+      result += map[(bits >> 18) & 0x3F];
+      result += map[(bits >> 12) & 0x3F];
+      result += map[(bits >> 6) & 0x3F];
+      result += map[bits & 0x3F];
+    }
+
+    bits = (bits << 8) + object[idx];
+  }
+
+  // Dump tail
+
+  tail = max % 3;
+
+  if (tail === 0) {
+    result += map[(bits >> 18) & 0x3F];
+    result += map[(bits >> 12) & 0x3F];
+    result += map[(bits >> 6) & 0x3F];
+    result += map[bits & 0x3F];
+  } else if (tail === 2) {
+    result += map[(bits >> 10) & 0x3F];
+    result += map[(bits >> 4) & 0x3F];
+    result += map[(bits << 2) & 0x3F];
+    result += map[64];
+  } else if (tail === 1) {
+    result += map[(bits >> 2) & 0x3F];
+    result += map[(bits << 4) & 0x3F];
+    result += map[64];
+    result += map[64];
+  }
+
+  return result;
+}
+
+function isBinary(obj) {
+  return Object.prototype.toString.call(obj) ===  '[object Uint8Array]';
+}
+
+module.exports = new Type('tag:yaml.org,2002:binary', {
+  kind: 'scalar',
+  resolve: resolveYamlBinary,
+  construct: constructYamlBinary,
+  predicate: isBinary,
+  represent: representYamlBinary
+});
+
+
+/***/ }),
+
+/***/ 85327:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+function resolveYamlBoolean(data) {
+  if (data === null) return false;
+
+  var max = data.length;
+
+  return (max === 4 && (data === 'true' || data === 'True' || data === 'TRUE')) ||
+         (max === 5 && (data === 'false' || data === 'False' || data === 'FALSE'));
+}
+
+function constructYamlBoolean(data) {
+  return data === 'true' ||
+         data === 'True' ||
+         data === 'TRUE';
+}
+
+function isBoolean(object) {
+  return Object.prototype.toString.call(object) === '[object Boolean]';
+}
+
+module.exports = new Type('tag:yaml.org,2002:bool', {
+  kind: 'scalar',
+  resolve: resolveYamlBoolean,
+  construct: constructYamlBoolean,
+  predicate: isBoolean,
+  represent: {
+    lowercase: function (object) { return object ? 'true' : 'false'; },
+    uppercase: function (object) { return object ? 'TRUE' : 'FALSE'; },
+    camelcase: function (object) { return object ? 'True' : 'False'; }
+  },
+  defaultStyle: 'lowercase'
+});
+
+
+/***/ }),
+
+/***/ 56128:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var common = __nccwpck_require__(44828);
+var Type   = __nccwpck_require__(57480);
+
+var YAML_FLOAT_PATTERN = new RegExp(
+  // 2.5e4, 2.5 and integers
+  '^(?:[-+]?(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?' +
+  // .2e4, .2
+  // special case, seems not from spec
+  '|\\.[0-9_]+(?:[eE][-+]?[0-9]+)?' +
+  // .inf
+  '|[-+]?\\.(?:inf|Inf|INF)' +
+  // .nan
+  '|\\.(?:nan|NaN|NAN))$');
+
+function resolveYamlFloat(data) {
+  if (data === null) return false;
+
+  if (!YAML_FLOAT_PATTERN.test(data) ||
+      // Quick hack to not allow integers end with `_`
+      // Probably should update regexp & check speed
+      data[data.length - 1] === '_') {
+    return false;
+  }
+
+  return true;
+}
+
+function constructYamlFloat(data) {
+  var value, sign;
+
+  value  = data.replace(/_/g, '').toLowerCase();
+  sign   = value[0] === '-' ? -1 : 1;
+
+  if ('+-'.indexOf(value[0]) >= 0) {
+    value = value.slice(1);
+  }
+
+  if (value === '.inf') {
+    return (sign === 1) ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+
+  } else if (value === '.nan') {
+    return NaN;
+  }
+  return sign * parseFloat(value, 10);
+}
+
+
+var SCIENTIFIC_WITHOUT_DOT = /^[-+]?[0-9]+e/;
+
+function representYamlFloat(object, style) {
+  var res;
+
+  if (isNaN(object)) {
+    switch (style) {
+      case 'lowercase': return '.nan';
+      case 'uppercase': return '.NAN';
+      case 'camelcase': return '.NaN';
+    }
+  } else if (Number.POSITIVE_INFINITY === object) {
+    switch (style) {
+      case 'lowercase': return '.inf';
+      case 'uppercase': return '.INF';
+      case 'camelcase': return '.Inf';
+    }
+  } else if (Number.NEGATIVE_INFINITY === object) {
+    switch (style) {
+      case 'lowercase': return '-.inf';
+      case 'uppercase': return '-.INF';
+      case 'camelcase': return '-.Inf';
+    }
+  } else if (common.isNegativeZero(object)) {
+    return '-0.0';
+  }
+
+  res = object.toString(10);
+
+  // JS stringifier can build scientific format without dots: 5e-100,
+  // while YAML requres dot: 5.e-100. Fix it with simple hack
+
+  return SCIENTIFIC_WITHOUT_DOT.test(res) ? res.replace('e', '.e') : res;
+}
+
+function isFloat(object) {
+  return (Object.prototype.toString.call(object) === '[object Number]') &&
+         (object % 1 !== 0 || common.isNegativeZero(object));
+}
+
+module.exports = new Type('tag:yaml.org,2002:float', {
+  kind: 'scalar',
+  resolve: resolveYamlFloat,
+  construct: constructYamlFloat,
+  predicate: isFloat,
+  represent: representYamlFloat,
+  defaultStyle: 'lowercase'
+});
+
+
+/***/ }),
+
+/***/ 2848:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var common = __nccwpck_require__(44828);
+var Type   = __nccwpck_require__(57480);
+
+function isHexCode(c) {
+  return ((0x30/* 0 */ <= c) && (c <= 0x39/* 9 */)) ||
+         ((0x41/* A */ <= c) && (c <= 0x46/* F */)) ||
+         ((0x61/* a */ <= c) && (c <= 0x66/* f */));
+}
+
+function isOctCode(c) {
+  return ((0x30/* 0 */ <= c) && (c <= 0x37/* 7 */));
+}
+
+function isDecCode(c) {
+  return ((0x30/* 0 */ <= c) && (c <= 0x39/* 9 */));
+}
+
+function resolveYamlInteger(data) {
+  if (data === null) return false;
+
+  var max = data.length,
+      index = 0,
+      hasDigits = false,
+      ch;
+
+  if (!max) return false;
+
+  ch = data[index];
+
+  // sign
+  if (ch === '-' || ch === '+') {
+    ch = data[++index];
+  }
+
+  if (ch === '0') {
+    // 0
+    if (index + 1 === max) return true;
+    ch = data[++index];
+
+    // base 2, base 8, base 16
+
+    if (ch === 'b') {
+      // base 2
+      index++;
+
+      for (; index < max; index++) {
+        ch = data[index];
+        if (ch === '_') continue;
+        if (ch !== '0' && ch !== '1') return false;
+        hasDigits = true;
+      }
+      return hasDigits && ch !== '_';
+    }
+
+
+    if (ch === 'x') {
+      // base 16
+      index++;
+
+      for (; index < max; index++) {
+        ch = data[index];
+        if (ch === '_') continue;
+        if (!isHexCode(data.charCodeAt(index))) return false;
+        hasDigits = true;
+      }
+      return hasDigits && ch !== '_';
+    }
+
+
+    if (ch === 'o') {
+      // base 8
+      index++;
+
+      for (; index < max; index++) {
+        ch = data[index];
+        if (ch === '_') continue;
+        if (!isOctCode(data.charCodeAt(index))) return false;
+        hasDigits = true;
+      }
+      return hasDigits && ch !== '_';
+    }
+  }
+
+  // base 10 (except 0)
+
+  // value should not start with `_`;
+  if (ch === '_') return false;
+
+  for (; index < max; index++) {
+    ch = data[index];
+    if (ch === '_') continue;
+    if (!isDecCode(data.charCodeAt(index))) {
+      return false;
+    }
+    hasDigits = true;
+  }
+
+  // Should have digits and should not end with `_`
+  if (!hasDigits || ch === '_') return false;
+
+  return true;
+}
+
+function constructYamlInteger(data) {
+  var value = data, sign = 1, ch;
+
+  if (value.indexOf('_') !== -1) {
+    value = value.replace(/_/g, '');
+  }
+
+  ch = value[0];
+
+  if (ch === '-' || ch === '+') {
+    if (ch === '-') sign = -1;
+    value = value.slice(1);
+    ch = value[0];
+  }
+
+  if (value === '0') return 0;
+
+  if (ch === '0') {
+    if (value[1] === 'b') return sign * parseInt(value.slice(2), 2);
+    if (value[1] === 'x') return sign * parseInt(value.slice(2), 16);
+    if (value[1] === 'o') return sign * parseInt(value.slice(2), 8);
+  }
+
+  return sign * parseInt(value, 10);
+}
+
+function isInteger(object) {
+  return (Object.prototype.toString.call(object)) === '[object Number]' &&
+         (object % 1 === 0 && !common.isNegativeZero(object));
+}
+
+module.exports = new Type('tag:yaml.org,2002:int', {
+  kind: 'scalar',
+  resolve: resolveYamlInteger,
+  construct: constructYamlInteger,
+  predicate: isInteger,
+  represent: {
+    binary:      function (obj) { return obj >= 0 ? '0b' + obj.toString(2) : '-0b' + obj.toString(2).slice(1); },
+    octal:       function (obj) { return obj >= 0 ? '0o'  + obj.toString(8) : '-0o'  + obj.toString(8).slice(1); },
+    decimal:     function (obj) { return obj.toString(10); },
+    /* eslint-disable max-len */
+    hexadecimal: function (obj) { return obj >= 0 ? '0x' + obj.toString(16).toUpperCase() :  '-0x' + obj.toString(16).toUpperCase().slice(1); }
+  },
+  defaultStyle: 'decimal',
+  styleAliases: {
+    binary:      [ 2,  'bin' ],
+    octal:       [ 8,  'oct' ],
+    decimal:     [ 10, 'dec' ],
+    hexadecimal: [ 16, 'hex' ]
+  }
+});
+
+
+/***/ }),
+
+/***/ 74352:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+module.exports = new Type('tag:yaml.org,2002:map', {
+  kind: 'mapping',
+  construct: function (data) { return data !== null ? data : {}; }
+});
+
+
+/***/ }),
+
+/***/ 70884:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+function resolveYamlMerge(data) {
+  return data === '<<' || data === null;
+}
+
+module.exports = new Type('tag:yaml.org,2002:merge', {
+  kind: 'scalar',
+  resolve: resolveYamlMerge
+});
+
+
+/***/ }),
+
+/***/ 61002:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+function resolveYamlNull(data) {
+  if (data === null) return true;
+
+  var max = data.length;
+
+  return (max === 1 && data === '~') ||
+         (max === 4 && (data === 'null' || data === 'Null' || data === 'NULL'));
+}
+
+function constructYamlNull() {
+  return null;
+}
+
+function isNull(object) {
+  return object === null;
+}
+
+module.exports = new Type('tag:yaml.org,2002:null', {
+  kind: 'scalar',
+  resolve: resolveYamlNull,
+  construct: constructYamlNull,
+  predicate: isNull,
+  represent: {
+    canonical: function () { return '~';    },
+    lowercase: function () { return 'null'; },
+    uppercase: function () { return 'NULL'; },
+    camelcase: function () { return 'Null'; },
+    empty:     function () { return '';     }
+  },
+  defaultStyle: 'lowercase'
+});
+
+
+/***/ }),
+
+/***/ 65894:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+var _toString       = Object.prototype.toString;
+
+function resolveYamlOmap(data) {
+  if (data === null) return true;
+
+  var objectKeys = [], index, length, pair, pairKey, pairHasKey,
+      object = data;
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    pair = object[index];
+    pairHasKey = false;
+
+    if (_toString.call(pair) !== '[object Object]') return false;
+
+    for (pairKey in pair) {
+      if (_hasOwnProperty.call(pair, pairKey)) {
+        if (!pairHasKey) pairHasKey = true;
+        else return false;
+      }
+    }
+
+    if (!pairHasKey) return false;
+
+    if (objectKeys.indexOf(pairKey) === -1) objectKeys.push(pairKey);
+    else return false;
+  }
+
+  return true;
+}
+
+function constructYamlOmap(data) {
+  return data !== null ? data : [];
+}
+
+module.exports = new Type('tag:yaml.org,2002:omap', {
+  kind: 'sequence',
+  resolve: resolveYamlOmap,
+  construct: constructYamlOmap
+});
+
+
+/***/ }),
+
+/***/ 18978:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+var _toString = Object.prototype.toString;
+
+function resolveYamlPairs(data) {
+  if (data === null) return true;
+
+  var index, length, pair, keys, result,
+      object = data;
+
+  result = new Array(object.length);
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    pair = object[index];
+
+    if (_toString.call(pair) !== '[object Object]') return false;
+
+    keys = Object.keys(pair);
+
+    if (keys.length !== 1) return false;
+
+    result[index] = [ keys[0], pair[keys[0]] ];
+  }
+
+  return true;
+}
+
+function constructYamlPairs(data) {
+  if (data === null) return [];
+
+  var index, length, pair, keys, result,
+      object = data;
+
+  result = new Array(object.length);
+
+  for (index = 0, length = object.length; index < length; index += 1) {
+    pair = object[index];
+
+    keys = Object.keys(pair);
+
+    result[index] = [ keys[0], pair[keys[0]] ];
+  }
+
+  return result;
+}
+
+module.exports = new Type('tag:yaml.org,2002:pairs', {
+  kind: 'sequence',
+  resolve: resolveYamlPairs,
+  construct: constructYamlPairs
+});
+
+
+/***/ }),
+
+/***/ 89695:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+module.exports = new Type('tag:yaml.org,2002:seq', {
+  kind: 'sequence',
+  construct: function (data) { return data !== null ? data : []; }
+});
+
+
+/***/ }),
+
+/***/ 87424:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+
+function resolveYamlSet(data) {
+  if (data === null) return true;
+
+  var key, object = data;
+
+  for (key in object) {
+    if (_hasOwnProperty.call(object, key)) {
+      if (object[key] !== null) return false;
+    }
+  }
+
+  return true;
+}
+
+function constructYamlSet(data) {
+  return data !== null ? data : {};
+}
+
+module.exports = new Type('tag:yaml.org,2002:set', {
+  kind: 'mapping',
+  resolve: resolveYamlSet,
+  construct: constructYamlSet
+});
+
+
+/***/ }),
+
+/***/ 32568:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+module.exports = new Type('tag:yaml.org,2002:str', {
+  kind: 'scalar',
+  construct: function (data) { return data !== null ? data : ''; }
+});
+
+
+/***/ }),
+
+/***/ 9561:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Type = __nccwpck_require__(57480);
+
+var YAML_DATE_REGEXP = new RegExp(
+  '^([0-9][0-9][0-9][0-9])'          + // [1] year
+  '-([0-9][0-9])'                    + // [2] month
+  '-([0-9][0-9])$');                   // [3] day
+
+var YAML_TIMESTAMP_REGEXP = new RegExp(
+  '^([0-9][0-9][0-9][0-9])'          + // [1] year
+  '-([0-9][0-9]?)'                   + // [2] month
+  '-([0-9][0-9]?)'                   + // [3] day
+  '(?:[Tt]|[ \\t]+)'                 + // ...
+  '([0-9][0-9]?)'                    + // [4] hour
+  ':([0-9][0-9])'                    + // [5] minute
+  ':([0-9][0-9])'                    + // [6] second
+  '(?:\\.([0-9]*))?'                 + // [7] fraction
+  '(?:[ \\t]*(Z|([-+])([0-9][0-9]?)' + // [8] tz [9] tz_sign [10] tz_hour
+  '(?::([0-9][0-9]))?))?$');           // [11] tz_minute
+
+function resolveYamlTimestamp(data) {
+  if (data === null) return false;
+  if (YAML_DATE_REGEXP.exec(data) !== null) return true;
+  if (YAML_TIMESTAMP_REGEXP.exec(data) !== null) return true;
+  return false;
+}
+
+function constructYamlTimestamp(data) {
+  var match, year, month, day, hour, minute, second, fraction = 0,
+      delta = null, tz_hour, tz_minute, date;
+
+  match = YAML_DATE_REGEXP.exec(data);
+  if (match === null) match = YAML_TIMESTAMP_REGEXP.exec(data);
+
+  if (match === null) throw new Error('Date resolve error');
+
+  // match: [1] year [2] month [3] day
+
+  year = +(match[1]);
+  month = +(match[2]) - 1; // JS month starts with 0
+  day = +(match[3]);
+
+  if (!match[4]) { // no hour
+    return new Date(Date.UTC(year, month, day));
+  }
+
+  // match: [4] hour [5] minute [6] second [7] fraction
+
+  hour = +(match[4]);
+  minute = +(match[5]);
+  second = +(match[6]);
+
+  if (match[7]) {
+    fraction = match[7].slice(0, 3);
+    while (fraction.length < 3) { // milli-seconds
+      fraction += '0';
+    }
+    fraction = +fraction;
+  }
+
+  // match: [8] tz [9] tz_sign [10] tz_hour [11] tz_minute
+
+  if (match[9]) {
+    tz_hour = +(match[10]);
+    tz_minute = +(match[11] || 0);
+    delta = (tz_hour * 60 + tz_minute) * 60000; // delta in mili-seconds
+    if (match[9] === '-') delta = -delta;
+  }
+
+  date = new Date(Date.UTC(year, month, day, hour, minute, second, fraction));
+
+  if (delta) date.setTime(date.getTime() - delta);
+
+  return date;
+}
+
+function representYamlTimestamp(object /*, style*/) {
+  return object.toISOString();
+}
+
+module.exports = new Type('tag:yaml.org,2002:timestamp', {
+  kind: 'scalar',
+  resolve: resolveYamlTimestamp,
+  construct: constructYamlTimestamp,
+  instanceOf: Date,
+  represent: representYamlTimestamp
+});
+
+
+/***/ }),
+
+/***/ 39662:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+module.exports = { getTransformStream };
+
+const { Transform } = __nccwpck_require__(51642);
+
+const prettyFactory = __nccwpck_require__(67362);
+const Sentry = __nccwpck_require__(22783);
+
+const LEVEL_MAP = {
+  10: "trace",
+  20: "debug",
+  30: "info",
+  40: "warn",
+  50: "error",
+  60: "fatal",
+};
+
+/**
+ * Implements Probot's default logging formatting and error captionaing using Sentry.
+ *
+ * @param {import("./").Options} options
+ * @returns Transform
+ * @see https://getpino.io/#/docs/transports
+ */
+function getTransformStream(options = {}) {
+  const formattingEnabled = options.logFormat !== "json";
+
+  const levelAsString = options.logLevelInString;
+  const sentryEnabled = !!options.sentryDsn;
+
+  if (sentryEnabled) {
+    Sentry.init({
+      dsn: options.sentryDsn,
+      // See https://github.com/getsentry/sentry-javascript/issues/1964#issuecomment-688482615
+      // 6 is enough to serialize the deepest property across all GitHub Event payloads
+      normalizeDepth: 6,
+    });
+  }
+
+  const pretty = prettyFactory({
+    ignore: [
+      // default pino keys
+      "time",
+      "pid",
+      "hostname",
+      // remove keys from pino-http
+      "req",
+      "res",
+      "responseTime",
+    ].join(","),
+    errorProps: ["event", "status", "headers", "request", "sentryEventId"].join(
+      ","
+    ),
+  });
+
+  return new Transform({
+    objectMode: true,
+    transform(chunk, enc, cb) {
+      const line = chunk.toString().trim();
+
+      /* istanbul ignore if */
+      if (line === undefined) return cb();
+
+      const data = sentryEnabled ? JSON.parse(line) : null;
+
+      if (!sentryEnabled || data.level < 50) {
+        if (formattingEnabled) {
+          return cb(null, pretty(line));
+        }
+
+        if (levelAsString) {
+          return cb(null, stringifyLogLevel(JSON.parse(line)));
+        }
+
+        cb(null, line + "\n");
+        return;
+      }
+
+      Sentry.withScope(function (scope) {
+        const sentryLevelName =
+          data.level === 50 ? Sentry.Severity.Error : Sentry.Severity.Fatal;
+        scope.setLevel(sentryLevelName);
+
+        for (const extra of ["event", "headers", "request", "status"]) {
+          if (!data[extra]) continue;
+
+          scope.setExtra(extra, data[extra]);
+        }
+
+        // set user id and username to installation ID and account login
+        if (data.event && data.event.payload) {
+          const {
+            // When GitHub App is installed organization wide
+            installation: { id, account: { login: account } = {} } = {},
+
+            // When the repository belongs to an organization
+            organization: { login: organization } = {},
+            // When the repository belongs to a user
+            repository: { owner: { login: owner } = {} } = {},
+          } = data.event.payload;
+
+          scope.setUser({
+            id: id,
+            username: account || organization || owner,
+          });
+        }
+
+        const sentryEventId = Sentry.captureException(toSentryError(data));
+
+        // reduce logging data and add reference to sentry event instead
+        if (data.event) {
+          data.event = { id: data.event.id };
+        }
+        if (data.request) {
+          data.request = {
+            method: data.request.method,
+            url: data.request.url,
+          };
+        }
+        data.sentryEventId = sentryEventId;
+
+        if (formattingEnabled) {
+          return cb(null, pretty(data));
+        }
+
+        // istanbul ignore if
+        if (levelAsString) {
+          return cb(null, stringifyLogLevel(data));
+        }
+
+        cb(null, JSON.stringify(data) + "\n");
+      });
+    },
+  });
+}
+
+function stringifyLogLevel(data) {
+  data.level = LEVEL_MAP[data.level];
+  return JSON.stringify(data) + "\n";
+}
+
+function toSentryError(data) {
+  const error = new Error(data.msg);
+  error.name = data.type;
+  error.stack = data.stack;
+  return error;
+}
+
+
+/***/ }),
+
+/***/ 90785:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+var SENTRY_API_VERSION = '7';
+/**
+ * Helper class to provide urls, headers and metadata that can be used to form
+ * different types of requests to Sentry endpoints.
+ * Supports both envelopes and regular event requests.
+ *
+ * @deprecated Please use APIDetails
+ **/
+var API = /** @class */ (function () {
+    /** Create a new instance of API */
+    function API(dsn, metadata, tunnel) {
+        if (metadata === void 0) { metadata = {}; }
+        this.dsn = dsn;
+        this._dsnObject = utils_1.makeDsn(dsn);
+        this.metadata = metadata;
+        this._tunnel = tunnel;
+    }
+    /** Returns the Dsn object. */
+    API.prototype.getDsn = function () {
+        return this._dsnObject;
+    };
+    /** Does this transport force envelopes? */
+    API.prototype.forceEnvelope = function () {
+        return !!this._tunnel;
+    };
+    /** Returns the prefix to construct Sentry ingestion API endpoints. */
+    API.prototype.getBaseApiEndpoint = function () {
+        return getBaseApiEndpoint(this._dsnObject);
+    };
+    /** Returns the store endpoint URL. */
+    API.prototype.getStoreEndpoint = function () {
+        return getStoreEndpoint(this._dsnObject);
+    };
+    /**
+     * Returns the store endpoint URL with auth in the query string.
+     *
+     * Sending auth as part of the query string and not as custom HTTP headers avoids CORS preflight requests.
+     */
+    API.prototype.getStoreEndpointWithUrlEncodedAuth = function () {
+        return getStoreEndpointWithUrlEncodedAuth(this._dsnObject);
+    };
+    /**
+     * Returns the envelope endpoint URL with auth in the query string.
+     *
+     * Sending auth as part of the query string and not as custom HTTP headers avoids CORS preflight requests.
+     */
+    API.prototype.getEnvelopeEndpointWithUrlEncodedAuth = function () {
+        return getEnvelopeEndpointWithUrlEncodedAuth(this._dsnObject, this._tunnel);
+    };
+    return API;
+}());
+exports.API = API;
+/** Initializes API Details */
+function initAPIDetails(dsn, metadata, tunnel) {
+    return {
+        initDsn: dsn,
+        metadata: metadata || {},
+        dsn: utils_1.makeDsn(dsn),
+        tunnel: tunnel,
+    };
+}
+exports.initAPIDetails = initAPIDetails;
+/** Returns the prefix to construct Sentry ingestion API endpoints. */
+function getBaseApiEndpoint(dsn) {
+    var protocol = dsn.protocol ? dsn.protocol + ":" : '';
+    var port = dsn.port ? ":" + dsn.port : '';
+    return protocol + "//" + dsn.host + port + (dsn.path ? "/" + dsn.path : '') + "/api/";
+}
+/** Returns the ingest API endpoint for target. */
+function _getIngestEndpoint(dsn, target) {
+    return "" + getBaseApiEndpoint(dsn) + dsn.projectId + "/" + target + "/";
+}
+/** Returns a URL-encoded string with auth config suitable for a query string. */
+function _encodedAuth(dsn) {
+    return utils_1.urlEncode({
+        // We send only the minimum set of required information. See
+        // https://github.com/getsentry/sentry-javascript/issues/2572.
+        sentry_key: dsn.publicKey,
+        sentry_version: SENTRY_API_VERSION,
+    });
+}
+/** Returns the store endpoint URL. */
+function getStoreEndpoint(dsn) {
+    return _getIngestEndpoint(dsn, 'store');
+}
+/**
+ * Returns the store endpoint URL with auth in the query string.
+ *
+ * Sending auth as part of the query string and not as custom HTTP headers avoids CORS preflight requests.
+ */
+function getStoreEndpointWithUrlEncodedAuth(dsn) {
+    return getStoreEndpoint(dsn) + "?" + _encodedAuth(dsn);
+}
+exports.getStoreEndpointWithUrlEncodedAuth = getStoreEndpointWithUrlEncodedAuth;
+/** Returns the envelope endpoint URL. */
+function _getEnvelopeEndpoint(dsn) {
+    return _getIngestEndpoint(dsn, 'envelope');
+}
+/**
+ * Returns the envelope endpoint URL with auth in the query string.
+ *
+ * Sending auth as part of the query string and not as custom HTTP headers avoids CORS preflight requests.
+ */
+function getEnvelopeEndpointWithUrlEncodedAuth(dsn, tunnel) {
+    return tunnel ? tunnel : _getEnvelopeEndpoint(dsn) + "?" + _encodedAuth(dsn);
+}
+exports.getEnvelopeEndpointWithUrlEncodedAuth = getEnvelopeEndpointWithUrlEncodedAuth;
+/**
+ * Returns an object that can be used in request headers.
+ * This is needed for node and the old /store endpoint in sentry
+ */
+function getRequestHeaders(dsn, clientName, clientVersion) {
+    // CHANGE THIS to use metadata but keep clientName and clientVersion compatible
+    var header = ["Sentry sentry_version=" + SENTRY_API_VERSION];
+    header.push("sentry_client=" + clientName + "/" + clientVersion);
+    header.push("sentry_key=" + dsn.publicKey);
+    if (dsn.pass) {
+        header.push("sentry_secret=" + dsn.pass);
+    }
+    return {
+        'Content-Type': 'application/json',
+        'X-Sentry-Auth': header.join(', '),
+    };
+}
+exports.getRequestHeaders = getRequestHeaders;
+/** Returns the url to the report dialog endpoint. */
+function getReportDialogEndpoint(dsnLike, dialogOptions) {
+    var dsn = utils_1.makeDsn(dsnLike);
+    var endpoint = getBaseApiEndpoint(dsn) + "embed/error-page/";
+    var encodedOptions = "dsn=" + utils_1.dsnToString(dsn);
+    for (var key in dialogOptions) {
+        if (key === 'dsn') {
+            continue;
+        }
+        if (key === 'user') {
+            if (!dialogOptions.user) {
+                continue;
+            }
+            if (dialogOptions.user.name) {
+                encodedOptions += "&name=" + encodeURIComponent(dialogOptions.user.name);
+            }
+            if (dialogOptions.user.email) {
+                encodedOptions += "&email=" + encodeURIComponent(dialogOptions.user.email);
+            }
+        }
+        else {
+            encodedOptions += "&" + encodeURIComponent(key) + "=" + encodeURIComponent(dialogOptions[key]);
+        }
+    }
+    return endpoint + "?" + encodedOptions;
+}
+exports.getReportDialogEndpoint = getReportDialogEndpoint;
+//# sourceMappingURL=api.js.map
+
+/***/ }),
+
+/***/ 25886:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(12163);
+var utils_1 = __nccwpck_require__(1620);
+var api_1 = __nccwpck_require__(90785);
+var flags_1 = __nccwpck_require__(91839);
+var request_1 = __nccwpck_require__(1553);
+var noop_1 = __nccwpck_require__(68641);
+/**
+ * This is the base implemention of a Backend.
+ * @hidden
+ */
+var BaseBackend = /** @class */ (function () {
+    /** Creates a new backend instance. */
+    function BaseBackend(options) {
+        this._options = options;
+        if (!this._options.dsn) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('No DSN provided, backend will not do anything.');
+        }
+        this._transport = this._setupTransport();
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    BaseBackend.prototype.eventFromException = function (_exception, _hint) {
+        throw new utils_1.SentryError('Backend has to implement `eventFromException` method');
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.eventFromMessage = function (_message, _level, _hint) {
+        throw new utils_1.SentryError('Backend has to implement `eventFromMessage` method');
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.sendEvent = function (event) {
+        // TODO(v7): Remove the if-else
+        if (this._newTransport &&
+            this._options.dsn &&
+            this._options._experiments &&
+            this._options._experiments.newTransport) {
+            var api = api_1.initAPIDetails(this._options.dsn, this._options._metadata, this._options.tunnel);
+            var env = request_1.createEventEnvelope(event, api);
+            void this._newTransport.send(env).then(null, function (reason) {
+                flags_1.IS_DEBUG_BUILD && utils_1.logger.error('Error while sending event:', reason);
+            });
+        }
+        else {
+            void this._transport.sendEvent(event).then(null, function (reason) {
+                flags_1.IS_DEBUG_BUILD && utils_1.logger.error('Error while sending event:', reason);
+            });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.sendSession = function (session) {
+        if (!this._transport.sendSession) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn("Dropping session because custom transport doesn't implement sendSession");
+            return;
+        }
+        // TODO(v7): Remove the if-else
+        if (this._newTransport &&
+            this._options.dsn &&
+            this._options._experiments &&
+            this._options._experiments.newTransport) {
+            var api = api_1.initAPIDetails(this._options.dsn, this._options._metadata, this._options.tunnel);
+            var _a = tslib_1.__read(request_1.createSessionEnvelope(session, api), 1), env = _a[0];
+            void this._newTransport.send(env).then(null, function (reason) {
+                flags_1.IS_DEBUG_BUILD && utils_1.logger.error('Error while sending session:', reason);
+            });
+        }
+        else {
+            void this._transport.sendSession(session).then(null, function (reason) {
+                flags_1.IS_DEBUG_BUILD && utils_1.logger.error('Error while sending session:', reason);
+            });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseBackend.prototype.getTransport = function () {
+        return this._transport;
+    };
+    /**
+     * Sets up the transport so it can be used later to send requests.
+     */
+    BaseBackend.prototype._setupTransport = function () {
+        return new noop_1.NoopTransport();
+    };
+    return BaseBackend;
+}());
+exports.BaseBackend = BaseBackend;
+//# sourceMappingURL=basebackend.js.map
+
+/***/ }),
+
+/***/ 25684:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(12163);
+/* eslint-disable max-lines */
+var hub_1 = __nccwpck_require__(6393);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(91839);
+var integration_1 = __nccwpck_require__(58500);
+var ALREADY_SEEN_ERROR = "Not capturing exception because it's already been captured.";
+/**
+ * Base implementation for all JavaScript SDK clients.
+ *
+ * Call the constructor with the corresponding backend constructor and options
+ * specific to the client subclass. To access these options later, use
+ * {@link Client.getOptions}. Also, the Backend instance is available via
+ * {@link Client.getBackend}.
+ *
+ * If a Dsn is specified in the options, it will be parsed and stored. Use
+ * {@link Client.getDsn} to retrieve the Dsn at any moment. In case the Dsn is
+ * invalid, the constructor will throw a {@link SentryException}. Note that
+ * without a valid Dsn, the SDK will not send any events to Sentry.
+ *
+ * Before sending an event via the backend, it is passed through
+ * {@link BaseClient._prepareEvent} to add SDK information and scope data
+ * (breadcrumbs and context). To add more custom information, override this
+ * method and extend the resulting prepared event.
+ *
+ * To issue automatically created events (e.g. via instrumentation), use
+ * {@link Client.captureEvent}. It will prepare the event and pass it through
+ * the callback lifecycle. To issue auto-breadcrumbs, use
+ * {@link Client.addBreadcrumb}.
+ *
+ * @example
+ * class NodeClient extends BaseClient<NodeBackend, NodeOptions> {
+ *   public constructor(options: NodeOptions) {
+ *     super(NodeBackend, options);
+ *   }
+ *
+ *   // ...
+ * }
+ */
+var BaseClient = /** @class */ (function () {
+    /**
+     * Initializes this client instance.
+     *
+     * @param backendClass A constructor function to create the backend.
+     * @param options Options for the client.
+     */
+    function BaseClient(backendClass, options) {
+        /** Array of used integrations. */
+        this._integrations = {};
+        /** Number of calls being processed */
+        this._numProcessing = 0;
+        this._backend = new backendClass(options);
+        this._options = options;
+        if (options.dsn) {
+            this._dsn = utils_1.makeDsn(options.dsn);
+        }
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    BaseClient.prototype.captureException = function (exception, hint, scope) {
+        var _this = this;
+        // ensure we haven't captured this very object before
+        if (utils_1.checkOrSetAlreadyCaught(exception)) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.log(ALREADY_SEEN_ERROR);
+            return;
+        }
+        var eventId = hint && hint.event_id;
+        this._process(this._getBackend()
+            .eventFromException(exception, hint)
+            .then(function (event) { return _this._captureEvent(event, hint, scope); })
+            .then(function (result) {
+            eventId = result;
+        }));
+        return eventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.captureMessage = function (message, level, hint, scope) {
+        var _this = this;
+        var eventId = hint && hint.event_id;
+        var promisedEvent = utils_1.isPrimitive(message)
+            ? this._getBackend().eventFromMessage(String(message), level, hint)
+            : this._getBackend().eventFromException(message, hint);
+        this._process(promisedEvent
+            .then(function (event) { return _this._captureEvent(event, hint, scope); })
+            .then(function (result) {
+            eventId = result;
+        }));
+        return eventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.captureEvent = function (event, hint, scope) {
+        // ensure we haven't captured this very object before
+        if (hint && hint.originalException && utils_1.checkOrSetAlreadyCaught(hint.originalException)) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.log(ALREADY_SEEN_ERROR);
+            return;
+        }
+        var eventId = hint && hint.event_id;
+        this._process(this._captureEvent(event, hint, scope).then(function (result) {
+            eventId = result;
+        }));
+        return eventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.captureSession = function (session) {
+        if (!this._isEnabled()) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('SDK not enabled, will not capture session.');
+            return;
+        }
+        if (!(typeof session.release === 'string')) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('Discarded session because of missing or non-string release');
+        }
+        else {
+            this._sendSession(session);
+            // After sending, we set init false to indicate it's not the first occurrence
+            session.update({ init: false });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.getDsn = function () {
+        return this._dsn;
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.getOptions = function () {
+        return this._options;
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.getTransport = function () {
+        return this._getBackend().getTransport();
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.flush = function (timeout) {
+        var _this = this;
+        return this._isClientDoneProcessing(timeout).then(function (clientFinished) {
+            return _this.getTransport()
+                .close(timeout)
+                .then(function (transportFlushed) { return clientFinished && transportFlushed; });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.close = function (timeout) {
+        var _this = this;
+        return this.flush(timeout).then(function (result) {
+            _this.getOptions().enabled = false;
+            return result;
+        });
+    };
+    /**
+     * Sets up the integrations
+     */
+    BaseClient.prototype.setupIntegrations = function () {
+        if (this._isEnabled() && !this._integrations.initialized) {
+            this._integrations = integration_1.setupIntegrations(this._options);
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseClient.prototype.getIntegration = function (integration) {
+        try {
+            return this._integrations[integration.id] || null;
+        }
+        catch (_oO) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn("Cannot retrieve integration " + integration.id + " from the current Client");
+            return null;
+        }
+    };
+    /** Updates existing session based on the provided event */
+    BaseClient.prototype._updateSessionFromEvent = function (session, event) {
+        var e_1, _a;
+        var crashed = false;
+        var errored = false;
+        var exceptions = event.exception && event.exception.values;
+        if (exceptions) {
+            errored = true;
+            try {
+                for (var exceptions_1 = tslib_1.__values(exceptions), exceptions_1_1 = exceptions_1.next(); !exceptions_1_1.done; exceptions_1_1 = exceptions_1.next()) {
+                    var ex = exceptions_1_1.value;
+                    var mechanism = ex.mechanism;
+                    if (mechanism && mechanism.handled === false) {
+                        crashed = true;
+                        break;
+                    }
+                }
+            }
+            catch (e_1_1) { e_1 = { error: e_1_1 }; }
+            finally {
+                try {
+                    if (exceptions_1_1 && !exceptions_1_1.done && (_a = exceptions_1.return)) _a.call(exceptions_1);
+                }
+                finally { if (e_1) throw e_1.error; }
+            }
+        }
+        // A session is updated and that session update is sent in only one of the two following scenarios:
+        // 1. Session with non terminal status and 0 errors + an error occurred -> Will set error count to 1 and send update
+        // 2. Session with non terminal status and 1 error + a crash occurred -> Will set status crashed and send update
+        var sessionNonTerminal = session.status === 'ok';
+        var shouldUpdateAndSend = (sessionNonTerminal && session.errors === 0) || (sessionNonTerminal && crashed);
+        if (shouldUpdateAndSend) {
+            session.update(tslib_1.__assign(tslib_1.__assign({}, (crashed && { status: 'crashed' })), { errors: session.errors || Number(errored || crashed) }));
+            this.captureSession(session);
+        }
+    };
+    /** Deliver captured session to Sentry */
+    BaseClient.prototype._sendSession = function (session) {
+        this._getBackend().sendSession(session);
+    };
+    /**
+     * Determine if the client is finished processing. Returns a promise because it will wait `timeout` ms before saying
+     * "no" (resolving to `false`) in order to give the client a chance to potentially finish first.
+     *
+     * @param timeout The time, in ms, after which to resolve to `false` if the client is still busy. Passing `0` (or not
+     * passing anything) will make the promise wait as long as it takes for processing to finish before resolving to
+     * `true`.
+     * @returns A promise which will resolve to `true` if processing is already done or finishes before the timeout, and
+     * `false` otherwise
+     */
+    BaseClient.prototype._isClientDoneProcessing = function (timeout) {
+        var _this = this;
+        return new utils_1.SyncPromise(function (resolve) {
+            var ticked = 0;
+            var tick = 1;
+            var interval = setInterval(function () {
+                if (_this._numProcessing == 0) {
+                    clearInterval(interval);
+                    resolve(true);
+                }
+                else {
+                    ticked += tick;
+                    if (timeout && ticked >= timeout) {
+                        clearInterval(interval);
+                        resolve(false);
+                    }
+                }
+            }, tick);
+        });
+    };
+    /** Returns the current backend. */
+    BaseClient.prototype._getBackend = function () {
+        return this._backend;
+    };
+    /** Determines whether this SDK is enabled and a valid Dsn is present. */
