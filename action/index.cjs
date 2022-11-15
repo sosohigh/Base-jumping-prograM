@@ -20385,3 +20385,2215 @@ Object.defineProperty(HeadersIteratorPrototype, Symbol.toStringTag, {
  *
  * @param   Headers  headers
  * @return  Object
+ */
+function exportNodeCompatibleHeaders(headers) {
+	const obj = Object.assign({ __proto__: null }, headers[MAP]);
+
+	// http.request() only supports string as Host header. This hack makes
+	// specifying custom Host header possible.
+	const hostHeaderKey = find(headers[MAP], 'Host');
+	if (hostHeaderKey !== undefined) {
+		obj[hostHeaderKey] = obj[hostHeaderKey][0];
+	}
+
+	return obj;
+}
+
+/**
+ * Create a Headers object from an object of headers, ignoring those that do
+ * not conform to HTTP grammar productions.
+ *
+ * @param   Object  obj  Object of headers
+ * @return  Headers
+ */
+function createHeadersLenient(obj) {
+	const headers = new Headers();
+	for (const name of Object.keys(obj)) {
+		if (invalidTokenRegex.test(name)) {
+			continue;
+		}
+		if (Array.isArray(obj[name])) {
+			for (const val of obj[name]) {
+				if (invalidHeaderCharRegex.test(val)) {
+					continue;
+				}
+				if (headers[MAP][name] === undefined) {
+					headers[MAP][name] = [val];
+				} else {
+					headers[MAP][name].push(val);
+				}
+			}
+		} else if (!invalidHeaderCharRegex.test(obj[name])) {
+			headers[MAP][name] = [obj[name]];
+		}
+	}
+	return headers;
+}
+
+const INTERNALS$1 = Symbol('Response internals');
+
+// fix an issue where "STATUS_CODES" aren't a named export for node <10
+const STATUS_CODES = http.STATUS_CODES;
+
+/**
+ * Response class
+ *
+ * @param   Stream  body  Readable stream
+ * @param   Object  opts  Response options
+ * @return  Void
+ */
+class Response {
+	constructor() {
+		let body = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+		let opts = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+		Body.call(this, body, opts);
+
+		const status = opts.status || 200;
+		const headers = new Headers(opts.headers);
+
+		if (body != null && !headers.has('Content-Type')) {
+			const contentType = extractContentType(body);
+			if (contentType) {
+				headers.append('Content-Type', contentType);
+			}
+		}
+
+		this[INTERNALS$1] = {
+			url: opts.url,
+			status,
+			statusText: opts.statusText || STATUS_CODES[status],
+			headers,
+			counter: opts.counter
+		};
+	}
+
+	get url() {
+		return this[INTERNALS$1].url || '';
+	}
+
+	get status() {
+		return this[INTERNALS$1].status;
+	}
+
+	/**
+  * Convenience property representing if the request ended normally
+  */
+	get ok() {
+		return this[INTERNALS$1].status >= 200 && this[INTERNALS$1].status < 300;
+	}
+
+	get redirected() {
+		return this[INTERNALS$1].counter > 0;
+	}
+
+	get statusText() {
+		return this[INTERNALS$1].statusText;
+	}
+
+	get headers() {
+		return this[INTERNALS$1].headers;
+	}
+
+	/**
+  * Clone this response
+  *
+  * @return  Response
+  */
+	clone() {
+		return new Response(clone(this), {
+			url: this.url,
+			status: this.status,
+			statusText: this.statusText,
+			headers: this.headers,
+			ok: this.ok,
+			redirected: this.redirected
+		});
+	}
+}
+
+Body.mixIn(Response.prototype);
+
+Object.defineProperties(Response.prototype, {
+	url: { enumerable: true },
+	status: { enumerable: true },
+	ok: { enumerable: true },
+	redirected: { enumerable: true },
+	statusText: { enumerable: true },
+	headers: { enumerable: true },
+	clone: { enumerable: true }
+});
+
+Object.defineProperty(Response.prototype, Symbol.toStringTag, {
+	value: 'Response',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+const INTERNALS$2 = Symbol('Request internals');
+const URL = Url.URL || whatwgUrl.URL;
+
+// fix an issue where "format", "parse" aren't a named export for node <10
+const parse_url = Url.parse;
+const format_url = Url.format;
+
+/**
+ * Wrapper around `new URL` to handle arbitrary URLs
+ *
+ * @param  {string} urlStr
+ * @return {void}
+ */
+function parseURL(urlStr) {
+	/*
+ 	Check whether the URL is absolute or not
+ 		Scheme: https://tools.ietf.org/html/rfc3986#section-3.1
+ 	Absolute URL: https://tools.ietf.org/html/rfc3986#section-4.3
+ */
+	if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.exec(urlStr)) {
+		urlStr = new URL(urlStr).toString();
+	}
+
+	// Fallback to old implementation for arbitrary URLs
+	return parse_url(urlStr);
+}
+
+const streamDestructionSupported = 'destroy' in Stream.Readable.prototype;
+
+/**
+ * Check if a value is an instance of Request.
+ *
+ * @param   Mixed   input
+ * @return  Boolean
+ */
+function isRequest(input) {
+	return typeof input === 'object' && typeof input[INTERNALS$2] === 'object';
+}
+
+function isAbortSignal(signal) {
+	const proto = signal && typeof signal === 'object' && Object.getPrototypeOf(signal);
+	return !!(proto && proto.constructor.name === 'AbortSignal');
+}
+
+/**
+ * Request class
+ *
+ * @param   Mixed   input  Url or Request instance
+ * @param   Object  init   Custom options
+ * @return  Void
+ */
+class Request {
+	constructor(input) {
+		let init = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+		let parsedURL;
+
+		// normalize input
+		if (!isRequest(input)) {
+			if (input && input.href) {
+				// in order to support Node.js' Url objects; though WHATWG's URL objects
+				// will fall into this branch also (since their `toString()` will return
+				// `href` property anyway)
+				parsedURL = parseURL(input.href);
+			} else {
+				// coerce input to a string before attempting to parse
+				parsedURL = parseURL(`${input}`);
+			}
+			input = {};
+		} else {
+			parsedURL = parseURL(input.url);
+		}
+
+		let method = init.method || input.method || 'GET';
+		method = method.toUpperCase();
+
+		if ((init.body != null || isRequest(input) && input.body !== null) && (method === 'GET' || method === 'HEAD')) {
+			throw new TypeError('Request with GET/HEAD method cannot have body');
+		}
+
+		let inputBody = init.body != null ? init.body : isRequest(input) && input.body !== null ? clone(input) : null;
+
+		Body.call(this, inputBody, {
+			timeout: init.timeout || input.timeout || 0,
+			size: init.size || input.size || 0
+		});
+
+		const headers = new Headers(init.headers || input.headers || {});
+
+		if (inputBody != null && !headers.has('Content-Type')) {
+			const contentType = extractContentType(inputBody);
+			if (contentType) {
+				headers.append('Content-Type', contentType);
+			}
+		}
+
+		let signal = isRequest(input) ? input.signal : null;
+		if ('signal' in init) signal = init.signal;
+
+		if (signal != null && !isAbortSignal(signal)) {
+			throw new TypeError('Expected signal to be an instanceof AbortSignal');
+		}
+
+		this[INTERNALS$2] = {
+			method,
+			redirect: init.redirect || input.redirect || 'follow',
+			headers,
+			parsedURL,
+			signal
+		};
+
+		// node-fetch-only options
+		this.follow = init.follow !== undefined ? init.follow : input.follow !== undefined ? input.follow : 20;
+		this.compress = init.compress !== undefined ? init.compress : input.compress !== undefined ? input.compress : true;
+		this.counter = init.counter || input.counter || 0;
+		this.agent = init.agent || input.agent;
+	}
+
+	get method() {
+		return this[INTERNALS$2].method;
+	}
+
+	get url() {
+		return format_url(this[INTERNALS$2].parsedURL);
+	}
+
+	get headers() {
+		return this[INTERNALS$2].headers;
+	}
+
+	get redirect() {
+		return this[INTERNALS$2].redirect;
+	}
+
+	get signal() {
+		return this[INTERNALS$2].signal;
+	}
+
+	/**
+  * Clone this request
+  *
+  * @return  Request
+  */
+	clone() {
+		return new Request(this);
+	}
+}
+
+Body.mixIn(Request.prototype);
+
+Object.defineProperty(Request.prototype, Symbol.toStringTag, {
+	value: 'Request',
+	writable: false,
+	enumerable: false,
+	configurable: true
+});
+
+Object.defineProperties(Request.prototype, {
+	method: { enumerable: true },
+	url: { enumerable: true },
+	headers: { enumerable: true },
+	redirect: { enumerable: true },
+	clone: { enumerable: true },
+	signal: { enumerable: true }
+});
+
+/**
+ * Convert a Request to Node.js http request options.
+ *
+ * @param   Request  A Request instance
+ * @return  Object   The options object to be passed to http.request
+ */
+function getNodeRequestOptions(request) {
+	const parsedURL = request[INTERNALS$2].parsedURL;
+	const headers = new Headers(request[INTERNALS$2].headers);
+
+	// fetch step 1.3
+	if (!headers.has('Accept')) {
+		headers.set('Accept', '*/*');
+	}
+
+	// Basic fetch
+	if (!parsedURL.protocol || !parsedURL.hostname) {
+		throw new TypeError('Only absolute URLs are supported');
+	}
+
+	if (!/^https?:$/.test(parsedURL.protocol)) {
+		throw new TypeError('Only HTTP(S) protocols are supported');
+	}
+
+	if (request.signal && request.body instanceof Stream.Readable && !streamDestructionSupported) {
+		throw new Error('Cancellation of streamed requests with AbortSignal is not supported in node < 8');
+	}
+
+	// HTTP-network-or-cache fetch steps 2.4-2.7
+	let contentLengthValue = null;
+	if (request.body == null && /^(POST|PUT)$/i.test(request.method)) {
+		contentLengthValue = '0';
+	}
+	if (request.body != null) {
+		const totalBytes = getTotalBytes(request);
+		if (typeof totalBytes === 'number') {
+			contentLengthValue = String(totalBytes);
+		}
+	}
+	if (contentLengthValue) {
+		headers.set('Content-Length', contentLengthValue);
+	}
+
+	// HTTP-network-or-cache fetch step 2.11
+	if (!headers.has('User-Agent')) {
+		headers.set('User-Agent', 'node-fetch/1.0 (+https://github.com/bitinn/node-fetch)');
+	}
+
+	// HTTP-network-or-cache fetch step 2.15
+	if (request.compress && !headers.has('Accept-Encoding')) {
+		headers.set('Accept-Encoding', 'gzip,deflate');
+	}
+
+	let agent = request.agent;
+	if (typeof agent === 'function') {
+		agent = agent(parsedURL);
+	}
+
+	if (!headers.has('Connection') && !agent) {
+		headers.set('Connection', 'close');
+	}
+
+	// HTTP-network fetch step 4.2
+	// chunked encoding is handled by Node.js
+
+	return Object.assign({}, parsedURL, {
+		method: request.method,
+		headers: exportNodeCompatibleHeaders(headers),
+		agent
+	});
+}
+
+/**
+ * abort-error.js
+ *
+ * AbortError interface for cancelled requests
+ */
+
+/**
+ * Create AbortError instance
+ *
+ * @param   String      message      Error message for human
+ * @return  AbortError
+ */
+function AbortError(message) {
+  Error.call(this, message);
+
+  this.type = 'aborted';
+  this.message = message;
+
+  // hide custom error implementation details from end-users
+  Error.captureStackTrace(this, this.constructor);
+}
+
+AbortError.prototype = Object.create(Error.prototype);
+AbortError.prototype.constructor = AbortError;
+AbortError.prototype.name = 'AbortError';
+
+const URL$1 = Url.URL || whatwgUrl.URL;
+
+// fix an issue where "PassThrough", "resolve" aren't a named export for node <10
+const PassThrough$1 = Stream.PassThrough;
+
+const isDomainOrSubdomain = function isDomainOrSubdomain(destination, original) {
+	const orig = new URL$1(original).hostname;
+	const dest = new URL$1(destination).hostname;
+
+	return orig === dest || orig[orig.length - dest.length - 1] === '.' && orig.endsWith(dest);
+};
+
+/**
+ * isSameProtocol reports whether the two provided URLs use the same protocol.
+ *
+ * Both domains must already be in canonical form.
+ * @param {string|URL} original
+ * @param {string|URL} destination
+ */
+const isSameProtocol = function isSameProtocol(destination, original) {
+	const orig = new URL$1(original).protocol;
+	const dest = new URL$1(destination).protocol;
+
+	return orig === dest;
+};
+
+/**
+ * Fetch function
+ *
+ * @param   Mixed    url   Absolute url or Request instance
+ * @param   Object   opts  Fetch options
+ * @return  Promise
+ */
+function fetch(url, opts) {
+
+	// allow custom promise
+	if (!fetch.Promise) {
+		throw new Error('native promise missing, set fetch.Promise to your favorite alternative');
+	}
+
+	Body.Promise = fetch.Promise;
+
+	// wrap http.request into fetch
+	return new fetch.Promise(function (resolve, reject) {
+		// build request object
+		const request = new Request(url, opts);
+		const options = getNodeRequestOptions(request);
+
+		const send = (options.protocol === 'https:' ? https : http).request;
+		const signal = request.signal;
+
+		let response = null;
+
+		const abort = function abort() {
+			let error = new AbortError('The user aborted a request.');
+			reject(error);
+			if (request.body && request.body instanceof Stream.Readable) {
+				destroyStream(request.body, error);
+			}
+			if (!response || !response.body) return;
+			response.body.emit('error', error);
+		};
+
+		if (signal && signal.aborted) {
+			abort();
+			return;
+		}
+
+		const abortAndFinalize = function abortAndFinalize() {
+			abort();
+			finalize();
+		};
+
+		// send request
+		const req = send(options);
+		let reqTimeout;
+
+		if (signal) {
+			signal.addEventListener('abort', abortAndFinalize);
+		}
+
+		function finalize() {
+			req.abort();
+			if (signal) signal.removeEventListener('abort', abortAndFinalize);
+			clearTimeout(reqTimeout);
+		}
+
+		if (request.timeout) {
+			req.once('socket', function (socket) {
+				reqTimeout = setTimeout(function () {
+					reject(new FetchError(`network timeout at: ${request.url}`, 'request-timeout'));
+					finalize();
+				}, request.timeout);
+			});
+		}
+
+		req.on('error', function (err) {
+			reject(new FetchError(`request to ${request.url} failed, reason: ${err.message}`, 'system', err));
+
+			if (response && response.body) {
+				destroyStream(response.body, err);
+			}
+
+			finalize();
+		});
+
+		fixResponseChunkedTransferBadEnding(req, function (err) {
+			if (signal && signal.aborted) {
+				return;
+			}
+
+			if (response && response.body) {
+				destroyStream(response.body, err);
+			}
+		});
+
+		/* c8 ignore next 18 */
+		if (parseInt(process.version.substring(1)) < 14) {
+			// Before Node.js 14, pipeline() does not fully support async iterators and does not always
+			// properly handle when the socket close/end events are out of order.
+			req.on('socket', function (s) {
+				s.addListener('close', function (hadError) {
+					// if a data listener is still present we didn't end cleanly
+					const hasDataListener = s.listenerCount('data') > 0;
+
+					// if end happened before close but the socket didn't emit an error, do it now
+					if (response && hasDataListener && !hadError && !(signal && signal.aborted)) {
+						const err = new Error('Premature close');
+						err.code = 'ERR_STREAM_PREMATURE_CLOSE';
+						response.body.emit('error', err);
+					}
+				});
+			});
+		}
+
+		req.on('response', function (res) {
+			clearTimeout(reqTimeout);
+
+			const headers = createHeadersLenient(res.headers);
+
+			// HTTP fetch step 5
+			if (fetch.isRedirect(res.statusCode)) {
+				// HTTP fetch step 5.2
+				const location = headers.get('Location');
+
+				// HTTP fetch step 5.3
+				let locationURL = null;
+				try {
+					locationURL = location === null ? null : new URL$1(location, request.url).toString();
+				} catch (err) {
+					// error here can only be invalid URL in Location: header
+					// do not throw when options.redirect == manual
+					// let the user extract the errorneous redirect URL
+					if (request.redirect !== 'manual') {
+						reject(new FetchError(`uri requested responds with an invalid redirect URL: ${location}`, 'invalid-redirect'));
+						finalize();
+						return;
+					}
+				}
+
+				// HTTP fetch step 5.5
+				switch (request.redirect) {
+					case 'error':
+						reject(new FetchError(`uri requested responds with a redirect, redirect mode is set to error: ${request.url}`, 'no-redirect'));
+						finalize();
+						return;
+					case 'manual':
+						// node-fetch-specific step: make manual redirect a bit easier to use by setting the Location header value to the resolved URL.
+						if (locationURL !== null) {
+							// handle corrupted header
+							try {
+								headers.set('Location', locationURL);
+							} catch (err) {
+								// istanbul ignore next: nodejs server prevent invalid response headers, we can't test this through normal request
+								reject(err);
+							}
+						}
+						break;
+					case 'follow':
+						// HTTP-redirect fetch step 2
+						if (locationURL === null) {
+							break;
+						}
+
+						// HTTP-redirect fetch step 5
+						if (request.counter >= request.follow) {
+							reject(new FetchError(`maximum redirect reached at: ${request.url}`, 'max-redirect'));
+							finalize();
+							return;
+						}
+
+						// HTTP-redirect fetch step 6 (counter increment)
+						// Create a new Request object.
+						const requestOpts = {
+							headers: new Headers(request.headers),
+							follow: request.follow,
+							counter: request.counter + 1,
+							agent: request.agent,
+							compress: request.compress,
+							method: request.method,
+							body: request.body,
+							signal: request.signal,
+							timeout: request.timeout,
+							size: request.size
+						};
+
+						if (!isDomainOrSubdomain(request.url, locationURL) || !isSameProtocol(request.url, locationURL)) {
+							for (const name of ['authorization', 'www-authenticate', 'cookie', 'cookie2']) {
+								requestOpts.headers.delete(name);
+							}
+						}
+
+						// HTTP-redirect fetch step 9
+						if (res.statusCode !== 303 && request.body && getTotalBytes(request) === null) {
+							reject(new FetchError('Cannot follow redirect with body being a readable stream', 'unsupported-redirect'));
+							finalize();
+							return;
+						}
+
+						// HTTP-redirect fetch step 11
+						if (res.statusCode === 303 || (res.statusCode === 301 || res.statusCode === 302) && request.method === 'POST') {
+							requestOpts.method = 'GET';
+							requestOpts.body = undefined;
+							requestOpts.headers.delete('content-length');
+						}
+
+						// HTTP-redirect fetch step 15
+						resolve(fetch(new Request(locationURL, requestOpts)));
+						finalize();
+						return;
+				}
+			}
+
+			// prepare response
+			res.once('end', function () {
+				if (signal) signal.removeEventListener('abort', abortAndFinalize);
+			});
+			let body = res.pipe(new PassThrough$1());
+
+			const response_options = {
+				url: request.url,
+				status: res.statusCode,
+				statusText: res.statusMessage,
+				headers: headers,
+				size: request.size,
+				timeout: request.timeout,
+				counter: request.counter
+			};
+
+			// HTTP-network fetch step 12.1.1.3
+			const codings = headers.get('Content-Encoding');
+
+			// HTTP-network fetch step 12.1.1.4: handle content codings
+
+			// in following scenarios we ignore compression support
+			// 1. compression support is disabled
+			// 2. HEAD request
+			// 3. no Content-Encoding header
+			// 4. no content response (204)
+			// 5. content not modified response (304)
+			if (!request.compress || request.method === 'HEAD' || codings === null || res.statusCode === 204 || res.statusCode === 304) {
+				response = new Response(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// For Node v6+
+			// Be less strict when decoding compressed responses, since sometimes
+			// servers send slightly invalid responses that are still accepted
+			// by common browsers.
+			// Always using Z_SYNC_FLUSH is what cURL does.
+			const zlibOptions = {
+				flush: zlib.Z_SYNC_FLUSH,
+				finishFlush: zlib.Z_SYNC_FLUSH
+			};
+
+			// for gzip
+			if (codings == 'gzip' || codings == 'x-gzip') {
+				body = body.pipe(zlib.createGunzip(zlibOptions));
+				response = new Response(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// for deflate
+			if (codings == 'deflate' || codings == 'x-deflate') {
+				// handle the infamous raw deflate response from old servers
+				// a hack for old IIS and Apache servers
+				const raw = res.pipe(new PassThrough$1());
+				raw.once('data', function (chunk) {
+					// see http://stackoverflow.com/questions/37519828
+					if ((chunk[0] & 0x0F) === 0x08) {
+						body = body.pipe(zlib.createInflate());
+					} else {
+						body = body.pipe(zlib.createInflateRaw());
+					}
+					response = new Response(body, response_options);
+					resolve(response);
+				});
+				raw.on('end', function () {
+					// some old IIS servers return zero-length OK deflate responses, so 'data' is never emitted.
+					if (!response) {
+						response = new Response(body, response_options);
+						resolve(response);
+					}
+				});
+				return;
+			}
+
+			// for br
+			if (codings == 'br' && typeof zlib.createBrotliDecompress === 'function') {
+				body = body.pipe(zlib.createBrotliDecompress());
+				response = new Response(body, response_options);
+				resolve(response);
+				return;
+			}
+
+			// otherwise, use response as-is
+			response = new Response(body, response_options);
+			resolve(response);
+		});
+
+		writeToStream(req, request);
+	});
+}
+function fixResponseChunkedTransferBadEnding(request, errorCallback) {
+	let socket;
+
+	request.on('socket', function (s) {
+		socket = s;
+	});
+
+	request.on('response', function (response) {
+		const headers = response.headers;
+
+		if (headers['transfer-encoding'] === 'chunked' && !headers['content-length']) {
+			response.once('close', function (hadError) {
+				// if a data listener is still present we didn't end cleanly
+				const hasDataListener = socket.listenerCount('data') > 0;
+
+				if (hasDataListener && !hadError) {
+					const err = new Error('Premature close');
+					err.code = 'ERR_STREAM_PREMATURE_CLOSE';
+					errorCallback(err);
+				}
+			});
+		}
+	});
+}
+
+function destroyStream(stream, err) {
+	if (stream.destroy) {
+		stream.destroy(err);
+	} else {
+		// node < 8
+		stream.emit('error', err);
+		stream.end();
+	}
+}
+
+/**
+ * Redirect code matching
+ *
+ * @param   Number   code  Status code
+ * @return  Boolean
+ */
+fetch.isRedirect = function (code) {
+	return code === 301 || code === 302 || code === 303 || code === 307 || code === 308;
+};
+
+// expose Promise
+fetch.Promise = global.Promise;
+
+module.exports = exports = fetch;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports["default"] = exports;
+exports.Headers = Headers;
+exports.Request = Request;
+exports.Response = Response;
+exports.FetchError = FetchError;
+
+
+/***/ }),
+
+/***/ 49768:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+var crypto = __nccwpck_require__(6113);
+var buffer = __nccwpck_require__(14300);
+
+const VERSION = "2.0.0";
+
+var Algorithm;
+
+(function (Algorithm) {
+  Algorithm["SHA1"] = "sha1";
+  Algorithm["SHA256"] = "sha256";
+})(Algorithm || (Algorithm = {}));
+
+async function sign(options, payload) {
+  const {
+    secret,
+    algorithm
+  } = typeof options === "object" ? {
+    secret: options.secret,
+    algorithm: options.algorithm || Algorithm.SHA256
+  } : {
+    secret: options,
+    algorithm: Algorithm.SHA256
+  };
+
+  if (!secret || !payload) {
+    throw new TypeError("[@octokit/webhooks-methods] secret & payload required for sign()");
+  }
+
+  if (!Object.values(Algorithm).includes(algorithm)) {
+    throw new TypeError(`[@octokit/webhooks] Algorithm ${algorithm} is not supported. Must be  'sha1' or 'sha256'`);
+  }
+
+  return `${algorithm}=${crypto.createHmac(algorithm, secret).update(payload).digest("hex")}`;
+}
+sign.VERSION = VERSION;
+
+const getAlgorithm = signature => {
+  return signature.startsWith("sha256=") ? "sha256" : "sha1";
+};
+
+async function verify(secret, eventPayload, signature) {
+  if (!secret || !eventPayload || !signature) {
+    throw new TypeError("[@octokit/webhooks-methods] secret, eventPayload & signature required");
+  }
+
+  const signatureBuffer = buffer.Buffer.from(signature);
+  const algorithm = getAlgorithm(signature);
+  const verificationBuffer = buffer.Buffer.from(await sign({
+    secret,
+    algorithm
+  }, eventPayload));
+
+  if (signatureBuffer.length !== verificationBuffer.length) {
+    return false;
+  } // constant time comparison to prevent timing attachs
+  // https://stackoverflow.com/a/31096242/206879
+  // https://en.wikipedia.org/wiki/Timing_attack
+
+
+  return crypto.timingSafeEqual(signatureBuffer, verificationBuffer);
+}
+verify.VERSION = VERSION;
+
+exports.sign = sign;
+exports.verify = verify;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 18513:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var AggregateError = _interopDefault(__nccwpck_require__(61231));
+var webhooksMethods = __nccwpck_require__(49768);
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+
+    if (enumerableOnly) {
+      symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      });
+    }
+
+    keys.push.apply(keys, symbols);
+  }
+
+  return keys;
+}
+
+function _objectSpread2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i] != null ? arguments[i] : {};
+
+    if (i % 2) {
+      ownKeys(Object(source), true).forEach(function (key) {
+        _defineProperty(target, key, source[key]);
+      });
+    } else if (Object.getOwnPropertyDescriptors) {
+      Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+    } else {
+      ownKeys(Object(source)).forEach(function (key) {
+        Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+      });
+    }
+  }
+
+  return target;
+}
+
+function _defineProperty(obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+
+  return obj;
+}
+
+const createLogger = logger => _objectSpread2({
+  debug: () => {},
+  info: () => {},
+  warn: console.warn.bind(console),
+  error: console.error.bind(console)
+}, logger);
+
+// THIS FILE IS GENERATED - DO NOT EDIT DIRECTLY
+// make edits in scripts/generate-types.ts
+const emitterEventNames = ["branch_protection_rule", "branch_protection_rule.created", "branch_protection_rule.deleted", "branch_protection_rule.edited", "check_run", "check_run.completed", "check_run.created", "check_run.requested_action", "check_run.rerequested", "check_suite", "check_suite.completed", "check_suite.requested", "check_suite.rerequested", "code_scanning_alert", "code_scanning_alert.appeared_in_branch", "code_scanning_alert.closed_by_user", "code_scanning_alert.created", "code_scanning_alert.fixed", "code_scanning_alert.reopened", "code_scanning_alert.reopened_by_user", "commit_comment", "commit_comment.created", "create", "delete", "deploy_key", "deploy_key.created", "deploy_key.deleted", "deployment", "deployment.created", "deployment_status", "deployment_status.created", "discussion", "discussion.answered", "discussion.category_changed", "discussion.created", "discussion.deleted", "discussion.edited", "discussion.labeled", "discussion.locked", "discussion.pinned", "discussion.transferred", "discussion.unanswered", "discussion.unlabeled", "discussion.unlocked", "discussion.unpinned", "discussion_comment", "discussion_comment.created", "discussion_comment.deleted", "discussion_comment.edited", "fork", "github_app_authorization", "github_app_authorization.revoked", "gollum", "installation", "installation.created", "installation.deleted", "installation.new_permissions_accepted", "installation.suspend", "installation.unsuspend", "installation_repositories", "installation_repositories.added", "installation_repositories.removed", "issue_comment", "issue_comment.created", "issue_comment.deleted", "issue_comment.edited", "issues", "issues.assigned", "issues.closed", "issues.deleted", "issues.demilestoned", "issues.edited", "issues.labeled", "issues.locked", "issues.milestoned", "issues.opened", "issues.pinned", "issues.reopened", "issues.transferred", "issues.unassigned", "issues.unlabeled", "issues.unlocked", "issues.unpinned", "label", "label.created", "label.deleted", "label.edited", "marketplace_purchase", "marketplace_purchase.cancelled", "marketplace_purchase.changed", "marketplace_purchase.pending_change", "marketplace_purchase.pending_change_cancelled", "marketplace_purchase.purchased", "member", "member.added", "member.edited", "member.removed", "membership", "membership.added", "membership.removed", "meta", "meta.deleted", "milestone", "milestone.closed", "milestone.created", "milestone.deleted", "milestone.edited", "milestone.opened", "org_block", "org_block.blocked", "org_block.unblocked", "organization", "organization.deleted", "organization.member_added", "organization.member_invited", "organization.member_removed", "organization.renamed", "package", "package.published", "package.updated", "page_build", "ping", "project", "project.closed", "project.created", "project.deleted", "project.edited", "project.reopened", "project_card", "project_card.converted", "project_card.created", "project_card.deleted", "project_card.edited", "project_card.moved", "project_column", "project_column.created", "project_column.deleted", "project_column.edited", "project_column.moved", "projects_v2_item", "projects_v2_item.archived", "projects_v2_item.converted", "projects_v2_item.created", "projects_v2_item.deleted", "projects_v2_item.edited", "projects_v2_item.reordered", "projects_v2_item.restored", "public", "pull_request", "pull_request.assigned", "pull_request.auto_merge_disabled", "pull_request.auto_merge_enabled", "pull_request.closed", "pull_request.converted_to_draft", "pull_request.edited", "pull_request.labeled", "pull_request.locked", "pull_request.opened", "pull_request.ready_for_review", "pull_request.reopened", "pull_request.review_request_removed", "pull_request.review_requested", "pull_request.synchronize", "pull_request.unassigned", "pull_request.unlabeled", "pull_request.unlocked", "pull_request_review", "pull_request_review.dismissed", "pull_request_review.edited", "pull_request_review.submitted", "pull_request_review_comment", "pull_request_review_comment.created", "pull_request_review_comment.deleted", "pull_request_review_comment.edited", "pull_request_review_thread", "pull_request_review_thread.resolved", "pull_request_review_thread.unresolved", "push", "release", "release.created", "release.deleted", "release.edited", "release.prereleased", "release.published", "release.released", "release.unpublished", "repository", "repository.archived", "repository.created", "repository.deleted", "repository.edited", "repository.privatized", "repository.publicized", "repository.renamed", "repository.transferred", "repository.unarchived", "repository_dispatch", "repository_import", "repository_vulnerability_alert", "repository_vulnerability_alert.create", "repository_vulnerability_alert.dismiss", "repository_vulnerability_alert.reopen", "repository_vulnerability_alert.resolve", "secret_scanning_alert", "secret_scanning_alert.created", "secret_scanning_alert.reopened", "secret_scanning_alert.resolved", "security_advisory", "security_advisory.performed", "security_advisory.published", "security_advisory.updated", "security_advisory.withdrawn", "sponsorship", "sponsorship.cancelled", "sponsorship.created", "sponsorship.edited", "sponsorship.pending_cancellation", "sponsorship.pending_tier_change", "sponsorship.tier_changed", "star", "star.created", "star.deleted", "status", "team", "team.added_to_repository", "team.created", "team.deleted", "team.edited", "team.removed_from_repository", "team_add", "watch", "watch.started", "workflow_dispatch", "workflow_job", "workflow_job.completed", "workflow_job.in_progress", "workflow_job.queued", "workflow_run", "workflow_run.completed", "workflow_run.requested"];
+
+function handleEventHandlers(state, webhookName, handler) {
+  if (!state.hooks[webhookName]) {
+    state.hooks[webhookName] = [];
+  }
+
+  state.hooks[webhookName].push(handler);
+}
+
+function receiverOn(state, webhookNameOrNames, handler) {
+  if (Array.isArray(webhookNameOrNames)) {
+    webhookNameOrNames.forEach(webhookName => receiverOn(state, webhookName, handler));
+    return;
+  }
+
+  if (["*", "error"].includes(webhookNameOrNames)) {
+    const webhookName = webhookNameOrNames === "*" ? "any" : webhookNameOrNames;
+    const message = `Using the "${webhookNameOrNames}" event with the regular Webhooks.on() function is not supported. Please use the Webhooks.on${webhookName.charAt(0).toUpperCase() + webhookName.slice(1)}() method instead`;
+    throw new Error(message);
+  }
+
+  if (!emitterEventNames.includes(webhookNameOrNames)) {
+    state.log.warn(`"${webhookNameOrNames}" is not a known webhook name (https://developer.github.com/v3/activity/events/types/)`);
+  }
+
+  handleEventHandlers(state, webhookNameOrNames, handler);
+}
+function receiverOnAny(state, handler) {
+  handleEventHandlers(state, "*", handler);
+}
+function receiverOnError(state, handler) {
+  handleEventHandlers(state, "error", handler);
+}
+
+// Errors thrown or rejected Promises in "error" event handlers are not handled
+// as they are in the webhook event handlers. If errors occur, we log a
+// "Fatal: Error occurred" message to stdout
+function wrapErrorHandler(handler, error) {
+  let returnValue;
+
+  try {
+    returnValue = handler(error);
+  } catch (error) {
+    console.log('FATAL: Error occurred in "error" event handler');
+    console.log(error);
+  }
+
+  if (returnValue && returnValue.catch) {
+    returnValue.catch(error => {
+      console.log('FATAL: Error occurred in "error" event handler');
+      console.log(error);
+    });
+  }
+}
+
+// @ts-ignore to address #245
+
+function getHooks(state, eventPayloadAction, eventName) {
+  const hooks = [state.hooks[eventName], state.hooks["*"]];
+
+  if (eventPayloadAction) {
+    hooks.unshift(state.hooks[`${eventName}.${eventPayloadAction}`]);
+  }
+
+  return [].concat(...hooks.filter(Boolean));
+} // main handler function
+
+
+function receiverHandle(state, event) {
+  const errorHandlers = state.hooks.error || [];
+
+  if (event instanceof Error) {
+    const error = Object.assign(new AggregateError([event]), {
+      event,
+      errors: [event]
+    });
+    errorHandlers.forEach(handler => wrapErrorHandler(handler, error));
+    return Promise.reject(error);
+  }
+
+  if (!event || !event.name) {
+    throw new AggregateError(["Event name not passed"]);
+  }
+
+  if (!event.payload) {
+    throw new AggregateError(["Event payload not passed"]);
+  } // flatten arrays of event listeners and remove undefined values
+
+
+  const hooks = getHooks(state, "action" in event.payload ? event.payload.action : null, event.name);
+
+  if (hooks.length === 0) {
+    return Promise.resolve();
+  }
+
+  const errors = [];
+  const promises = hooks.map(handler => {
+    let promise = Promise.resolve(event);
+
+    if (state.transform) {
+      promise = promise.then(state.transform);
+    }
+
+    return promise.then(event => {
+      return handler(event);
+    }).catch(error => errors.push(Object.assign(error, {
+      event
+    })));
+  });
+  return Promise.all(promises).then(() => {
+    if (errors.length === 0) {
+      return;
+    }
+
+    const error = new AggregateError(errors);
+    Object.assign(error, {
+      event,
+      errors
+    });
+    errorHandlers.forEach(handler => wrapErrorHandler(handler, error));
+    throw error;
+  });
+}
+
+function removeListener(state, webhookNameOrNames, handler) {
+  if (Array.isArray(webhookNameOrNames)) {
+    webhookNameOrNames.forEach(webhookName => removeListener(state, webhookName, handler));
+    return;
+  }
+
+  if (!state.hooks[webhookNameOrNames]) {
+    return;
+  } // remove last hook that has been added, that way
+  // it behaves the same as removeListener
+
+
+  for (let i = state.hooks[webhookNameOrNames].length - 1; i >= 0; i--) {
+    if (state.hooks[webhookNameOrNames][i] === handler) {
+      state.hooks[webhookNameOrNames].splice(i, 1);
+      return;
+    }
+  }
+}
+
+function createEventHandler(options) {
+  const state = {
+    hooks: {},
+    log: createLogger(options && options.log)
+  };
+
+  if (options && options.transform) {
+    state.transform = options.transform;
+  }
+
+  return {
+    on: receiverOn.bind(null, state),
+    onAny: receiverOnAny.bind(null, state),
+    onError: receiverOnError.bind(null, state),
+    removeListener: removeListener.bind(null, state),
+    receive: receiverHandle.bind(null, state)
+  };
+}
+
+/**
+ * GitHub sends its JSON with an indentation of 2 spaces and a line break at the end
+ */
+function toNormalizedJsonString(payload) {
+  const payloadString = JSON.stringify(payload);
+  return payloadString.replace(/[^\\]\\u[\da-f]{4}/g, s => {
+    return s.substr(0, 3) + s.substr(3).toUpperCase();
+  });
+}
+
+async function sign(secret, payload) {
+  return webhooksMethods.sign(secret, typeof payload === "string" ? payload : toNormalizedJsonString(payload));
+}
+
+async function verify(secret, payload, signature) {
+  return webhooksMethods.verify(secret, typeof payload === "string" ? payload : toNormalizedJsonString(payload), signature);
+}
+
+async function verifyAndReceive(state, event) {
+  // verify will validate that the secret is not undefined
+  const matchesSignature = await webhooksMethods.verify(state.secret, typeof event.payload === "object" ? toNormalizedJsonString(event.payload) : event.payload, event.signature);
+
+  if (!matchesSignature) {
+    const error = new Error("[@octokit/webhooks] signature does not match event payload and secret");
+    return state.eventHandler.receive(Object.assign(error, {
+      event,
+      status: 400
+    }));
+  }
+
+  return state.eventHandler.receive({
+    id: event.id,
+    name: event.name,
+    payload: typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload
+  });
+}
+
+const WEBHOOK_HEADERS = ["x-github-event", "x-hub-signature-256", "x-github-delivery"]; // https://docs.github.com/en/developers/webhooks-and-events/webhook-events-and-payloads#delivery-headers
+
+function getMissingHeaders(request) {
+  return WEBHOOK_HEADERS.filter(header => !(header in request.headers));
+}
+
+// @ts-ignore to address #245
+function getPayload(request) {
+  // If request.body already exists we can stop here
+  // See https://github.com/octokit/webhooks.js/pull/23
+  if (request.body) return Promise.resolve(request.body);
+  return new Promise((resolve, reject) => {
+    let data = "";
+    request.setEncoding("utf8"); // istanbul ignore next
+
+    request.on("error", error => reject(new AggregateError([error])));
+    request.on("data", chunk => data += chunk);
+    request.on("end", () => {
+      try {
+        resolve(JSON.parse(data));
+      } catch (error) {
+        error.message = "Invalid JSON";
+        error.status = 400;
+        reject(new AggregateError([error]));
+      }
+    });
+  });
+}
+
+async function middleware(webhooks, options, request, response, next) {
+  let pathname;
+
+  try {
+    pathname = new URL(request.url, "http://localhost").pathname;
+  } catch (error) {
+    response.writeHead(422, {
+      "content-type": "application/json"
+    });
+    response.end(JSON.stringify({
+      error: `Request URL could not be parsed: ${request.url}`
+    }));
+    return;
+  }
+
+  const isUnknownRoute = request.method !== "POST" || pathname !== options.path;
+  const isExpressMiddleware = typeof next === "function";
+
+  if (isUnknownRoute) {
+    if (isExpressMiddleware) {
+      return next();
+    } else {
+      return options.onUnhandledRequest(request, response);
+    }
+  }
+
+  const missingHeaders = getMissingHeaders(request).join(", ");
+
+  if (missingHeaders) {
+    response.writeHead(400, {
+      "content-type": "application/json"
+    });
+    response.end(JSON.stringify({
+      error: `Required headers missing: ${missingHeaders}`
+    }));
+    return;
+  }
+
+  const eventName = request.headers["x-github-event"];
+  const signatureSHA256 = request.headers["x-hub-signature-256"];
+  const id = request.headers["x-github-delivery"];
+  options.log.debug(`${eventName} event received (id: ${id})`); // GitHub will abort the request if it does not receive a response within 10s
+  // See https://github.com/octokit/webhooks.js/issues/185
+
+  let didTimeout = false;
+  const timeout = setTimeout(() => {
+    didTimeout = true;
+    response.statusCode = 202;
+    response.end("still processing\n");
+  }, 9000).unref();
+
+  try {
+    const payload = await getPayload(request);
+    await webhooks.verifyAndReceive({
+      id: id,
+      name: eventName,
+      payload: payload,
+      signature: signatureSHA256
+    });
+    clearTimeout(timeout);
+    if (didTimeout) return;
+    response.end("ok\n");
+  } catch (error) {
+    clearTimeout(timeout);
+    if (didTimeout) return;
+    const statusCode = Array.from(error)[0].status;
+    response.statusCode = typeof statusCode !== "undefined" ? statusCode : 500;
+    response.end(String(error));
+  }
+}
+
+function onUnhandledRequestDefault(request, response) {
+  response.writeHead(404, {
+    "content-type": "application/json"
+  });
+  response.end(JSON.stringify({
+    error: `Unknown route: ${request.method} ${request.url}`
+  }));
+}
+
+function createNodeMiddleware(webhooks, {
+  path = "/api/github/webhooks",
+  onUnhandledRequest = onUnhandledRequestDefault,
+  log = createLogger()
+} = {}) {
+  return middleware.bind(null, webhooks, {
+    path,
+    onUnhandledRequest,
+    log
+  });
+}
+
+class Webhooks {
+  constructor(options) {
+    if (!options || !options.secret) {
+      throw new Error("[@octokit/webhooks] options.secret required");
+    }
+
+    const state = {
+      eventHandler: createEventHandler(options),
+      secret: options.secret,
+      hooks: {},
+      log: createLogger(options.log)
+    };
+    this.sign = sign.bind(null, options.secret);
+    this.verify = verify.bind(null, options.secret);
+    this.on = state.eventHandler.on;
+    this.onAny = state.eventHandler.onAny;
+    this.onError = state.eventHandler.onError;
+    this.removeListener = state.eventHandler.removeListener;
+    this.receive = state.eventHandler.receive;
+    this.verifyAndReceive = verifyAndReceive.bind(null, state);
+  }
+
+}
+
+exports.Webhooks = Webhooks;
+exports.createEventHandler = createEventHandler;
+exports.createNodeMiddleware = createNodeMiddleware;
+exports.emitterEventNames = emitterEventNames;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 93159:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const ProbotExports = __nccwpck_require__(58930);
+const pino = __nccwpck_require__(77708);
+
+const { transport } = __nccwpck_require__(96645);
+
+module.exports = { ...ProbotExports, run };
+
+async function run(app) {
+  const log = pino({}, transport);
+
+  const githubToken =
+    process.env.GITHUB_TOKEN ||
+    process.env.INPUT_GITHUB_TOKEN ||
+    process.env.INPUT_TOKEN;
+
+  if (!githubToken) {
+    log.error(
+      "[probot/adapter-github-actions] a token must be passed as `env.GITHUB_TOKEN` or `with.GITHUB_TOKEN` or `with.token`, see https://github.com/probot/adapter-github-actions#usage"
+    );
+    return;
+  }
+
+  const envVariablesMissing = [
+    "GITHUB_RUN_ID",
+    "GITHUB_EVENT_NAME",
+    "GITHUB_EVENT_PATH",
+  ].filter((name) => !process.env[name]);
+
+  if (envVariablesMissing.length) {
+    log.error(
+      `[probot/adapter-github-actions] GitHub Action default environment variables missing: ${envVariablesMissing.join(
+        ", "
+      )}. See https://docs.github.com/en/free-pro-team@latest/actions/reference/environment-variables#default-environment-variables`
+    );
+    return;
+  }
+
+  const probot = ProbotExports.createProbot({
+    overrides: {
+      githubToken,
+      log,
+    },
+  });
+
+  await probot.load(app);
+
+  return probot
+    .receive({
+      id: process.env.GITHUB_RUN_ID,
+      name: process.env.GITHUB_EVENT_NAME,
+      payload: require(process.env.GITHUB_EVENT_PATH),
+    })
+    .catch((error) => {
+      probot.log.error(error);
+    });
+}
+
+
+/***/ }),
+
+/***/ 96645:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const { inspect } = __nccwpck_require__(73837);
+
+const through = __nccwpck_require__(18180);
+const core = __nccwpck_require__(42186);
+const pino = __nccwpck_require__(77708);
+
+const LEVEL_TO_ACTIONS_CORE_LOG_METHOD = {
+  trace: "debug",
+  debug: "debug",
+  info: "info",
+  warn: "warning",
+  error: "error",
+  fatal: "error",
+};
+
+const transport = through.obj(function (chunk, enc, cb) {
+  const { level, hostname, pid, msg, time, ...meta } = JSON.parse(chunk);
+  const levelLabel = pino.levels.labels[level] || level;
+  const logMethodName = LEVEL_TO_ACTIONS_CORE_LOG_METHOD[levelLabel];
+
+  const output = [
+    msg,
+    Object.keys(meta).length ? inspect(meta, { depth: Infinity }) : "",
+  ]
+    .join("\n")
+    .trim();
+
+  if (logMethodName in core) {
+    core[logMethodName](output);
+  } else {
+    core.error(`"${level}" is not a known log level - ${output}`);
+  }
+
+  cb();
+});
+
+module.exports = { transport };
+
+
+/***/ }),
+
+/***/ 97743:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var path = __nccwpck_require__(71017);
+var fs = __nccwpck_require__(57147);
+var isBase64 = _interopDefault(__nccwpck_require__(31310));
+
+const VERSION = "0.0.0-development";
+
+const begin = "-----BEGIN RSA PRIVATE KEY-----";
+const end = "-----END RSA PRIVATE KEY-----";
+function getPrivateKey(options = {}) {
+  const env = options.env || process.env;
+  const cwd = options.cwd || process.cwd();
+
+  if (options.filepath) {
+    return fs.readFileSync(path.resolve(cwd, options.filepath), "utf-8");
+  }
+
+  if (env.PRIVATE_KEY) {
+    let privateKey = env.PRIVATE_KEY;
+
+    if (isBase64(privateKey)) {
+      // Decode base64-encoded certificate
+      privateKey = Buffer.from(privateKey, "base64").toString();
+    }
+
+    if (privateKey.includes(begin) && privateKey.includes(end)) {
+      // newlines are escaped
+      if (privateKey.indexOf("\\n") !== -1) {
+        privateKey = privateKey.replace(/\\n/g, "\n");
+      } // newlines are missing
+
+
+      if (privateKey.indexOf("\n") === -1) {
+        privateKey = addNewlines(privateKey);
+      }
+
+      return privateKey;
+    }
+
+    throw new Error(`[@probot/get-private-key] The contents of "env.PRIVATE_KEY" could not be validated. Please check to ensure you have copied the contents of the .pem file correctly.`);
+  }
+
+  if (env.PRIVATE_KEY_PATH) {
+    const filepath = path.resolve(cwd, env.PRIVATE_KEY_PATH);
+
+    if (fs.existsSync(filepath)) {
+      return fs.readFileSync(filepath, "utf-8");
+    } else {
+      throw new Error(`[@probot/get-private-key] Private key does not exists at path: "${env.PRIVATE_KEY_PATH}". Please check to ensure that "env.PRIVATE_KEY_PATH" is correct.`);
+    }
+  }
+
+  const pemFiles = fs.readdirSync(cwd).filter(path => path.endsWith(".pem"));
+
+  if (pemFiles.length > 1) {
+    const paths = pemFiles.join(", ");
+    throw new Error(`[@probot/get-private-key] More than one file found: "${paths}". Set { filepath } option or set one of the environment variables: PRIVATE_KEY, PRIVATE_KEY_PATH`);
+  } else if (pemFiles[0]) {
+    return getPrivateKey({
+      filepath: pemFiles[0],
+      cwd
+    });
+  }
+
+  return null;
+}
+
+function addNewlines(privateKey) {
+  const middleLength = privateKey.length - begin.length - end.length - 2;
+  const middle = privateKey.substr(begin.length + 1, middleLength);
+  return `${begin}\n${middle.trim().replace(/\s+/g, "\n")}\n${end}`;
+}
+
+getPrivateKey.VERSION = VERSION;
+
+exports.getPrivateKey = getPrivateKey;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 59326:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var yaml = _interopDefault(__nccwpck_require__(80557));
+
+const VERSION = "1.1.6";
+
+function _defineProperty(obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
+
+  return obj;
+}
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+    if (enumerableOnly) symbols = symbols.filter(function (sym) {
+      return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+    });
+    keys.push.apply(keys, symbols);
+  }
+
+  return keys;
+}
+
+function _objectSpread2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i] != null ? arguments[i] : {};
+
+    if (i % 2) {
+      ownKeys(Object(source), true).forEach(function (key) {
+        _defineProperty(target, key, source[key]);
+      });
+    } else if (Object.getOwnPropertyDescriptors) {
+      Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+    } else {
+      ownKeys(Object(source)).forEach(function (key) {
+        Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+      });
+    }
+  }
+
+  return target;
+}
+
+const SUPPORTED_FILE_EXTENSIONS = ["json", "yml", "yaml"];
+/**
+ * Load configuration from a given repository and path.
+ *
+ * @param octokit Octokit instance
+ * @param options
+ */
+
+async function getConfigFile(octokit, {
+  owner,
+  repo,
+  path,
+  ref
+}) {
+  const fileExtension = path.split(".").pop().toLowerCase();
+
+  if (!SUPPORTED_FILE_EXTENSIONS.includes(fileExtension)) {
+    throw new Error(`[@probot/octokit-plugin-config] .${fileExtension} extension is not support for configuration (path: "${path}")`);
+  } // https://docs.github.com/en/rest/reference/repos#get-repository-content
+
+
+  const endpoint = _objectSpread2({
+    method: "GET",
+    url: "/repos/{owner}/{repo}/contents/{path}",
+    owner,
+    repo,
+    path,
+    mediaType: {
+      format: "raw"
+    }
+  }, ref ? {
+    ref
+  } : {});
+
+  const {
+    url
+  } = await octokit.request.endpoint(endpoint);
+  const emptyConfigResult = {
+    owner,
+    repo,
+    path,
+    url,
+    config: null
+  };
+
+  try {
+    const {
+      data,
+      headers
+    } = await octokit.request(endpoint); // If path is a submodule, or a folder, then a JSON string is returned with
+    // the "Content-Type" header set to "application/json; charset=utf-8".
+    //
+    // - https://docs.github.com/en/rest/reference/repos#if-the-content-is-a-submodule
+    // - https://docs.github.com/en/rest/reference/repos#if-the-content-is-a-directory
+    //
+    // symlinks just return the content of the linked file when requesting the raw formt,
+    // so we are fine
+
+    if (headers["content-type"] === "application/json; charset=utf-8") {
+      throw new Error(`[@probot/octokit-plugin-config] ${url} exists, but is either a directory or a submodule. Ignoring.`);
+    }
+
+    if (fileExtension === "json") {
+      if (typeof data === "string") {
+        throw new Error(`[@probot/octokit-plugin-config] Configuration could not be parsed from ${url} (invalid JSON)`);
+      }
+
+      return _objectSpread2(_objectSpread2({}, emptyConfigResult), {}, {
+        config: data
+      });
+    }
+
+    const config = yaml.load(data) || {};
+
+    if (typeof config === "string") {
+      throw new Error(`[@probot/octokit-plugin-config] Configuration could not be parsed from ${url} (YAML is not an object)`);
+    }
+
+    return _objectSpread2(_objectSpread2({}, emptyConfigResult), {}, {
+      config
+    });
+  } catch (error) {
+    if (error.status === 404) {
+      return emptyConfigResult;
+    }
+
+    if (error.name === "YAMLException") {
+      const reason = /unknown tag/.test(error.message) ? "unsafe YAML" : "invalid YAML";
+      throw new Error(`[@probot/octokit-plugin-config] Configuration could not be parsed from ${url} (${reason})`);
+    }
+
+    throw error;
+  }
+}
+
+const EXTENDS_REGEX = new RegExp("^" + "(?:([a-z\\d](?:[a-z\\d]|-(?=[a-z\\d])){0,38})/)?" + // org
+"([-_.\\w\\d]+)" + // project
+"(?::([-_./\\w\\d]+\\.ya?ml))?" + // filename
+"$", "i");
+/**
+ * Computes parameters to retrieve the configuration file specified in _extends
+ *
+ * Base can either be the name of a repository in the same organization or
+ * a full slug "organization/repo".
+ *
+ * @param options
+ * @return The params needed to retrieve a configuration file
+ */
+
+function extendsToGetContentParams({
+  owner,
+  path,
+  url,
+  extendsValue
+}) {
+  if (typeof extendsValue !== "string") {
+    throw new Error(`[@probot/octokit-plugin-config] Invalid value ${JSON.stringify(extendsValue)} for _extends in ${url}`);
+  }
+
+  const match = extendsValue.match(EXTENDS_REGEX);
+
+  if (match === null) {
+    throw new Error(`[@probot/octokit-plugin-config] Invalid value "${extendsValue}" for _extends in ${url}`);
+  }
+
+  return {
+    owner: match[1] || owner,
+    repo: match[2],
+    path: match[3] || path
+  };
+}
+
+/**
+ * Load configuration from selected repository file. If the file does not exist
+ * it loads configuration from the owners `.github` repository.
+ *
+ * If the repository file configuration includes an `_extends` key, that file
+ * is loaded. Same with the target file until no `_extends` key is present.
+ *
+ * @param octokit Octokit instance
+ * @param options
+ */
+
+async function getConfigFiles(octokit, {
+  owner,
+  repo,
+  path,
+  branch
+}) {
+  const requestedRepoFile = await getConfigFile(octokit, {
+    owner,
+    repo,
+    path,
+    ref: branch
+  });
+  const files = [requestedRepoFile]; // if no configuration file present in selected repository,
+  // try to load it from the `.github` repository
+
+  if (!requestedRepoFile.config) {
+    if (repo === ".github") {
+      return files;
+    }
+
+    const defaultRepoConfig = await getConfigFile(octokit, {
+      owner,
+      repo: ".github",
+      path
+    });
+    files.push(defaultRepoConfig);
+  }
+
+  const file = files[files.length - 1]; // if the configuration has no `_extends` key, we are done here.
+
+  if (!file.config || !file.config._extends) {
+    return files;
+  } // parse the value of `_extends` into request parameters to
+  // retrieve the new configuration file
+
+
+  let extendConfigOptions = extendsToGetContentParams({
+    owner,
+    path,
+    url: file.url,
+    extendsValue: file.config._extends
+  }); // remove the `_extends` key from the configuration that is returned
+
+  delete file.config._extends; // now load the configuration linked from the `_extends` key. If that
+  // configuration also includes an `_extends` key, then load that configuration
+  // as well, until the target configuration has no `_extends` key
+
+  do {
+    const extendRepoConfig = await getConfigFile(octokit, extendConfigOptions);
+    files.push(extendRepoConfig);
+
+    if (!extendRepoConfig.config || !extendRepoConfig.config._extends) {
+      return files;
+    }
+
+    extendConfigOptions = extendsToGetContentParams({
+      owner,
+      path,
+      url: extendRepoConfig.url,
+      extendsValue: extendRepoConfig.config._extends
+    });
+    delete extendRepoConfig.config._extends; // Avoid loops
+
+    const alreadyLoaded = files.find(file => file.owner === extendConfigOptions.owner && file.repo === extendConfigOptions.repo && file.path === extendConfigOptions.path);
+
+    if (alreadyLoaded) {
+      throw new Error(`[@probot/octokit-plugin-config] Recursion detected. Ignoring  "_extends: ${extendRepoConfig.config._extends}" from ${extendRepoConfig.url} because ${alreadyLoaded.url} was already loaded.`);
+    }
+  } while (true);
+}
+
+/**
+ * Loads configuration from one or multiple files and resolves with
+ * the combined configuration as well as the list of files the configuration
+ * was loaded from
+ *
+ * @param octokit Octokit instance
+ * @param options
+ */
+
+async function composeConfigGet(octokit, {
+  owner,
+  repo,
+  defaults,
+  path,
+  branch
+}) {
+  const files = await getConfigFiles(octokit, {
+    owner,
+    repo,
+    path,
+    branch
+  });
+  const configs = files.map(file => file.config).reverse().filter(Boolean);
+  return {
+    files,
+    config: typeof defaults === "function" ? defaults(configs) : Object.assign({}, defaults, ...configs)
+  };
+}
+
+/**
+ * @param octokit Octokit instance
+ */
+
+function config(octokit) {
+  return {
+    config: {
+      async get(options) {
+        return composeConfigGet(octokit, options);
+      }
+
+    }
+  };
+}
+config.VERSION = VERSION;
+
+exports.composeConfigGet = composeConfigGet;
+exports.config = config;
+//# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 80557:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+
+var loader = __nccwpck_require__(26106);
+var dumper = __nccwpck_require__(73811);
+
+
+function renamed(from, to) {
+  return function () {
+    throw new Error('Function yaml.' + from + ' is removed in js-yaml 4. ' +
+      'Use yaml.' + to + ' instead, which is now safe by default.');
+  };
+}
+
+
+module.exports.Type = __nccwpck_require__(57480);
+module.exports.Schema = __nccwpck_require__(22258);
+module.exports.FAILSAFE_SCHEMA = __nccwpck_require__(54323);
+module.exports.JSON_SCHEMA = __nccwpck_require__(70265);
+module.exports.CORE_SCHEMA = __nccwpck_require__(90085);
+module.exports.DEFAULT_SCHEMA = __nccwpck_require__(77599);
+module.exports.load                = loader.load;
+module.exports.loadAll             = loader.loadAll;
+module.exports.dump                = dumper.dump;
+module.exports.YAMLException = __nccwpck_require__(30780);
+
+// Re-export all types in case user wants to create custom schema
+module.exports.types = {
+  binary:    __nccwpck_require__(56942),
+  float:     __nccwpck_require__(56128),
+  map:       __nccwpck_require__(74352),
+  null:      __nccwpck_require__(61002),
+  pairs:     __nccwpck_require__(18978),
+  set:       __nccwpck_require__(87424),
+  timestamp: __nccwpck_require__(9561),
+  bool:      __nccwpck_require__(85327),
+  int:       __nccwpck_require__(2848),
+  merge:     __nccwpck_require__(70884),
+  omap:      __nccwpck_require__(65894),
+  seq:       __nccwpck_require__(89695),
+  str:       __nccwpck_require__(32568)
+};
+
+// Removed functions from JS-YAML 3.0.x
+module.exports.safeLoad            = renamed('safeLoad', 'load');
+module.exports.safeLoadAll         = renamed('safeLoadAll', 'loadAll');
+module.exports.safeDump            = renamed('safeDump', 'dump');
+
+
+/***/ }),
+
+/***/ 44828:
+/***/ ((module) => {
+
+"use strict";
+
+
+
+function isNothing(subject) {
+  return (typeof subject === 'undefined') || (subject === null);
+}
+
+
+function isObject(subject) {
+  return (typeof subject === 'object') && (subject !== null);
+}
+
+
+function toArray(sequence) {
+  if (Array.isArray(sequence)) return sequence;
+  else if (isNothing(sequence)) return [];
+
+  return [ sequence ];
+}
+
+
+function extend(target, source) {
+  var index, length, key, sourceKeys;
+
+  if (source) {
+    sourceKeys = Object.keys(source);
+
+    for (index = 0, length = sourceKeys.length; index < length; index += 1) {
+      key = sourceKeys[index];
+      target[key] = source[key];
+    }
+  }
+
+  return target;
+}
+
+
+function repeat(string, count) {
+  var result = '', cycle;
+
+  for (cycle = 0; cycle < count; cycle += 1) {
+    result += string;
+  }
+
+  return result;
+}
+
+
+function isNegativeZero(number) {
+  return (number === 0) && (Number.NEGATIVE_INFINITY === 1 / number);
+}
+
+
+module.exports.isNothing      = isNothing;
+module.exports.isObject       = isObject;
+module.exports.toArray        = toArray;
+module.exports.repeat         = repeat;
+module.exports.isNegativeZero = isNegativeZero;
+module.exports.extend         = extend;
+
+
+/***/ }),
+
+/***/ 73811:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+/*eslint-disable no-use-before-define*/
+
+var common              = __nccwpck_require__(44828);
+var YAMLException       = __nccwpck_require__(30780);
+var DEFAULT_SCHEMA      = __nccwpck_require__(77599);
+
+var _toString       = Object.prototype.toString;
+var _hasOwnProperty = Object.prototype.hasOwnProperty;
+
+var CHAR_BOM                  = 0xFEFF;
+var CHAR_TAB                  = 0x09; /* Tab */
+var CHAR_LINE_FEED            = 0x0A; /* LF */
+var CHAR_CARRIAGE_RETURN      = 0x0D; /* CR */
+var CHAR_SPACE                = 0x20; /* Space */
+var CHAR_EXCLAMATION          = 0x21; /* ! */
+var CHAR_DOUBLE_QUOTE         = 0x22; /* " */
+var CHAR_SHARP                = 0x23; /* # */
+var CHAR_PERCENT              = 0x25; /* % */
+var CHAR_AMPERSAND            = 0x26; /* & */
+var CHAR_SINGLE_QUOTE         = 0x27; /* ' */
+var CHAR_ASTERISK             = 0x2A; /* * */
+var CHAR_COMMA                = 0x2C; /* , */
+var CHAR_MINUS                = 0x2D; /* - */
+var CHAR_COLON                = 0x3A; /* : */
+var CHAR_EQUALS               = 0x3D; /* = */
+var CHAR_GREATER_THAN         = 0x3E; /* > */
+var CHAR_QUESTION             = 0x3F; /* ? */
+var CHAR_COMMERCIAL_AT        = 0x40; /* @ */
+var CHAR_LEFT_SQUARE_BRACKET  = 0x5B; /* [ */
+var CHAR_RIGHT_SQUARE_BRACKET = 0x5D; /* ] */
+var CHAR_GRAVE_ACCENT         = 0x60; /* ` */
+var CHAR_LEFT_CURLY_BRACKET   = 0x7B; /* { */
+var CHAR_VERTICAL_LINE        = 0x7C; /* | */
+var CHAR_RIGHT_CURLY_BRACKET  = 0x7D; /* } */
+
+var ESCAPE_SEQUENCES = {};
+
+ESCAPE_SEQUENCES[0x00]   = '\\0';
+ESCAPE_SEQUENCES[0x07]   = '\\a';
+ESCAPE_SEQUENCES[0x08]   = '\\b';
+ESCAPE_SEQUENCES[0x09]   = '\\t';
+ESCAPE_SEQUENCES[0x0A]   = '\\n';
+ESCAPE_SEQUENCES[0x0B]   = '\\v';
+ESCAPE_SEQUENCES[0x0C]   = '\\f';
+ESCAPE_SEQUENCES[0x0D]   = '\\r';
+ESCAPE_SEQUENCES[0x1B]   = '\\e';
+ESCAPE_SEQUENCES[0x22]   = '\\"';
+ESCAPE_SEQUENCES[0x5C]   = '\\\\';
+ESCAPE_SEQUENCES[0x85]   = '\\N';
+ESCAPE_SEQUENCES[0xA0]   = '\\_';
+ESCAPE_SEQUENCES[0x2028] = '\\L';
+ESCAPE_SEQUENCES[0x2029] = '\\P';
+
+var DEPRECATED_BOOLEANS_SYNTAX = [
+  'y', 'Y', 'yes', 'Yes', 'YES', 'on', 'On', 'ON',
+  'n', 'N', 'no', 'No', 'NO', 'off', 'Off', 'OFF'
+];
+
+var DEPRECATED_BASE60_SYNTAX = /^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;
+
+function compileStyleMap(schema, map) {
+  var result, keys, index, length, tag, style, type;
+
+  if (map === null) return {};
+
+  result = {};
+  keys = Object.keys(map);
+
+  for (index = 0, length = keys.length; index < length; index += 1) {
+    tag = keys[index];
+    style = String(map[tag]);
+
+    if (tag.slice(0, 2) === '!!') {
+      tag = 'tag:yaml.org,2002:' + tag.slice(2);
+    }
+    type = schema.compiledTypeMap['fallback'][tag];
+
+    if (type && _hasOwnProperty.call(type.styleAliases, style)) {
+      style = type.styleAliases[style];
+    }
+
+    result[tag] = style;
+  }
+
+  return result;
+}
+
+function encodeHex(character) {
+  var string, handle, length;
+
+  string = character.toString(16).toUpperCase();
+
+  if (character <= 0xFF) {
+    handle = 'x';
+    length = 2;
+  } else if (character <= 0xFFFF) {
+    handle = 'u';
+    length = 4;
+  } else if (character <= 0xFFFFFFFF) {
+    handle = 'U';
+    length = 8;
+  } else {
+    throw new YAMLException('code point within a string may not be greater than 0xFFFFFFFF');
+  }
+
+  return '\\' + handle + common.repeat('0', length - string.length) + string;
+}
+
+
+var QUOTING_TYPE_SINGLE = 1,
+    QUOTING_TYPE_DOUBLE = 2;
+
+function State(options) {
+  this.schema        = options['schema'] || DEFAULT_SCHEMA;
+  this.indent        = Math.max(1, (options['indent'] || 2));
+  this.noArrayIndent = options['noArrayIndent'] || false;
+  this.skipInvalid   = options['skipInvalid'] || false;
+  this.flowLevel     = (common.isNothing(options['flowLevel']) ? -1 : options['flowLevel']);
+  this.styleMap      = compileStyleMap(this.schema, options['styles'] || null);
+  this.sortKeys      = options['sortKeys'] || false;
+  this.lineWidth     = options['lineWidth'] || 80;
+  this.noRefs        = options['noRefs'] || false;
+  this.noCompatMode  = options['noCompatMode'] || false;
+  this.condenseFlow  = options['condenseFlow'] || false;
+  this.quotingType   = options['quotingType'] === '"' ? QUOTING_TYPE_DOUBLE : QUOTING_TYPE_SINGLE;
+  this.forceQuotes   = options['forceQuotes'] || false;
+  this.replacer      = typeof options['replacer'] === 'function' ? options['replacer'] : null;
+
+  this.implicitTypes = this.schema.compiledImplicit;
+  this.explicitTypes = this.schema.compiledExplicit;
+
+  this.tag = null;
+  this.result = '';
+
+  this.duplicates = [];
+  this.usedDuplicates = null;
+}
+
+// Indents every line in a string. Empty lines (\n only) are not indented.
+function indentString(string, spaces) {
+  var ind = common.repeat(' ', spaces),
+      position = 0,
+      next = -1,
+      result = '',
+      line,
+      length = string.length;
+
+  while (position < length) {
+    next = string.indexOf('\n', position);
+    if (next === -1) {
+      line = string.slice(position);
+      position = length;
+    } else {
+      line = string.slice(position, next + 1);
+      position = next + 1;
+    }
+
+    if (line.length && line !== '\n') result += ind;
+
+    result += line;
+  }
+
+  return result;
+}
+
+function generateNextLine(state, level) {
+  return '\n' + common.repeat(' ', state.indent * level);
+}
+
+function testImplicitResolving(state, str) {
+  var index, length, type;
+
+  for (index = 0, length = state.implicitTypes.length; index < length; index += 1) {
+    type = state.implicitTypes[index];
+
+    if (type.resolve(str)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// [33] s-white ::= s-space | s-tab
+function isWhitespace(c) {
+  return c === CHAR_SPACE || c === CHAR_TAB;
+}
+
+// Returns true if the character can be printed without escaping.
+// From YAML 1.2: "any allowed characters known to be non-printable
+// should also be escaped. [However,] This isn’t mandatory"
+// Derived from nb-char - \t - #x85 - #xA0 - #x2028 - #x2029.
+function isPrintable(c) {
+  return  (0x00020 <= c && c <= 0x00007E)
+      || ((0x000A1 <= c && c <= 0x00D7FF) && c !== 0x2028 && c !== 0x2029)
+      || ((0x0E000 <= c && c <= 0x00FFFD) && c !== CHAR_BOM)
+      ||  (0x10000 <= c && c <= 0x10FFFF);
+}
+
+// [34] ns-char ::= nb-char - s-white
+// [27] nb-char ::= c-printable - b-char - c-byte-order-mark
+// [26] b-char  ::= b-line-feed | b-carriage-return
+// Including s-white (for some reason, examples doesn't match specs in this aspect)
+// ns-char ::= c-printable - b-line-feed - b-carriage-return - c-byte-order-mark
+function isNsCharOrWhitespace(c) {
+  return isPrintable(c)
+    && c !== CHAR_BOM
+    // - b-char
+    && c !== CHAR_CARRIAGE_RETURN
+    && c !== CHAR_LINE_FEED;
+}
+
+// [127]  ns-plain-safe(c) ::= c = flow-out  ⇒ ns-plain-safe-out
+//                             c = flow-in   ⇒ ns-plain-safe-in
+//                             c = block-key ⇒ ns-plain-safe-out
+//                             c = flow-key  ⇒ ns-plain-safe-in
+// [128] ns-plain-safe-out ::= ns-char
+// [129]  ns-plain-safe-in ::= ns-char - c-flow-indicator
+// [130]  ns-plain-char(c) ::=  ( ns-plain-safe(c) - “:” - “#” )
+//                            | ( /* An ns-char preceding */ “#” )
+//                            | ( “:” /* Followed by an ns-plain-safe(c) */ )
+function isPlainSafe(c, prev, inblock) {
+  var cIsNsCharOrWhitespace = isNsCharOrWhitespace(c);
+  var cIsNsChar = cIsNsCharOrWhitespace && !isWhitespace(c);
+  return (
+    // ns-plain-safe
+    inblock ? // c = flow-in
+      cIsNsCharOrWhitespace
+      : cIsNsCharOrWhitespace
+        // - c-flow-indicator
+        && c !== CHAR_COMMA
+        && c !== CHAR_LEFT_SQUARE_BRACKET
+        && c !== CHAR_RIGHT_SQUARE_BRACKET
+        && c !== CHAR_LEFT_CURLY_BRACKET
+        && c !== CHAR_RIGHT_CURLY_BRACKET
+  )
+    // ns-plain-char
+    && c !== CHAR_SHARP // false on '#'
+    && !(prev === CHAR_COLON && !cIsNsChar) // false on ': '
+    || (isNsCharOrWhitespace(prev) && !isWhitespace(prev) && c === CHAR_SHARP) // change to true on '[^ ]#'
+    || (prev === CHAR_COLON && cIsNsChar); // change to true on ':[^ ]'
+}
+
+// Simplified test for values allowed as the first character in plain style.
+function isPlainSafeFirst(c) {
+  // Uses a subset of ns-char - c-indicator
+  // where ns-char = nb-char - s-white.
+  // No support of ( ( “?” | “:” | “-” ) /* Followed by an ns-plain-safe(c)) */ ) part
+  return isPrintable(c) && c !== CHAR_BOM
+    && !isWhitespace(c) // - s-white
+    // - (c-indicator ::=
+    // “-” | “?” | “:” | “,” | “[” | “]” | “{” | “}”
+    && c !== CHAR_MINUS
+    && c !== CHAR_QUESTION
+    && c !== CHAR_COLON
+    && c !== CHAR_COMMA
