@@ -31342,3 +31342,2211 @@ function _readSourceFile(filename) {
     });
 }
 //# sourceMappingURL=contextlines.js.map
+
+/***/ }),
+
+/***/ 76280:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(71188);
+var http_1 = __nccwpck_require__(84103);
+var NODE_VERSION = utils_1.parseSemver(process.versions.node);
+/** http module integration */
+var Http = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function Http(options) {
+        if (options === void 0) { options = {}; }
+        /**
+         * @inheritDoc
+         */
+        this.name = Http.id;
+        this._breadcrumbs = typeof options.breadcrumbs === 'undefined' ? true : options.breadcrumbs;
+        this._tracing = typeof options.tracing === 'undefined' ? false : options.tracing;
+    }
+    /**
+     * @inheritDoc
+     */
+    Http.prototype.setupOnce = function () {
+        // No need to instrument if we don't want to track anything
+        if (!this._breadcrumbs && !this._tracing) {
+            return;
+        }
+        var wrappedHandlerMaker = _createWrappedRequestMethodFactory(this._breadcrumbs, this._tracing);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        var httpModule = __nccwpck_require__(13685);
+        utils_1.fill(httpModule, 'get', wrappedHandlerMaker);
+        utils_1.fill(httpModule, 'request', wrappedHandlerMaker);
+        // NOTE: Prior to Node 9, `https` used internals of `http` module, thus we don't patch it.
+        // If we do, we'd get double breadcrumbs and double spans for `https` calls.
+        // It has been changed in Node 9, so for all versions equal and above, we patch `https` separately.
+        if (NODE_VERSION.major && NODE_VERSION.major > 8) {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            var httpsModule = __nccwpck_require__(95687);
+            utils_1.fill(httpsModule, 'get', wrappedHandlerMaker);
+            utils_1.fill(httpsModule, 'request', wrappedHandlerMaker);
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Http.id = 'Http';
+    return Http;
+}());
+exports.Http = Http;
+/**
+ * Function which creates a function which creates wrapped versions of internal `request` and `get` calls within `http`
+ * and `https` modules. (NB: Not a typo - this is a creator^2!)
+ *
+ * @param breadcrumbsEnabled Whether or not to record outgoing requests as breadcrumbs
+ * @param tracingEnabled Whether or not to record outgoing requests as tracing spans
+ *
+ * @returns A function which accepts the exiting handler and returns a wrapped handler
+ */
+function _createWrappedRequestMethodFactory(breadcrumbsEnabled, tracingEnabled) {
+    return function wrappedRequestMethodFactory(originalRequestMethod) {
+        return function wrappedMethod() {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            // eslint-disable-next-line @typescript-eslint/no-this-alias
+            var httpModule = this;
+            var requestArgs = http_1.normalizeRequestArgs(this, args);
+            var requestOptions = requestArgs[0];
+            var requestUrl = http_1.extractUrl(requestOptions);
+            // we don't want to record requests to Sentry as either breadcrumbs or spans, so just use the original method
+            if (http_1.isSentryRequest(requestUrl)) {
+                return originalRequestMethod.apply(httpModule, requestArgs);
+            }
+            var span;
+            var parentSpan;
+            var scope = core_1.getCurrentHub().getScope();
+            if (scope && tracingEnabled) {
+                parentSpan = scope.getSpan();
+                if (parentSpan) {
+                    span = parentSpan.startChild({
+                        description: (requestOptions.method || 'GET') + " " + requestUrl,
+                        op: 'http.client',
+                    });
+                    var sentryTraceHeader = span.toTraceparent();
+                    flags_1.IS_DEBUG_BUILD &&
+                        utils_1.logger.log("[Tracing] Adding sentry-trace header " + sentryTraceHeader + " to outgoing request to " + requestUrl + ": ");
+                    requestOptions.headers = tslib_1.__assign(tslib_1.__assign({}, requestOptions.headers), { 'sentry-trace': sentryTraceHeader });
+                }
+            }
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            return originalRequestMethod
+                .apply(httpModule, requestArgs)
+                .once('response', function (res) {
+                // eslint-disable-next-line @typescript-eslint/no-this-alias
+                var req = this;
+                if (breadcrumbsEnabled) {
+                    addRequestBreadcrumb('response', requestUrl, req, res);
+                }
+                if (tracingEnabled && span) {
+                    if (res.statusCode) {
+                        span.setHttpStatus(res.statusCode);
+                    }
+                    span.description = http_1.cleanSpanDescription(span.description, requestOptions, req);
+                    span.finish();
+                }
+            })
+                .once('error', function () {
+                // eslint-disable-next-line @typescript-eslint/no-this-alias
+                var req = this;
+                if (breadcrumbsEnabled) {
+                    addRequestBreadcrumb('error', requestUrl, req);
+                }
+                if (tracingEnabled && span) {
+                    span.setHttpStatus(500);
+                    span.description = http_1.cleanSpanDescription(span.description, requestOptions, req);
+                    span.finish();
+                }
+            });
+        };
+    };
+}
+/**
+ * Captures Breadcrumb based on provided request/response pair
+ */
+function addRequestBreadcrumb(event, url, req, res) {
+    if (!core_1.getCurrentHub().getIntegration(Http)) {
+        return;
+    }
+    core_1.getCurrentHub().addBreadcrumb({
+        category: 'http',
+        data: {
+            method: req.method,
+            status_code: res && res.statusCode,
+            url: url,
+        },
+        type: 'http',
+    }, {
+        event: event,
+        request: req,
+        response: res,
+    });
+}
+//# sourceMappingURL=http.js.map
+
+/***/ }),
+
+/***/ 72310:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var console_1 = __nccwpck_require__(29552);
+exports.Console = console_1.Console;
+var http_1 = __nccwpck_require__(76280);
+exports.Http = http_1.Http;
+var onuncaughtexception_1 = __nccwpck_require__(50443);
+exports.OnUncaughtException = onuncaughtexception_1.OnUncaughtException;
+var onunhandledrejection_1 = __nccwpck_require__(87344);
+exports.OnUnhandledRejection = onunhandledrejection_1.OnUnhandledRejection;
+var linkederrors_1 = __nccwpck_require__(70208);
+exports.LinkedErrors = linkederrors_1.LinkedErrors;
+var modules_1 = __nccwpck_require__(90046);
+exports.Modules = modules_1.Modules;
+var contextlines_1 = __nccwpck_require__(27797);
+exports.ContextLines = contextlines_1.ContextLines;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 70208:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var eventbuilder_1 = __nccwpck_require__(79287);
+var contextlines_1 = __nccwpck_require__(27797);
+var DEFAULT_KEY = 'cause';
+var DEFAULT_LIMIT = 5;
+/** Adds SDK info to an event. */
+var LinkedErrors = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function LinkedErrors(options) {
+        if (options === void 0) { options = {}; }
+        /**
+         * @inheritDoc
+         */
+        this.name = LinkedErrors.id;
+        this._key = options.key || DEFAULT_KEY;
+        this._limit = options.limit || DEFAULT_LIMIT;
+    }
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.prototype.setupOnce = function () {
+        core_1.addGlobalEventProcessor(function (event, hint) {
+            var self = core_1.getCurrentHub().getIntegration(LinkedErrors);
+            if (self) {
+                var handler = self._handler && self._handler.bind(self);
+                return typeof handler === 'function' ? handler(event, hint) : event;
+            }
+            return event;
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.prototype._handler = function (event, hint) {
+        var _this = this;
+        if (!event.exception || !event.exception.values || !hint || !utils_1.isInstanceOf(hint.originalException, Error)) {
+            return utils_1.resolvedSyncPromise(event);
+        }
+        return new utils_1.SyncPromise(function (resolve) {
+            void _this._walkErrorTree(hint.originalException, _this._key)
+                .then(function (linkedErrors) {
+                if (event && event.exception && event.exception.values) {
+                    event.exception.values = tslib_1.__spread(linkedErrors, event.exception.values);
+                }
+                resolve(event);
+            })
+                .then(null, function () {
+                resolve(event);
+            });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.prototype._walkErrorTree = function (error, key, stack) {
+        if (stack === void 0) { stack = []; }
+        var _a;
+        return tslib_1.__awaiter(this, void 0, void 0, function () {
+            var exception, contextLines;
+            var _this = this;
+            return tslib_1.__generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        if (!utils_1.isInstanceOf(error[key], Error) || stack.length + 1 >= this._limit) {
+                            return [2 /*return*/, Promise.resolve(stack)];
+                        }
+                        exception = eventbuilder_1.exceptionFromError(error[key]);
+                        contextLines = core_1.getCurrentHub().getIntegration(contextlines_1.ContextLines);
+                        if (!(contextLines && ((_a = exception.stacktrace) === null || _a === void 0 ? void 0 : _a.frames))) return [3 /*break*/, 2];
+                        return [4 /*yield*/, contextLines.addSourceContextToFrames(exception.stacktrace.frames)];
+                    case 1:
+                        _b.sent();
+                        _b.label = 2;
+                    case 2: return [2 /*return*/, new Promise(function (resolve, reject) {
+                            void _this._walkErrorTree(error[key], key, tslib_1.__spread([exception], stack))
+                                .then(resolve)
+                                .then(null, function () {
+                                reject();
+                            });
+                        })];
+                }
+            });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    LinkedErrors.id = 'LinkedErrors';
+    return LinkedErrors;
+}());
+exports.LinkedErrors = LinkedErrors;
+//# sourceMappingURL=linkederrors.js.map
+
+/***/ }),
+
+/***/ 90046:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var fs_1 = __nccwpck_require__(57147);
+var path_1 = __nccwpck_require__(71017);
+var moduleCache;
+/** Extract information about paths */
+function getPaths() {
+    try {
+        return require.cache ? Object.keys(require.cache) : [];
+    }
+    catch (e) {
+        return [];
+    }
+}
+/** Extract information about package.json modules */
+function collectModules() {
+    var mainPaths = (require.main && require.main.paths) || [];
+    var paths = getPaths();
+    var infos = {};
+    var seen = {};
+    paths.forEach(function (path) {
+        var dir = path;
+        /** Traverse directories upward in the search of package.json file */
+        var updir = function () {
+            var orig = dir;
+            dir = path_1.dirname(orig);
+            if (!dir || orig === dir || seen[orig]) {
+                return undefined;
+            }
+            if (mainPaths.indexOf(dir) < 0) {
+                return updir();
+            }
+            var pkgfile = path_1.join(orig, 'package.json');
+            seen[orig] = true;
+            if (!fs_1.existsSync(pkgfile)) {
+                return updir();
+            }
+            try {
+                var info = JSON.parse(fs_1.readFileSync(pkgfile, 'utf8'));
+                infos[info.name] = info.version;
+            }
+            catch (_oO) {
+                // no-empty
+            }
+        };
+        updir();
+    });
+    return infos;
+}
+/** Add node modules / packages to the event */
+var Modules = /** @class */ (function () {
+    function Modules() {
+        /**
+         * @inheritDoc
+         */
+        this.name = Modules.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    Modules.prototype.setupOnce = function (addGlobalEventProcessor, getCurrentHub) {
+        var _this = this;
+        addGlobalEventProcessor(function (event) {
+            if (!getCurrentHub().getIntegration(Modules)) {
+                return event;
+            }
+            return tslib_1.__assign(tslib_1.__assign({}, event), { modules: _this._getModules() });
+        });
+    };
+    /** Fetches the list of modules and the versions loaded by the entry file for your node.js app. */
+    Modules.prototype._getModules = function () {
+        if (!moduleCache) {
+            moduleCache = collectModules();
+        }
+        return moduleCache;
+    };
+    /**
+     * @inheritDoc
+     */
+    Modules.id = 'Modules';
+    return Modules;
+}());
+exports.Modules = Modules;
+//# sourceMappingURL=modules.js.map
+
+/***/ }),
+
+/***/ 50443:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var core_1 = __nccwpck_require__(79212);
+var types_1 = __nccwpck_require__(83789);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(71188);
+var errorhandling_1 = __nccwpck_require__(5635);
+/** Global Promise Rejection handler */
+var OnUncaughtException = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function OnUncaughtException(_options) {
+        if (_options === void 0) { _options = {}; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = OnUncaughtException.id;
+        /**
+         * @inheritDoc
+         */
+        this.handler = this._makeErrorHandler();
+    }
+    /**
+     * @inheritDoc
+     */
+    OnUncaughtException.prototype.setupOnce = function () {
+        global.process.on('uncaughtException', this.handler.bind(this));
+    };
+    /**
+     * @hidden
+     */
+    OnUncaughtException.prototype._makeErrorHandler = function () {
+        var _this = this;
+        var timeout = 2000;
+        var caughtFirstError = false;
+        var caughtSecondError = false;
+        var calledFatalError = false;
+        var firstError;
+        return function (error) {
+            var onFatalError = errorhandling_1.logAndExitProcess;
+            var client = core_1.getCurrentHub().getClient();
+            if (_this._options.onFatalError) {
+                // eslint-disable-next-line @typescript-eslint/unbound-method
+                onFatalError = _this._options.onFatalError;
+            }
+            else if (client && client.getOptions().onFatalError) {
+                // eslint-disable-next-line @typescript-eslint/unbound-method
+                onFatalError = client.getOptions().onFatalError;
+            }
+            if (!caughtFirstError) {
+                var hub_1 = core_1.getCurrentHub();
+                // this is the first uncaught error and the ultimate reason for shutting down
+                // we want to do absolutely everything possible to ensure it gets captured
+                // also we want to make sure we don't go recursion crazy if more errors happen after this one
+                firstError = error;
+                caughtFirstError = true;
+                if (hub_1.getIntegration(OnUncaughtException)) {
+                    hub_1.withScope(function (scope) {
+                        scope.setLevel(types_1.Severity.Fatal);
+                        hub_1.captureException(error, {
+                            originalException: error,
+                            data: { mechanism: { handled: false, type: 'onuncaughtexception' } },
+                        });
+                        if (!calledFatalError) {
+                            calledFatalError = true;
+                            onFatalError(error);
+                        }
+                    });
+                }
+                else {
+                    if (!calledFatalError) {
+                        calledFatalError = true;
+                        onFatalError(error);
+                    }
+                }
+            }
+            else if (calledFatalError) {
+                // we hit an error *after* calling onFatalError - pretty boned at this point, just shut it down
+                flags_1.IS_DEBUG_BUILD &&
+                    utils_1.logger.warn('uncaught exception after calling fatal error shutdown callback - this is bad! forcing shutdown');
+                errorhandling_1.logAndExitProcess(error);
+            }
+            else if (!caughtSecondError) {
+                // two cases for how we can hit this branch:
+                //   - capturing of first error blew up and we just caught the exception from that
+                //     - quit trying to capture, proceed with shutdown
+                //   - a second independent error happened while waiting for first error to capture
+                //     - want to avoid causing premature shutdown before first error capture finishes
+                // it's hard to immediately tell case 1 from case 2 without doing some fancy/questionable domain stuff
+                // so let's instead just delay a bit before we proceed with our action here
+                // in case 1, we just wait a bit unnecessarily but ultimately do the same thing
+                // in case 2, the delay hopefully made us wait long enough for the capture to finish
+                // two potential nonideal outcomes:
+                //   nonideal case 1: capturing fails fast, we sit around for a few seconds unnecessarily before proceeding correctly by calling onFatalError
+                //   nonideal case 2: case 2 happens, 1st error is captured but slowly, timeout completes before capture and we treat second error as the sendErr of (nonexistent) failure from trying to capture first error
+                // note that after hitting this branch, we might catch more errors where (caughtSecondError && !calledFatalError)
+                //   we ignore them - they don't matter to us, we're just waiting for the second error timeout to finish
+                caughtSecondError = true;
+                setTimeout(function () {
+                    if (!calledFatalError) {
+                        // it was probably case 1, let's treat err as the sendErr and call onFatalError
+                        calledFatalError = true;
+                        onFatalError(firstError, error);
+                    }
+                    else {
+                        // it was probably case 2, our first error finished capturing while we waited, cool, do nothing
+                    }
+                }, timeout); // capturing could take at least sendTimeout to fail, plus an arbitrary second for how long it takes to collect surrounding source etc
+            }
+        };
+    };
+    /**
+     * @inheritDoc
+     */
+    OnUncaughtException.id = 'OnUncaughtException';
+    return OnUncaughtException;
+}());
+exports.OnUncaughtException = OnUncaughtException;
+//# sourceMappingURL=onuncaughtexception.js.map
+
+/***/ }),
+
+/***/ 87344:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var errorhandling_1 = __nccwpck_require__(5635);
+/** Global Promise Rejection handler */
+var OnUnhandledRejection = /** @class */ (function () {
+    /**
+     * @inheritDoc
+     */
+    function OnUnhandledRejection(_options) {
+        if (_options === void 0) { _options = { mode: 'warn' }; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = OnUnhandledRejection.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    OnUnhandledRejection.prototype.setupOnce = function () {
+        global.process.on('unhandledRejection', this.sendUnhandledPromise.bind(this));
+    };
+    /**
+     * Send an exception with reason
+     * @param reason string
+     * @param promise promise
+     */
+    // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
+    OnUnhandledRejection.prototype.sendUnhandledPromise = function (reason, promise) {
+        var hub = core_1.getCurrentHub();
+        if (!hub.getIntegration(OnUnhandledRejection)) {
+            this._handleRejection(reason);
+            return;
+        }
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+        var context = (promise.domain && promise.domain.sentryContext) || {};
+        hub.withScope(function (scope) {
+            scope.setExtra('unhandledPromiseRejection', true);
+            // Preserve backwards compatibility with raven-node for now
+            if (context.user) {
+                scope.setUser(context.user);
+            }
+            if (context.tags) {
+                scope.setTags(context.tags);
+            }
+            if (context.extra) {
+                scope.setExtras(context.extra);
+            }
+            hub.captureException(reason, {
+                originalException: promise,
+                data: { mechanism: { handled: false, type: 'onunhandledrejection' } },
+            });
+        });
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+        this._handleRejection(reason);
+    };
+    /**
+     * Handler for `mode` option
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    OnUnhandledRejection.prototype._handleRejection = function (reason) {
+        // https://github.com/nodejs/node/blob/7cf6f9e964aa00772965391c23acda6d71972a9a/lib/internal/process/promises.js#L234-L240
+        var rejectionWarning = 'This error originated either by ' +
+            'throwing inside of an async function without a catch block, ' +
+            'or by rejecting a promise which was not handled with .catch().' +
+            ' The promise rejected with the reason:';
+        /* eslint-disable no-console */
+        if (this._options.mode === 'warn') {
+            utils_1.consoleSandbox(function () {
+                console.warn(rejectionWarning);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                console.error(reason && reason.stack ? reason.stack : reason);
+            });
+        }
+        else if (this._options.mode === 'strict') {
+            utils_1.consoleSandbox(function () {
+                console.warn(rejectionWarning);
+            });
+            errorhandling_1.logAndExitProcess(reason);
+        }
+        /* eslint-enable no-console */
+    };
+    /**
+     * @inheritDoc
+     */
+    OnUnhandledRejection.id = 'OnUnhandledRejection';
+    return OnUnhandledRejection;
+}());
+exports.OnUnhandledRejection = OnUnhandledRejection;
+//# sourceMappingURL=onunhandledrejection.js.map
+
+/***/ }),
+
+/***/ 5635:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(71188);
+var DEFAULT_SHUTDOWN_TIMEOUT = 2000;
+/**
+ * @hidden
+ */
+function logAndExitProcess(error) {
+    // eslint-disable-next-line no-console
+    console.error(error && error.stack ? error.stack : error);
+    var client = core_1.getCurrentHub().getClient();
+    if (client === undefined) {
+        flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('No NodeClient was defined, we are exiting the process now.');
+        global.process.exit(1);
+    }
+    var options = client.getOptions();
+    var timeout = (options && options.shutdownTimeout && options.shutdownTimeout > 0 && options.shutdownTimeout) ||
+        DEFAULT_SHUTDOWN_TIMEOUT;
+    utils_1.forget(client.close(timeout).then(function (result) {
+        if (!result) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('We reached the timeout for emptying the request buffer, still exiting now!');
+        }
+        global.process.exit(1);
+    }));
+}
+exports.logAndExitProcess = logAndExitProcess;
+//# sourceMappingURL=errorhandling.js.map
+
+/***/ }),
+
+/***/ 84103:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var url_1 = __nccwpck_require__(57310);
+var NODE_VERSION = utils_1.parseSemver(process.versions.node);
+/**
+ * Checks whether given url points to Sentry server
+ * @param url url to verify
+ */
+function isSentryRequest(url) {
+    var _a;
+    var dsn = (_a = core_1.getCurrentHub().getClient()) === null || _a === void 0 ? void 0 : _a.getDsn();
+    return dsn ? url.includes(dsn.host) : false;
+}
+exports.isSentryRequest = isSentryRequest;
+/**
+ * Assemble a URL to be used for breadcrumbs and spans.
+ *
+ * @param requestOptions RequestOptions object containing the component parts for a URL
+ * @returns Fully-formed URL
+ */
+function extractUrl(requestOptions) {
+    var protocol = requestOptions.protocol || '';
+    var hostname = requestOptions.hostname || requestOptions.host || '';
+    // Don't log standard :80 (http) and :443 (https) ports to reduce the noise
+    var port = !requestOptions.port || requestOptions.port === 80 || requestOptions.port === 443 ? '' : ":" + requestOptions.port;
+    var path = requestOptions.path ? requestOptions.path : '/';
+    return protocol + "//" + hostname + port + path;
+}
+exports.extractUrl = extractUrl;
+/**
+ * Handle various edge cases in the span description (for spans representing http(s) requests).
+ *
+ * @param description current `description` property of the span representing the request
+ * @param requestOptions Configuration data for the request
+ * @param Request Request object
+ *
+ * @returns The cleaned description
+ */
+function cleanSpanDescription(description, requestOptions, request) {
+    var _a, _b, _c;
+    // nothing to clean
+    if (!description) {
+        return description;
+    }
+    // eslint-disable-next-line prefer-const
+    var _d = tslib_1.__read(description.split(' '), 2), method = _d[0], requestUrl = _d[1];
+    // superagent sticks the protocol in a weird place (we check for host because if both host *and* protocol are missing,
+    // we're likely dealing with an internal route and this doesn't apply)
+    if (requestOptions.host && !requestOptions.protocol) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        requestOptions.protocol = (_b = (_a = request) === null || _a === void 0 ? void 0 : _a.agent) === null || _b === void 0 ? void 0 : _b.protocol; // worst comes to worst, this is undefined and nothing changes
+        requestUrl = extractUrl(requestOptions);
+    }
+    // internal routes can end up starting with a triple slash rather than a single one
+    if ((_c = requestUrl) === null || _c === void 0 ? void 0 : _c.startsWith('///')) {
+        requestUrl = requestUrl.slice(2);
+    }
+    return method + " " + requestUrl;
+}
+exports.cleanSpanDescription = cleanSpanDescription;
+/**
+ * Convert a URL object into a RequestOptions object.
+ *
+ * Copied from Node's internals (where it's used in http(s).request() and http(s).get()), modified only to use the
+ * RequestOptions type above.
+ *
+ * See https://github.com/nodejs/node/blob/master/lib/internal/url.js.
+ */
+function urlToOptions(url) {
+    var options = {
+        protocol: url.protocol,
+        hostname: typeof url.hostname === 'string' && url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname,
+        hash: url.hash,
+        search: url.search,
+        pathname: url.pathname,
+        path: "" + (url.pathname || '') + (url.search || ''),
+        href: url.href,
+    };
+    if (url.port !== '') {
+        options.port = Number(url.port);
+    }
+    if (url.username || url.password) {
+        options.auth = url.username + ":" + url.password;
+    }
+    return options;
+}
+exports.urlToOptions = urlToOptions;
+/**
+ * Normalize inputs to `http(s).request()` and `http(s).get()`.
+ *
+ * Legal inputs to `http(s).request()` and `http(s).get()` can take one of ten forms:
+ *     [ RequestOptions | string | URL ],
+ *     [ RequestOptions | string | URL, RequestCallback ],
+ *     [ string | URL, RequestOptions ], and
+ *     [ string | URL, RequestOptions, RequestCallback ].
+ *
+ * This standardizes to one of two forms: [ RequestOptions ] and [ RequestOptions, RequestCallback ]. A similar thing is
+ * done as the first step of `http(s).request()` and `http(s).get()`; this just does it early so that we can interact
+ * with the args in a standard way.
+ *
+ * @param requestArgs The inputs to `http(s).request()` or `http(s).get()`, as an array.
+ *
+ * @returns Equivalent args of the form [ RequestOptions ] or [ RequestOptions, RequestCallback ].
+ */
+function normalizeRequestArgs(httpModule, requestArgs) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var callback, requestOptions;
+    // pop off the callback, if there is one
+    if (typeof requestArgs[requestArgs.length - 1] === 'function') {
+        callback = requestArgs.pop();
+    }
+    // create a RequestOptions object of whatever's at index 0
+    if (typeof requestArgs[0] === 'string') {
+        requestOptions = urlToOptions(new url_1.URL(requestArgs[0]));
+    }
+    else if (requestArgs[0] instanceof url_1.URL) {
+        requestOptions = urlToOptions(requestArgs[0]);
+    }
+    else {
+        requestOptions = requestArgs[0];
+    }
+    // if the options were given separately from the URL, fold them in
+    if (requestArgs.length === 2) {
+        requestOptions = tslib_1.__assign(tslib_1.__assign({}, requestOptions), requestArgs[1]);
+    }
+    // Figure out the protocol if it's currently missing
+    if (requestOptions.protocol === undefined) {
+        // Worst case we end up populating protocol with undefined, which it already is
+        /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+        // NOTE: Prior to Node 9, `https` used internals of `http` module, thus we don't patch it.
+        // Because of that, we cannot rely on `httpModule` to provide us with valid protocol,
+        // as it will always return `http`, even when using `https` module.
+        //
+        // See test/integrations/http.test.ts for more details on Node <=v8 protocol issue.
+        if (NODE_VERSION.major && NODE_VERSION.major > 8) {
+            requestOptions.protocol =
+                ((_b = (_a = httpModule) === null || _a === void 0 ? void 0 : _a.globalAgent) === null || _b === void 0 ? void 0 : _b.protocol) || ((_c = requestOptions.agent) === null || _c === void 0 ? void 0 : _c.protocol) || ((_d = requestOptions._defaultAgent) === null || _d === void 0 ? void 0 : _d.protocol);
+        }
+        else {
+            requestOptions.protocol =
+                ((_e = requestOptions.agent) === null || _e === void 0 ? void 0 : _e.protocol) || ((_f = requestOptions._defaultAgent) === null || _f === void 0 ? void 0 : _f.protocol) || ((_h = (_g = httpModule) === null || _g === void 0 ? void 0 : _g.globalAgent) === null || _h === void 0 ? void 0 : _h.protocol);
+        }
+        /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+    }
+    // return args in standardized form
+    if (callback) {
+        return [requestOptions, callback];
+    }
+    else {
+        return [requestOptions];
+    }
+}
+exports.normalizeRequestArgs = normalizeRequestArgs;
+//# sourceMappingURL=http.js.map
+
+/***/ }),
+
+/***/ 38836:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var hub_1 = __nccwpck_require__(6393);
+var utils_1 = __nccwpck_require__(1620);
+var domain = __nccwpck_require__(13639);
+var client_1 = __nccwpck_require__(86147);
+var flags_1 = __nccwpck_require__(71188);
+var integrations_1 = __nccwpck_require__(72310);
+exports.defaultIntegrations = [
+    // Common
+    new core_1.Integrations.InboundFilters(),
+    new core_1.Integrations.FunctionToString(),
+    new integrations_1.ContextLines(),
+    // Native Wrappers
+    new integrations_1.Console(),
+    new integrations_1.Http(),
+    // Global Handlers
+    new integrations_1.OnUncaughtException(),
+    new integrations_1.OnUnhandledRejection(),
+    // Misc
+    new integrations_1.LinkedErrors(),
+];
+/**
+ * The Sentry Node SDK Client.
+ *
+ * To use this SDK, call the {@link init} function as early as possible in the
+ * main entry module. To set context information or send manual events, use the
+ * provided methods.
+ *
+ * @example
+ * ```
+ *
+ * const { init } = require('@sentry/node');
+ *
+ * init({
+ *   dsn: '__DSN__',
+ *   // ...
+ * });
+ * ```
+ *
+ * @example
+ * ```
+ *
+ * const { configureScope } = require('@sentry/node');
+ * configureScope((scope: Scope) => {
+ *   scope.setExtra({ battery: 0.7 });
+ *   scope.setTag({ user_mode: 'admin' });
+ *   scope.setUser({ id: '4711' });
+ * });
+ * ```
+ *
+ * @example
+ * ```
+ *
+ * const { addBreadcrumb } = require('@sentry/node');
+ * addBreadcrumb({
+ *   message: 'My Breadcrumb',
+ *   // ...
+ * });
+ * ```
+ *
+ * @example
+ * ```
+ *
+ * const Sentry = require('@sentry/node');
+ * Sentry.captureMessage('Hello, world!');
+ * Sentry.captureException(new Error('Good bye'));
+ * Sentry.captureEvent({
+ *   message: 'Manual',
+ *   stacktrace: [
+ *     // ...
+ *   ],
+ * });
+ * ```
+ *
+ * @see {@link NodeOptions} for documentation on configuration options.
+ */
+function init(options) {
+    if (options === void 0) { options = {}; }
+    var _a;
+    var carrier = hub_1.getMainCarrier();
+    var autoloadedIntegrations = ((_a = carrier.__SENTRY__) === null || _a === void 0 ? void 0 : _a.integrations) || [];
+    options.defaultIntegrations =
+        options.defaultIntegrations === false
+            ? []
+            : tslib_1.__spread((Array.isArray(options.defaultIntegrations) ? options.defaultIntegrations : exports.defaultIntegrations), autoloadedIntegrations);
+    if (options.dsn === undefined && process.env.SENTRY_DSN) {
+        options.dsn = process.env.SENTRY_DSN;
+    }
+    if (options.tracesSampleRate === undefined && process.env.SENTRY_TRACES_SAMPLE_RATE) {
+        var tracesSampleRate = parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE);
+        if (isFinite(tracesSampleRate)) {
+            options.tracesSampleRate = tracesSampleRate;
+        }
+    }
+    if (options.release === undefined) {
+        var detectedRelease = getSentryRelease();
+        if (detectedRelease !== undefined) {
+            options.release = detectedRelease;
+        }
+        else {
+            // If release is not provided, then we should disable autoSessionTracking
+            options.autoSessionTracking = false;
+        }
+    }
+    if (options.environment === undefined && process.env.SENTRY_ENVIRONMENT) {
+        options.environment = process.env.SENTRY_ENVIRONMENT;
+    }
+    if (options.autoSessionTracking === undefined && options.dsn !== undefined) {
+        options.autoSessionTracking = true;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+    if (domain.active) {
+        hub_1.setHubOnCarrier(carrier, core_1.getCurrentHub());
+    }
+    core_1.initAndBind(client_1.NodeClient, options);
+    if (options.autoSessionTracking) {
+        startSessionTracking();
+    }
+}
+exports.init = init;
+/**
+ * This is the getter for lastEventId.
+ *
+ * @returns The last event id of a captured event.
+ */
+function lastEventId() {
+    return core_1.getCurrentHub().lastEventId();
+}
+exports.lastEventId = lastEventId;
+/**
+ * Call `flush()` on the current client, if there is one. See {@link Client.flush}.
+ *
+ * @param timeout Maximum time in ms the client should wait to flush its event queue. Omitting this parameter will cause
+ * the client to wait until all events are sent before resolving the promise.
+ * @returns A promise which resolves to `true` if the queue successfully drains before the timeout, or `false` if it
+ * doesn't (or if there's no client defined).
+ */
+function flush(timeout) {
+    return tslib_1.__awaiter(this, void 0, void 0, function () {
+        var client;
+        return tslib_1.__generator(this, function (_a) {
+            client = core_1.getCurrentHub().getClient();
+            if (client) {
+                return [2 /*return*/, client.flush(timeout)];
+            }
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('Cannot flush events. No client defined.');
+            return [2 /*return*/, Promise.resolve(false)];
+        });
+    });
+}
+exports.flush = flush;
+/**
+ * Call `close()` on the current client, if there is one. See {@link Client.close}.
+ *
+ * @param timeout Maximum time in ms the client should wait to flush its event queue before shutting down. Omitting this
+ * parameter will cause the client to wait until all events are sent before disabling itself.
+ * @returns A promise which resolves to `true` if the queue successfully drains before the timeout, or `false` if it
+ * doesn't (or if there's no client defined).
+ */
+function close(timeout) {
+    return tslib_1.__awaiter(this, void 0, void 0, function () {
+        var client;
+        return tslib_1.__generator(this, function (_a) {
+            client = core_1.getCurrentHub().getClient();
+            if (client) {
+                return [2 /*return*/, client.close(timeout)];
+            }
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('Cannot flush events and disable SDK. No client defined.');
+            return [2 /*return*/, Promise.resolve(false)];
+        });
+    });
+}
+exports.close = close;
+/**
+ * Function that takes an instance of NodeClient and checks if autoSessionTracking option is enabled for that client
+ */
+function isAutoSessionTrackingEnabled(client) {
+    if (client === undefined) {
+        return false;
+    }
+    var clientOptions = client && client.getOptions();
+    if (clientOptions && clientOptions.autoSessionTracking !== undefined) {
+        return clientOptions.autoSessionTracking;
+    }
+    return false;
+}
+exports.isAutoSessionTrackingEnabled = isAutoSessionTrackingEnabled;
+/**
+ * Returns a release dynamically from environment variables.
+ */
+function getSentryRelease(fallback) {
+    // Always read first as Sentry takes this as precedence
+    if (process.env.SENTRY_RELEASE) {
+        return process.env.SENTRY_RELEASE;
+    }
+    // This supports the variable that sentry-webpack-plugin injects
+    var global = utils_1.getGlobalObject();
+    if (global.SENTRY_RELEASE && global.SENTRY_RELEASE.id) {
+        return global.SENTRY_RELEASE.id;
+    }
+    return (
+    // GitHub Actions - https://help.github.com/en/actions/configuring-and-managing-workflows/using-environment-variables#default-environment-variables
+    process.env.GITHUB_SHA ||
+        // Netlify - https://docs.netlify.com/configure-builds/environment-variables/#build-metadata
+        process.env.COMMIT_REF ||
+        // Vercel - https://vercel.com/docs/v2/build-step#system-environment-variables
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.VERCEL_GITHUB_COMMIT_SHA ||
+        process.env.VERCEL_GITLAB_COMMIT_SHA ||
+        process.env.VERCEL_BITBUCKET_COMMIT_SHA ||
+        // Zeit (now known as Vercel)
+        process.env.ZEIT_GITHUB_COMMIT_SHA ||
+        process.env.ZEIT_GITLAB_COMMIT_SHA ||
+        process.env.ZEIT_BITBUCKET_COMMIT_SHA ||
+        fallback);
+}
+exports.getSentryRelease = getSentryRelease;
+/**
+ * Enable automatic Session Tracking for the node process.
+ */
+function startSessionTracking() {
+    var hub = core_1.getCurrentHub();
+    hub.startSession();
+    // Emitted in the case of healthy sessions, error of `mechanism.handled: true` and unhandledrejections because
+    // The 'beforeExit' event is not emitted for conditions causing explicit termination,
+    // such as calling process.exit() or uncaught exceptions.
+    // Ref: https://nodejs.org/api/process.html#process_event_beforeexit
+    process.on('beforeExit', function () {
+        var _a;
+        var session = (_a = hub.getScope()) === null || _a === void 0 ? void 0 : _a.getSession();
+        var terminalStates = ['exited', 'crashed'];
+        // Only call endSession, if the Session exists on Scope and SessionStatus is not a
+        // Terminal Status i.e. Exited or Crashed because
+        // "When a session is moved away from ok it must not be updated anymore."
+        // Ref: https://develop.sentry.dev/sdk/sessions/
+        if (session && !terminalStates.includes(session.status))
+            hub.endSession();
+    });
+}
+//# sourceMappingURL=sdk.js.map
+
+/***/ }),
+
+/***/ 94854:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+/** Gets the module */
+function getModule(filename) {
+    if (!filename) {
+        return;
+    }
+    // We could use optional chaining here but webpack does like that mixed with require
+    var base = ((require && require.main && require.main.filename && utils_1.dirname(require.main.filename)) || global.process.cwd()) + "/";
+    // It's specifically a module
+    var file = utils_1.basename(filename, '.js');
+    var path = utils_1.dirname(filename);
+    var n = path.lastIndexOf('/node_modules/');
+    if (n > -1) {
+        // /node_modules/ is 14 chars
+        return path.substr(n + 14).replace(/\//g, '.') + ":" + file;
+    }
+    // Let's see if it's a part of the main module
+    // To be a part of main module, it has to share the same base
+    n = (path + "/").lastIndexOf(base, 0);
+    if (n === 0) {
+        var moduleName = path.substr(base.length).replace(/\//g, '.');
+        if (moduleName) {
+            moduleName += ':';
+        }
+        moduleName += file;
+        return moduleName;
+    }
+    return file;
+}
+var FILENAME_MATCH = /^\s*[-]{4,}$/;
+var FULL_MATCH = /at (?:async )?(?:(.+?)\s+\()?(?:(.+?):(\d+)(?::(\d+))?|([^)]+))\)?/;
+// eslint-disable-next-line complexity
+var node = function (line) {
+    var _a;
+    if (line.match(FILENAME_MATCH)) {
+        return {
+            filename: line,
+        };
+    }
+    var lineMatch = line.match(FULL_MATCH);
+    if (!lineMatch) {
+        return undefined;
+    }
+    var object;
+    var method;
+    var functionName;
+    var typeName;
+    var methodName;
+    if (lineMatch[1]) {
+        functionName = lineMatch[1];
+        var methodStart = functionName.lastIndexOf('.');
+        if (functionName[methodStart - 1] === '.') {
+            // eslint-disable-next-line no-plusplus
+            methodStart--;
+        }
+        if (methodStart > 0) {
+            object = functionName.substr(0, methodStart);
+            method = functionName.substr(methodStart + 1);
+            var objectEnd = object.indexOf('.Module');
+            if (objectEnd > 0) {
+                functionName = functionName.substr(objectEnd + 1);
+                object = object.substr(0, objectEnd);
+            }
+        }
+        typeName = undefined;
+    }
+    if (method) {
+        typeName = object;
+        methodName = method;
+    }
+    if (method === '<anonymous>') {
+        methodName = undefined;
+        functionName = undefined;
+    }
+    if (functionName === undefined) {
+        methodName = methodName || '<anonymous>';
+        functionName = typeName ? typeName + "." + methodName : methodName;
+    }
+    var filename = ((_a = lineMatch[2]) === null || _a === void 0 ? void 0 : _a.startsWith('file://')) ? lineMatch[2].substr(7) : lineMatch[2];
+    var isNative = lineMatch[5] === 'native';
+    var isInternal = isNative || (filename && !filename.startsWith('/') && !filename.startsWith('.') && filename.indexOf(':\\') !== 1);
+    // in_app is all that's not an internal Node function or a module within node_modules
+    // note that isNative appears to return true even for node core libraries
+    // see https://github.com/getsentry/raven-node/issues/176
+    var in_app = !isInternal && filename !== undefined && !filename.includes('node_modules/');
+    return {
+        filename: filename,
+        module: getModule(filename),
+        function: functionName,
+        lineno: parseInt(lineMatch[3], 10) || undefined,
+        colno: parseInt(lineMatch[4], 10) || undefined,
+        in_app: in_app,
+    };
+};
+exports.nodeStackParser = [90, node];
+//# sourceMappingURL=stack-parser.js.map
+
+/***/ }),
+
+/***/ 41194:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var fs = __nccwpck_require__(57147);
+var url_1 = __nccwpck_require__(57310);
+var flags_1 = __nccwpck_require__(71188);
+var version_1 = __nccwpck_require__(31271);
+var CATEGORY_MAPPING = {
+    event: 'error',
+    transaction: 'transaction',
+    session: 'session',
+    attachment: 'attachment',
+};
+/** Base Transport class implementation */
+var BaseTransport = /** @class */ (function () {
+    /** Create instance and set this.dsn */
+    function BaseTransport(options) {
+        this.options = options;
+        /** A simple buffer holding all requests. */
+        this._buffer = utils_1.makePromiseBuffer(30);
+        /** Locks transport after receiving rate limits in a response */
+        this._rateLimits = {};
+        /** Default function used to parse URLs */
+        this.urlParser = function (url) { return new url_1.URL(url); };
+        // eslint-disable-next-line deprecation/deprecation
+        this._api = core_1.initAPIDetails(options.dsn, options._metadata, options.tunnel);
+    }
+    /**
+     * @inheritDoc
+     */
+    BaseTransport.prototype.sendEvent = function (_) {
+        throw new utils_1.SentryError('Transport Class has to implement `sendEvent` method.');
+    };
+    /**
+     * @inheritDoc
+     */
+    BaseTransport.prototype.close = function (timeout) {
+        return this._buffer.drain(timeout);
+    };
+    /**
+     * Extracts proxy settings from client options and env variables.
+     *
+     * Honors `no_proxy` env variable with the highest priority to allow for hosts exclusion.
+     *
+     * An order of priority for available protocols is:
+     * `http`  => `options.httpProxy` | `process.env.http_proxy`
+     * `https` => `options.httpsProxy` | `options.httpProxy` | `process.env.https_proxy` | `process.env.http_proxy`
+     */
+    BaseTransport.prototype._getProxy = function (protocol) {
+        var e_1, _a;
+        var _b = process.env, no_proxy = _b.no_proxy, http_proxy = _b.http_proxy, https_proxy = _b.https_proxy;
+        var _c = this.options, httpProxy = _c.httpProxy, httpsProxy = _c.httpsProxy;
+        var proxy = protocol === 'http' ? httpProxy || http_proxy : httpsProxy || httpProxy || https_proxy || http_proxy;
+        if (!no_proxy) {
+            return proxy;
+        }
+        var _d = this._api.dsn, host = _d.host, port = _d.port;
+        try {
+            for (var _e = tslib_1.__values(no_proxy.split(',')), _f = _e.next(); !_f.done; _f = _e.next()) {
+                var np = _f.value;
+                if (host.endsWith(np) || (host + ":" + port).endsWith(np)) {
+                    return;
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_f && !_f.done && (_a = _e.return)) _a.call(_e);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return proxy;
+    };
+    /** Returns a build request option object used by request */
+    BaseTransport.prototype._getRequestOptions = function (urlParts) {
+        var headers = tslib_1.__assign(tslib_1.__assign({}, core_1.getRequestHeaders(this._api.dsn, version_1.SDK_NAME, core_1.SDK_VERSION)), this.options.headers);
+        var hostname = urlParts.hostname, pathname = urlParts.pathname, port = urlParts.port, protocol = urlParts.protocol;
+        // See https://github.com/nodejs/node/blob/38146e717fed2fabe3aacb6540d839475e0ce1c6/lib/internal/url.js#L1268-L1290
+        // We ignore the query string on purpose
+        var path = "" + pathname;
+        return tslib_1.__assign({ agent: this.client, headers: headers,
+            hostname: hostname, method: 'POST', path: path,
+            port: port,
+            protocol: protocol }, (this.options.caCerts && {
+            ca: fs.readFileSync(this.options.caCerts),
+        }));
+    };
+    /**
+     * Gets the time that given category is disabled until for rate limiting
+     */
+    BaseTransport.prototype._disabledUntil = function (requestType) {
+        var category = CATEGORY_MAPPING[requestType];
+        return this._rateLimits[category] || this._rateLimits.all;
+    };
+    /**
+     * Checks if a category is rate limited
+     */
+    BaseTransport.prototype._isRateLimited = function (requestType) {
+        return this._disabledUntil(requestType) > new Date(Date.now());
+    };
+    /**
+     * Sets internal _rateLimits from incoming headers. Returns true if headers contains a non-empty rate limiting header.
+     */
+    BaseTransport.prototype._handleRateLimit = function (headers) {
+        var e_2, _a, e_3, _b;
+        var now = Date.now();
+        var rlHeader = headers['x-sentry-rate-limits'];
+        var raHeader = headers['retry-after'];
+        if (rlHeader) {
+            try {
+                // rate limit headers are of the form
+                //     <header>,<header>,..
+                // where each <header> is of the form
+                //     <retry_after>: <categories>: <scope>: <reason_code>
+                // where
+                //     <retry_after> is a delay in ms
+                //     <categories> is the event type(s) (error, transaction, etc) being rate limited and is of the form
+                //         <category>;<category>;...
+                //     <scope> is what's being limited (org, project, or key) - ignored by SDK
+                //     <reason_code> is an arbitrary string like "org_quota" - ignored by SDK
+                for (var _c = tslib_1.__values(rlHeader.trim().split(',')), _d = _c.next(); !_d.done; _d = _c.next()) {
+                    var limit = _d.value;
+                    var parameters = limit.split(':', 2);
+                    var headerDelay = parseInt(parameters[0], 10);
+                    var delay = (!isNaN(headerDelay) ? headerDelay : 60) * 1000; // 60sec default
+                    try {
+                        for (var _e = (e_3 = void 0, tslib_1.__values((parameters[1] && parameters[1].split(';')) || ['all'])), _f = _e.next(); !_f.done; _f = _e.next()) {
+                            var category = _f.value;
+                            // categoriesAllowed is added here to ensure we are only storing rate limits for categories we support in this
+                            // sdk and any categories that are not supported will not be added redundantly to the rateLimits object
+                            var categoriesAllowed = tslib_1.__spread(Object.keys(CATEGORY_MAPPING).map(function (k) { return CATEGORY_MAPPING[k]; }), [
+                                'all',
+                            ]);
+                            if (categoriesAllowed.includes(category))
+                                this._rateLimits[category] = new Date(now + delay);
+                        }
+                    }
+                    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                    finally {
+                        try {
+                            if (_f && !_f.done && (_b = _e.return)) _b.call(_e);
+                        }
+                        finally { if (e_3) throw e_3.error; }
+                    }
+                }
+            }
+            catch (e_2_1) { e_2 = { error: e_2_1 }; }
+            finally {
+                try {
+                    if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+                }
+                finally { if (e_2) throw e_2.error; }
+            }
+            return true;
+        }
+        else if (raHeader) {
+            this._rateLimits.all = new Date(now + utils_1.parseRetryAfterHeader(raHeader, now));
+            return true;
+        }
+        return false;
+    };
+    /** JSDoc */
+    BaseTransport.prototype._send = function (sentryRequest, originalPayload) {
+        return tslib_1.__awaiter(this, void 0, void 0, function () {
+            var _this = this;
+            return tslib_1.__generator(this, function (_a) {
+                if (!this.module) {
+                    throw new utils_1.SentryError('No module available');
+                }
+                if (originalPayload && this._isRateLimited(sentryRequest.type)) {
+                    return [2 /*return*/, Promise.reject({
+                            payload: originalPayload,
+                            type: sentryRequest.type,
+                            reason: "Transport for " + sentryRequest.type + " requests locked till " + this._disabledUntil(sentryRequest.type) + " due to too many requests.",
+                            status: 429,
+                        })];
+                }
+                return [2 /*return*/, this._buffer.add(function () {
+                        return new Promise(function (resolve, reject) {
+                            if (!_this.module) {
+                                throw new utils_1.SentryError('No module available');
+                            }
+                            var options = _this._getRequestOptions(_this.urlParser(sentryRequest.url));
+                            var req = _this.module.request(options, function (res) {
+                                var statusCode = res.statusCode || 500;
+                                var status = utils_1.eventStatusFromHttpCode(statusCode);
+                                res.setEncoding('utf8');
+                                /**
+                                 * "Key-value pairs of header names and values. Header names are lower-cased."
+                                 * https://nodejs.org/api/http.html#http_message_headers
+                                 */
+                                var retryAfterHeader = res.headers ? res.headers['retry-after'] : '';
+                                retryAfterHeader = (Array.isArray(retryAfterHeader) ? retryAfterHeader[0] : retryAfterHeader);
+                                var rlHeader = res.headers ? res.headers['x-sentry-rate-limits'] : '';
+                                rlHeader = (Array.isArray(rlHeader) ? rlHeader[0] : rlHeader);
+                                var headers = {
+                                    'x-sentry-rate-limits': rlHeader,
+                                    'retry-after': retryAfterHeader,
+                                };
+                                var limited = _this._handleRateLimit(headers);
+                                if (limited)
+                                    flags_1.IS_DEBUG_BUILD &&
+                                        utils_1.logger.warn("Too many " + sentryRequest.type + " requests, backing off until: " + _this._disabledUntil(sentryRequest.type));
+                                if (status === 'success') {
+                                    resolve({ status: status });
+                                }
+                                else {
+                                    var rejectionMessage = "HTTP Error (" + statusCode + ")";
+                                    if (res.headers && res.headers['x-sentry-error']) {
+                                        rejectionMessage += ": " + res.headers['x-sentry-error'];
+                                    }
+                                    reject(new utils_1.SentryError(rejectionMessage));
+                                }
+                                // Force the socket to drain
+                                res.on('data', function () {
+                                    // Drain
+                                });
+                                res.on('end', function () {
+                                    // Drain
+                                });
+                            });
+                            req.on('error', reject);
+                            req.end(sentryRequest.body);
+                        });
+                    })];
+            });
+        });
+    };
+    return BaseTransport;
+}());
+exports.BaseTransport = BaseTransport;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 84490:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var http = __nccwpck_require__(13685);
+var base_1 = __nccwpck_require__(41194);
+/** Node http module transport */
+var HTTPTransport = /** @class */ (function (_super) {
+    tslib_1.__extends(HTTPTransport, _super);
+    /** Create a new instance and set this.agent */
+    function HTTPTransport(options) {
+        var _this = _super.call(this, options) || this;
+        _this.options = options;
+        var proxy = _this._getProxy('http');
+        _this.module = http;
+        _this.client = proxy
+            ? new (__nccwpck_require__(77219))(proxy)
+            : new http.Agent({ keepAlive: false, maxSockets: 30, timeout: 2000 });
+        return _this;
+    }
+    /**
+     * @inheritDoc
+     */
+    HTTPTransport.prototype.sendEvent = function (event) {
+        return this._send(core_1.eventToSentryRequest(event, this._api), event);
+    };
+    /**
+     * @inheritDoc
+     */
+    HTTPTransport.prototype.sendSession = function (session) {
+        return this._send(core_1.sessionToSentryRequest(session, this._api), session);
+    };
+    return HTTPTransport;
+}(base_1.BaseTransport));
+exports.HTTPTransport = HTTPTransport;
+//# sourceMappingURL=http.js.map
+
+/***/ }),
+
+/***/ 68621:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var https = __nccwpck_require__(95687);
+var base_1 = __nccwpck_require__(41194);
+/** Node https module transport */
+var HTTPSTransport = /** @class */ (function (_super) {
+    tslib_1.__extends(HTTPSTransport, _super);
+    /** Create a new instance and set this.agent */
+    function HTTPSTransport(options) {
+        var _this = _super.call(this, options) || this;
+        _this.options = options;
+        var proxy = _this._getProxy('https');
+        _this.module = https;
+        _this.client = proxy
+            ? new (__nccwpck_require__(77219))(proxy)
+            : new https.Agent({ keepAlive: false, maxSockets: 30, timeout: 2000 });
+        return _this;
+    }
+    /**
+     * @inheritDoc
+     */
+    HTTPSTransport.prototype.sendEvent = function (event) {
+        return this._send(core_1.eventToSentryRequest(event, this._api), event);
+    };
+    /**
+     * @inheritDoc
+     */
+    HTTPSTransport.prototype.sendSession = function (session) {
+        return this._send(core_1.sessionToSentryRequest(session, this._api), session);
+    };
+    return HTTPSTransport;
+}(base_1.BaseTransport));
+exports.HTTPSTransport = HTTPSTransport;
+//# sourceMappingURL=https.js.map
+
+/***/ }),
+
+/***/ 21437:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var base_1 = __nccwpck_require__(41194);
+exports.BaseTransport = base_1.BaseTransport;
+var http_1 = __nccwpck_require__(84490);
+exports.HTTPTransport = http_1.HTTPTransport;
+var https_1 = __nccwpck_require__(68621);
+exports.HTTPSTransport = https_1.HTTPSTransport;
+var new_1 = __nccwpck_require__(72208);
+exports.makeNodeTransport = new_1.makeNodeTransport;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 72208:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var http = __nccwpck_require__(13685);
+var https = __nccwpck_require__(95687);
+var url_1 = __nccwpck_require__(57310);
+/**
+ * Creates a Transport that uses native the native 'http' and 'https' modules to send events to Sentry.
+ */
+function makeNodeTransport(options) {
+    var _a;
+    var urlSegments = new url_1.URL(options.url);
+    var isHttps = urlSegments.protocol === 'https:';
+    // Proxy prioritization: http => `options.proxy` | `process.env.http_proxy`
+    // Proxy prioritization: https => `options.proxy` | `process.env.https_proxy` | `process.env.http_proxy`
+    var proxy = applyNoProxyOption(urlSegments, options.proxy || (isHttps ? process.env.https_proxy : undefined) || process.env.http_proxy);
+    var nativeHttpModule = isHttps ? https : http;
+    // TODO(v7): Evaluate if we can set keepAlive to true. This would involve testing for memory leaks in older node
+    // versions(>= 8) as they had memory leaks when using it: #2555
+    var agent = proxy
+        ? new (__nccwpck_require__(77219))(proxy)
+        : new nativeHttpModule.Agent({ keepAlive: false, maxSockets: 30, timeout: 2000 });
+    var requestExecutor = createRequestExecutor(options, (_a = options.httpModule, (_a !== null && _a !== void 0 ? _a : nativeHttpModule)), agent);
+    return core_1.createTransport({ bufferSize: options.bufferSize }, requestExecutor);
+}
+exports.makeNodeTransport = makeNodeTransport;
+/**
+ * Honors the `no_proxy` env variable with the highest priority to allow for hosts exclusion.
+ *
+ * @param transportUrl The URL the transport intends to send events to.
+ * @param proxy The client configured proxy.
+ * @returns A proxy the transport should use.
+ */
+function applyNoProxyOption(transportUrlSegments, proxy) {
+    var no_proxy = process.env.no_proxy;
+    var urlIsExemptFromProxy = no_proxy &&
+        no_proxy
+            .split(',')
+            .some(function (exemption) { return transportUrlSegments.host.endsWith(exemption) || transportUrlSegments.hostname.endsWith(exemption); });
+    if (urlIsExemptFromProxy) {
+        return undefined;
+    }
+    else {
+        return proxy;
+    }
+}
+/**
+ * Creates a RequestExecutor to be used with `createTransport`.
+ */
+function createRequestExecutor(options, httpModule, agent) {
+    var _a = new url_1.URL(options.url), hostname = _a.hostname, pathname = _a.pathname, port = _a.port, protocol = _a.protocol, search = _a.search;
+    return function makeRequest(request) {
+        return new Promise(function (resolve, reject) {
+            var req = httpModule.request({
+                method: 'POST',
+                agent: agent,
+                headers: options.headers,
+                hostname: hostname,
+                path: "" + pathname + search,
+                port: port,
+                protocol: protocol,
+                ca: options.caCerts,
+            }, function (res) {
+                var _a, _b, _c;
+                res.on('data', function () {
+                    // Drain socket
+                });
+                res.on('end', function () {
+                    // Drain socket
+                });
+                var statusCode = (_a = res.statusCode, (_a !== null && _a !== void 0 ? _a : 500));
+                var status = utils_1.eventStatusFromHttpCode(statusCode);
+                res.setEncoding('utf8');
+                // "Key-value pairs of header names and values. Header names are lower-cased."
+                // https://nodejs.org/api/http.html#http_message_headers
+                var retryAfterHeader = (_b = res.headers['retry-after'], (_b !== null && _b !== void 0 ? _b : null));
+                var rateLimitsHeader = (_c = res.headers['x-sentry-rate-limits'], (_c !== null && _c !== void 0 ? _c : null));
+                resolve({
+                    headers: {
+                        'retry-after': retryAfterHeader,
+                        'x-sentry-rate-limits': Array.isArray(rateLimitsHeader) ? rateLimitsHeader[0] : rateLimitsHeader,
+                    },
+                    reason: status,
+                    statusCode: statusCode,
+                });
+            });
+            req.on('error', reject);
+            req.end(request.body);
+        });
+    };
+}
+//# sourceMappingURL=new.js.map
+
+/***/ }),
+
+/***/ 27937:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var fs = __nccwpck_require__(57147);
+var path = __nccwpck_require__(71017);
+/**
+ * Recursively read the contents of a directory.
+ *
+ * @param targetDir Absolute or relative path of the directory to scan. All returned paths will be relative to this
+ * directory.
+ * @returns Array holding all relative paths
+ */
+function deepReadDirSync(targetDir) {
+    var targetDirAbsPath = path.resolve(targetDir);
+    if (!fs.existsSync(targetDirAbsPath)) {
+        throw new Error("Cannot read contents of " + targetDirAbsPath + ". Directory does not exist.");
+    }
+    if (!fs.statSync(targetDirAbsPath).isDirectory()) {
+        throw new Error("Cannot read contents of " + targetDirAbsPath + ", because it is not a directory.");
+    }
+    // This does the same thing as its containing function, `deepReadDirSync` (except that - purely for convenience - it
+    // deals in absolute paths rather than relative ones). We need this to be separate from the outer function to preserve
+    // the difference between `targetDirAbsPath` and `currentDirAbsPath`.
+    var deepReadCurrentDir = function (currentDirAbsPath) {
+        return fs.readdirSync(currentDirAbsPath).reduce(function (absPaths, itemName) {
+            var itemAbsPath = path.join(currentDirAbsPath, itemName);
+            if (fs.statSync(itemAbsPath).isDirectory()) {
+                return tslib_1.__spread(absPaths, deepReadCurrentDir(itemAbsPath));
+            }
+            return tslib_1.__spread(absPaths, [itemAbsPath]);
+        }, []);
+    };
+    return deepReadCurrentDir(targetDirAbsPath).map(function (absPath) { return path.relative(targetDirAbsPath, absPath); });
+}
+exports.deepReadDirSync = deepReadDirSync;
+//# sourceMappingURL=utils.js.map
+
+/***/ }),
+
+/***/ 31271:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+// TODO: Remove in the next major release and rely only on @sentry/core SDK_VERSION and SdkMetadata
+exports.SDK_NAME = 'sentry.javascript.node';
+//# sourceMappingURL=version.js.map
+
+/***/ }),
+
+/***/ 52208:
+/***/ ((module) => {
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+/* global global, define, System, Reflect, Promise */
+var __extends;
+var __assign;
+var __rest;
+var __decorate;
+var __param;
+var __metadata;
+var __awaiter;
+var __generator;
+var __exportStar;
+var __values;
+var __read;
+var __spread;
+var __spreadArrays;
+var __await;
+var __asyncGenerator;
+var __asyncDelegator;
+var __asyncValues;
+var __makeTemplateObject;
+var __importStar;
+var __importDefault;
+var __classPrivateFieldGet;
+var __classPrivateFieldSet;
+var __createBinding;
+(function (factory) {
+    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+    if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
+    }
+    else if ( true && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+    }
+    else {
+        factory(createExporter(root));
+    }
+    function createExporter(exports, previous) {
+        if (exports !== root) {
+            if (typeof Object.create === "function") {
+                Object.defineProperty(exports, "__esModule", { value: true });
+            }
+            else {
+                exports.__esModule = true;
+            }
+        }
+        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
+    }
+})
+(function (exporter) {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+
+    __extends = function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+
+    __assign = Object.assign || function (t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+
+    __rest = function (s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    };
+
+    __decorate = function (decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+
+    __param = function (paramIndex, decorator) {
+        return function (target, key) { decorator(target, key, paramIndex); }
+    };
+
+    __metadata = function (metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    };
+
+    __awaiter = function (thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+
+    __generator = function (thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    };
+
+    __createBinding = function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        o[k2] = m[k];
+    };
+
+    __exportStar = function (m, exports) {
+        for (var p in m) if (p !== "default" && !exports.hasOwnProperty(p)) exports[p] = m[p];
+    };
+
+    __values = function (o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m) return m.call(o);
+        if (o && typeof o.length === "number") return {
+            next: function () {
+                if (o && i >= o.length) o = void 0;
+                return { value: o && o[i++], done: !o };
+            }
+        };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+    };
+
+    __read = function (o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m) return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+        }
+        catch (error) { e = { error: error }; }
+        finally {
+            try {
+                if (r && !r.done && (m = i["return"])) m.call(i);
+            }
+            finally { if (e) throw e.error; }
+        }
+        return ar;
+    };
+
+    __spread = function () {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+            ar = ar.concat(__read(arguments[i]));
+        return ar;
+    };
+
+    __spreadArrays = function () {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    };
+
+    __await = function (v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+    };
+
+    __asyncGenerator = function (thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+        function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+        function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);  }
+        function fulfill(value) { resume("next", value); }
+        function reject(value) { resume("throw", value); }
+        function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+    };
+
+    __asyncDelegator = function (o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function (e) { throw e; }), verb("return"), i[Symbol.iterator] = function () { return this; }, i;
+        function verb(n, f) { i[n] = o[n] ? function (v) { return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v; } : f; }
+    };
+
+    __asyncValues = function (o) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+        function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+        function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+    };
+
+    __makeTemplateObject = function (cooked, raw) {
+        if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+        return cooked;
+    };
+
+    __importStar = function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+        result["default"] = mod;
+        return result;
+    };
+
+    __importDefault = function (mod) {
+        return (mod && mod.__esModule) ? mod : { "default": mod };
+    };
+
+    __classPrivateFieldGet = function (receiver, privateMap) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to get private field on non-instance");
+        }
+        return privateMap.get(receiver);
+    };
+
+    __classPrivateFieldSet = function (receiver, privateMap, value) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to set private field on non-instance");
+        }
+        privateMap.set(receiver, value);
+        return value;
+    };
+
+    exporter("__extends", __extends);
+    exporter("__assign", __assign);
+    exporter("__rest", __rest);
+    exporter("__decorate", __decorate);
+    exporter("__param", __param);
+    exporter("__metadata", __metadata);
+    exporter("__awaiter", __awaiter);
+    exporter("__generator", __generator);
+    exporter("__exportStar", __exportStar);
+    exporter("__createBinding", __createBinding);
+    exporter("__values", __values);
+    exporter("__read", __read);
+    exporter("__spread", __spread);
+    exporter("__spreadArrays", __spreadArrays);
+    exporter("__await", __await);
+    exporter("__asyncGenerator", __asyncGenerator);
+    exporter("__asyncDelegator", __asyncDelegator);
+    exporter("__asyncValues", __asyncValues);
+    exporter("__makeTemplateObject", __makeTemplateObject);
+    exporter("__importStar", __importStar);
+    exporter("__importDefault", __importDefault);
+    exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+    exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+});
+
+
+/***/ }),
+
+/***/ 83789:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var severity_1 = __nccwpck_require__(94124);
+exports.Severity = severity_1.Severity;
+var severity_2 = __nccwpck_require__(94124);
+exports.SeverityLevels = severity_2.SeverityLevels;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 94124:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/**
+ * TODO(v7): Remove this enum and replace with SeverityLevel
+ */
+var Severity;
+(function (Severity) {
+    /** JSDoc */
+    Severity["Fatal"] = "fatal";
+    /** JSDoc */
+    Severity["Error"] = "error";
+    /** JSDoc */
+    Severity["Warning"] = "warning";
+    /** JSDoc */
+    Severity["Log"] = "log";
+    /** JSDoc */
+    Severity["Info"] = "info";
+    /** JSDoc */
+    Severity["Debug"] = "debug";
+    /** JSDoc */
+    Severity["Critical"] = "critical";
+})(Severity = exports.Severity || (exports.Severity = {}));
+// TODO: in v7, these can disappear, because they now also exist in `@sentry/utils`. (Having them there rather than here
+// is nice because then it enforces the idea that only types are exported from `@sentry/types`.)
+exports.SeverityLevels = ['fatal', 'error', 'warning', 'log', 'info', 'debug', 'critical'];
+//# sourceMappingURL=severity.js.map
+
+/***/ }),
+
+/***/ 58343:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/**
+ * Consumes the promise and logs the error when it rejects.
+ * @param promise A promise to forget.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function forget(promise) {
+    void promise.then(null, function (e) {
+        // TODO: Use a better logging mechanism
+        // eslint-disable-next-line no-console
+        console.error(e);
+    });
+}
+exports.forget = forget;
+//# sourceMappingURL=async.js.map
+
+/***/ }),
+
+/***/ 30597:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var global_1 = __nccwpck_require__(68813);
+var is_1 = __nccwpck_require__(92757);
+/**
+ * Given a child DOM element, returns a query-selector statement describing that
+ * and its ancestors
+ * e.g. [HTMLElement] => body > div > input#foo.btn[name=baz]
+ * @returns generated DOM path
+ */
+function htmlTreeAsString(elem, keyAttrs) {
+    // try/catch both:
+    // - accessing event.target (see getsentry/raven-js#838, #768)
+    // - `htmlTreeAsString` because it's complex, and just accessing the DOM incorrectly
+    // - can throw an exception in some circumstances.
+    try {
+        var currentElem = elem;
+        var MAX_TRAVERSE_HEIGHT = 5;
+        var MAX_OUTPUT_LEN = 80;
+        var out = [];
+        var height = 0;
+        var len = 0;
+        var separator = ' > ';
+        var sepLength = separator.length;
+        var nextStr = void 0;
+        // eslint-disable-next-line no-plusplus
+        while (currentElem && height++ < MAX_TRAVERSE_HEIGHT) {
+            nextStr = _htmlElementAsString(currentElem, keyAttrs);
+            // bail out if
+            // - nextStr is the 'html' element
+            // - the length of the string that would be created exceeds MAX_OUTPUT_LEN
+            //   (ignore this limit if we are on the first iteration)
+            if (nextStr === 'html' || (height > 1 && len + out.length * sepLength + nextStr.length >= MAX_OUTPUT_LEN)) {
+                break;
+            }
+            out.push(nextStr);
+            len += nextStr.length;
+            currentElem = currentElem.parentNode;
+        }
+        return out.reverse().join(separator);
+    }
+    catch (_oO) {
+        return '<unknown>';
+    }
+}
+exports.htmlTreeAsString = htmlTreeAsString;
+/**
+ * Returns a simple, query-selector representation of a DOM element
+ * e.g. [HTMLElement] => input#foo.btn[name=baz]
+ * @returns generated DOM path
+ */
+function _htmlElementAsString(el, keyAttrs) {
+    var elem = el;
+    var out = [];
+    var className;
+    var classes;
+    var key;
+    var attr;
+    var i;
+    if (!elem || !elem.tagName) {
+        return '';
+    }
+    out.push(elem.tagName.toLowerCase());
+    // Pairs of attribute keys defined in `serializeAttribute` and their values on element.
+    var keyAttrPairs = keyAttrs && keyAttrs.length
+        ? keyAttrs.filter(function (keyAttr) { return elem.getAttribute(keyAttr); }).map(function (keyAttr) { return [keyAttr, elem.getAttribute(keyAttr)]; })
+        : null;
+    if (keyAttrPairs && keyAttrPairs.length) {
+        keyAttrPairs.forEach(function (keyAttrPair) {
+            out.push("[" + keyAttrPair[0] + "=\"" + keyAttrPair[1] + "\"]");
+        });
+    }
+    else {
+        if (elem.id) {
+            out.push("#" + elem.id);
+        }
+        // eslint-disable-next-line prefer-const
+        className = elem.className;
+        if (className && is_1.isString(className)) {
+            classes = className.split(/\s+/);
+            for (i = 0; i < classes.length; i++) {
+                out.push("." + classes[i]);
+            }
+        }
+    }
+    var allowedAttrs = ['type', 'name', 'title', 'alt'];
+    for (i = 0; i < allowedAttrs.length; i++) {
+        key = allowedAttrs[i];
+        attr = elem.getAttribute(key);
+        if (attr) {
+            out.push("[" + key + "=\"" + attr + "\"]");
+        }
+    }
+    return out.join('');
+}
+/**
+ * A safe form of location.href
+ */
+function getLocationHref() {
+    var global = global_1.getGlobalObject();
+    try {
+        return global.document.location.href;
+    }
+    catch (oO) {
+        return '';
+    }
+}
+exports.getLocationHref = getLocationHref;
+//# sourceMappingURL=browser.js.map
+
+/***/ }),
+
+/***/ 38857:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var envelope_1 = __nccwpck_require__(6222);
+var time_1 = __nccwpck_require__(1735);
+/**
+ * Creates client report envelope
+ * @param discarded_events An array of discard events
+ * @param dsn A DSN that can be set on the header. Optional.
+ */
+function createClientReportEnvelope(discarded_events, dsn, timestamp) {
+    var clientReportItem = [
+        { type: 'client_report' },
+        {
+            timestamp: timestamp || time_1.dateTimestampInSeconds(),
+            discarded_events: discarded_events,
+        },
+    ];
+    return envelope_1.createEnvelope(dsn ? { dsn: dsn } : {}, [clientReportItem]);
+}
+exports.createClientReportEnvelope = createClientReportEnvelope;
+//# sourceMappingURL=clientreport.js.map
+
+/***/ }),
+
+/***/ 3275:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var error_1 = __nccwpck_require__(66238);
+var flags_1 = __nccwpck_require__(23710);
+/** Regular expression used to parse a Dsn. */
+var DSN_REGEX = /^(?:(\w+):)\/\/(?:(\w+)(?::(\w+))?@)([\w.-]+)(?::(\d+))?\/(.+)/;
+function isValidProtocol(protocol) {
+    return protocol === 'http' || protocol === 'https';
+}
+/**
+ * Renders the string representation of this Dsn.
+ *
+ * By default, this will render the public representation without the password
+ * component. To get the deprecated private representation, set `withPassword`
+ * to true.
+ *
+ * @param withPassword When set to true, the password will be included.
+ */
+function dsnToString(dsn, withPassword) {
+    if (withPassword === void 0) { withPassword = false; }
+    var host = dsn.host, path = dsn.path, pass = dsn.pass, port = dsn.port, projectId = dsn.projectId, protocol = dsn.protocol, publicKey = dsn.publicKey;
+    return (protocol + "://" + publicKey + (withPassword && pass ? ":" + pass : '') +
+        ("@" + host + (port ? ":" + port : '') + "/" + (path ? path + "/" : path) + projectId));
+}
+exports.dsnToString = dsnToString;
+function dsnFromString(str) {
+    var match = DSN_REGEX.exec(str);
+    if (!match) {
+        throw new error_1.SentryError("Invalid Sentry Dsn: " + str);
+    }
+    var _a = tslib_1.__read(match.slice(1), 6), protocol = _a[0], publicKey = _a[1], _b = _a[2], pass = _b === void 0 ? '' : _b, host = _a[3], _c = _a[4], port = _c === void 0 ? '' : _c, lastPath = _a[5];
+    var path = '';
+    var projectId = lastPath;
+    var split = projectId.split('/');
+    if (split.length > 1) {
+        path = split.slice(0, -1).join('/');
+        projectId = split.pop();
+    }
+    if (projectId) {
+        var projectMatch = projectId.match(/^\d+/);
+        if (projectMatch) {
+            projectId = projectMatch[0];
+        }
+    }
+    return dsnFromComponents({ host: host, pass: pass, path: path, projectId: projectId, port: port, protocol: protocol, publicKey: publicKey });
+}
+function dsnFromComponents(components) {
+    // TODO this is for backwards compatibility, and can be removed in a future version
+    if ('user' in components && !('publicKey' in components)) {
+        components.publicKey = components.user;
+    }
+    return {
+        user: components.publicKey || '',
+        protocol: components.protocol,
+        publicKey: components.publicKey || '',
+        pass: components.pass || '',
+        host: components.host,
+        port: components.port || '',
+        path: components.path || '',
+        projectId: components.projectId,
+    };
+}
+function validateDsn(dsn) {
+    if (!flags_1.IS_DEBUG_BUILD) {
+        return;
+    }
+    var port = dsn.port, projectId = dsn.projectId, protocol = dsn.protocol;
+    var requiredComponents = ['protocol', 'publicKey', 'host', 'projectId'];
+    requiredComponents.forEach(function (component) {
+        if (!dsn[component]) {
+            throw new error_1.SentryError("Invalid Sentry Dsn: " + component + " missing");
+        }
+    });
+    if (!projectId.match(/^\d+$/)) {
+        throw new error_1.SentryError("Invalid Sentry Dsn: Invalid projectId " + projectId);
+    }
+    if (!isValidProtocol(protocol)) {
+        throw new error_1.SentryError("Invalid Sentry Dsn: Invalid protocol " + protocol);
+    }
+    if (port && isNaN(parseInt(port, 10))) {
+        throw new error_1.SentryError("Invalid Sentry Dsn: Invalid port " + port);
+    }
+    return true;
