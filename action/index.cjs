@@ -29221,3 +29221,2124 @@ var Scope = /** @class */ (function () {
                 var result = processor(tslib_1.__assign({}, event), hint);
                 if (utils_1.isThenable(result)) {
                     void result
+                        .then(function (final) { return _this._notifyEventProcessors(processors, final, hint, index + 1).then(resolve); })
+                        .then(null, reject);
+                }
+                else {
+                    void _this._notifyEventProcessors(processors, result, hint, index + 1)
+                        .then(resolve)
+                        .then(null, reject);
+                }
+            }
+        });
+    };
+    /**
+     * This will be called on every set call.
+     */
+    Scope.prototype._notifyScopeListeners = function () {
+        var _this = this;
+        // We need this check for this._notifyingListeners to be able to work on scope during updates
+        // If this check is not here we'll produce endless recursion when something is done with the scope
+        // during the callback.
+        if (!this._notifyingListeners) {
+            this._notifyingListeners = true;
+            this._scopeListeners.forEach(function (callback) {
+                callback(_this);
+            });
+            this._notifyingListeners = false;
+        }
+    };
+    /**
+     * Applies fingerprint from the scope to the event if there's one,
+     * uses message if there's one instead or get rid of empty fingerprint
+     */
+    Scope.prototype._applyFingerprint = function (event) {
+        // Make sure it's an array first and we actually have something in place
+        event.fingerprint = event.fingerprint
+            ? Array.isArray(event.fingerprint)
+                ? event.fingerprint
+                : [event.fingerprint]
+            : [];
+        // If we have something on the scope, then merge it with event
+        if (this._fingerprint) {
+            event.fingerprint = event.fingerprint.concat(this._fingerprint);
+        }
+        // If we have no data at all, remove empty array default
+        if (event.fingerprint && !event.fingerprint.length) {
+            delete event.fingerprint;
+        }
+    };
+    return Scope;
+}());
+exports.Scope = Scope;
+/**
+ * Returns the global event processors.
+ */
+function getGlobalEventProcessors() {
+    return utils_1.getGlobalSingleton('globalEventProcessors', function () { return []; });
+}
+/**
+ * Add a EventProcessor to be kept globally.
+ * @param callback EventProcessor to add
+ */
+function addGlobalEventProcessor(callback) {
+    getGlobalEventProcessors().push(callback);
+}
+exports.addGlobalEventProcessor = addGlobalEventProcessor;
+//# sourceMappingURL=scope.js.map
+
+/***/ }),
+
+/***/ 12474:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+/**
+ * @inheritdoc
+ */
+var Session = /** @class */ (function () {
+    function Session(context) {
+        this.errors = 0;
+        this.sid = utils_1.uuid4();
+        this.duration = 0;
+        this.status = 'ok';
+        this.init = true;
+        this.ignoreDuration = false;
+        // Both timestamp and started are in seconds since the UNIX epoch.
+        var startingTime = utils_1.timestampInSeconds();
+        this.timestamp = startingTime;
+        this.started = startingTime;
+        if (context) {
+            this.update(context);
+        }
+    }
+    /** JSDoc */
+    // eslint-disable-next-line complexity
+    Session.prototype.update = function (context) {
+        if (context === void 0) { context = {}; }
+        if (context.user) {
+            if (!this.ipAddress && context.user.ip_address) {
+                this.ipAddress = context.user.ip_address;
+            }
+            if (!this.did && !context.did) {
+                this.did = context.user.id || context.user.email || context.user.username;
+            }
+        }
+        this.timestamp = context.timestamp || utils_1.timestampInSeconds();
+        if (context.ignoreDuration) {
+            this.ignoreDuration = context.ignoreDuration;
+        }
+        if (context.sid) {
+            // Good enough uuid validation. — Kamil
+            this.sid = context.sid.length === 32 ? context.sid : utils_1.uuid4();
+        }
+        if (context.init !== undefined) {
+            this.init = context.init;
+        }
+        if (!this.did && context.did) {
+            this.did = "" + context.did;
+        }
+        if (typeof context.started === 'number') {
+            this.started = context.started;
+        }
+        if (this.ignoreDuration) {
+            this.duration = undefined;
+        }
+        else if (typeof context.duration === 'number') {
+            this.duration = context.duration;
+        }
+        else {
+            var duration = this.timestamp - this.started;
+            this.duration = duration >= 0 ? duration : 0;
+        }
+        if (context.release) {
+            this.release = context.release;
+        }
+        if (context.environment) {
+            this.environment = context.environment;
+        }
+        if (!this.ipAddress && context.ipAddress) {
+            this.ipAddress = context.ipAddress;
+        }
+        if (!this.userAgent && context.userAgent) {
+            this.userAgent = context.userAgent;
+        }
+        if (typeof context.errors === 'number') {
+            this.errors = context.errors;
+        }
+        if (context.status) {
+            this.status = context.status;
+        }
+    };
+    /** JSDoc */
+    Session.prototype.close = function (status) {
+        if (status) {
+            this.update({ status: status });
+        }
+        else if (this.status === 'ok') {
+            this.update({ status: 'exited' });
+        }
+        else {
+            this.update();
+        }
+    };
+    /** JSDoc */
+    Session.prototype.toJSON = function () {
+        return utils_1.dropUndefinedKeys({
+            sid: "" + this.sid,
+            init: this.init,
+            // Make sure that sec is converted to ms for date constructor
+            started: new Date(this.started * 1000).toISOString(),
+            timestamp: new Date(this.timestamp * 1000).toISOString(),
+            status: this.status,
+            errors: this.errors,
+            did: typeof this.did === 'number' || typeof this.did === 'string' ? "" + this.did : undefined,
+            duration: this.duration,
+            attrs: {
+                release: this.release,
+                environment: this.environment,
+                ip_address: this.ipAddress,
+                user_agent: this.userAgent,
+            },
+        });
+    };
+    return Session;
+}());
+exports.Session = Session;
+//# sourceMappingURL=session.js.map
+
+/***/ }),
+
+/***/ 99695:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(30369);
+var hub_1 = __nccwpck_require__(53536);
+/**
+ * @inheritdoc
+ */
+var SessionFlusher = /** @class */ (function () {
+    function SessionFlusher(transport, attrs) {
+        var _this = this;
+        this.flushTimeout = 60;
+        this._pendingAggregates = {};
+        this._isEnabled = true;
+        this._transport = transport;
+        // Call to setInterval, so that flush is called every 60 seconds
+        this._intervalId = setInterval(function () { return _this.flush(); }, this.flushTimeout * 1000);
+        this._sessionAttrs = attrs;
+    }
+    /** Sends session aggregates to Transport */
+    SessionFlusher.prototype.sendSessionAggregates = function (sessionAggregates) {
+        if (!this._transport.sendSession) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn("Dropping session because custom transport doesn't implement sendSession");
+            return;
+        }
+        void this._transport.sendSession(sessionAggregates).then(null, function (reason) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.error('Error while sending session:', reason);
+        });
+    };
+    /** Checks if `pendingAggregates` has entries, and if it does flushes them by calling `sendSessions` */
+    SessionFlusher.prototype.flush = function () {
+        var sessionAggregates = this.getSessionAggregates();
+        if (sessionAggregates.aggregates.length === 0) {
+            return;
+        }
+        this._pendingAggregates = {};
+        this.sendSessionAggregates(sessionAggregates);
+    };
+    /** Massages the entries in `pendingAggregates` and returns aggregated sessions */
+    SessionFlusher.prototype.getSessionAggregates = function () {
+        var _this = this;
+        var aggregates = Object.keys(this._pendingAggregates).map(function (key) {
+            return _this._pendingAggregates[parseInt(key)];
+        });
+        var sessionAggregates = {
+            attrs: this._sessionAttrs,
+            aggregates: aggregates,
+        };
+        return utils_1.dropUndefinedKeys(sessionAggregates);
+    };
+    /** JSDoc */
+    SessionFlusher.prototype.close = function () {
+        clearInterval(this._intervalId);
+        this._isEnabled = false;
+        this.flush();
+    };
+    /**
+     * Wrapper function for _incrementSessionStatusCount that checks if the instance of SessionFlusher is enabled then
+     * fetches the session status of the request from `Scope.getRequestSession().status` on the scope and passes them to
+     * `_incrementSessionStatusCount` along with the start date
+     */
+    SessionFlusher.prototype.incrementSessionStatusCount = function () {
+        if (!this._isEnabled) {
+            return;
+        }
+        var scope = hub_1.getCurrentHub().getScope();
+        var requestSession = scope && scope.getRequestSession();
+        if (requestSession && requestSession.status) {
+            this._incrementSessionStatusCount(requestSession.status, new Date());
+            // This is not entirely necessarily but is added as a safe guard to indicate the bounds of a request and so in
+            // case captureRequestSession is called more than once to prevent double count
+            if (scope) {
+                scope.setRequestSession(undefined);
+            }
+            /* eslint-enable @typescript-eslint/no-unsafe-member-access */
+        }
+    };
+    /**
+     * Increments status bucket in pendingAggregates buffer (internal state) corresponding to status of
+     * the session received
+     */
+    SessionFlusher.prototype._incrementSessionStatusCount = function (status, date) {
+        // Truncate minutes and seconds on Session Started attribute to have one minute bucket keys
+        var sessionStartedTrunc = new Date(date).setSeconds(0, 0);
+        this._pendingAggregates[sessionStartedTrunc] = this._pendingAggregates[sessionStartedTrunc] || {};
+        // corresponds to aggregated sessions in one specific minute bucket
+        // for example, {"started":"2021-03-16T08:00:00.000Z","exited":4, "errored": 1}
+        var aggregationCounts = this._pendingAggregates[sessionStartedTrunc];
+        if (!aggregationCounts.started) {
+            aggregationCounts.started = new Date(sessionStartedTrunc).toISOString();
+        }
+        switch (status) {
+            case 'errored':
+                aggregationCounts.errored = (aggregationCounts.errored || 0) + 1;
+                return aggregationCounts.errored;
+            case 'ok':
+                aggregationCounts.exited = (aggregationCounts.exited || 0) + 1;
+                return aggregationCounts.exited;
+            default:
+                aggregationCounts.crashed = (aggregationCounts.crashed || 0) + 1;
+                return aggregationCounts.crashed;
+        }
+    };
+    return SessionFlusher;
+}());
+exports.SessionFlusher = SessionFlusher;
+//# sourceMappingURL=sessionflusher.js.map
+
+/***/ }),
+
+/***/ 39615:
+/***/ ((module) => {
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+/* global global, define, System, Reflect, Promise */
+var __extends;
+var __assign;
+var __rest;
+var __decorate;
+var __param;
+var __metadata;
+var __awaiter;
+var __generator;
+var __exportStar;
+var __values;
+var __read;
+var __spread;
+var __spreadArrays;
+var __await;
+var __asyncGenerator;
+var __asyncDelegator;
+var __asyncValues;
+var __makeTemplateObject;
+var __importStar;
+var __importDefault;
+var __classPrivateFieldGet;
+var __classPrivateFieldSet;
+var __createBinding;
+(function (factory) {
+    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+    if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
+    }
+    else if ( true && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+    }
+    else {
+        factory(createExporter(root));
+    }
+    function createExporter(exports, previous) {
+        if (exports !== root) {
+            if (typeof Object.create === "function") {
+                Object.defineProperty(exports, "__esModule", { value: true });
+            }
+            else {
+                exports.__esModule = true;
+            }
+        }
+        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
+    }
+})
+(function (exporter) {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+
+    __extends = function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+
+    __assign = Object.assign || function (t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+
+    __rest = function (s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    };
+
+    __decorate = function (decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+
+    __param = function (paramIndex, decorator) {
+        return function (target, key) { decorator(target, key, paramIndex); }
+    };
+
+    __metadata = function (metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    };
+
+    __awaiter = function (thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+
+    __generator = function (thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    };
+
+    __createBinding = function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        o[k2] = m[k];
+    };
+
+    __exportStar = function (m, exports) {
+        for (var p in m) if (p !== "default" && !exports.hasOwnProperty(p)) exports[p] = m[p];
+    };
+
+    __values = function (o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m) return m.call(o);
+        if (o && typeof o.length === "number") return {
+            next: function () {
+                if (o && i >= o.length) o = void 0;
+                return { value: o && o[i++], done: !o };
+            }
+        };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+    };
+
+    __read = function (o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m) return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+        }
+        catch (error) { e = { error: error }; }
+        finally {
+            try {
+                if (r && !r.done && (m = i["return"])) m.call(i);
+            }
+            finally { if (e) throw e.error; }
+        }
+        return ar;
+    };
+
+    __spread = function () {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+            ar = ar.concat(__read(arguments[i]));
+        return ar;
+    };
+
+    __spreadArrays = function () {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    };
+
+    __await = function (v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+    };
+
+    __asyncGenerator = function (thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+        function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+        function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);  }
+        function fulfill(value) { resume("next", value); }
+        function reject(value) { resume("throw", value); }
+        function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+    };
+
+    __asyncDelegator = function (o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function (e) { throw e; }), verb("return"), i[Symbol.iterator] = function () { return this; }, i;
+        function verb(n, f) { i[n] = o[n] ? function (v) { return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v; } : f; }
+    };
+
+    __asyncValues = function (o) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+        function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+        function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+    };
+
+    __makeTemplateObject = function (cooked, raw) {
+        if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+        return cooked;
+    };
+
+    __importStar = function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+        result["default"] = mod;
+        return result;
+    };
+
+    __importDefault = function (mod) {
+        return (mod && mod.__esModule) ? mod : { "default": mod };
+    };
+
+    __classPrivateFieldGet = function (receiver, privateMap) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to get private field on non-instance");
+        }
+        return privateMap.get(receiver);
+    };
+
+    __classPrivateFieldSet = function (receiver, privateMap, value) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to set private field on non-instance");
+        }
+        privateMap.set(receiver, value);
+        return value;
+    };
+
+    exporter("__extends", __extends);
+    exporter("__assign", __assign);
+    exporter("__rest", __rest);
+    exporter("__decorate", __decorate);
+    exporter("__param", __param);
+    exporter("__metadata", __metadata);
+    exporter("__awaiter", __awaiter);
+    exporter("__generator", __generator);
+    exporter("__exportStar", __exportStar);
+    exporter("__createBinding", __createBinding);
+    exporter("__values", __values);
+    exporter("__read", __read);
+    exporter("__spread", __spread);
+    exporter("__spreadArrays", __spreadArrays);
+    exporter("__await", __await);
+    exporter("__asyncGenerator", __asyncGenerator);
+    exporter("__asyncDelegator", __asyncDelegator);
+    exporter("__asyncValues", __asyncValues);
+    exporter("__makeTemplateObject", __makeTemplateObject);
+    exporter("__importStar", __importStar);
+    exporter("__importDefault", __importDefault);
+    exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+    exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+});
+
+
+/***/ }),
+
+/***/ 88455:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52227);
+var hub_1 = __nccwpck_require__(6393);
+/**
+ * This calls a function on the current hub.
+ * @param method function to call on hub.
+ * @param args to pass to function.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function callOnHub(method) {
+    var args = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        args[_i - 1] = arguments[_i];
+    }
+    var hub = hub_1.getCurrentHub();
+    if (hub && hub[method]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return hub[method].apply(hub, tslib_1.__spread(args));
+    }
+    throw new Error("No hub defined or " + method + " was not found on the hub, please open a bug report.");
+}
+/**
+ * Captures an exception event and sends it to Sentry.
+ *
+ * @param exception An exception-like object.
+ * @returns The generated eventId.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+function captureException(exception, captureContext) {
+    var syntheticException = new Error('Sentry syntheticException');
+    return callOnHub('captureException', exception, {
+        captureContext: captureContext,
+        originalException: exception,
+        syntheticException: syntheticException,
+    });
+}
+exports.captureException = captureException;
+/**
+ * Captures a message event and sends it to Sentry.
+ *
+ * @param message The message to send to Sentry.
+ * @param Severity Define the level of the message.
+ * @returns The generated eventId.
+ */
+function captureMessage(message, captureContext) {
+    var syntheticException = new Error(message);
+    // This is necessary to provide explicit scopes upgrade, without changing the original
+    // arity of the `captureMessage(message, level)` method.
+    var level = typeof captureContext === 'string' ? captureContext : undefined;
+    var context = typeof captureContext !== 'string' ? { captureContext: captureContext } : undefined;
+    return callOnHub('captureMessage', message, level, tslib_1.__assign({ originalException: message, syntheticException: syntheticException }, context));
+}
+exports.captureMessage = captureMessage;
+/**
+ * Captures a manually created event and sends it to Sentry.
+ *
+ * @param event The event to send to Sentry.
+ * @returns The generated eventId.
+ */
+function captureEvent(event) {
+    return callOnHub('captureEvent', event);
+}
+exports.captureEvent = captureEvent;
+/**
+ * Callback to set context information onto the scope.
+ * @param callback Callback function that receives Scope.
+ */
+function configureScope(callback) {
+    callOnHub('configureScope', callback);
+}
+exports.configureScope = configureScope;
+/**
+ * Records a new breadcrumb which will be attached to future events.
+ *
+ * Breadcrumbs will be added to subsequent events to provide more context on
+ * user's actions prior to an error or crash.
+ *
+ * @param breadcrumb The breadcrumb to record.
+ */
+function addBreadcrumb(breadcrumb) {
+    callOnHub('addBreadcrumb', breadcrumb);
+}
+exports.addBreadcrumb = addBreadcrumb;
+/**
+ * Sets context data with the given name.
+ * @param name of the context
+ * @param context Any kind of data. This data will be normalized.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function setContext(name, context) {
+    callOnHub('setContext', name, context);
+}
+exports.setContext = setContext;
+/**
+ * Set an object that will be merged sent as extra data with the event.
+ * @param extras Extras object to merge into current context.
+ */
+function setExtras(extras) {
+    callOnHub('setExtras', extras);
+}
+exports.setExtras = setExtras;
+/**
+ * Set an object that will be merged sent as tags data with the event.
+ * @param tags Tags context object to merge into current context.
+ */
+function setTags(tags) {
+    callOnHub('setTags', tags);
+}
+exports.setTags = setTags;
+/**
+ * Set key:value that will be sent as extra data with the event.
+ * @param key String of extra
+ * @param extra Any kind of data. This data will be normalized.
+ */
+function setExtra(key, extra) {
+    callOnHub('setExtra', key, extra);
+}
+exports.setExtra = setExtra;
+/**
+ * Set key:value that will be sent as tags data with the event.
+ *
+ * Can also be used to unset a tag, by passing `undefined`.
+ *
+ * @param key String key of tag
+ * @param value Value of tag
+ */
+function setTag(key, value) {
+    callOnHub('setTag', key, value);
+}
+exports.setTag = setTag;
+/**
+ * Updates user context information for future events.
+ *
+ * @param user User context object to be set in the current context. Pass `null` to unset the user.
+ */
+function setUser(user) {
+    callOnHub('setUser', user);
+}
+exports.setUser = setUser;
+/**
+ * Creates a new scope with and executes the given operation within.
+ * The scope is automatically removed once the operation
+ * finishes or throws.
+ *
+ * This is essentially a convenience function for:
+ *
+ *     pushScope();
+ *     callback();
+ *     popScope();
+ *
+ * @param callback that will be enclosed into push/popScope.
+ */
+function withScope(callback) {
+    callOnHub('withScope', callback);
+}
+exports.withScope = withScope;
+/**
+ * Calls a function on the latest client. Use this with caution, it's meant as
+ * in "internal" helper so we don't need to expose every possible function in
+ * the shim. It is not guaranteed that the client actually implements the
+ * function.
+ *
+ * @param method The method to call on the client/client.
+ * @param args Arguments to pass to the client/fontend.
+ * @hidden
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _callOnClient(method) {
+    var args = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        args[_i - 1] = arguments[_i];
+    }
+    callOnHub.apply(void 0, tslib_1.__spread(['_invokeClient', method], args));
+}
+exports._callOnClient = _callOnClient;
+/**
+ * Starts a new `Transaction` and returns it. This is the entry point to manual tracing instrumentation.
+ *
+ * A tree structure can be built by adding child spans to the transaction, and child spans to other spans. To start a
+ * new child span within the transaction or any span, call the respective `.startChild()` method.
+ *
+ * Every child span must be finished before the transaction is finished, otherwise the unfinished spans are discarded.
+ *
+ * The transaction must be finished with a call to its `.finish()` method, at which point the transaction with all its
+ * finished child spans will be sent to Sentry.
+ *
+ * @param context Properties of the new `Transaction`.
+ * @param customSamplingContext Information given to the transaction sampling function (along with context-dependent
+ * default values). See {@link Options.tracesSampler}.
+ *
+ * @returns The transaction which was just started
+ */
+function startTransaction(context, customSamplingContext) {
+    return callOnHub('startTransaction', tslib_1.__assign({}, context), customSamplingContext);
+}
+exports.startTransaction = startTransaction;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 52227:
+/***/ ((module) => {
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+/* global global, define, System, Reflect, Promise */
+var __extends;
+var __assign;
+var __rest;
+var __decorate;
+var __param;
+var __metadata;
+var __awaiter;
+var __generator;
+var __exportStar;
+var __values;
+var __read;
+var __spread;
+var __spreadArrays;
+var __await;
+var __asyncGenerator;
+var __asyncDelegator;
+var __asyncValues;
+var __makeTemplateObject;
+var __importStar;
+var __importDefault;
+var __classPrivateFieldGet;
+var __classPrivateFieldSet;
+var __createBinding;
+(function (factory) {
+    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+    if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
+    }
+    else if ( true && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+    }
+    else {
+        factory(createExporter(root));
+    }
+    function createExporter(exports, previous) {
+        if (exports !== root) {
+            if (typeof Object.create === "function") {
+                Object.defineProperty(exports, "__esModule", { value: true });
+            }
+            else {
+                exports.__esModule = true;
+            }
+        }
+        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
+    }
+})
+(function (exporter) {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+
+    __extends = function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+
+    __assign = Object.assign || function (t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+
+    __rest = function (s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    };
+
+    __decorate = function (decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+
+    __param = function (paramIndex, decorator) {
+        return function (target, key) { decorator(target, key, paramIndex); }
+    };
+
+    __metadata = function (metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    };
+
+    __awaiter = function (thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+
+    __generator = function (thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    };
+
+    __createBinding = function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        o[k2] = m[k];
+    };
+
+    __exportStar = function (m, exports) {
+        for (var p in m) if (p !== "default" && !exports.hasOwnProperty(p)) exports[p] = m[p];
+    };
+
+    __values = function (o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m) return m.call(o);
+        if (o && typeof o.length === "number") return {
+            next: function () {
+                if (o && i >= o.length) o = void 0;
+                return { value: o && o[i++], done: !o };
+            }
+        };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+    };
+
+    __read = function (o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m) return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+        }
+        catch (error) { e = { error: error }; }
+        finally {
+            try {
+                if (r && !r.done && (m = i["return"])) m.call(i);
+            }
+            finally { if (e) throw e.error; }
+        }
+        return ar;
+    };
+
+    __spread = function () {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+            ar = ar.concat(__read(arguments[i]));
+        return ar;
+    };
+
+    __spreadArrays = function () {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    };
+
+    __await = function (v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+    };
+
+    __asyncGenerator = function (thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+        function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+        function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);  }
+        function fulfill(value) { resume("next", value); }
+        function reject(value) { resume("throw", value); }
+        function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+    };
+
+    __asyncDelegator = function (o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function (e) { throw e; }), verb("return"), i[Symbol.iterator] = function () { return this; }, i;
+        function verb(n, f) { i[n] = o[n] ? function (v) { return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v; } : f; }
+    };
+
+    __asyncValues = function (o) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+        function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+        function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+    };
+
+    __makeTemplateObject = function (cooked, raw) {
+        if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+        return cooked;
+    };
+
+    __importStar = function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+        result["default"] = mod;
+        return result;
+    };
+
+    __importDefault = function (mod) {
+        return (mod && mod.__esModule) ? mod : { "default": mod };
+    };
+
+    __classPrivateFieldGet = function (receiver, privateMap) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to get private field on non-instance");
+        }
+        return privateMap.get(receiver);
+    };
+
+    __classPrivateFieldSet = function (receiver, privateMap, value) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to set private field on non-instance");
+        }
+        privateMap.set(receiver, value);
+        return value;
+    };
+
+    exporter("__extends", __extends);
+    exporter("__assign", __assign);
+    exporter("__rest", __rest);
+    exporter("__decorate", __decorate);
+    exporter("__param", __param);
+    exporter("__metadata", __metadata);
+    exporter("__awaiter", __awaiter);
+    exporter("__generator", __generator);
+    exporter("__exportStar", __exportStar);
+    exporter("__createBinding", __createBinding);
+    exporter("__values", __values);
+    exporter("__read", __read);
+    exporter("__spread", __spread);
+    exporter("__spreadArrays", __spreadArrays);
+    exporter("__await", __await);
+    exporter("__asyncGenerator", __asyncGenerator);
+    exporter("__asyncDelegator", __asyncDelegator);
+    exporter("__asyncValues", __asyncValues);
+    exporter("__makeTemplateObject", __makeTemplateObject);
+    exporter("__importStar", __importStar);
+    exporter("__importDefault", __importDefault);
+    exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+    exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+});
+
+
+/***/ }),
+
+/***/ 40508:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var types_1 = __nccwpck_require__(83789);
+var utils_1 = __nccwpck_require__(1620);
+var eventbuilder_1 = __nccwpck_require__(79287);
+var transports_1 = __nccwpck_require__(21437);
+/**
+ * The Sentry Node SDK Backend.
+ * @hidden
+ */
+var NodeBackend = /** @class */ (function (_super) {
+    tslib_1.__extends(NodeBackend, _super);
+    function NodeBackend() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    NodeBackend.prototype.eventFromException = function (exception, hint) {
+        return utils_1.resolvedSyncPromise(eventbuilder_1.eventFromUnknownInput(exception, hint));
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeBackend.prototype.eventFromMessage = function (message, level, hint) {
+        if (level === void 0) { level = types_1.Severity.Info; }
+        return utils_1.resolvedSyncPromise(eventbuilder_1.eventFromMessage(message, level, hint, this._options.attachStacktrace));
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeBackend.prototype._setupTransport = function () {
+        if (!this._options.dsn) {
+            // We return the noop transport here in case there is no Dsn.
+            return _super.prototype._setupTransport.call(this);
+        }
+        var dsn = utils_1.makeDsn(this._options.dsn);
+        var transportOptions = tslib_1.__assign(tslib_1.__assign(tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({}, this._options.transportOptions), (this._options.httpProxy && { httpProxy: this._options.httpProxy })), (this._options.httpsProxy && { httpsProxy: this._options.httpsProxy })), (this._options.caCerts && { caCerts: this._options.caCerts })), { dsn: this._options.dsn, tunnel: this._options.tunnel, _metadata: this._options._metadata });
+        if (this._options.transport) {
+            return new this._options.transport(transportOptions);
+        }
+        var api = core_1.initAPIDetails(transportOptions.dsn, transportOptions._metadata, transportOptions.tunnel);
+        var url = core_1.getEnvelopeEndpointWithUrlEncodedAuth(api.dsn, api.tunnel);
+        this._newTransport = transports_1.makeNodeTransport({
+            url: url,
+            headers: transportOptions.headers,
+            proxy: transportOptions.httpProxy,
+            caCerts: transportOptions.caCerts,
+        });
+        if (dsn.protocol === 'http') {
+            return new transports_1.HTTPTransport(transportOptions);
+        }
+        return new transports_1.HTTPSTransport(transportOptions);
+    };
+    return NodeBackend;
+}(core_1.BaseBackend));
+exports.NodeBackend = NodeBackend;
+//# sourceMappingURL=backend.js.map
+
+/***/ }),
+
+/***/ 86147:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var hub_1 = __nccwpck_require__(6393);
+var utils_1 = __nccwpck_require__(1620);
+var backend_1 = __nccwpck_require__(40508);
+var flags_1 = __nccwpck_require__(71188);
+/**
+ * The Sentry Node SDK Client.
+ *
+ * @see NodeOptions for documentation on configuration options.
+ * @see SentryClient for usage documentation.
+ */
+var NodeClient = /** @class */ (function (_super) {
+    tslib_1.__extends(NodeClient, _super);
+    /**
+     * Creates a new Node SDK instance.
+     * @param options Configuration options for this SDK.
+     */
+    function NodeClient(options) {
+        var _this = this;
+        options._metadata = options._metadata || {};
+        options._metadata.sdk = options._metadata.sdk || {
+            name: 'sentry.javascript.node',
+            packages: [
+                {
+                    name: 'npm:@sentry/node',
+                    version: core_1.SDK_VERSION,
+                },
+            ],
+            version: core_1.SDK_VERSION,
+        };
+        _this = _super.call(this, backend_1.NodeBackend, options) || this;
+        return _this;
+    }
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    NodeClient.prototype.captureException = function (exception, hint, scope) {
+        // Check if the flag `autoSessionTracking` is enabled, and if `_sessionFlusher` exists because it is initialised only
+        // when the `requestHandler` middleware is used, and hence the expectation is to have SessionAggregates payload
+        // sent to the Server only when the `requestHandler` middleware is used
+        if (this._options.autoSessionTracking && this._sessionFlusher && scope) {
+            var requestSession = scope.getRequestSession();
+            // Necessary checks to ensure this is code block is executed only within a request
+            // Should override the status only if `requestSession.status` is `Ok`, which is its initial stage
+            if (requestSession && requestSession.status === 'ok') {
+                requestSession.status = 'errored';
+            }
+        }
+        return _super.prototype.captureException.call(this, exception, hint, scope);
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeClient.prototype.captureEvent = function (event, hint, scope) {
+        // Check if the flag `autoSessionTracking` is enabled, and if `_sessionFlusher` exists because it is initialised only
+        // when the `requestHandler` middleware is used, and hence the expectation is to have SessionAggregates payload
+        // sent to the Server only when the `requestHandler` middleware is used
+        if (this._options.autoSessionTracking && this._sessionFlusher && scope) {
+            var eventType = event.type || 'exception';
+            var isException = eventType === 'exception' && event.exception && event.exception.values && event.exception.values.length > 0;
+            // If the event is of type Exception, then a request session should be captured
+            if (isException) {
+                var requestSession = scope.getRequestSession();
+                // Ensure that this is happening within the bounds of a request, and make sure not to override
+                // Session Status if Errored / Crashed
+                if (requestSession && requestSession.status === 'ok') {
+                    requestSession.status = 'errored';
+                }
+            }
+        }
+        return _super.prototype.captureEvent.call(this, event, hint, scope);
+    };
+    /**
+     *
+     * @inheritdoc
+     */
+    NodeClient.prototype.close = function (timeout) {
+        var _a;
+        (_a = this._sessionFlusher) === null || _a === void 0 ? void 0 : _a.close();
+        return _super.prototype.close.call(this, timeout);
+    };
+    /** Method that initialises an instance of SessionFlusher on Client */
+    NodeClient.prototype.initSessionFlusher = function () {
+        var _a = this._options, release = _a.release, environment = _a.environment;
+        if (!release) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('Cannot initialise an instance of SessionFlusher if no release is provided!');
+        }
+        else {
+            this._sessionFlusher = new hub_1.SessionFlusher(this.getTransport(), {
+                release: release,
+                environment: environment,
+            });
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    NodeClient.prototype._prepareEvent = function (event, scope, hint) {
+        event.platform = event.platform || 'node';
+        if (this.getOptions().serverName) {
+            event.server_name = this.getOptions().serverName;
+        }
+        return _super.prototype._prepareEvent.call(this, event, scope, hint);
+    };
+    /**
+     * Method responsible for capturing/ending a request session by calling `incrementSessionStatusCount` to increment
+     * appropriate session aggregates bucket
+     */
+    NodeClient.prototype._captureRequestSession = function () {
+        if (!this._sessionFlusher) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('Discarded request mode session because autoSessionTracking option was disabled');
+        }
+        else {
+            this._sessionFlusher.incrementSessionStatusCount();
+        }
+    };
+    return NodeClient;
+}(core_1.BaseClient));
+exports.NodeClient = NodeClient;
+//# sourceMappingURL=client.js.map
+
+/***/ }),
+
+/***/ 79287:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var hub_1 = __nccwpck_require__(6393);
+var types_1 = __nccwpck_require__(83789);
+var utils_1 = __nccwpck_require__(1620);
+var stack_parser_1 = __nccwpck_require__(94854);
+/**
+ * Extracts stack frames from the error.stack string
+ */
+function parseStackFrames(error) {
+    return utils_1.createStackParser(stack_parser_1.nodeStackParser)(error.stack || '', 1);
+}
+exports.parseStackFrames = parseStackFrames;
+/**
+ * Extracts stack frames from the error and builds a Sentry Exception
+ */
+function exceptionFromError(error) {
+    var exception = {
+        type: error.name || error.constructor.name,
+        value: error.message,
+    };
+    var frames = parseStackFrames(error);
+    if (frames.length) {
+        exception.stacktrace = { frames: frames };
+    }
+    return exception;
+}
+exports.exceptionFromError = exceptionFromError;
+/**
+ * Builds and Event from a Exception
+ * @hidden
+ */
+function eventFromUnknownInput(exception, hint) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    var ex = exception;
+    var providedMechanism = hint && hint.data && hint.data.mechanism;
+    var mechanism = providedMechanism || {
+        handled: true,
+        type: 'generic',
+    };
+    if (!utils_1.isError(exception)) {
+        if (utils_1.isPlainObject(exception)) {
+            // This will allow us to group events based on top-level keys
+            // which is much better than creating new group when any key/value change
+            var message = "Non-Error exception captured with keys: " + utils_1.extractExceptionKeysForMessage(exception);
+            hub_1.getCurrentHub().configureScope(function (scope) {
+                scope.setExtra('__serialized__', utils_1.normalizeToSize(exception));
+            });
+            ex = (hint && hint.syntheticException) || new Error(message);
+            ex.message = message;
+        }
+        else {
+            // This handles when someone does: `throw "something awesome";`
+            // We use synthesized Error here so we can extract a (rough) stack trace.
+            ex = (hint && hint.syntheticException) || new Error(exception);
+            ex.message = exception;
+        }
+        mechanism.synthetic = true;
+    }
+    var event = {
+        exception: {
+            values: [exceptionFromError(ex)],
+        },
+    };
+    utils_1.addExceptionTypeValue(event, undefined, undefined);
+    utils_1.addExceptionMechanism(event, mechanism);
+    return tslib_1.__assign(tslib_1.__assign({}, event), { event_id: hint && hint.event_id });
+}
+exports.eventFromUnknownInput = eventFromUnknownInput;
+/**
+ * Builds and Event from a Message
+ * @hidden
+ */
+function eventFromMessage(message, level, hint, attachStacktrace) {
+    if (level === void 0) { level = types_1.Severity.Info; }
+    var event = {
+        event_id: hint && hint.event_id,
+        level: level,
+        message: message,
+    };
+    if (attachStacktrace && hint && hint.syntheticException) {
+        var frames_1 = parseStackFrames(hint.syntheticException);
+        if (frames_1.length) {
+            event.stacktrace = { frames: frames_1 };
+        }
+    }
+    return event;
+}
+exports.eventFromMessage = eventFromMessage;
+//# sourceMappingURL=eventbuilder.js.map
+
+/***/ }),
+
+/***/ 71188:
+/***/ ((__unused_webpack_module, exports) => {
+
+/*
+ * This file defines flags and constants that can be modified during compile time in order to facilitate tree shaking
+ * for users.
+ *
+ * Debug flags need to be declared in each package individually and must not be imported across package boundaries,
+ * because some build tools have trouble tree-shaking imported guards.
+ *
+ * As a convention, we define debug flags in a `flags.ts` file in the root of a package's `src` folder.
+ *
+ * Debug flag files will contain "magic strings" like `__SENTRY_DEBUG__` that may get replaced with actual values during
+ * our, or the user's build process. Take care when introducing new flags - they must not throw if they are not
+ * replaced.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/** Flag that is true for debug builds, false otherwise. */
+exports.IS_DEBUG_BUILD = typeof __SENTRY_DEBUG__ === 'undefined' ? true : __SENTRY_DEBUG__;
+//# sourceMappingURL=flags.js.map
+
+/***/ }),
+
+/***/ 45400:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+/* eslint-disable max-lines */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var cookie = __nccwpck_require__(93658);
+var domain = __nccwpck_require__(13639);
+var os = __nccwpck_require__(22037);
+var url = __nccwpck_require__(57310);
+var flags_1 = __nccwpck_require__(71188);
+var sdk_1 = __nccwpck_require__(38836);
+/**
+ * Express-compatible tracing handler.
+ * @see Exposed as `Handlers.tracingHandler`
+ */
+function tracingHandler() {
+    return function sentryTracingMiddleware(req, res, next) {
+        // If there is a trace header set, we extract the data from it (parentSpanId, traceId, and sampling decision)
+        var traceparentData;
+        if (req.headers && utils_1.isString(req.headers['sentry-trace'])) {
+            traceparentData = utils_1.extractTraceparentData(req.headers['sentry-trace']);
+        }
+        var transaction = core_1.startTransaction(tslib_1.__assign({ name: extractExpressTransactionName(req, { path: true, method: true }), op: 'http.server' }, traceparentData), 
+        // extra context passed to the tracesSampler
+        { request: extractRequestData(req) });
+        // We put the transaction on the scope so users can attach children to it
+        core_1.getCurrentHub().configureScope(function (scope) {
+            scope.setSpan(transaction);
+        });
+        // We also set __sentry_transaction on the response so people can grab the transaction there to add
+        // spans to it later.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        res.__sentry_transaction = transaction;
+        res.once('finish', function () {
+            // Push `transaction.finish` to the next event loop so open spans have a chance to finish before the transaction
+            // closes
+            setImmediate(function () {
+                addExpressReqToTransaction(transaction, req);
+                transaction.setHttpStatus(res.statusCode);
+                transaction.finish();
+            });
+        });
+        next();
+    };
+}
+exports.tracingHandler = tracingHandler;
+/**
+ * Set parameterized as transaction name e.g.: `GET /users/:id`
+ * Also adds more context data on the transaction from the request
+ */
+function addExpressReqToTransaction(transaction, req) {
+    if (!transaction)
+        return;
+    transaction.name = extractExpressTransactionName(req, { path: true, method: true });
+    transaction.setData('url', req.originalUrl);
+    transaction.setData('baseUrl', req.baseUrl);
+    transaction.setData('query', req.query);
+}
+/**
+ * Extracts complete generalized path from the request object and uses it to construct transaction name.
+ *
+ * eg. GET /mountpoint/user/:id
+ *
+ * @param req The ExpressRequest object
+ * @param options What to include in the transaction name (method, path, or both)
+ *
+ * @returns The fully constructed transaction name
+ */
+function extractExpressTransactionName(req, options) {
+    if (options === void 0) { options = {}; }
+    var _a;
+    var method = (_a = req.method) === null || _a === void 0 ? void 0 : _a.toUpperCase();
+    var path = '';
+    if (req.route) {
+        path = "" + (req.baseUrl || '') + req.route.path;
+    }
+    else if (req.originalUrl || req.url) {
+        path = utils_1.stripUrlQueryAndFragment(req.originalUrl || req.url || '');
+    }
+    var info = '';
+    if (options.method && method) {
+        info += method;
+    }
+    if (options.method && options.path) {
+        info += ' ';
+    }
+    if (options.path && path) {
+        info += path;
+    }
+    return info;
+}
+/** JSDoc */
+function extractTransaction(req, type) {
+    var _a;
+    switch (type) {
+        case 'path': {
+            return extractExpressTransactionName(req, { path: true });
+        }
+        case 'handler': {
+            return ((_a = req.route) === null || _a === void 0 ? void 0 : _a.stack[0].name) || '<anonymous>';
+        }
+        case 'methodPath':
+        default: {
+            return extractExpressTransactionName(req, { path: true, method: true });
+        }
+    }
+}
+/** Default user keys that'll be used to extract data from the request */
+var DEFAULT_USER_KEYS = ['id', 'username', 'email'];
+/** JSDoc */
+function extractUserData(user, keys) {
+    var extractedUser = {};
+    var attributes = Array.isArray(keys) ? keys : DEFAULT_USER_KEYS;
+    attributes.forEach(function (key) {
+        if (user && key in user) {
+            extractedUser[key] = user[key];
+        }
+    });
+    return extractedUser;
+}
+/** Default request keys that'll be used to extract data from the request */
+var DEFAULT_REQUEST_KEYS = ['cookies', 'data', 'headers', 'method', 'query_string', 'url'];
+/**
+ * Normalizes data from the request object, accounting for framework differences.
+ *
+ * @param req The request object from which to extract data
+ * @param keys An optional array of keys to include in the normalized data. Defaults to DEFAULT_REQUEST_KEYS if not
+ * provided.
+ * @returns An object containing normalized request data
+ */
+function extractRequestData(req, keys) {
+    if (keys === void 0) { keys = DEFAULT_REQUEST_KEYS; }
+    var requestData = {};
+    // headers:
+    //   node, express, nextjs: req.headers
+    //   koa: req.header
+    var headers = (req.headers || req.header || {});
+    // method:
+    //   node, express, koa, nextjs: req.method
+    var method = req.method;
+    // host:
+    //   express: req.hostname in > 4 and req.host in < 4
+    //   koa: req.host
+    //   node, nextjs: req.headers.host
+    var host = req.hostname || req.host || headers.host || '<no host>';
+    // protocol:
+    //   node, nextjs: <n/a>
+    //   express, koa: req.protocol
+    var protocol = req.protocol === 'https' || req.secure || (req.socket || {}).encrypted
+        ? 'https'
+        : 'http';
+    // url (including path and query string):
+    //   node, express: req.originalUrl
+    //   koa, nextjs: req.url
+    var originalUrl = (req.originalUrl || req.url || '');
+    // absolute url
+    var absoluteUrl = protocol + "://" + host + originalUrl;
+    keys.forEach(function (key) {
+        switch (key) {
+            case 'headers':
+                requestData.headers = headers;
+                break;
+            case 'method':
+                requestData.method = method;
+                break;
+            case 'url':
+                requestData.url = absoluteUrl;
+                break;
+            case 'cookies':
+                // cookies:
+                //   node, express, koa: req.headers.cookie
+                //   vercel, sails.js, express (w/ cookie middleware), nextjs: req.cookies
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                requestData.cookies = req.cookies || cookie.parse(headers.cookie || '');
+                break;
+            case 'query_string':
+                // query string:
+                //   node: req.url (raw)
+                //   express, koa, nextjs: req.query
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                requestData.query_string = req.query || url.parse(originalUrl || '', false).query;
+                break;
+            case 'data':
+                if (method === 'GET' || method === 'HEAD') {
+                    break;
+                }
+                // body data:
+                //   express, koa, nextjs: req.body
+                //
+                //   when using node by itself, you have to read the incoming stream(see
+                //   https://nodejs.dev/learn/get-http-request-body-data-using-nodejs); if a user is doing that, we can't know
+                //   where they're going to store the final result, so they'll have to capture this data themselves
+                if (req.body !== undefined) {
+                    requestData.data = utils_1.isString(req.body) ? req.body : JSON.stringify(utils_1.normalize(req.body));
+                }
+                break;
+            default:
+                if ({}.hasOwnProperty.call(req, key)) {
+                    requestData[key] = req[key];
+                }
+        }
+    });
+    return requestData;
+}
+exports.extractRequestData = extractRequestData;
+/**
+ * Enriches passed event with request data.
+ *
+ * @param event Will be mutated and enriched with req data
+ * @param req Request object
+ * @param options object containing flags to enable functionality
+ * @hidden
+ */
+function parseRequest(event, req, options) {
+    // eslint-disable-next-line no-param-reassign
+    options = tslib_1.__assign({ ip: false, request: true, serverName: true, transaction: true, user: true, version: true }, options);
+    if (options.version) {
+        event.contexts = tslib_1.__assign(tslib_1.__assign({}, event.contexts), { runtime: {
+                name: 'node',
+                version: global.process.version,
+            } });
+    }
+    if (options.request) {
+        // if the option value is `true`, use the default set of keys by not passing anything to `extractRequestData()`
+        var extractedRequestData = Array.isArray(options.request)
+            ? extractRequestData(req, options.request)
+            : extractRequestData(req);
+        event.request = tslib_1.__assign(tslib_1.__assign({}, event.request), extractedRequestData);
+    }
+    if (options.serverName && !event.server_name) {
+        event.server_name = global.process.env.SENTRY_NAME || os.hostname();
+    }
+    if (options.user) {
+        var extractedUser = req.user && utils_1.isPlainObject(req.user) ? extractUserData(req.user, options.user) : {};
+        if (Object.keys(extractedUser)) {
+            event.user = tslib_1.__assign(tslib_1.__assign({}, event.user), extractedUser);
+        }
+    }
+    // client ip:
+    //   node, nextjs: req.connection.remoteAddress
+    //   express, koa: req.ip
+    if (options.ip) {
+        var ip = req.ip || (req.connection && req.connection.remoteAddress);
+        if (ip) {
+            event.user = tslib_1.__assign(tslib_1.__assign({}, event.user), { ip_address: ip });
+        }
+    }
+    if (options.transaction && !event.transaction) {
+        // TODO do we even need this anymore?
+        // TODO make this work for nextjs
+        event.transaction = extractTransaction(req, options.transaction);
+    }
+    return event;
+}
+exports.parseRequest = parseRequest;
+/**
+ * Express compatible request handler.
+ * @see Exposed as `Handlers.requestHandler`
+ */
+function requestHandler(options) {
+    var currentHub = core_1.getCurrentHub();
+    var client = currentHub.getClient();
+    // Initialise an instance of SessionFlusher on the client when `autoSessionTracking` is enabled and the
+    // `requestHandler` middleware is used indicating that we are running in SessionAggregates mode
+    if (client && sdk_1.isAutoSessionTrackingEnabled(client)) {
+        client.initSessionFlusher();
+        // If Scope contains a Single mode Session, it is removed in favor of using Session Aggregates mode
+        var scope = currentHub.getScope();
+        if (scope && scope.getSession()) {
+            scope.setSession();
+        }
+    }
+    return function sentryRequestMiddleware(req, res, next) {
+        if (options && options.flushTimeout && options.flushTimeout > 0) {
+            // eslint-disable-next-line @typescript-eslint/unbound-method
+            var _end_1 = res.end;
+            res.end = function (chunk, encoding, cb) {
+                var _this = this;
+                void sdk_1.flush(options.flushTimeout)
+                    .then(function () {
+                    _end_1.call(_this, chunk, encoding, cb);
+                })
+                    .then(null, function (e) {
+                    flags_1.IS_DEBUG_BUILD && utils_1.logger.error(e);
+                    _end_1.call(_this, chunk, encoding, cb);
+                });
+            };
+        }
+        var local = domain.create();
+        local.add(req);
+        local.add(res);
+        local.on('error', next);
+        local.run(function () {
+            var currentHub = core_1.getCurrentHub();
+            currentHub.configureScope(function (scope) {
+                scope.addEventProcessor(function (event) { return parseRequest(event, req, options); });
+                var client = currentHub.getClient();
+                if (sdk_1.isAutoSessionTrackingEnabled(client)) {
+                    var scope_1 = currentHub.getScope();
+                    if (scope_1) {
+                        // Set `status` of `RequestSession` to Ok, at the beginning of the request
+                        scope_1.setRequestSession({ status: 'ok' });
+                    }
+                }
+            });
+            res.once('finish', function () {
+                var client = currentHub.getClient();
+                if (sdk_1.isAutoSessionTrackingEnabled(client)) {
+                    setImmediate(function () {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                        if (client && client._captureRequestSession) {
+                            // Calling _captureRequestSession to capture request session at the end of the request by incrementing
+                            // the correct SessionAggregates bucket i.e. crashed, errored or exited
+                            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                            client._captureRequestSession();
+                        }
+                    });
+                }
+            });
+            next();
+        });
+    };
+}
+exports.requestHandler = requestHandler;
+/** JSDoc */
+function getStatusCodeFromResponse(error) {
+    var statusCode = error.status || error.statusCode || error.status_code || (error.output && error.output.statusCode);
+    return statusCode ? parseInt(statusCode, 10) : 500;
+}
+/** Returns true if response code is internal server error */
+function defaultShouldHandleError(error) {
+    var status = getStatusCodeFromResponse(error);
+    return status >= 500;
+}
+/**
+ * Express compatible error handler.
+ * @see Exposed as `Handlers.errorHandler`
+ */
+function errorHandler(options) {
+    return function sentryErrorMiddleware(error, _req, res, next) {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        var shouldHandleError = (options && options.shouldHandleError) || defaultShouldHandleError;
+        if (shouldHandleError(error)) {
+            core_1.withScope(function (_scope) {
+                // For some reason we need to set the transaction on the scope again
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                var transaction = res.__sentry_transaction;
+                if (transaction && _scope.getSpan() === undefined) {
+                    _scope.setSpan(transaction);
+                }
+                var client = core_1.getCurrentHub().getClient();
+                if (client && sdk_1.isAutoSessionTrackingEnabled(client)) {
+                    // Check if the `SessionFlusher` is instantiated on the client to go into this branch that marks the
+                    // `requestSession.status` as `Crashed`, and this check is necessary because the `SessionFlusher` is only
+                    // instantiated when the the`requestHandler` middleware is initialised, which indicates that we should be
+                    // running in SessionAggregates mode
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                    var isSessionAggregatesMode = client._sessionFlusher !== undefined;
+                    if (isSessionAggregatesMode) {
+                        var requestSession = _scope.getRequestSession();
+                        // If an error bubbles to the `errorHandler`, then this is an unhandled error, and should be reported as a
+                        // Crashed session. The `_requestSession.status` is checked to ensure that this error is happening within
+                        // the bounds of a request, and if so the status is updated
+                        if (requestSession && requestSession.status !== undefined) {
+                            requestSession.status = 'crashed';
+                        }
+                    }
+                }
+                var eventId = core_1.captureException(error);
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                res.sentry = eventId;
+                next(error);
+            });
+            return;
+        }
+        next(error);
+    };
+}
+exports.errorHandler = errorHandler;
+//# sourceMappingURL=handlers.js.map
+
+/***/ }),
+
+/***/ 22783:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var types_1 = __nccwpck_require__(83789);
+exports.Severity = types_1.Severity;
+var core_1 = __nccwpck_require__(79212);
+exports.addGlobalEventProcessor = core_1.addGlobalEventProcessor;
+exports.addBreadcrumb = core_1.addBreadcrumb;
+exports.captureException = core_1.captureException;
+exports.captureEvent = core_1.captureEvent;
+exports.captureMessage = core_1.captureMessage;
+exports.configureScope = core_1.configureScope;
+exports.getHubFromCarrier = core_1.getHubFromCarrier;
+exports.getCurrentHub = core_1.getCurrentHub;
+exports.Hub = core_1.Hub;
+exports.makeMain = core_1.makeMain;
+exports.Scope = core_1.Scope;
+exports.Session = core_1.Session;
+exports.startTransaction = core_1.startTransaction;
+exports.SDK_VERSION = core_1.SDK_VERSION;
+exports.setContext = core_1.setContext;
+exports.setExtra = core_1.setExtra;
+exports.setExtras = core_1.setExtras;
+exports.setTag = core_1.setTag;
+exports.setTags = core_1.setTags;
+exports.setUser = core_1.setUser;
+exports.withScope = core_1.withScope;
+var backend_1 = __nccwpck_require__(40508);
+exports.NodeBackend = backend_1.NodeBackend;
+var client_1 = __nccwpck_require__(86147);
+exports.NodeClient = client_1.NodeClient;
+var sdk_1 = __nccwpck_require__(38836);
+exports.defaultIntegrations = sdk_1.defaultIntegrations;
+exports.init = sdk_1.init;
+exports.lastEventId = sdk_1.lastEventId;
+exports.flush = sdk_1.flush;
+exports.close = sdk_1.close;
+exports.getSentryRelease = sdk_1.getSentryRelease;
+var utils_1 = __nccwpck_require__(27937);
+exports.deepReadDirSync = utils_1.deepReadDirSync;
+var version_1 = __nccwpck_require__(31271);
+exports.SDK_NAME = version_1.SDK_NAME;
+var core_2 = __nccwpck_require__(79212);
+var hub_1 = __nccwpck_require__(6393);
+var domain = __nccwpck_require__(13639);
+var Handlers = __nccwpck_require__(45400);
+exports.Handlers = Handlers;
+var NodeIntegrations = __nccwpck_require__(72310);
+var Transports = __nccwpck_require__(21437);
+exports.Transports = Transports;
+var INTEGRATIONS = tslib_1.__assign(tslib_1.__assign({}, core_2.Integrations), NodeIntegrations);
+exports.Integrations = INTEGRATIONS;
+// We need to patch domain on the global __SENTRY__ object to make it work for node in cross-platform packages like
+// @sentry/hub. If we don't do this, browser bundlers will have troubles resolving `require('domain')`.
+var carrier = hub_1.getMainCarrier();
+if (carrier.__SENTRY__) {
+    carrier.__SENTRY__.extensions = carrier.__SENTRY__.extensions || {};
+    carrier.__SENTRY__.extensions.domain = carrier.__SENTRY__.extensions.domain || domain;
+}
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 29552:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var util = __nccwpck_require__(73837);
+/** Console module integration */
+var Console = /** @class */ (function () {
+    function Console() {
+        /**
+         * @inheritDoc
+         */
+        this.name = Console.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    Console.prototype.setupOnce = function () {
+        var e_1, _a;
+        try {
+            for (var _b = tslib_1.__values(['debug', 'info', 'warn', 'error', 'log']), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var level = _c.value;
+                utils_1.fill(console, level, createConsoleWrapper(level));
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Console.id = 'Console';
+    return Console;
+}());
+exports.Console = Console;
+/**
+ * Wrapper function that'll be used for every console level
+ */
+function createConsoleWrapper(level) {
+    return function consoleWrapper(originalConsoleMethod) {
+        var sentryLevel = utils_1.severityFromString(level);
+        /* eslint-disable prefer-rest-params */
+        return function () {
+            if (core_1.getCurrentHub().getIntegration(Console)) {
+                core_1.getCurrentHub().addBreadcrumb({
+                    category: 'console',
+                    level: sentryLevel,
+                    message: util.format.apply(undefined, arguments),
+                }, {
+                    input: tslib_1.__spread(arguments),
+                    level: level,
+                });
+            }
+            originalConsoleMethod.apply(this, arguments);
+        };
+        /* eslint-enable prefer-rest-params */
+    };
+}
+//# sourceMappingURL=console.js.map
+
+/***/ }),
+
+/***/ 27797:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(52208);
+var core_1 = __nccwpck_require__(79212);
+var utils_1 = __nccwpck_require__(1620);
+var fs_1 = __nccwpck_require__(57147);
+var lru_map_1 = __nccwpck_require__(18424);
+var FILE_CONTENT_CACHE = new lru_map_1.LRUMap(100);
+var DEFAULT_LINES_OF_CONTEXT = 7;
+// TODO: Replace with promisify when minimum supported node >= v8
+function readTextFileAsync(path) {
+    return new Promise(function (resolve, reject) {
+        fs_1.readFile(path, 'utf8', function (err, data) {
+            if (err)
+                reject(err);
+            else
+                resolve(data);
+        });
+    });
+}
+/**
+ * Resets the file cache. Exists for testing purposes.
+ * @hidden
+ */
+function resetFileContentCache() {
+    FILE_CONTENT_CACHE.clear();
+}
+exports.resetFileContentCache = resetFileContentCache;
+/** Add node modules / packages to the event */
+var ContextLines = /** @class */ (function () {
+    function ContextLines(_options) {
+        if (_options === void 0) { _options = {}; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = ContextLines.id;
+    }
+    Object.defineProperty(ContextLines.prototype, "_contextLines", {
+        /** Get's the number of context lines to add */
+        get: function () {
+            var _a, _b;
+            // This is only here to copy frameContextLines from init options if it hasn't
+            // been set via this integrations constructor.
+            //
+            // TODO: Remove on next major!
+            if (this._options.frameContextLines === undefined) {
+                var initOptions = (_a = core_1.getCurrentHub().getClient()) === null || _a === void 0 ? void 0 : _a.getOptions();
+                // eslint-disable-next-line deprecation/deprecation
+                this._options.frameContextLines = (_b = initOptions) === null || _b === void 0 ? void 0 : _b.frameContextLines;
+            }
+            return this._options.frameContextLines !== undefined ? this._options.frameContextLines : DEFAULT_LINES_OF_CONTEXT;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    /**
+     * @inheritDoc
+     */
+    ContextLines.prototype.setupOnce = function (addGlobalEventProcessor) {
+        var _this = this;
+        addGlobalEventProcessor(function (event) { return _this.addSourceContext(event); });
+    };
+    /** Processes an event and adds context lines */
+    ContextLines.prototype.addSourceContext = function (event) {
+        var _a, _b;
+        return tslib_1.__awaiter(this, void 0, void 0, function () {
+            var _c, _d, exception, e_1_1;
+            var e_1, _e;
+            return tslib_1.__generator(this, function (_f) {
+                switch (_f.label) {
+                    case 0:
+                        if (!(this._contextLines > 0 && ((_a = event.exception) === null || _a === void 0 ? void 0 : _a.values))) return [3 /*break*/, 8];
+                        _f.label = 1;
+                    case 1:
+                        _f.trys.push([1, 6, 7, 8]);
+                        _c = tslib_1.__values(event.exception.values), _d = _c.next();
+                        _f.label = 2;
+                    case 2:
+                        if (!!_d.done) return [3 /*break*/, 5];
+                        exception = _d.value;
+                        if (!((_b = exception.stacktrace) === null || _b === void 0 ? void 0 : _b.frames)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.addSourceContextToFrames(exception.stacktrace.frames)];
+                    case 3:
+                        _f.sent();
+                        _f.label = 4;
+                    case 4:
+                        _d = _c.next();
+                        return [3 /*break*/, 2];
+                    case 5: return [3 /*break*/, 8];
+                    case 6:
+                        e_1_1 = _f.sent();
+                        e_1 = { error: e_1_1 };
+                        return [3 /*break*/, 8];
+                    case 7:
+                        try {
+                            if (_d && !_d.done && (_e = _c.return)) _e.call(_c);
+                        }
+                        finally { if (e_1) throw e_1.error; }
+                        return [7 /*endfinally*/];
+                    case 8: return [2 /*return*/, event];
+                }
+            });
+        });
+    };
+    /** Adds context lines to frames */
+    ContextLines.prototype.addSourceContextToFrames = function (frames) {
+        return tslib_1.__awaiter(this, void 0, void 0, function () {
+            var contextLines, frames_1, frames_1_1, frame, sourceFile, lines, e_2_1;
+            var e_2, _a;
+            return tslib_1.__generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        contextLines = this._contextLines;
+                        _b.label = 1;
+                    case 1:
+                        _b.trys.push([1, 6, 7, 8]);
+                        frames_1 = tslib_1.__values(frames), frames_1_1 = frames_1.next();
+                        _b.label = 2;
+                    case 2:
+                        if (!!frames_1_1.done) return [3 /*break*/, 5];
+                        frame = frames_1_1.value;
+                        if (!(frame.filename && frame.context_line === undefined)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, _readSourceFile(frame.filename)];
+                    case 3:
+                        sourceFile = _b.sent();
+                        if (sourceFile) {
+                            try {
+                                lines = sourceFile.split('\n');
+                                utils_1.addContextToFrame(lines, frame, contextLines);
+                            }
+                            catch (e) {
+                                // anomaly, being defensive in case
+                                // unlikely to ever happen in practice but can definitely happen in theory
+                            }
+                        }
+                        _b.label = 4;
+                    case 4:
+                        frames_1_1 = frames_1.next();
+                        return [3 /*break*/, 2];
+                    case 5: return [3 /*break*/, 8];
+                    case 6:
+                        e_2_1 = _b.sent();
+                        e_2 = { error: e_2_1 };
+                        return [3 /*break*/, 8];
+                    case 7:
+                        try {
+                            if (frames_1_1 && !frames_1_1.done && (_a = frames_1.return)) _a.call(frames_1);
+                        }
+                        finally { if (e_2) throw e_2.error; }
+                        return [7 /*endfinally*/];
+                    case 8: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    ContextLines.id = 'ContextLines';
+    return ContextLines;
+}());
+exports.ContextLines = ContextLines;
+/**
+ * Reads file contents and caches them in a global LRU cache.
+ *
+ * @param filename filepath to read content from.
+ */
+function _readSourceFile(filename) {
+    return tslib_1.__awaiter(this, void 0, void 0, function () {
+        var cachedFile, content, _1;
+        return tslib_1.__generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    cachedFile = FILE_CONTENT_CACHE.get(filename);
+                    // We have a cache hit
+                    if (cachedFile !== undefined) {
+                        return [2 /*return*/, cachedFile];
+                    }
+                    content = null;
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, readTextFileAsync(filename)];
+                case 2:
+                    content = _a.sent();
+                    return [3 /*break*/, 4];
+                case 3:
+                    _1 = _a.sent();
+                    return [3 /*break*/, 4];
+                case 4:
+                    FILE_CONTENT_CACHE.set(filename, content);
+                    return [2 /*return*/, content];
+            }
+        });
+    });
+}
+//# sourceMappingURL=contextlines.js.map
