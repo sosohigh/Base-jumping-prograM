@@ -26999,3 +26999,2225 @@ var BaseClient = /** @class */ (function () {
         return this._backend;
     };
     /** Determines whether this SDK is enabled and a valid Dsn is present. */
+    BaseClient.prototype._isEnabled = function () {
+        return this.getOptions().enabled !== false && this._dsn !== undefined;
+    };
+    /**
+     * Adds common information to events.
+     *
+     * The information includes release and environment from `options`,
+     * breadcrumbs and context (extra, tags and user) from the scope.
+     *
+     * Information that is already present in the event is never overwritten. For
+     * nested objects, such as the context, keys are merged.
+     *
+     * @param event The original event.
+     * @param hint May contain additional information about the original exception.
+     * @param scope A scope containing event metadata.
+     * @returns A new event with more information.
+     */
+    BaseClient.prototype._prepareEvent = function (event, scope, hint) {
+        var _this = this;
+        var _a = this.getOptions(), _b = _a.normalizeDepth, normalizeDepth = _b === void 0 ? 3 : _b, _c = _a.normalizeMaxBreadth, normalizeMaxBreadth = _c === void 0 ? 1000 : _c;
+        var prepared = tslib_1.__assign(tslib_1.__assign({}, event), { event_id: event.event_id || (hint && hint.event_id ? hint.event_id : utils_1.uuid4()), timestamp: event.timestamp || utils_1.dateTimestampInSeconds() });
+        this._applyClientOptions(prepared);
+        this._applyIntegrationsMetadata(prepared);
+        // If we have scope given to us, use it as the base for further modifications.
+        // This allows us to prevent unnecessary copying of data if `captureContext` is not provided.
+        var finalScope = scope;
+        if (hint && hint.captureContext) {
+            finalScope = hub_1.Scope.clone(finalScope).update(hint.captureContext);
+        }
+        // We prepare the result here with a resolved Event.
+        var result = utils_1.resolvedSyncPromise(prepared);
+        // This should be the last thing called, since we want that
+        // {@link Hub.addEventProcessor} gets the finished prepared event.
+        if (finalScope) {
+            // In case we have a hub we reassign it.
+            result = finalScope.applyToEvent(prepared, hint);
+        }
+        return result.then(function (evt) {
+            if (evt) {
+                // TODO this is more of the hack trying to solve https://github.com/getsentry/sentry-javascript/issues/2809
+                // it is only attached as extra data to the event if the event somehow skips being normalized
+                evt.sdkProcessingMetadata = tslib_1.__assign(tslib_1.__assign({}, evt.sdkProcessingMetadata), { normalizeDepth: utils_1.normalize(normalizeDepth) + " (" + typeof normalizeDepth + ")" });
+            }
+            if (typeof normalizeDepth === 'number' && normalizeDepth > 0) {
+                return _this._normalizeEvent(evt, normalizeDepth, normalizeMaxBreadth);
+            }
+            return evt;
+        });
+    };
+    /**
+     * Applies `normalize` function on necessary `Event` attributes to make them safe for serialization.
+     * Normalized keys:
+     * - `breadcrumbs.data`
+     * - `user`
+     * - `contexts`
+     * - `extra`
+     * @param event Event
+     * @returns Normalized event
+     */
+    BaseClient.prototype._normalizeEvent = function (event, depth, maxBreadth) {
+        if (!event) {
+            return null;
+        }
+        var normalized = tslib_1.__assign(tslib_1.__assign(tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({}, event), (event.breadcrumbs && {
+            breadcrumbs: event.breadcrumbs.map(function (b) { return (tslib_1.__assign(tslib_1.__assign({}, b), (b.data && {
+                data: utils_1.normalize(b.data, depth, maxBreadth),
+            }))); }),
+        })), (event.user && {
+            user: utils_1.normalize(event.user, depth, maxBreadth),
+        })), (event.contexts && {
+            contexts: utils_1.normalize(event.contexts, depth, maxBreadth),
+        })), (event.extra && {
+            extra: utils_1.normalize(event.extra, depth, maxBreadth),
+        }));
+        // event.contexts.trace stores information about a Transaction. Similarly,
+        // event.spans[] stores information about child Spans. Given that a
+        // Transaction is conceptually a Span, normalization should apply to both
+        // Transactions and Spans consistently.
+        // For now the decision is to skip normalization of Transactions and Spans,
+        // so this block overwrites the normalized event to add back the original
+        // Transaction information prior to normalization.
+        if (event.contexts && event.contexts.trace) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            normalized.contexts.trace = event.contexts.trace;
+        }
+        normalized.sdkProcessingMetadata = tslib_1.__assign(tslib_1.__assign({}, normalized.sdkProcessingMetadata), { baseClientNormalized: true });
+        return normalized;
+    };
+    /**
+     *  Enhances event using the client configuration.
+     *  It takes care of all "static" values like environment, release and `dist`,
+     *  as well as truncating overly long values.
+     * @param event event instance to be enhanced
+     */
+    BaseClient.prototype._applyClientOptions = function (event) {
+        var options = this.getOptions();
+        var environment = options.environment, release = options.release, dist = options.dist, _a = options.maxValueLength, maxValueLength = _a === void 0 ? 250 : _a;
+        if (!('environment' in event)) {
+            event.environment = 'environment' in options ? environment : 'production';
+        }
+        if (event.release === undefined && release !== undefined) {
+            event.release = release;
+        }
+        if (event.dist === undefined && dist !== undefined) {
+            event.dist = dist;
+        }
+        if (event.message) {
+            event.message = utils_1.truncate(event.message, maxValueLength);
+        }
+        var exception = event.exception && event.exception.values && event.exception.values[0];
+        if (exception && exception.value) {
+            exception.value = utils_1.truncate(exception.value, maxValueLength);
+        }
+        var request = event.request;
+        if (request && request.url) {
+            request.url = utils_1.truncate(request.url, maxValueLength);
+        }
+    };
+    /**
+     * This function adds all used integrations to the SDK info in the event.
+     * @param event The event that will be filled with all integrations.
+     */
+    BaseClient.prototype._applyIntegrationsMetadata = function (event) {
+        var integrationsArray = Object.keys(this._integrations);
+        if (integrationsArray.length > 0) {
+            event.sdk = event.sdk || {};
+            event.sdk.integrations = tslib_1.__spread((event.sdk.integrations || []), integrationsArray);
+        }
+    };
+    /**
+     * Tells the backend to send this event
+     * @param event The Sentry event to send
+     */
+    BaseClient.prototype._sendEvent = function (event) {
+        this._getBackend().sendEvent(event);
+    };
+    /**
+     * Processes the event and logs an error in case of rejection
+     * @param event
+     * @param hint
+     * @param scope
+     */
+    BaseClient.prototype._captureEvent = function (event, hint, scope) {
+        return this._processEvent(event, hint, scope).then(function (finalEvent) {
+            return finalEvent.event_id;
+        }, function (reason) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.error(reason);
+            return undefined;
+        });
+    };
+    /**
+     * Processes an event (either error or message) and sends it to Sentry.
+     *
+     * This also adds breadcrumbs and context information to the event. However,
+     * platform specific meta data (such as the User's IP address) must be added
+     * by the SDK implementor.
+     *
+     *
+     * @param event The event to send to Sentry.
+     * @param hint May contain additional information about the original exception.
+     * @param scope A scope containing event metadata.
+     * @returns A SyncPromise that resolves with the event or rejects in case event was/will not be send.
+     */
+    BaseClient.prototype._processEvent = function (event, hint, scope) {
+        var _this = this;
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        var _a = this.getOptions(), beforeSend = _a.beforeSend, sampleRate = _a.sampleRate;
+        var transport = this.getTransport();
+        function recordLostEvent(outcome, category) {
+            if (transport.recordLostEvent) {
+                transport.recordLostEvent(outcome, category);
+            }
+        }
+        if (!this._isEnabled()) {
+            return utils_1.rejectedSyncPromise(new utils_1.SentryError('SDK not enabled, will not capture event.'));
+        }
+        var isTransaction = event.type === 'transaction';
+        // 1.0 === 100% events are sent
+        // 0.0 === 0% events are sent
+        // Sampling for transaction happens somewhere else
+        if (!isTransaction && typeof sampleRate === 'number' && Math.random() > sampleRate) {
+            recordLostEvent('sample_rate', 'event');
+            return utils_1.rejectedSyncPromise(new utils_1.SentryError("Discarding event because it's not included in the random sample (sampling rate = " + sampleRate + ")"));
+        }
+        return this._prepareEvent(event, scope, hint)
+            .then(function (prepared) {
+            if (prepared === null) {
+                recordLostEvent('event_processor', event.type || 'event');
+                throw new utils_1.SentryError('An event processor returned null, will not send event.');
+            }
+            var isInternalException = hint && hint.data && hint.data.__sentry__ === true;
+            if (isInternalException || isTransaction || !beforeSend) {
+                return prepared;
+            }
+            var beforeSendResult = beforeSend(prepared, hint);
+            return _ensureBeforeSendRv(beforeSendResult);
+        })
+            .then(function (processedEvent) {
+            if (processedEvent === null) {
+                recordLostEvent('before_send', event.type || 'event');
+                throw new utils_1.SentryError('`beforeSend` returned `null`, will not send event.');
+            }
+            var session = scope && scope.getSession && scope.getSession();
+            if (!isTransaction && session) {
+                _this._updateSessionFromEvent(session, processedEvent);
+            }
+            _this._sendEvent(processedEvent);
+            return processedEvent;
+        })
+            .then(null, function (reason) {
+            if (reason instanceof utils_1.SentryError) {
+                throw reason;
+            }
+            _this.captureException(reason, {
+                data: {
+                    __sentry__: true,
+                },
+                originalException: reason,
+            });
+            throw new utils_1.SentryError("Event processing pipeline threw an error, original event will not be sent. Details have been sent as a new event.\nReason: " + reason);
+        });
+    };
+    /**
+     * Occupies the client with processing and event
+     */
+    BaseClient.prototype._process = function (promise) {
+        var _this = this;
+        this._numProcessing += 1;
+        void promise.then(function (value) {
+            _this._numProcessing -= 1;
+            return value;
+        }, function (reason) {
+            _this._numProcessing -= 1;
+            return reason;
+        });
+    };
+    return BaseClient;
+}());
+exports.BaseClient = BaseClient;
+/**
+ * Verifies that return value of configured `beforeSend` is of expected type.
+ */
+function _ensureBeforeSendRv(rv) {
+    var nullErr = '`beforeSend` method has to return `null` or a valid event.';
+    if (utils_1.isThenable(rv)) {
+        return rv.then(function (event) {
+            if (!(utils_1.isPlainObject(event) || event === null)) {
+                throw new utils_1.SentryError(nullErr);
+            }
+            return event;
+        }, function (e) {
+            throw new utils_1.SentryError("beforeSend rejected with " + e);
+        });
+    }
+    else if (!(utils_1.isPlainObject(rv) || rv === null)) {
+        throw new utils_1.SentryError(nullErr);
+    }
+    return rv;
+}
+//# sourceMappingURL=baseclient.js.map
+
+/***/ }),
+
+/***/ 91839:
+/***/ ((__unused_webpack_module, exports) => {
+
+/*
+ * This file defines flags and constants that can be modified during compile time in order to facilitate tree shaking
+ * for users.
+ *
+ * Debug flags need to be declared in each package individually and must not be imported across package boundaries,
+ * because some build tools have trouble tree-shaking imported guards.
+ *
+ * As a convention, we define debug flags in a `flags.ts` file in the root of a package's `src` folder.
+ *
+ * Debug flag files will contain "magic strings" like `__SENTRY_DEBUG__` that may get replaced with actual values during
+ * our, or the user's build process. Take care when introducing new flags - they must not throw if they are not
+ * replaced.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/** Flag that is true for debug builds, false otherwise. */
+exports.IS_DEBUG_BUILD = typeof __SENTRY_DEBUG__ === 'undefined' ? true : __SENTRY_DEBUG__;
+//# sourceMappingURL=flags.js.map
+
+/***/ }),
+
+/***/ 79212:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var minimal_1 = __nccwpck_require__(88455);
+exports.addBreadcrumb = minimal_1.addBreadcrumb;
+exports.captureException = minimal_1.captureException;
+exports.captureEvent = minimal_1.captureEvent;
+exports.captureMessage = minimal_1.captureMessage;
+exports.configureScope = minimal_1.configureScope;
+exports.startTransaction = minimal_1.startTransaction;
+exports.setContext = minimal_1.setContext;
+exports.setExtra = minimal_1.setExtra;
+exports.setExtras = minimal_1.setExtras;
+exports.setTag = minimal_1.setTag;
+exports.setTags = minimal_1.setTags;
+exports.setUser = minimal_1.setUser;
+exports.withScope = minimal_1.withScope;
+var hub_1 = __nccwpck_require__(6393);
+exports.addGlobalEventProcessor = hub_1.addGlobalEventProcessor;
+exports.getCurrentHub = hub_1.getCurrentHub;
+exports.getHubFromCarrier = hub_1.getHubFromCarrier;
+exports.Hub = hub_1.Hub;
+exports.makeMain = hub_1.makeMain;
+exports.Scope = hub_1.Scope;
+exports.Session = hub_1.Session;
+var api_1 = __nccwpck_require__(90785);
+// eslint-disable-next-line deprecation/deprecation
+exports.API = api_1.API;
+exports.getEnvelopeEndpointWithUrlEncodedAuth = api_1.getEnvelopeEndpointWithUrlEncodedAuth;
+exports.getStoreEndpointWithUrlEncodedAuth = api_1.getStoreEndpointWithUrlEncodedAuth;
+exports.getRequestHeaders = api_1.getRequestHeaders;
+exports.initAPIDetails = api_1.initAPIDetails;
+exports.getReportDialogEndpoint = api_1.getReportDialogEndpoint;
+var baseclient_1 = __nccwpck_require__(25684);
+exports.BaseClient = baseclient_1.BaseClient;
+var basebackend_1 = __nccwpck_require__(25886);
+exports.BaseBackend = basebackend_1.BaseBackend;
+var request_1 = __nccwpck_require__(1553);
+exports.eventToSentryRequest = request_1.eventToSentryRequest;
+exports.sessionToSentryRequest = request_1.sessionToSentryRequest;
+var sdk_1 = __nccwpck_require__(46406);
+exports.initAndBind = sdk_1.initAndBind;
+var noop_1 = __nccwpck_require__(68641);
+exports.NoopTransport = noop_1.NoopTransport;
+var base_1 = __nccwpck_require__(309);
+exports.createTransport = base_1.createTransport;
+var version_1 = __nccwpck_require__(33493);
+exports.SDK_VERSION = version_1.SDK_VERSION;
+var Integrations = __nccwpck_require__(96727);
+exports.Integrations = Integrations;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 58500:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(12163);
+var hub_1 = __nccwpck_require__(6393);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(91839);
+exports.installedIntegrations = [];
+/**
+ * @private
+ */
+function filterDuplicates(integrations) {
+    return integrations.reduce(function (acc, integrations) {
+        if (acc.every(function (accIntegration) { return integrations.name !== accIntegration.name; })) {
+            acc.push(integrations);
+        }
+        return acc;
+    }, []);
+}
+/** Gets integration to install */
+function getIntegrationsToSetup(options) {
+    var defaultIntegrations = (options.defaultIntegrations && tslib_1.__spread(options.defaultIntegrations)) || [];
+    var userIntegrations = options.integrations;
+    var integrations = tslib_1.__spread(filterDuplicates(defaultIntegrations));
+    if (Array.isArray(userIntegrations)) {
+        // Filter out integrations that are also included in user options
+        integrations = tslib_1.__spread(integrations.filter(function (integrations) {
+            return userIntegrations.every(function (userIntegration) { return userIntegration.name !== integrations.name; });
+        }), filterDuplicates(userIntegrations));
+    }
+    else if (typeof userIntegrations === 'function') {
+        integrations = userIntegrations(integrations);
+        integrations = Array.isArray(integrations) ? integrations : [integrations];
+    }
+    // Make sure that if present, `Debug` integration will always run last
+    var integrationsNames = integrations.map(function (i) { return i.name; });
+    var alwaysLastToRun = 'Debug';
+    if (integrationsNames.indexOf(alwaysLastToRun) !== -1) {
+        integrations.push.apply(integrations, tslib_1.__spread(integrations.splice(integrationsNames.indexOf(alwaysLastToRun), 1)));
+    }
+    return integrations;
+}
+exports.getIntegrationsToSetup = getIntegrationsToSetup;
+/** Setup given integration */
+function setupIntegration(integration) {
+    if (exports.installedIntegrations.indexOf(integration.name) !== -1) {
+        return;
+    }
+    integration.setupOnce(hub_1.addGlobalEventProcessor, hub_1.getCurrentHub);
+    exports.installedIntegrations.push(integration.name);
+    flags_1.IS_DEBUG_BUILD && utils_1.logger.log("Integration installed: " + integration.name);
+}
+exports.setupIntegration = setupIntegration;
+/**
+ * Given a list of integration instances this installs them all. When `withDefaults` is set to `true` then all default
+ * integrations are added unless they were already provided before.
+ * @param integrations array of integration instances
+ * @param withDefault should enable default integrations
+ */
+function setupIntegrations(options) {
+    var integrations = {};
+    getIntegrationsToSetup(options).forEach(function (integration) {
+        integrations[integration.name] = integration;
+        setupIntegration(integration);
+    });
+    // set the `initialized` flag so we don't run through the process again unecessarily; use `Object.defineProperty`
+    // because by default it creates a property which is nonenumerable, which we want since `initialized` shouldn't be
+    // considered a member of the index the way the actual integrations are
+    utils_1.addNonEnumerableProperty(integrations, 'initialized', true);
+    return integrations;
+}
+exports.setupIntegrations = setupIntegrations;
+//# sourceMappingURL=integration.js.map
+
+/***/ }),
+
+/***/ 87349:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+var originalFunctionToString;
+/** Patch toString calls to return proper name for wrapped functions */
+var FunctionToString = /** @class */ (function () {
+    function FunctionToString() {
+        /**
+         * @inheritDoc
+         */
+        this.name = FunctionToString.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    FunctionToString.prototype.setupOnce = function () {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        originalFunctionToString = Function.prototype.toString;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Function.prototype.toString = function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            var context = utils_1.getOriginalFunction(this) || this;
+            return originalFunctionToString.apply(context, args);
+        };
+    };
+    /**
+     * @inheritDoc
+     */
+    FunctionToString.id = 'FunctionToString';
+    return FunctionToString;
+}());
+exports.FunctionToString = FunctionToString;
+//# sourceMappingURL=functiontostring.js.map
+
+/***/ }),
+
+/***/ 54838:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(12163);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(91839);
+// "Script error." is hard coded into browsers for errors that it can't read.
+// this is the result of a script being pulled in from an external domain and CORS.
+var DEFAULT_IGNORE_ERRORS = [/^Script error\.?$/, /^Javascript error: Script error\.? on line 0$/];
+/** Inbound filters configurable by the user */
+var InboundFilters = /** @class */ (function () {
+    function InboundFilters(_options) {
+        if (_options === void 0) { _options = {}; }
+        this._options = _options;
+        /**
+         * @inheritDoc
+         */
+        this.name = InboundFilters.id;
+    }
+    /**
+     * @inheritDoc
+     */
+    InboundFilters.prototype.setupOnce = function (addGlobalEventProcessor, getCurrentHub) {
+        addGlobalEventProcessor(function (event) {
+            var hub = getCurrentHub();
+            if (hub) {
+                var self_1 = hub.getIntegration(InboundFilters);
+                if (self_1) {
+                    var client = hub.getClient();
+                    var clientOptions = client ? client.getOptions() : {};
+                    var options = _mergeOptions(self_1._options, clientOptions);
+                    return _shouldDropEvent(event, options) ? null : event;
+                }
+            }
+            return event;
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    InboundFilters.id = 'InboundFilters';
+    return InboundFilters;
+}());
+exports.InboundFilters = InboundFilters;
+/** JSDoc */
+function _mergeOptions(internalOptions, clientOptions) {
+    if (internalOptions === void 0) { internalOptions = {}; }
+    if (clientOptions === void 0) { clientOptions = {}; }
+    return {
+        allowUrls: tslib_1.__spread((internalOptions.whitelistUrls || []), (internalOptions.allowUrls || []), (clientOptions.whitelistUrls || []), (clientOptions.allowUrls || [])),
+        denyUrls: tslib_1.__spread((internalOptions.blacklistUrls || []), (internalOptions.denyUrls || []), (clientOptions.blacklistUrls || []), (clientOptions.denyUrls || [])),
+        ignoreErrors: tslib_1.__spread((internalOptions.ignoreErrors || []), (clientOptions.ignoreErrors || []), DEFAULT_IGNORE_ERRORS),
+        ignoreInternal: internalOptions.ignoreInternal !== undefined ? internalOptions.ignoreInternal : true,
+    };
+}
+exports._mergeOptions = _mergeOptions;
+/** JSDoc */
+function _shouldDropEvent(event, options) {
+    if (options.ignoreInternal && _isSentryError(event)) {
+        flags_1.IS_DEBUG_BUILD &&
+            utils_1.logger.warn("Event dropped due to being internal Sentry Error.\nEvent: " + utils_1.getEventDescription(event));
+        return true;
+    }
+    if (_isIgnoredError(event, options.ignoreErrors)) {
+        flags_1.IS_DEBUG_BUILD &&
+            utils_1.logger.warn("Event dropped due to being matched by `ignoreErrors` option.\nEvent: " + utils_1.getEventDescription(event));
+        return true;
+    }
+    if (_isDeniedUrl(event, options.denyUrls)) {
+        flags_1.IS_DEBUG_BUILD &&
+            utils_1.logger.warn("Event dropped due to being matched by `denyUrls` option.\nEvent: " + utils_1.getEventDescription(event) + ".\nUrl: " + _getEventFilterUrl(event));
+        return true;
+    }
+    if (!_isAllowedUrl(event, options.allowUrls)) {
+        flags_1.IS_DEBUG_BUILD &&
+            utils_1.logger.warn("Event dropped due to not being matched by `allowUrls` option.\nEvent: " + utils_1.getEventDescription(event) + ".\nUrl: " + _getEventFilterUrl(event));
+        return true;
+    }
+    return false;
+}
+exports._shouldDropEvent = _shouldDropEvent;
+function _isIgnoredError(event, ignoreErrors) {
+    if (!ignoreErrors || !ignoreErrors.length) {
+        return false;
+    }
+    return _getPossibleEventMessages(event).some(function (message) {
+        return ignoreErrors.some(function (pattern) { return utils_1.isMatchingPattern(message, pattern); });
+    });
+}
+function _isDeniedUrl(event, denyUrls) {
+    // TODO: Use Glob instead?
+    if (!denyUrls || !denyUrls.length) {
+        return false;
+    }
+    var url = _getEventFilterUrl(event);
+    return !url ? false : denyUrls.some(function (pattern) { return utils_1.isMatchingPattern(url, pattern); });
+}
+function _isAllowedUrl(event, allowUrls) {
+    // TODO: Use Glob instead?
+    if (!allowUrls || !allowUrls.length) {
+        return true;
+    }
+    var url = _getEventFilterUrl(event);
+    return !url ? true : allowUrls.some(function (pattern) { return utils_1.isMatchingPattern(url, pattern); });
+}
+function _getPossibleEventMessages(event) {
+    if (event.message) {
+        return [event.message];
+    }
+    if (event.exception) {
+        try {
+            var _a = (event.exception.values && event.exception.values[0]) || {}, _b = _a.type, type = _b === void 0 ? '' : _b, _c = _a.value, value = _c === void 0 ? '' : _c;
+            return ["" + value, type + ": " + value];
+        }
+        catch (oO) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.error("Cannot extract message for event " + utils_1.getEventDescription(event));
+            return [];
+        }
+    }
+    return [];
+}
+function _isSentryError(event) {
+    try {
+        // @ts-ignore can't be a sentry error if undefined
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        return event.exception.values[0].type === 'SentryError';
+    }
+    catch (e) {
+        // ignore
+    }
+    return false;
+}
+function _getLastValidUrl(frames) {
+    if (frames === void 0) { frames = []; }
+    for (var i = frames.length - 1; i >= 0; i--) {
+        var frame = frames[i];
+        if (frame && frame.filename !== '<anonymous>' && frame.filename !== '[native code]') {
+            return frame.filename || null;
+        }
+    }
+    return null;
+}
+function _getEventFilterUrl(event) {
+    try {
+        if (event.stacktrace) {
+            return _getLastValidUrl(event.stacktrace.frames);
+        }
+        var frames_1;
+        try {
+            // @ts-ignore we only care about frames if the whole thing here is defined
+            frames_1 = event.exception.values[0].stacktrace.frames;
+        }
+        catch (e) {
+            // ignore
+        }
+        return frames_1 ? _getLastValidUrl(frames_1) : null;
+    }
+    catch (oO) {
+        flags_1.IS_DEBUG_BUILD && utils_1.logger.error("Cannot extract url for event " + utils_1.getEventDescription(event));
+        return null;
+    }
+}
+//# sourceMappingURL=inboundfilters.js.map
+
+/***/ }),
+
+/***/ 96727:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var functiontostring_1 = __nccwpck_require__(87349);
+exports.FunctionToString = functiontostring_1.FunctionToString;
+var inboundfilters_1 = __nccwpck_require__(54838);
+exports.InboundFilters = inboundfilters_1.InboundFilters;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 1553:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(12163);
+var utils_1 = __nccwpck_require__(1620);
+var api_1 = __nccwpck_require__(90785);
+/** Extract sdk info from from the API metadata */
+function getSdkMetadataForEnvelopeHeader(api) {
+    if (!api.metadata || !api.metadata.sdk) {
+        return;
+    }
+    var _a = api.metadata.sdk, name = _a.name, version = _a.version;
+    return { name: name, version: version };
+}
+/**
+ * Apply SdkInfo (name, version, packages, integrations) to the corresponding event key.
+ * Merge with existing data if any.
+ **/
+function enhanceEventWithSdkInfo(event, sdkInfo) {
+    if (!sdkInfo) {
+        return event;
+    }
+    event.sdk = event.sdk || {};
+    event.sdk.name = event.sdk.name || sdkInfo.name;
+    event.sdk.version = event.sdk.version || sdkInfo.version;
+    event.sdk.integrations = tslib_1.__spread((event.sdk.integrations || []), (sdkInfo.integrations || []));
+    event.sdk.packages = tslib_1.__spread((event.sdk.packages || []), (sdkInfo.packages || []));
+    return event;
+}
+/** Creates an envelope from a Session */
+function createSessionEnvelope(session, api) {
+    var sdkInfo = getSdkMetadataForEnvelopeHeader(api);
+    var envelopeHeaders = tslib_1.__assign(tslib_1.__assign({ sent_at: new Date().toISOString() }, (sdkInfo && { sdk: sdkInfo })), (!!api.tunnel && { dsn: utils_1.dsnToString(api.dsn) }));
+    // I know this is hacky but we don't want to add `sessions` to request type since it's never rate limited
+    var type = 'aggregates' in session ? 'sessions' : 'session';
+    // TODO (v7) Have to cast type because envelope items do not accept a `SentryRequestType`
+    var envelopeItem = [{ type: type }, session];
+    var envelope = utils_1.createEnvelope(envelopeHeaders, [envelopeItem]);
+    return [envelope, type];
+}
+exports.createSessionEnvelope = createSessionEnvelope;
+/** Creates a SentryRequest from a Session. */
+function sessionToSentryRequest(session, api) {
+    var _a = tslib_1.__read(createSessionEnvelope(session, api), 2), envelope = _a[0], type = _a[1];
+    return {
+        body: utils_1.serializeEnvelope(envelope),
+        type: type,
+        url: api_1.getEnvelopeEndpointWithUrlEncodedAuth(api.dsn, api.tunnel),
+    };
+}
+exports.sessionToSentryRequest = sessionToSentryRequest;
+/**
+ * Create an Envelope from an event. Note that this is duplicated from below,
+ * but on purpose as this will be refactored in v7.
+ */
+function createEventEnvelope(event, api) {
+    var sdkInfo = getSdkMetadataForEnvelopeHeader(api);
+    var eventType = event.type || 'event';
+    var transactionSampling = (event.sdkProcessingMetadata || {}).transactionSampling;
+    var _a = transactionSampling || {}, samplingMethod = _a.method, sampleRate = _a.rate;
+    // TODO: Below is a temporary hack in order to debug a serialization error - see
+    // https://github.com/getsentry/sentry-javascript/issues/2809,
+    // https://github.com/getsentry/sentry-javascript/pull/4425, and
+    // https://github.com/getsentry/sentry-javascript/pull/4574.
+    //
+    // TL; DR: even though we normalize all events (which should prevent this), something is causing `JSON.stringify` to
+    // throw a circular reference error.
+    //
+    // When it's time to remove it:
+    // 1. Delete everything between here and where the request object `req` is created, EXCEPT the line deleting
+    //    `sdkProcessingMetadata`
+    // 2. Restore the original version of the request body, which is commented out
+    // 3. Search for either of the PR URLs above and pull out the companion hacks in the browser playwright tests and the
+    //    baseClient tests in this package
+    enhanceEventWithSdkInfo(event, api.metadata.sdk);
+    event.tags = event.tags || {};
+    event.extra = event.extra || {};
+    // In theory, all events should be marked as having gone through normalization and so
+    // we should never set this tag/extra data
+    if (!(event.sdkProcessingMetadata && event.sdkProcessingMetadata.baseClientNormalized)) {
+        event.tags.skippedNormalization = true;
+        event.extra.normalizeDepth = event.sdkProcessingMetadata ? event.sdkProcessingMetadata.normalizeDepth : 'unset';
+    }
+    // prevent this data from being sent to sentry
+    // TODO: This is NOT part of the hack - DO NOT DELETE
+    delete event.sdkProcessingMetadata;
+    var envelopeHeaders = tslib_1.__assign(tslib_1.__assign({ event_id: event.event_id, sent_at: new Date().toISOString() }, (sdkInfo && { sdk: sdkInfo })), (!!api.tunnel && { dsn: utils_1.dsnToString(api.dsn) }));
+    var eventItem = [
+        {
+            type: eventType,
+            sample_rates: [{ id: samplingMethod, rate: sampleRate }],
+        },
+        event,
+    ];
+    return utils_1.createEnvelope(envelopeHeaders, [eventItem]);
+}
+exports.createEventEnvelope = createEventEnvelope;
+/** Creates a SentryRequest from an event. */
+function eventToSentryRequest(event, api) {
+    var sdkInfo = getSdkMetadataForEnvelopeHeader(api);
+    var eventType = event.type || 'event';
+    var useEnvelope = eventType === 'transaction' || !!api.tunnel;
+    var transactionSampling = (event.sdkProcessingMetadata || {}).transactionSampling;
+    var _a = transactionSampling || {}, samplingMethod = _a.method, sampleRate = _a.rate;
+    // TODO: Below is a temporary hack in order to debug a serialization error - see
+    // https://github.com/getsentry/sentry-javascript/issues/2809,
+    // https://github.com/getsentry/sentry-javascript/pull/4425, and
+    // https://github.com/getsentry/sentry-javascript/pull/4574.
+    //
+    // TL; DR: even though we normalize all events (which should prevent this), something is causing `JSON.stringify` to
+    // throw a circular reference error.
+    //
+    // When it's time to remove it:
+    // 1. Delete everything between here and where the request object `req` is created, EXCEPT the line deleting
+    //    `sdkProcessingMetadata`
+    // 2. Restore the original version of the request body, which is commented out
+    // 3. Search for either of the PR URLs above and pull out the companion hacks in the browser playwright tests and the
+    //    baseClient tests in this package
+    enhanceEventWithSdkInfo(event, api.metadata.sdk);
+    event.tags = event.tags || {};
+    event.extra = event.extra || {};
+    // In theory, all events should be marked as having gone through normalization and so
+    // we should never set this tag/extra data
+    if (!(event.sdkProcessingMetadata && event.sdkProcessingMetadata.baseClientNormalized)) {
+        event.tags.skippedNormalization = true;
+        event.extra.normalizeDepth = event.sdkProcessingMetadata ? event.sdkProcessingMetadata.normalizeDepth : 'unset';
+    }
+    // prevent this data from being sent to sentry
+    // TODO: This is NOT part of the hack - DO NOT DELETE
+    delete event.sdkProcessingMetadata;
+    var body;
+    try {
+        // 99.9% of events should get through just fine - no change in behavior for them
+        body = JSON.stringify(event);
+    }
+    catch (err) {
+        // Record data about the error without replacing original event data, then force renormalization
+        event.tags.JSONStringifyError = true;
+        event.extra.JSONStringifyError = err;
+        try {
+            body = JSON.stringify(utils_1.normalize(event));
+        }
+        catch (newErr) {
+            // At this point even renormalization hasn't worked, meaning something about the event data has gone very wrong.
+            // Time to cut our losses and record only the new error. With luck, even in the problematic cases we're trying to
+            // debug with this hack, we won't ever land here.
+            var innerErr = newErr;
+            body = JSON.stringify({
+                message: 'JSON.stringify error after renormalization',
+                // setting `extra: { innerErr }` here for some reason results in an empty object, so unpack manually
+                extra: { message: innerErr.message, stack: innerErr.stack },
+            });
+        }
+    }
+    var req = {
+        // this is the relevant line of code before the hack was added, to make it easy to undo said hack once we've solved
+        // the mystery
+        // body: JSON.stringify(sdkInfo ? enhanceEventWithSdkInfo(event, api.metadata.sdk) : event),
+        body: body,
+        type: eventType,
+        url: useEnvelope
+            ? api_1.getEnvelopeEndpointWithUrlEncodedAuth(api.dsn, api.tunnel)
+            : api_1.getStoreEndpointWithUrlEncodedAuth(api.dsn),
+    };
+    // https://develop.sentry.dev/sdk/envelopes/
+    // Since we don't need to manipulate envelopes nor store them, there is no
+    // exported concept of an Envelope with operations including serialization and
+    // deserialization. Instead, we only implement a minimal subset of the spec to
+    // serialize events inline here.
+    if (useEnvelope) {
+        var envelopeHeaders = tslib_1.__assign(tslib_1.__assign({ event_id: event.event_id, sent_at: new Date().toISOString() }, (sdkInfo && { sdk: sdkInfo })), (!!api.tunnel && { dsn: utils_1.dsnToString(api.dsn) }));
+        var eventItem = [
+            {
+                type: eventType,
+                sample_rates: [{ id: samplingMethod, rate: sampleRate }],
+            },
+            req.body,
+        ];
+        var envelope = utils_1.createEnvelope(envelopeHeaders, [eventItem]);
+        req.body = utils_1.serializeEnvelope(envelope);
+    }
+    return req;
+}
+exports.eventToSentryRequest = eventToSentryRequest;
+//# sourceMappingURL=request.js.map
+
+/***/ }),
+
+/***/ 46406:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var hub_1 = __nccwpck_require__(6393);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(91839);
+/**
+ * Internal function to create a new SDK client instance. The client is
+ * installed and then bound to the current scope.
+ *
+ * @param clientClass The client class to instantiate.
+ * @param options Options to pass to the client.
+ */
+function initAndBind(clientClass, options) {
+    if (options.debug === true) {
+        if (flags_1.IS_DEBUG_BUILD) {
+            utils_1.logger.enable();
+        }
+        else {
+            // use `console.warn` rather than `logger.warn` since by non-debug bundles have all `logger.x` statements stripped
+            // eslint-disable-next-line no-console
+            console.warn('[Sentry] Cannot initialize SDK with `debug` option using a non-debug bundle.');
+        }
+    }
+    var hub = hub_1.getCurrentHub();
+    var scope = hub.getScope();
+    if (scope) {
+        scope.update(options.initialScope);
+    }
+    var client = new clientClass(options);
+    hub.bindClient(client);
+}
+exports.initAndBind = initAndBind;
+//# sourceMappingURL=sdk.js.map
+
+/***/ }),
+
+/***/ 309:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+exports.ERROR_TRANSPORT_CATEGORY = 'error';
+exports.TRANSACTION_TRANSPORT_CATEGORY = 'transaction';
+exports.ATTACHMENT_TRANSPORT_CATEGORY = 'attachment';
+exports.SESSION_TRANSPORT_CATEGORY = 'session';
+exports.DEFAULT_TRANSPORT_BUFFER_SIZE = 30;
+/**
+ * Creates a `NewTransport`
+ *
+ * @param options
+ * @param makeRequest
+ */
+function createTransport(options, makeRequest, buffer) {
+    if (buffer === void 0) { buffer = utils_1.makePromiseBuffer(options.bufferSize || exports.DEFAULT_TRANSPORT_BUFFER_SIZE); }
+    var rateLimits = {};
+    var flush = function (timeout) { return buffer.drain(timeout); };
+    function send(envelope) {
+        var envCategory = utils_1.getEnvelopeType(envelope);
+        var category = envCategory === 'event' ? 'error' : envCategory;
+        var request = {
+            category: category,
+            body: utils_1.serializeEnvelope(envelope),
+        };
+        // Don't add to buffer if transport is already rate-limited
+        if (utils_1.isRateLimited(rateLimits, category)) {
+            return utils_1.rejectedSyncPromise({
+                status: 'rate_limit',
+                reason: getRateLimitReason(rateLimits, category),
+            });
+        }
+        var requestTask = function () {
+            return makeRequest(request).then(function (_a) {
+                var body = _a.body, headers = _a.headers, reason = _a.reason, statusCode = _a.statusCode;
+                var status = utils_1.eventStatusFromHttpCode(statusCode);
+                if (headers) {
+                    rateLimits = utils_1.updateRateLimits(rateLimits, headers);
+                }
+                if (status === 'success') {
+                    return utils_1.resolvedSyncPromise({ status: status, reason: reason });
+                }
+                return utils_1.rejectedSyncPromise({
+                    status: status,
+                    reason: reason ||
+                        body ||
+                        (status === 'rate_limit' ? getRateLimitReason(rateLimits, category) : 'Unknown transport error'),
+                });
+            });
+        };
+        return buffer.add(requestTask);
+    }
+    return {
+        send: send,
+        flush: flush,
+    };
+}
+exports.createTransport = createTransport;
+function getRateLimitReason(rateLimits, category) {
+    return "Too many " + category + " requests, backing off until: " + new Date(utils_1.disabledUntil(rateLimits, category)).toISOString();
+}
+//# sourceMappingURL=base.js.map
+
+/***/ }),
+
+/***/ 68641:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var utils_1 = __nccwpck_require__(1620);
+/** Noop transport */
+var NoopTransport = /** @class */ (function () {
+    function NoopTransport() {
+    }
+    /**
+     * @inheritDoc
+     */
+    NoopTransport.prototype.sendEvent = function (_) {
+        return utils_1.resolvedSyncPromise({
+            reason: 'NoopTransport: Event has been skipped because no Dsn is configured.',
+            status: 'skipped',
+        });
+    };
+    /**
+     * @inheritDoc
+     */
+    NoopTransport.prototype.close = function (_) {
+        return utils_1.resolvedSyncPromise(true);
+    };
+    return NoopTransport;
+}());
+exports.NoopTransport = NoopTransport;
+//# sourceMappingURL=noop.js.map
+
+/***/ }),
+
+/***/ 33493:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SDK_VERSION = '6.19.7';
+//# sourceMappingURL=version.js.map
+
+/***/ }),
+
+/***/ 12163:
+/***/ ((module) => {
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+/* global global, define, System, Reflect, Promise */
+var __extends;
+var __assign;
+var __rest;
+var __decorate;
+var __param;
+var __metadata;
+var __awaiter;
+var __generator;
+var __exportStar;
+var __values;
+var __read;
+var __spread;
+var __spreadArrays;
+var __await;
+var __asyncGenerator;
+var __asyncDelegator;
+var __asyncValues;
+var __makeTemplateObject;
+var __importStar;
+var __importDefault;
+var __classPrivateFieldGet;
+var __classPrivateFieldSet;
+var __createBinding;
+(function (factory) {
+    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+    if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
+    }
+    else if ( true && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+    }
+    else {
+        factory(createExporter(root));
+    }
+    function createExporter(exports, previous) {
+        if (exports !== root) {
+            if (typeof Object.create === "function") {
+                Object.defineProperty(exports, "__esModule", { value: true });
+            }
+            else {
+                exports.__esModule = true;
+            }
+        }
+        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
+    }
+})
+(function (exporter) {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+
+    __extends = function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+
+    __assign = Object.assign || function (t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+
+    __rest = function (s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    };
+
+    __decorate = function (decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+
+    __param = function (paramIndex, decorator) {
+        return function (target, key) { decorator(target, key, paramIndex); }
+    };
+
+    __metadata = function (metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    };
+
+    __awaiter = function (thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+
+    __generator = function (thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    };
+
+    __createBinding = function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        o[k2] = m[k];
+    };
+
+    __exportStar = function (m, exports) {
+        for (var p in m) if (p !== "default" && !exports.hasOwnProperty(p)) exports[p] = m[p];
+    };
+
+    __values = function (o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m) return m.call(o);
+        if (o && typeof o.length === "number") return {
+            next: function () {
+                if (o && i >= o.length) o = void 0;
+                return { value: o && o[i++], done: !o };
+            }
+        };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+    };
+
+    __read = function (o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m) return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+        }
+        catch (error) { e = { error: error }; }
+        finally {
+            try {
+                if (r && !r.done && (m = i["return"])) m.call(i);
+            }
+            finally { if (e) throw e.error; }
+        }
+        return ar;
+    };
+
+    __spread = function () {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+            ar = ar.concat(__read(arguments[i]));
+        return ar;
+    };
+
+    __spreadArrays = function () {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    };
+
+    __await = function (v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+    };
+
+    __asyncGenerator = function (thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+        function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+        function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);  }
+        function fulfill(value) { resume("next", value); }
+        function reject(value) { resume("throw", value); }
+        function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+    };
+
+    __asyncDelegator = function (o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function (e) { throw e; }), verb("return"), i[Symbol.iterator] = function () { return this; }, i;
+        function verb(n, f) { i[n] = o[n] ? function (v) { return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v; } : f; }
+    };
+
+    __asyncValues = function (o) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+        function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+        function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+    };
+
+    __makeTemplateObject = function (cooked, raw) {
+        if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+        return cooked;
+    };
+
+    __importStar = function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+        result["default"] = mod;
+        return result;
+    };
+
+    __importDefault = function (mod) {
+        return (mod && mod.__esModule) ? mod : { "default": mod };
+    };
+
+    __classPrivateFieldGet = function (receiver, privateMap) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to get private field on non-instance");
+        }
+        return privateMap.get(receiver);
+    };
+
+    __classPrivateFieldSet = function (receiver, privateMap, value) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to set private field on non-instance");
+        }
+        privateMap.set(receiver, value);
+        return value;
+    };
+
+    exporter("__extends", __extends);
+    exporter("__assign", __assign);
+    exporter("__rest", __rest);
+    exporter("__decorate", __decorate);
+    exporter("__param", __param);
+    exporter("__metadata", __metadata);
+    exporter("__awaiter", __awaiter);
+    exporter("__generator", __generator);
+    exporter("__exportStar", __exportStar);
+    exporter("__createBinding", __createBinding);
+    exporter("__values", __values);
+    exporter("__read", __read);
+    exporter("__spread", __spread);
+    exporter("__spreadArrays", __spreadArrays);
+    exporter("__await", __await);
+    exporter("__asyncGenerator", __asyncGenerator);
+    exporter("__asyncDelegator", __asyncDelegator);
+    exporter("__asyncValues", __asyncValues);
+    exporter("__makeTemplateObject", __makeTemplateObject);
+    exporter("__importStar", __importStar);
+    exporter("__importDefault", __importDefault);
+    exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+    exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+});
+
+
+/***/ }),
+
+/***/ 30369:
+/***/ ((__unused_webpack_module, exports) => {
+
+/*
+ * This file defines flags and constants that can be modified during compile time in order to facilitate tree shaking
+ * for users.
+ *
+ * Debug flags need to be declared in each package individually and must not be imported across package boundaries,
+ * because some build tools have trouble tree-shaking imported guards.
+ *
+ * As a convention, we define debug flags in a `flags.ts` file in the root of a package's `src` folder.
+ *
+ * Debug flag files will contain "magic strings" like `__SENTRY_DEBUG__` that may get replaced with actual values during
+ * our, or the user's build process. Take care when introducing new flags - they must not throw if they are not
+ * replaced.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/** Flag that is true for debug builds, false otherwise. */
+exports.IS_DEBUG_BUILD = typeof __SENTRY_DEBUG__ === 'undefined' ? true : __SENTRY_DEBUG__;
+//# sourceMappingURL=flags.js.map
+
+/***/ }),
+
+/***/ 53536:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(39615);
+var utils_1 = __nccwpck_require__(1620);
+var flags_1 = __nccwpck_require__(30369);
+var scope_1 = __nccwpck_require__(4213);
+var session_1 = __nccwpck_require__(12474);
+/**
+ * API compatibility version of this hub.
+ *
+ * WARNING: This number should only be increased when the global interface
+ * changes and new methods are introduced.
+ *
+ * @hidden
+ */
+exports.API_VERSION = 4;
+/**
+ * Default maximum number of breadcrumbs added to an event. Can be overwritten
+ * with {@link Options.maxBreadcrumbs}.
+ */
+var DEFAULT_BREADCRUMBS = 100;
+/**
+ * @inheritDoc
+ */
+var Hub = /** @class */ (function () {
+    /**
+     * Creates a new instance of the hub, will push one {@link Layer} into the
+     * internal stack on creation.
+     *
+     * @param client bound to the hub.
+     * @param scope bound to the hub.
+     * @param version number, higher number means higher priority.
+     */
+    function Hub(client, scope, _version) {
+        if (scope === void 0) { scope = new scope_1.Scope(); }
+        if (_version === void 0) { _version = exports.API_VERSION; }
+        this._version = _version;
+        /** Is a {@link Layer}[] containing the client and scope */
+        this._stack = [{}];
+        this.getStackTop().scope = scope;
+        if (client) {
+            this.bindClient(client);
+        }
+    }
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.isOlderThan = function (version) {
+        return this._version < version;
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.bindClient = function (client) {
+        var top = this.getStackTop();
+        top.client = client;
+        if (client && client.setupIntegrations) {
+            client.setupIntegrations();
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.pushScope = function () {
+        // We want to clone the content of prev scope
+        var scope = scope_1.Scope.clone(this.getScope());
+        this.getStack().push({
+            client: this.getClient(),
+            scope: scope,
+        });
+        return scope;
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.popScope = function () {
+        if (this.getStack().length <= 1)
+            return false;
+        return !!this.getStack().pop();
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.withScope = function (callback) {
+        var scope = this.pushScope();
+        try {
+            callback(scope);
+        }
+        finally {
+            this.popScope();
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.getClient = function () {
+        return this.getStackTop().client;
+    };
+    /** Returns the scope of the top stack. */
+    Hub.prototype.getScope = function () {
+        return this.getStackTop().scope;
+    };
+    /** Returns the scope stack for domains or the process. */
+    Hub.prototype.getStack = function () {
+        return this._stack;
+    };
+    /** Returns the topmost scope layer in the order domain > local > process. */
+    Hub.prototype.getStackTop = function () {
+        return this._stack[this._stack.length - 1];
+    };
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    Hub.prototype.captureException = function (exception, hint) {
+        var eventId = (this._lastEventId = hint && hint.event_id ? hint.event_id : utils_1.uuid4());
+        var finalHint = hint;
+        // If there's no explicit hint provided, mimic the same thing that would happen
+        // in the minimal itself to create a consistent behavior.
+        // We don't do this in the client, as it's the lowest level API, and doing this,
+        // would prevent user from having full control over direct calls.
+        if (!hint) {
+            var syntheticException = void 0;
+            try {
+                throw new Error('Sentry syntheticException');
+            }
+            catch (exception) {
+                syntheticException = exception;
+            }
+            finalHint = {
+                originalException: exception,
+                syntheticException: syntheticException,
+            };
+        }
+        this._invokeClient('captureException', exception, tslib_1.__assign(tslib_1.__assign({}, finalHint), { event_id: eventId }));
+        return eventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.captureMessage = function (message, level, hint) {
+        var eventId = (this._lastEventId = hint && hint.event_id ? hint.event_id : utils_1.uuid4());
+        var finalHint = hint;
+        // If there's no explicit hint provided, mimic the same thing that would happen
+        // in the minimal itself to create a consistent behavior.
+        // We don't do this in the client, as it's the lowest level API, and doing this,
+        // would prevent user from having full control over direct calls.
+        if (!hint) {
+            var syntheticException = void 0;
+            try {
+                throw new Error(message);
+            }
+            catch (exception) {
+                syntheticException = exception;
+            }
+            finalHint = {
+                originalException: message,
+                syntheticException: syntheticException,
+            };
+        }
+        this._invokeClient('captureMessage', message, level, tslib_1.__assign(tslib_1.__assign({}, finalHint), { event_id: eventId }));
+        return eventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.captureEvent = function (event, hint) {
+        var eventId = hint && hint.event_id ? hint.event_id : utils_1.uuid4();
+        if (event.type !== 'transaction') {
+            this._lastEventId = eventId;
+        }
+        this._invokeClient('captureEvent', event, tslib_1.__assign(tslib_1.__assign({}, hint), { event_id: eventId }));
+        return eventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.lastEventId = function () {
+        return this._lastEventId;
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.addBreadcrumb = function (breadcrumb, hint) {
+        var _a = this.getStackTop(), scope = _a.scope, client = _a.client;
+        if (!scope || !client)
+            return;
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        var _b = (client.getOptions && client.getOptions()) || {}, _c = _b.beforeBreadcrumb, beforeBreadcrumb = _c === void 0 ? null : _c, _d = _b.maxBreadcrumbs, maxBreadcrumbs = _d === void 0 ? DEFAULT_BREADCRUMBS : _d;
+        if (maxBreadcrumbs <= 0)
+            return;
+        var timestamp = utils_1.dateTimestampInSeconds();
+        var mergedBreadcrumb = tslib_1.__assign({ timestamp: timestamp }, breadcrumb);
+        var finalBreadcrumb = beforeBreadcrumb
+            ? utils_1.consoleSandbox(function () { return beforeBreadcrumb(mergedBreadcrumb, hint); })
+            : mergedBreadcrumb;
+        if (finalBreadcrumb === null)
+            return;
+        scope.addBreadcrumb(finalBreadcrumb, maxBreadcrumbs);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.setUser = function (user) {
+        var scope = this.getScope();
+        if (scope)
+            scope.setUser(user);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.setTags = function (tags) {
+        var scope = this.getScope();
+        if (scope)
+            scope.setTags(tags);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.setExtras = function (extras) {
+        var scope = this.getScope();
+        if (scope)
+            scope.setExtras(extras);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.setTag = function (key, value) {
+        var scope = this.getScope();
+        if (scope)
+            scope.setTag(key, value);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.setExtra = function (key, extra) {
+        var scope = this.getScope();
+        if (scope)
+            scope.setExtra(key, extra);
+    };
+    /**
+     * @inheritDoc
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Hub.prototype.setContext = function (name, context) {
+        var scope = this.getScope();
+        if (scope)
+            scope.setContext(name, context);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.configureScope = function (callback) {
+        var _a = this.getStackTop(), scope = _a.scope, client = _a.client;
+        if (scope && client) {
+            callback(scope);
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.run = function (callback) {
+        var oldHub = makeMain(this);
+        try {
+            callback(this);
+        }
+        finally {
+            makeMain(oldHub);
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.getIntegration = function (integration) {
+        var client = this.getClient();
+        if (!client)
+            return null;
+        try {
+            return client.getIntegration(integration);
+        }
+        catch (_oO) {
+            flags_1.IS_DEBUG_BUILD && utils_1.logger.warn("Cannot retrieve integration " + integration.id + " from the current Hub");
+            return null;
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.startSpan = function (context) {
+        return this._callExtensionMethod('startSpan', context);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.startTransaction = function (context, customSamplingContext) {
+        return this._callExtensionMethod('startTransaction', context, customSamplingContext);
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.traceHeaders = function () {
+        return this._callExtensionMethod('traceHeaders');
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.captureSession = function (endSession) {
+        if (endSession === void 0) { endSession = false; }
+        // both send the update and pull the session from the scope
+        if (endSession) {
+            return this.endSession();
+        }
+        // only send the update
+        this._sendSessionUpdate();
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.endSession = function () {
+        var layer = this.getStackTop();
+        var scope = layer && layer.scope;
+        var session = scope && scope.getSession();
+        if (session) {
+            session.close();
+        }
+        this._sendSessionUpdate();
+        // the session is over; take it off of the scope
+        if (scope) {
+            scope.setSession();
+        }
+    };
+    /**
+     * @inheritDoc
+     */
+    Hub.prototype.startSession = function (context) {
+        var _a = this.getStackTop(), scope = _a.scope, client = _a.client;
+        var _b = (client && client.getOptions()) || {}, release = _b.release, environment = _b.environment;
+        // Will fetch userAgent if called from browser sdk
+        var global = utils_1.getGlobalObject();
+        var userAgent = (global.navigator || {}).userAgent;
+        var session = new session_1.Session(tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({ release: release,
+            environment: environment }, (scope && { user: scope.getUser() })), (userAgent && { userAgent: userAgent })), context));
+        if (scope) {
+            // End existing session if there's one
+            var currentSession = scope.getSession && scope.getSession();
+            if (currentSession && currentSession.status === 'ok') {
+                currentSession.update({ status: 'exited' });
+            }
+            this.endSession();
+            // Afterwards we set the new session on the scope
+            scope.setSession(session);
+        }
+        return session;
+    };
+    /**
+     * Sends the current Session on the scope
+     */
+    Hub.prototype._sendSessionUpdate = function () {
+        var _a = this.getStackTop(), scope = _a.scope, client = _a.client;
+        if (!scope)
+            return;
+        var session = scope.getSession && scope.getSession();
+        if (session) {
+            if (client && client.captureSession) {
+                client.captureSession(session);
+            }
+        }
+    };
+    /**
+     * Internal helper function to call a method on the top client if it exists.
+     *
+     * @param method The method to call on the client.
+     * @param args Arguments to pass to the client function.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Hub.prototype._invokeClient = function (method) {
+        var _a;
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        var _b = this.getStackTop(), scope = _b.scope, client = _b.client;
+        if (client && client[method]) {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+            (_a = client)[method].apply(_a, tslib_1.__spread(args, [scope]));
+        }
+    };
+    /**
+     * Calls global extension method and binding current instance to the function call
+     */
+    // @ts-ignore Function lacks ending return statement and return type does not include 'undefined'. ts(2366)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Hub.prototype._callExtensionMethod = function (method) {
+        var args = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            args[_i - 1] = arguments[_i];
+        }
+        var carrier = getMainCarrier();
+        var sentry = carrier.__SENTRY__;
+        if (sentry && sentry.extensions && typeof sentry.extensions[method] === 'function') {
+            return sentry.extensions[method].apply(this, args);
+        }
+        flags_1.IS_DEBUG_BUILD && utils_1.logger.warn("Extension method " + method + " couldn't be found, doing nothing.");
+    };
+    return Hub;
+}());
+exports.Hub = Hub;
+/**
+ * Returns the global shim registry.
+ *
+ * FIXME: This function is problematic, because despite always returning a valid Carrier,
+ * it has an optional `__SENTRY__` property, which then in turn requires us to always perform an unnecessary check
+ * at the call-site. We always access the carrier through this function, so we can guarantee that `__SENTRY__` is there.
+ **/
+function getMainCarrier() {
+    var carrier = utils_1.getGlobalObject();
+    carrier.__SENTRY__ = carrier.__SENTRY__ || {
+        extensions: {},
+        hub: undefined,
+    };
+    return carrier;
+}
+exports.getMainCarrier = getMainCarrier;
+/**
+ * Replaces the current main hub with the passed one on the global object
+ *
+ * @returns The old replaced hub
+ */
+function makeMain(hub) {
+    var registry = getMainCarrier();
+    var oldHub = getHubFromCarrier(registry);
+    setHubOnCarrier(registry, hub);
+    return oldHub;
+}
+exports.makeMain = makeMain;
+/**
+ * Returns the default hub instance.
+ *
+ * If a hub is already registered in the global carrier but this module
+ * contains a more recent version, it replaces the registered version.
+ * Otherwise, the currently registered hub will be returned.
+ */
+function getCurrentHub() {
+    // Get main carrier (global for every environment)
+    var registry = getMainCarrier();
+    // If there's no hub, or its an old API, assign a new one
+    if (!hasHubOnCarrier(registry) || getHubFromCarrier(registry).isOlderThan(exports.API_VERSION)) {
+        setHubOnCarrier(registry, new Hub());
+    }
+    // Prefer domains over global if they are there (applicable only to Node environment)
+    if (utils_1.isNodeEnv()) {
+        return getHubFromActiveDomain(registry);
+    }
+    // Return hub that lives on a global object
+    return getHubFromCarrier(registry);
+}
+exports.getCurrentHub = getCurrentHub;
+/**
+ * Returns the active domain, if one exists
+ * @deprecated No longer used; remove in v7
+ * @returns The domain, or undefined if there is no active domain
+ */
+// eslint-disable-next-line deprecation/deprecation
+function getActiveDomain() {
+    flags_1.IS_DEBUG_BUILD && utils_1.logger.warn('Function `getActiveDomain` is deprecated and will be removed in a future version.');
+    var sentry = getMainCarrier().__SENTRY__;
+    return sentry && sentry.extensions && sentry.extensions.domain && sentry.extensions.domain.active;
+}
+exports.getActiveDomain = getActiveDomain;
+/**
+ * Try to read the hub from an active domain, and fallback to the registry if one doesn't exist
+ * @returns discovered hub
+ */
+function getHubFromActiveDomain(registry) {
+    try {
+        var sentry = getMainCarrier().__SENTRY__;
+        var activeDomain = sentry && sentry.extensions && sentry.extensions.domain && sentry.extensions.domain.active;
+        // If there's no active domain, just return global hub
+        if (!activeDomain) {
+            return getHubFromCarrier(registry);
+        }
+        // If there's no hub on current domain, or it's an old API, assign a new one
+        if (!hasHubOnCarrier(activeDomain) || getHubFromCarrier(activeDomain).isOlderThan(exports.API_VERSION)) {
+            var registryHubTopStack = getHubFromCarrier(registry).getStackTop();
+            setHubOnCarrier(activeDomain, new Hub(registryHubTopStack.client, scope_1.Scope.clone(registryHubTopStack.scope)));
+        }
+        // Return hub that lives on a domain
+        return getHubFromCarrier(activeDomain);
+    }
+    catch (_Oo) {
+        // Return hub that lives on a global object
+        return getHubFromCarrier(registry);
+    }
+}
+/**
+ * This will tell whether a carrier has a hub on it or not
+ * @param carrier object
+ */
+function hasHubOnCarrier(carrier) {
+    return !!(carrier && carrier.__SENTRY__ && carrier.__SENTRY__.hub);
+}
+/**
+ * This will create a new {@link Hub} and add to the passed object on
+ * __SENTRY__.hub.
+ * @param carrier object
+ * @hidden
+ */
+function getHubFromCarrier(carrier) {
+    return utils_1.getGlobalSingleton('hub', function () { return new Hub(); }, carrier);
+}
+exports.getHubFromCarrier = getHubFromCarrier;
+/**
+ * This will set passed {@link Hub} on the passed object's __SENTRY__.hub attribute
+ * @param carrier object
+ * @param hub Hub
+ * @returns A boolean indicating success or failure
+ */
+function setHubOnCarrier(carrier, hub) {
+    if (!carrier)
+        return false;
+    var __SENTRY__ = (carrier.__SENTRY__ = carrier.__SENTRY__ || {});
+    __SENTRY__.hub = hub;
+    return true;
+}
+exports.setHubOnCarrier = setHubOnCarrier;
+//# sourceMappingURL=hub.js.map
+
+/***/ }),
+
+/***/ 6393:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var scope_1 = __nccwpck_require__(4213);
+exports.addGlobalEventProcessor = scope_1.addGlobalEventProcessor;
+exports.Scope = scope_1.Scope;
+var session_1 = __nccwpck_require__(12474);
+exports.Session = session_1.Session;
+var sessionflusher_1 = __nccwpck_require__(99695);
+exports.SessionFlusher = sessionflusher_1.SessionFlusher;
+var hub_1 = __nccwpck_require__(53536);
+// eslint-disable-next-line deprecation/deprecation
+exports.getActiveDomain = hub_1.getActiveDomain;
+exports.getCurrentHub = hub_1.getCurrentHub;
+exports.getHubFromCarrier = hub_1.getHubFromCarrier;
+exports.getMainCarrier = hub_1.getMainCarrier;
+exports.Hub = hub_1.Hub;
+exports.makeMain = hub_1.makeMain;
+exports.setHubOnCarrier = hub_1.setHubOnCarrier;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 4213:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(39615);
+var utils_1 = __nccwpck_require__(1620);
+/**
+ * Absolute maximum number of breadcrumbs added to an event.
+ * The `maxBreadcrumbs` option cannot be higher than this value.
+ */
+var MAX_BREADCRUMBS = 100;
+/**
+ * Holds additional event information. {@link Scope.applyToEvent} will be
+ * called by the client before an event will be sent.
+ */
+var Scope = /** @class */ (function () {
+    function Scope() {
+        /** Flag if notifying is happening. */
+        this._notifyingListeners = false;
+        /** Callback for client to receive scope changes. */
+        this._scopeListeners = [];
+        /** Callback list that will be called after {@link applyToEvent}. */
+        this._eventProcessors = [];
+        /** Array of breadcrumbs. */
+        this._breadcrumbs = [];
+        /** User */
+        this._user = {};
+        /** Tags */
+        this._tags = {};
+        /** Extra */
+        this._extra = {};
+        /** Contexts */
+        this._contexts = {};
+        /**
+         * A place to stash data which is needed at some point in the SDK's event processing pipeline but which shouldn't get
+         * sent to Sentry
+         */
+        this._sdkProcessingMetadata = {};
+    }
+    /**
+     * Inherit values from the parent scope.
+     * @param scope to clone.
+     */
+    Scope.clone = function (scope) {
+        var newScope = new Scope();
+        if (scope) {
+            newScope._breadcrumbs = tslib_1.__spread(scope._breadcrumbs);
+            newScope._tags = tslib_1.__assign({}, scope._tags);
+            newScope._extra = tslib_1.__assign({}, scope._extra);
+            newScope._contexts = tslib_1.__assign({}, scope._contexts);
+            newScope._user = scope._user;
+            newScope._level = scope._level;
+            newScope._span = scope._span;
+            newScope._session = scope._session;
+            newScope._transactionName = scope._transactionName;
+            newScope._fingerprint = scope._fingerprint;
+            newScope._eventProcessors = tslib_1.__spread(scope._eventProcessors);
+            newScope._requestSession = scope._requestSession;
+        }
+        return newScope;
+    };
+    /**
+     * Add internal on change listener. Used for sub SDKs that need to store the scope.
+     * @hidden
+     */
+    Scope.prototype.addScopeListener = function (callback) {
+        this._scopeListeners.push(callback);
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.addEventProcessor = function (callback) {
+        this._eventProcessors.push(callback);
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setUser = function (user) {
+        this._user = user || {};
+        if (this._session) {
+            this._session.update({ user: user });
+        }
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.getUser = function () {
+        return this._user;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.getRequestSession = function () {
+        return this._requestSession;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setRequestSession = function (requestSession) {
+        this._requestSession = requestSession;
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setTags = function (tags) {
+        this._tags = tslib_1.__assign(tslib_1.__assign({}, this._tags), tags);
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setTag = function (key, value) {
+        var _a;
+        this._tags = tslib_1.__assign(tslib_1.__assign({}, this._tags), (_a = {}, _a[key] = value, _a));
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setExtras = function (extras) {
+        this._extra = tslib_1.__assign(tslib_1.__assign({}, this._extra), extras);
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setExtra = function (key, extra) {
+        var _a;
+        this._extra = tslib_1.__assign(tslib_1.__assign({}, this._extra), (_a = {}, _a[key] = extra, _a));
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setFingerprint = function (fingerprint) {
+        this._fingerprint = fingerprint;
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setLevel = function (level) {
+        this._level = level;
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setTransactionName = function (name) {
+        this._transactionName = name;
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * Can be removed in major version.
+     * @deprecated in favor of {@link this.setTransactionName}
+     */
+    Scope.prototype.setTransaction = function (name) {
+        return this.setTransactionName(name);
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setContext = function (key, context) {
+        var _a;
+        if (context === null) {
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+            delete this._contexts[key];
+        }
+        else {
+            this._contexts = tslib_1.__assign(tslib_1.__assign({}, this._contexts), (_a = {}, _a[key] = context, _a));
+        }
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setSpan = function (span) {
+        this._span = span;
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.getSpan = function () {
+        return this._span;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.getTransaction = function () {
+        // Often, this span (if it exists at all) will be a transaction, but it's not guaranteed to be. Regardless, it will
+        // have a pointer to the currently-active transaction.
+        var span = this.getSpan();
+        return span && span.transaction;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.setSession = function (session) {
+        if (!session) {
+            delete this._session;
+        }
+        else {
+            this._session = session;
+        }
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.getSession = function () {
+        return this._session;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.update = function (captureContext) {
+        if (!captureContext) {
+            return this;
+        }
+        if (typeof captureContext === 'function') {
+            var updatedScope = captureContext(this);
+            return updatedScope instanceof Scope ? updatedScope : this;
+        }
+        if (captureContext instanceof Scope) {
+            this._tags = tslib_1.__assign(tslib_1.__assign({}, this._tags), captureContext._tags);
+            this._extra = tslib_1.__assign(tslib_1.__assign({}, this._extra), captureContext._extra);
+            this._contexts = tslib_1.__assign(tslib_1.__assign({}, this._contexts), captureContext._contexts);
+            if (captureContext._user && Object.keys(captureContext._user).length) {
+                this._user = captureContext._user;
+            }
+            if (captureContext._level) {
+                this._level = captureContext._level;
+            }
+            if (captureContext._fingerprint) {
+                this._fingerprint = captureContext._fingerprint;
+            }
+            if (captureContext._requestSession) {
+                this._requestSession = captureContext._requestSession;
+            }
+        }
+        else if (utils_1.isPlainObject(captureContext)) {
+            // eslint-disable-next-line no-param-reassign
+            captureContext = captureContext;
+            this._tags = tslib_1.__assign(tslib_1.__assign({}, this._tags), captureContext.tags);
+            this._extra = tslib_1.__assign(tslib_1.__assign({}, this._extra), captureContext.extra);
+            this._contexts = tslib_1.__assign(tslib_1.__assign({}, this._contexts), captureContext.contexts);
+            if (captureContext.user) {
+                this._user = captureContext.user;
+            }
+            if (captureContext.level) {
+                this._level = captureContext.level;
+            }
+            if (captureContext.fingerprint) {
+                this._fingerprint = captureContext.fingerprint;
+            }
+            if (captureContext.requestSession) {
+                this._requestSession = captureContext.requestSession;
+            }
+        }
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.clear = function () {
+        this._breadcrumbs = [];
+        this._tags = {};
+        this._extra = {};
+        this._user = {};
+        this._contexts = {};
+        this._level = undefined;
+        this._transactionName = undefined;
+        this._fingerprint = undefined;
+        this._requestSession = undefined;
+        this._span = undefined;
+        this._session = undefined;
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.addBreadcrumb = function (breadcrumb, maxBreadcrumbs) {
+        var maxCrumbs = typeof maxBreadcrumbs === 'number' ? Math.min(maxBreadcrumbs, MAX_BREADCRUMBS) : MAX_BREADCRUMBS;
+        // No data has been changed, so don't notify scope listeners
+        if (maxCrumbs <= 0) {
+            return this;
+        }
+        var mergedBreadcrumb = tslib_1.__assign({ timestamp: utils_1.dateTimestampInSeconds() }, breadcrumb);
+        this._breadcrumbs = tslib_1.__spread(this._breadcrumbs, [mergedBreadcrumb]).slice(-maxCrumbs);
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * @inheritDoc
+     */
+    Scope.prototype.clearBreadcrumbs = function () {
+        this._breadcrumbs = [];
+        this._notifyScopeListeners();
+        return this;
+    };
+    /**
+     * Applies the current context and fingerprint to the event.
+     * Note that breadcrumbs will be added by the client.
+     * Also if the event has already breadcrumbs on it, we do not merge them.
+     * @param event Event
+     * @param hint May contain additional information about the original exception.
+     * @hidden
+     */
+    Scope.prototype.applyToEvent = function (event, hint) {
+        if (this._extra && Object.keys(this._extra).length) {
+            event.extra = tslib_1.__assign(tslib_1.__assign({}, this._extra), event.extra);
+        }
+        if (this._tags && Object.keys(this._tags).length) {
+            event.tags = tslib_1.__assign(tslib_1.__assign({}, this._tags), event.tags);
+        }
+        if (this._user && Object.keys(this._user).length) {
+            event.user = tslib_1.__assign(tslib_1.__assign({}, this._user), event.user);
+        }
+        if (this._contexts && Object.keys(this._contexts).length) {
+            event.contexts = tslib_1.__assign(tslib_1.__assign({}, this._contexts), event.contexts);
+        }
+        if (this._level) {
+            event.level = this._level;
+        }
+        if (this._transactionName) {
+            event.transaction = this._transactionName;
+        }
+        // We want to set the trace context for normal events only if there isn't already
+        // a trace context on the event. There is a product feature in place where we link
+        // errors with transaction and it relies on that.
+        if (this._span) {
+            event.contexts = tslib_1.__assign({ trace: this._span.getTraceContext() }, event.contexts);
+            var transactionName = this._span.transaction && this._span.transaction.name;
+            if (transactionName) {
+                event.tags = tslib_1.__assign({ transaction: transactionName }, event.tags);
+            }
+        }
+        this._applyFingerprint(event);
+        event.breadcrumbs = tslib_1.__spread((event.breadcrumbs || []), this._breadcrumbs);
+        event.breadcrumbs = event.breadcrumbs.length > 0 ? event.breadcrumbs : undefined;
+        event.sdkProcessingMetadata = this._sdkProcessingMetadata;
+        return this._notifyEventProcessors(tslib_1.__spread(getGlobalEventProcessors(), this._eventProcessors), event, hint);
+    };
+    /**
+     * Add data which will be accessible during event processing but won't get sent to Sentry
+     */
+    Scope.prototype.setSDKProcessingMetadata = function (newData) {
+        this._sdkProcessingMetadata = tslib_1.__assign(tslib_1.__assign({}, this._sdkProcessingMetadata), newData);
+        return this;
+    };
+    /**
+     * This will be called after {@link applyToEvent} is finished.
+     */
+    Scope.prototype._notifyEventProcessors = function (processors, event, hint, index) {
+        var _this = this;
+        if (index === void 0) { index = 0; }
+        return new utils_1.SyncPromise(function (resolve, reject) {
+            var processor = processors[index];
+            if (event === null || typeof processor !== 'function') {
+                resolve(event);
+            }
+            else {
+                var result = processor(tslib_1.__assign({}, event), hint);
+                if (utils_1.isThenable(result)) {
+                    void result
