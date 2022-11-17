@@ -33550,3 +33550,2175 @@ function validateDsn(dsn) {
         throw new error_1.SentryError("Invalid Sentry Dsn: Invalid port " + port);
     }
     return true;
+}
+/** The Sentry Dsn, identifying a Sentry instance and project. */
+function makeDsn(from) {
+    var components = typeof from === 'string' ? dsnFromString(from) : dsnFromComponents(from);
+    validateDsn(components);
+    return components;
+}
+exports.makeDsn = makeDsn;
+//# sourceMappingURL=dsn.js.map
+
+/***/ }),
+
+/***/ 19489:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SeverityLevels = ['fatal', 'error', 'warning', 'log', 'info', 'debug', 'critical'];
+//# sourceMappingURL=enums.js.map
+
+/***/ }),
+
+/***/ 31913:
+/***/ ((__unused_webpack_module, exports) => {
+
+/*
+ * This module exists for optimizations in the build process through rollup and terser.  We define some global
+ * constants, which can be overridden during build. By guarding certain pieces of code with functions that return these
+ * constants, we can control whether or not they appear in the final bundle. (Any code guarded by a false condition will
+ * never run, and will hence be dropped during treeshaking.) The two primary uses for this are stripping out calls to
+ * `logger` and preventing node-related code from appearing in browser bundles.
+ *
+ * Attention:
+ * This file should not be used to define constants/flags that are intended to be used for tree-shaking conducted by
+ * users. These fags should live in their respective packages, as we identified user tooling (specifically webpack)
+ * having issues tree-shaking these constants across package boundaries.
+ * An example for this is the __SENTRY_DEBUG__ constant. It is declared in each package individually because we want
+ * users to be able to shake away expressions that it guards.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/**
+ * Figures out if we're building a browser bundle.
+ *
+ * @returns true if this is a browser bundle build.
+ */
+function isBrowserBundle() {
+    return typeof __SENTRY_BROWSER_BUNDLE__ !== 'undefined' && !!__SENTRY_BROWSER_BUNDLE__;
+}
+exports.isBrowserBundle = isBrowserBundle;
+//# sourceMappingURL=env.js.map
+
+/***/ }),
+
+/***/ 6222:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var is_1 = __nccwpck_require__(92757);
+/**
+ * Creates an envelope.
+ * Make sure to always explicitly provide the generic to this function
+ * so that the envelope types resolve correctly.
+ */
+function createEnvelope(headers, items) {
+    if (items === void 0) { items = []; }
+    return [headers, items];
+}
+exports.createEnvelope = createEnvelope;
+/**
+ * Add an item to an envelope.
+ * Make sure to always explicitly provide the generic to this function
+ * so that the envelope types resolve correctly.
+ */
+function addItemToEnvelope(envelope, newItem) {
+    var _a = tslib_1.__read(envelope, 2), headers = _a[0], items = _a[1];
+    return [headers, tslib_1.__spread(items, [newItem])];
+}
+exports.addItemToEnvelope = addItemToEnvelope;
+/**
+ * Get the type of the envelope. Grabs the type from the first envelope item.
+ */
+function getEnvelopeType(envelope) {
+    var _a = tslib_1.__read(envelope, 2), _b = tslib_1.__read(_a[1], 1), _c = tslib_1.__read(_b[0], 1), firstItemHeader = _c[0];
+    return firstItemHeader.type;
+}
+exports.getEnvelopeType = getEnvelopeType;
+/**
+ * Serializes an envelope into a string.
+ */
+function serializeEnvelope(envelope) {
+    var _a = tslib_1.__read(envelope, 2), headers = _a[0], items = _a[1];
+    var serializedHeaders = JSON.stringify(headers);
+    // Have to cast items to any here since Envelope is a union type
+    // Fixed in Typescript 4.2
+    // TODO: Remove any[] cast when we upgrade to TS 4.2
+    // https://github.com/microsoft/TypeScript/issues/36390
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return items.reduce(function (acc, item) {
+        var _a = tslib_1.__read(item, 2), itemHeaders = _a[0], payload = _a[1];
+        // We do not serialize payloads that are primitives
+        var serializedPayload = is_1.isPrimitive(payload) ? String(payload) : JSON.stringify(payload);
+        return acc + "\n" + JSON.stringify(itemHeaders) + "\n" + serializedPayload;
+    }, serializedHeaders);
+}
+exports.serializeEnvelope = serializeEnvelope;
+//# sourceMappingURL=envelope.js.map
+
+/***/ }),
+
+/***/ 66238:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var polyfill_1 = __nccwpck_require__(1243);
+/** An error emitted by Sentry SDKs and related utilities. */
+var SentryError = /** @class */ (function (_super) {
+    tslib_1.__extends(SentryError, _super);
+    function SentryError(message) {
+        var _newTarget = this.constructor;
+        var _this = _super.call(this, message) || this;
+        _this.message = message;
+        _this.name = _newTarget.prototype.constructor.name;
+        polyfill_1.setPrototypeOf(_this, _newTarget.prototype);
+        return _this;
+    }
+    return SentryError;
+}(Error));
+exports.SentryError = SentryError;
+//# sourceMappingURL=error.js.map
+
+/***/ }),
+
+/***/ 23710:
+/***/ ((__unused_webpack_module, exports) => {
+
+/*
+ * This file defines flags and constants that can be modified during compile time in order to facilitate tree shaking
+ * for users.
+ *
+ * Debug flags need to be declared in each package individually and must not be imported across package boundaries,
+ * because some build tools have trouble tree-shaking imported guards.
+ *
+ * As a convention, we define debug flags in a `flags.ts` file in the root of a package's `src` folder.
+ *
+ * Debug flag files will contain "magic strings" like `__SENTRY_DEBUG__` that may get replaced with actual values during
+ * our, or the user's build process. Take care when introducing new flags - they must not throw if they are not
+ * replaced.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/** Flag that is true for debug builds, false otherwise. */
+exports.IS_DEBUG_BUILD = typeof __SENTRY_DEBUG__ === 'undefined' ? true : __SENTRY_DEBUG__;
+//# sourceMappingURL=flags.js.map
+
+/***/ }),
+
+/***/ 68813:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+/**
+ * NOTE: In order to avoid circular dependencies, if you add a function to this module and it needs to print something,
+ * you must either a) use `console.log` rather than the logger, or b) put your function elsewhere.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var node_1 = __nccwpck_require__(16411);
+var fallbackGlobalObject = {};
+/**
+ * Safely get global scope object
+ *
+ * @returns Global scope object
+ */
+function getGlobalObject() {
+    return (node_1.isNodeEnv()
+        ? global
+        : typeof window !== 'undefined' // eslint-disable-line no-restricted-globals
+            ? window // eslint-disable-line no-restricted-globals
+            : typeof self !== 'undefined'
+                ? self
+                : fallbackGlobalObject);
+}
+exports.getGlobalObject = getGlobalObject;
+/**
+ * Returns a global singleton contained in the global `__SENTRY__` object.
+ *
+ * If the singleton doesn't already exist in `__SENTRY__`, it will be created using the given factory
+ * function and added to the `__SENTRY__` object.
+ *
+ * @param name name of the global singleton on __SENTRY__
+ * @param creator creator Factory function to create the singleton if it doesn't already exist on `__SENTRY__`
+ * @param obj (Optional) The global object on which to look for `__SENTRY__`, if not `getGlobalObject`'s return value
+ * @returns the singleton
+ */
+function getGlobalSingleton(name, creator, obj) {
+    var global = (obj || getGlobalObject());
+    var __SENTRY__ = (global.__SENTRY__ = global.__SENTRY__ || {});
+    var singleton = __SENTRY__[name] || (__SENTRY__[name] = creator());
+    return singleton;
+}
+exports.getGlobalSingleton = getGlobalSingleton;
+//# sourceMappingURL=global.js.map
+
+/***/ }),
+
+/***/ 1620:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+tslib_1.__exportStar(__nccwpck_require__(58343), exports);
+tslib_1.__exportStar(__nccwpck_require__(30597), exports);
+tslib_1.__exportStar(__nccwpck_require__(3275), exports);
+tslib_1.__exportStar(__nccwpck_require__(19489), exports);
+tslib_1.__exportStar(__nccwpck_require__(66238), exports);
+tslib_1.__exportStar(__nccwpck_require__(68813), exports);
+tslib_1.__exportStar(__nccwpck_require__(65474), exports);
+tslib_1.__exportStar(__nccwpck_require__(92757), exports);
+tslib_1.__exportStar(__nccwpck_require__(15577), exports);
+tslib_1.__exportStar(__nccwpck_require__(49515), exports);
+tslib_1.__exportStar(__nccwpck_require__(32154), exports);
+tslib_1.__exportStar(__nccwpck_require__(16411), exports);
+tslib_1.__exportStar(__nccwpck_require__(28592), exports);
+tslib_1.__exportStar(__nccwpck_require__(69249), exports);
+tslib_1.__exportStar(__nccwpck_require__(39188), exports);
+tslib_1.__exportStar(__nccwpck_require__(31811), exports);
+tslib_1.__exportStar(__nccwpck_require__(68853), exports);
+tslib_1.__exportStar(__nccwpck_require__(5986), exports);
+tslib_1.__exportStar(__nccwpck_require__(70313), exports);
+tslib_1.__exportStar(__nccwpck_require__(66538), exports);
+tslib_1.__exportStar(__nccwpck_require__(88714), exports);
+tslib_1.__exportStar(__nccwpck_require__(87833), exports);
+tslib_1.__exportStar(__nccwpck_require__(1735), exports);
+tslib_1.__exportStar(__nccwpck_require__(66850), exports);
+tslib_1.__exportStar(__nccwpck_require__(31913), exports);
+tslib_1.__exportStar(__nccwpck_require__(6222), exports);
+tslib_1.__exportStar(__nccwpck_require__(38857), exports);
+tslib_1.__exportStar(__nccwpck_require__(69377), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 65474:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var flags_1 = __nccwpck_require__(23710);
+var global_1 = __nccwpck_require__(68813);
+var is_1 = __nccwpck_require__(92757);
+var logger_1 = __nccwpck_require__(15577);
+var object_1 = __nccwpck_require__(69249);
+var stacktrace_1 = __nccwpck_require__(5986);
+var supports_1 = __nccwpck_require__(88714);
+var global = global_1.getGlobalObject();
+/**
+ * Instrument native APIs to call handlers that can be used to create breadcrumbs, APM spans etc.
+ *  - Console API
+ *  - Fetch API
+ *  - XHR API
+ *  - History API
+ *  - DOM API (click/typing)
+ *  - Error API
+ *  - UnhandledRejection API
+ */
+var handlers = {};
+var instrumented = {};
+/** Instruments given API */
+function instrument(type) {
+    if (instrumented[type]) {
+        return;
+    }
+    instrumented[type] = true;
+    switch (type) {
+        case 'console':
+            instrumentConsole();
+            break;
+        case 'dom':
+            instrumentDOM();
+            break;
+        case 'xhr':
+            instrumentXHR();
+            break;
+        case 'fetch':
+            instrumentFetch();
+            break;
+        case 'history':
+            instrumentHistory();
+            break;
+        case 'error':
+            instrumentError();
+            break;
+        case 'unhandledrejection':
+            instrumentUnhandledRejection();
+            break;
+        default:
+            flags_1.IS_DEBUG_BUILD && logger_1.logger.warn('unknown instrumentation type:', type);
+            return;
+    }
+}
+/**
+ * Add handler that will be called when given type of instrumentation triggers.
+ * Use at your own risk, this might break without changelog notice, only used internally.
+ * @hidden
+ */
+function addInstrumentationHandler(type, callback) {
+    handlers[type] = handlers[type] || [];
+    handlers[type].push(callback);
+    instrument(type);
+}
+exports.addInstrumentationHandler = addInstrumentationHandler;
+/** JSDoc */
+function triggerHandlers(type, data) {
+    var e_1, _a;
+    if (!type || !handlers[type]) {
+        return;
+    }
+    try {
+        for (var _b = tslib_1.__values(handlers[type] || []), _c = _b.next(); !_c.done; _c = _b.next()) {
+            var handler = _c.value;
+            try {
+                handler(data);
+            }
+            catch (e) {
+                flags_1.IS_DEBUG_BUILD &&
+                    logger_1.logger.error("Error while triggering instrumentation handler.\nType: " + type + "\nName: " + stacktrace_1.getFunctionName(handler) + "\nError:", e);
+            }
+        }
+    }
+    catch (e_1_1) { e_1 = { error: e_1_1 }; }
+    finally {
+        try {
+            if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+        }
+        finally { if (e_1) throw e_1.error; }
+    }
+}
+/** JSDoc */
+function instrumentConsole() {
+    if (!('console' in global)) {
+        return;
+    }
+    logger_1.CONSOLE_LEVELS.forEach(function (level) {
+        if (!(level in global.console)) {
+            return;
+        }
+        object_1.fill(global.console, level, function (originalConsoleMethod) {
+            return function () {
+                var args = [];
+                for (var _i = 0; _i < arguments.length; _i++) {
+                    args[_i] = arguments[_i];
+                }
+                triggerHandlers('console', { args: args, level: level });
+                // this fails for some browsers. :(
+                if (originalConsoleMethod) {
+                    originalConsoleMethod.apply(global.console, args);
+                }
+            };
+        });
+    });
+}
+/** JSDoc */
+function instrumentFetch() {
+    if (!supports_1.supportsNativeFetch()) {
+        return;
+    }
+    object_1.fill(global, 'fetch', function (originalFetch) {
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            var handlerData = {
+                args: args,
+                fetchData: {
+                    method: getFetchMethod(args),
+                    url: getFetchUrl(args),
+                },
+                startTimestamp: Date.now(),
+            };
+            triggerHandlers('fetch', tslib_1.__assign({}, handlerData));
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            return originalFetch.apply(global, args).then(function (response) {
+                triggerHandlers('fetch', tslib_1.__assign(tslib_1.__assign({}, handlerData), { endTimestamp: Date.now(), response: response }));
+                return response;
+            }, function (error) {
+                triggerHandlers('fetch', tslib_1.__assign(tslib_1.__assign({}, handlerData), { endTimestamp: Date.now(), error: error }));
+                // NOTE: If you are a Sentry user, and you are seeing this stack frame,
+                //       it means the sentry.javascript SDK caught an error invoking your application code.
+                //       This is expected behavior and NOT indicative of a bug with sentry.javascript.
+                throw error;
+            });
+        };
+    });
+}
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/** Extract `method` from fetch call arguments */
+function getFetchMethod(fetchArgs) {
+    if (fetchArgs === void 0) { fetchArgs = []; }
+    if ('Request' in global && is_1.isInstanceOf(fetchArgs[0], Request) && fetchArgs[0].method) {
+        return String(fetchArgs[0].method).toUpperCase();
+    }
+    if (fetchArgs[1] && fetchArgs[1].method) {
+        return String(fetchArgs[1].method).toUpperCase();
+    }
+    return 'GET';
+}
+/** Extract `url` from fetch call arguments */
+function getFetchUrl(fetchArgs) {
+    if (fetchArgs === void 0) { fetchArgs = []; }
+    if (typeof fetchArgs[0] === 'string') {
+        return fetchArgs[0];
+    }
+    if ('Request' in global && is_1.isInstanceOf(fetchArgs[0], Request)) {
+        return fetchArgs[0].url;
+    }
+    return String(fetchArgs[0]);
+}
+/* eslint-enable @typescript-eslint/no-unsafe-member-access */
+/** JSDoc */
+function instrumentXHR() {
+    if (!('XMLHttpRequest' in global)) {
+        return;
+    }
+    var xhrproto = XMLHttpRequest.prototype;
+    object_1.fill(xhrproto, 'open', function (originalOpen) {
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            // eslint-disable-next-line @typescript-eslint/no-this-alias
+            var xhr = this;
+            var url = args[1];
+            var xhrInfo = (xhr.__sentry_xhr__ = {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                method: is_1.isString(args[0]) ? args[0].toUpperCase() : args[0],
+                url: args[1],
+            });
+            // if Sentry key appears in URL, don't capture it as a request
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            if (is_1.isString(url) && xhrInfo.method === 'POST' && url.match(/sentry_key/)) {
+                xhr.__sentry_own_request__ = true;
+            }
+            var onreadystatechangeHandler = function () {
+                if (xhr.readyState === 4) {
+                    try {
+                        // touching statusCode in some platforms throws
+                        // an exception
+                        xhrInfo.status_code = xhr.status;
+                    }
+                    catch (e) {
+                        /* do nothing */
+                    }
+                    triggerHandlers('xhr', {
+                        args: args,
+                        endTimestamp: Date.now(),
+                        startTimestamp: Date.now(),
+                        xhr: xhr,
+                    });
+                }
+            };
+            if ('onreadystatechange' in xhr && typeof xhr.onreadystatechange === 'function') {
+                object_1.fill(xhr, 'onreadystatechange', function (original) {
+                    return function () {
+                        var readyStateArgs = [];
+                        for (var _i = 0; _i < arguments.length; _i++) {
+                            readyStateArgs[_i] = arguments[_i];
+                        }
+                        onreadystatechangeHandler();
+                        return original.apply(xhr, readyStateArgs);
+                    };
+                });
+            }
+            else {
+                xhr.addEventListener('readystatechange', onreadystatechangeHandler);
+            }
+            return originalOpen.apply(xhr, args);
+        };
+    });
+    object_1.fill(xhrproto, 'send', function (originalSend) {
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            if (this.__sentry_xhr__ && args[0] !== undefined) {
+                this.__sentry_xhr__.body = args[0];
+            }
+            triggerHandlers('xhr', {
+                args: args,
+                startTimestamp: Date.now(),
+                xhr: this,
+            });
+            return originalSend.apply(this, args);
+        };
+    });
+}
+var lastHref;
+/** JSDoc */
+function instrumentHistory() {
+    if (!supports_1.supportsHistory()) {
+        return;
+    }
+    var oldOnPopState = global.onpopstate;
+    global.onpopstate = function () {
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i] = arguments[_i];
+        }
+        var to = global.location.href;
+        // keep track of the current URL state, as we always receive only the updated state
+        var from = lastHref;
+        lastHref = to;
+        triggerHandlers('history', {
+            from: from,
+            to: to,
+        });
+        if (oldOnPopState) {
+            // Apparently this can throw in Firefox when incorrectly implemented plugin is installed.
+            // https://github.com/getsentry/sentry-javascript/issues/3344
+            // https://github.com/bugsnag/bugsnag-js/issues/469
+            try {
+                return oldOnPopState.apply(this, args);
+            }
+            catch (_oO) {
+                // no-empty
+            }
+        }
+    };
+    /** @hidden */
+    function historyReplacementFunction(originalHistoryFunction) {
+        return function () {
+            var args = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                args[_i] = arguments[_i];
+            }
+            var url = args.length > 2 ? args[2] : undefined;
+            if (url) {
+                // coerce to string (this is what pushState does)
+                var from = lastHref;
+                var to = String(url);
+                // keep track of the current URL state, as we always receive only the updated state
+                lastHref = to;
+                triggerHandlers('history', {
+                    from: from,
+                    to: to,
+                });
+            }
+            return originalHistoryFunction.apply(this, args);
+        };
+    }
+    object_1.fill(global.history, 'pushState', historyReplacementFunction);
+    object_1.fill(global.history, 'replaceState', historyReplacementFunction);
+}
+var debounceDuration = 1000;
+var debounceTimerID;
+var lastCapturedEvent;
+/**
+ * Decide whether the current event should finish the debounce of previously captured one.
+ * @param previous previously captured event
+ * @param current event to be captured
+ */
+function shouldShortcircuitPreviousDebounce(previous, current) {
+    // If there was no previous event, it should always be swapped for the new one.
+    if (!previous) {
+        return true;
+    }
+    // If both events have different type, then user definitely performed two separate actions. e.g. click + keypress.
+    if (previous.type !== current.type) {
+        return true;
+    }
+    try {
+        // If both events have the same type, it's still possible that actions were performed on different targets.
+        // e.g. 2 clicks on different buttons.
+        if (previous.target !== current.target) {
+            return true;
+        }
+    }
+    catch (e) {
+        // just accessing `target` property can throw an exception in some rare circumstances
+        // see: https://github.com/getsentry/sentry-javascript/issues/838
+    }
+    // If both events have the same type _and_ same `target` (an element which triggered an event, _not necessarily_
+    // to which an event listener was attached), we treat them as the same action, as we want to capture
+    // only one breadcrumb. e.g. multiple clicks on the same button, or typing inside a user input box.
+    return false;
+}
+/**
+ * Decide whether an event should be captured.
+ * @param event event to be captured
+ */
+function shouldSkipDOMEvent(event) {
+    // We are only interested in filtering `keypress` events for now.
+    if (event.type !== 'keypress') {
+        return false;
+    }
+    try {
+        var target = event.target;
+        if (!target || !target.tagName) {
+            return true;
+        }
+        // Only consider keypress events on actual input elements. This will disregard keypresses targeting body
+        // e.g.tabbing through elements, hotkeys, etc.
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+            return false;
+        }
+    }
+    catch (e) {
+        // just accessing `target` property can throw an exception in some rare circumstances
+        // see: https://github.com/getsentry/sentry-javascript/issues/838
+    }
+    return true;
+}
+/**
+ * Wraps addEventListener to capture UI breadcrumbs
+ * @param handler function that will be triggered
+ * @param globalListener indicates whether event was captured by the global event listener
+ * @returns wrapped breadcrumb events handler
+ * @hidden
+ */
+function makeDOMEventHandler(handler, globalListener) {
+    if (globalListener === void 0) { globalListener = false; }
+    return function (event) {
+        // It's possible this handler might trigger multiple times for the same
+        // event (e.g. event propagation through node ancestors).
+        // Ignore if we've already captured that event.
+        if (!event || lastCapturedEvent === event) {
+            return;
+        }
+        // We always want to skip _some_ events.
+        if (shouldSkipDOMEvent(event)) {
+            return;
+        }
+        var name = event.type === 'keypress' ? 'input' : event.type;
+        // If there is no debounce timer, it means that we can safely capture the new event and store it for future comparisons.
+        if (debounceTimerID === undefined) {
+            handler({
+                event: event,
+                name: name,
+                global: globalListener,
+            });
+            lastCapturedEvent = event;
+        }
+        // If there is a debounce awaiting, see if the new event is different enough to treat it as a unique one.
+        // If that's the case, emit the previous event and store locally the newly-captured DOM event.
+        else if (shouldShortcircuitPreviousDebounce(lastCapturedEvent, event)) {
+            handler({
+                event: event,
+                name: name,
+                global: globalListener,
+            });
+            lastCapturedEvent = event;
+        }
+        // Start a new debounce timer that will prevent us from capturing multiple events that should be grouped together.
+        clearTimeout(debounceTimerID);
+        debounceTimerID = global.setTimeout(function () {
+            debounceTimerID = undefined;
+        }, debounceDuration);
+    };
+}
+/** JSDoc */
+function instrumentDOM() {
+    if (!('document' in global)) {
+        return;
+    }
+    // Make it so that any click or keypress that is unhandled / bubbled up all the way to the document triggers our dom
+    // handlers. (Normally we have only one, which captures a breadcrumb for each click or keypress.) Do this before
+    // we instrument `addEventListener` so that we don't end up attaching this handler twice.
+    var triggerDOMHandler = triggerHandlers.bind(null, 'dom');
+    var globalDOMEventHandler = makeDOMEventHandler(triggerDOMHandler, true);
+    global.document.addEventListener('click', globalDOMEventHandler, false);
+    global.document.addEventListener('keypress', globalDOMEventHandler, false);
+    // After hooking into click and keypress events bubbled up to `document`, we also hook into user-handled
+    // clicks & keypresses, by adding an event listener of our own to any element to which they add a listener. That
+    // way, whenever one of their handlers is triggered, ours will be, too. (This is needed because their handler
+    // could potentially prevent the event from bubbling up to our global listeners. This way, our handler are still
+    // guaranteed to fire at least once.)
+    ['EventTarget', 'Node'].forEach(function (target) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        var proto = global[target] && global[target].prototype;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, no-prototype-builtins
+        if (!proto || !proto.hasOwnProperty || !proto.hasOwnProperty('addEventListener')) {
+            return;
+        }
+        object_1.fill(proto, 'addEventListener', function (originalAddEventListener) {
+            return function (type, listener, options) {
+                if (type === 'click' || type == 'keypress') {
+                    try {
+                        var el = this;
+                        var handlers_1 = (el.__sentry_instrumentation_handlers__ = el.__sentry_instrumentation_handlers__ || {});
+                        var handlerForType = (handlers_1[type] = handlers_1[type] || { refCount: 0 });
+                        if (!handlerForType.handler) {
+                            var handler = makeDOMEventHandler(triggerDOMHandler);
+                            handlerForType.handler = handler;
+                            originalAddEventListener.call(this, type, handler, options);
+                        }
+                        handlerForType.refCount += 1;
+                    }
+                    catch (e) {
+                        // Accessing dom properties is always fragile.
+                        // Also allows us to skip `addEventListenrs` calls with no proper `this` context.
+                    }
+                }
+                return originalAddEventListener.call(this, type, listener, options);
+            };
+        });
+        object_1.fill(proto, 'removeEventListener', function (originalRemoveEventListener) {
+            return function (type, listener, options) {
+                if (type === 'click' || type == 'keypress') {
+                    try {
+                        var el = this;
+                        var handlers_2 = el.__sentry_instrumentation_handlers__ || {};
+                        var handlerForType = handlers_2[type];
+                        if (handlerForType) {
+                            handlerForType.refCount -= 1;
+                            // If there are no longer any custom handlers of the current type on this element, we can remove ours, too.
+                            if (handlerForType.refCount <= 0) {
+                                originalRemoveEventListener.call(this, type, handlerForType.handler, options);
+                                handlerForType.handler = undefined;
+                                delete handlers_2[type]; // eslint-disable-line @typescript-eslint/no-dynamic-delete
+                            }
+                            // If there are no longer any custom handlers of any type on this element, cleanup everything.
+                            if (Object.keys(handlers_2).length === 0) {
+                                delete el.__sentry_instrumentation_handlers__;
+                            }
+                        }
+                    }
+                    catch (e) {
+                        // Accessing dom properties is always fragile.
+                        // Also allows us to skip `addEventListenrs` calls with no proper `this` context.
+                    }
+                }
+                return originalRemoveEventListener.call(this, type, listener, options);
+            };
+        });
+    });
+}
+var _oldOnErrorHandler = null;
+/** JSDoc */
+function instrumentError() {
+    _oldOnErrorHandler = global.onerror;
+    global.onerror = function (msg, url, line, column, error) {
+        triggerHandlers('error', {
+            column: column,
+            error: error,
+            line: line,
+            msg: msg,
+            url: url,
+        });
+        if (_oldOnErrorHandler) {
+            // eslint-disable-next-line prefer-rest-params
+            return _oldOnErrorHandler.apply(this, arguments);
+        }
+        return false;
+    };
+}
+var _oldOnUnhandledRejectionHandler = null;
+/** JSDoc */
+function instrumentUnhandledRejection() {
+    _oldOnUnhandledRejectionHandler = global.onunhandledrejection;
+    global.onunhandledrejection = function (e) {
+        triggerHandlers('unhandledrejection', e);
+        if (_oldOnUnhandledRejectionHandler) {
+            // eslint-disable-next-line prefer-rest-params
+            return _oldOnUnhandledRejectionHandler.apply(this, arguments);
+        }
+        return true;
+    };
+}
+//# sourceMappingURL=instrument.js.map
+
+/***/ }),
+
+/***/ 92757:
+/***/ ((__unused_webpack_module, exports) => {
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+// eslint-disable-next-line @typescript-eslint/unbound-method
+var objectToString = Object.prototype.toString;
+/**
+ * Checks whether given value's type is one of a few Error or Error-like
+ * {@link isError}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isError(wat) {
+    switch (objectToString.call(wat)) {
+        case '[object Error]':
+        case '[object Exception]':
+        case '[object DOMException]':
+            return true;
+        default:
+            return isInstanceOf(wat, Error);
+    }
+}
+exports.isError = isError;
+function isBuiltin(wat, ty) {
+    return objectToString.call(wat) === "[object " + ty + "]";
+}
+/**
+ * Checks whether given value's type is ErrorEvent
+ * {@link isErrorEvent}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isErrorEvent(wat) {
+    return isBuiltin(wat, 'ErrorEvent');
+}
+exports.isErrorEvent = isErrorEvent;
+/**
+ * Checks whether given value's type is DOMError
+ * {@link isDOMError}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isDOMError(wat) {
+    return isBuiltin(wat, 'DOMError');
+}
+exports.isDOMError = isDOMError;
+/**
+ * Checks whether given value's type is DOMException
+ * {@link isDOMException}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isDOMException(wat) {
+    return isBuiltin(wat, 'DOMException');
+}
+exports.isDOMException = isDOMException;
+/**
+ * Checks whether given value's type is a string
+ * {@link isString}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isString(wat) {
+    return isBuiltin(wat, 'String');
+}
+exports.isString = isString;
+/**
+ * Checks whether given value is a primitive (undefined, null, number, boolean, string, bigint, symbol)
+ * {@link isPrimitive}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isPrimitive(wat) {
+    return wat === null || (typeof wat !== 'object' && typeof wat !== 'function');
+}
+exports.isPrimitive = isPrimitive;
+/**
+ * Checks whether given value's type is an object literal
+ * {@link isPlainObject}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isPlainObject(wat) {
+    return isBuiltin(wat, 'Object');
+}
+exports.isPlainObject = isPlainObject;
+/**
+ * Checks whether given value's type is an Event instance
+ * {@link isEvent}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isEvent(wat) {
+    return typeof Event !== 'undefined' && isInstanceOf(wat, Event);
+}
+exports.isEvent = isEvent;
+/**
+ * Checks whether given value's type is an Element instance
+ * {@link isElement}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isElement(wat) {
+    return typeof Element !== 'undefined' && isInstanceOf(wat, Element);
+}
+exports.isElement = isElement;
+/**
+ * Checks whether given value's type is an regexp
+ * {@link isRegExp}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isRegExp(wat) {
+    return isBuiltin(wat, 'RegExp');
+}
+exports.isRegExp = isRegExp;
+/**
+ * Checks whether given value has a then function.
+ * @param wat A value to be checked.
+ */
+function isThenable(wat) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return Boolean(wat && wat.then && typeof wat.then === 'function');
+}
+exports.isThenable = isThenable;
+/**
+ * Checks whether given value's type is a SyntheticEvent
+ * {@link isSyntheticEvent}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isSyntheticEvent(wat) {
+    return isPlainObject(wat) && 'nativeEvent' in wat && 'preventDefault' in wat && 'stopPropagation' in wat;
+}
+exports.isSyntheticEvent = isSyntheticEvent;
+/**
+ * Checks whether given value is NaN
+ * {@link isNaN}.
+ *
+ * @param wat A value to be checked.
+ * @returns A boolean representing the result.
+ */
+function isNaN(wat) {
+    return typeof wat === 'number' && wat !== wat;
+}
+exports.isNaN = isNaN;
+/**
+ * Checks whether given value's type is an instance of provided constructor.
+ * {@link isInstanceOf}.
+ *
+ * @param wat A value to be checked.
+ * @param base A constructor to be used in a check.
+ * @returns A boolean representing the result.
+ */
+function isInstanceOf(wat, base) {
+    try {
+        return wat instanceof base;
+    }
+    catch (_e) {
+        return false;
+    }
+}
+exports.isInstanceOf = isInstanceOf;
+//# sourceMappingURL=is.js.map
+
+/***/ }),
+
+/***/ 15577:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var flags_1 = __nccwpck_require__(23710);
+var global_1 = __nccwpck_require__(68813);
+// TODO: Implement different loggers for different environments
+var global = global_1.getGlobalObject();
+/** Prefix for logging strings */
+var PREFIX = 'Sentry Logger ';
+exports.CONSOLE_LEVELS = ['debug', 'info', 'warn', 'error', 'log', 'assert'];
+/**
+ * Temporarily disable sentry console instrumentations.
+ *
+ * @param callback The function to run against the original `console` messages
+ * @returns The results of the callback
+ */
+function consoleSandbox(callback) {
+    var global = global_1.getGlobalObject();
+    if (!('console' in global)) {
+        return callback();
+    }
+    var originalConsole = global.console;
+    var wrappedLevels = {};
+    // Restore all wrapped console methods
+    exports.CONSOLE_LEVELS.forEach(function (level) {
+        // TODO(v7): Remove this check as it's only needed for Node 6
+        var originalWrappedFunc = originalConsole[level] && originalConsole[level].__sentry_original__;
+        if (level in global.console && originalWrappedFunc) {
+            wrappedLevels[level] = originalConsole[level];
+            originalConsole[level] = originalWrappedFunc;
+        }
+    });
+    try {
+        return callback();
+    }
+    finally {
+        // Revert restoration to wrapped state
+        Object.keys(wrappedLevels).forEach(function (level) {
+            originalConsole[level] = wrappedLevels[level];
+        });
+    }
+}
+exports.consoleSandbox = consoleSandbox;
+function makeLogger() {
+    var enabled = false;
+    var logger = {
+        enable: function () {
+            enabled = true;
+        },
+        disable: function () {
+            enabled = false;
+        },
+    };
+    if (flags_1.IS_DEBUG_BUILD) {
+        exports.CONSOLE_LEVELS.forEach(function (name) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            logger[name] = function () {
+                var args = [];
+                for (var _i = 0; _i < arguments.length; _i++) {
+                    args[_i] = arguments[_i];
+                }
+                if (enabled) {
+                    consoleSandbox(function () {
+                        var _a;
+                        (_a = global.console)[name].apply(_a, tslib_1.__spread([PREFIX + "[" + name + "]:"], args));
+                    });
+                }
+            };
+        });
+    }
+    else {
+        exports.CONSOLE_LEVELS.forEach(function (name) {
+            logger[name] = function () { return undefined; };
+        });
+    }
+    return logger;
+}
+// Ensure we only have a single logger instance, even if multiple versions of @sentry/utils are being used
+var logger;
+exports.logger = logger;
+if (flags_1.IS_DEBUG_BUILD) {
+    exports.logger = logger = global_1.getGlobalSingleton('logger', makeLogger);
+}
+else {
+    exports.logger = logger = makeLogger();
+}
+//# sourceMappingURL=logger.js.map
+
+/***/ }),
+
+/***/ 49515:
+/***/ ((__unused_webpack_module, exports) => {
+
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/**
+ * Helper to decycle json objects
+ */
+function memoBuilder() {
+    var hasWeakSet = typeof WeakSet === 'function';
+    var inner = hasWeakSet ? new WeakSet() : [];
+    function memoize(obj) {
+        if (hasWeakSet) {
+            if (inner.has(obj)) {
+                return true;
+            }
+            inner.add(obj);
+            return false;
+        }
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
+        for (var i = 0; i < inner.length; i++) {
+            var value = inner[i];
+            if (value === obj) {
+                return true;
+            }
+        }
+        inner.push(obj);
+        return false;
+    }
+    function unmemoize(obj) {
+        if (hasWeakSet) {
+            inner.delete(obj);
+        }
+        else {
+            for (var i = 0; i < inner.length; i++) {
+                if (inner[i] === obj) {
+                    inner.splice(i, 1);
+                    break;
+                }
+            }
+        }
+    }
+    return [memoize, unmemoize];
+}
+exports.memoBuilder = memoBuilder;
+//# sourceMappingURL=memo.js.map
+
+/***/ }),
+
+/***/ 32154:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var global_1 = __nccwpck_require__(68813);
+var object_1 = __nccwpck_require__(69249);
+var string_1 = __nccwpck_require__(66538);
+/**
+ * UUID4 generator
+ *
+ * @returns string Generated UUID4.
+ */
+function uuid4() {
+    var global = global_1.getGlobalObject();
+    var crypto = global.crypto || global.msCrypto;
+    if (!(crypto === void 0) && crypto.getRandomValues) {
+        // Use window.crypto API if available
+        var arr = new Uint16Array(8);
+        crypto.getRandomValues(arr);
+        // set 4 in byte 7
+        // eslint-disable-next-line no-bitwise
+        arr[3] = (arr[3] & 0xfff) | 0x4000;
+        // set 2 most significant bits of byte 9 to '10'
+        // eslint-disable-next-line no-bitwise
+        arr[4] = (arr[4] & 0x3fff) | 0x8000;
+        var pad = function (num) {
+            var v = num.toString(16);
+            while (v.length < 4) {
+                v = "0" + v;
+            }
+            return v;
+        };
+        return (pad(arr[0]) + pad(arr[1]) + pad(arr[2]) + pad(arr[3]) + pad(arr[4]) + pad(arr[5]) + pad(arr[6]) + pad(arr[7]));
+    }
+    // http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript/2117523#2117523
+    return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        // eslint-disable-next-line no-bitwise
+        var r = (Math.random() * 16) | 0;
+        // eslint-disable-next-line no-bitwise
+        var v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+exports.uuid4 = uuid4;
+/**
+ * Parses string form of URL into an object
+ * // borrowed from https://tools.ietf.org/html/rfc3986#appendix-B
+ * // intentionally using regex and not <a/> href parsing trick because React Native and other
+ * // environments where DOM might not be available
+ * @returns parsed URL object
+ */
+function parseUrl(url) {
+    if (!url) {
+        return {};
+    }
+    var match = url.match(/^(([^:/?#]+):)?(\/\/([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/);
+    if (!match) {
+        return {};
+    }
+    // coerce to undefined values to empty string so we don't get 'undefined'
+    var query = match[6] || '';
+    var fragment = match[8] || '';
+    return {
+        host: match[4],
+        path: match[5],
+        protocol: match[2],
+        relative: match[5] + query + fragment,
+    };
+}
+exports.parseUrl = parseUrl;
+function getFirstException(event) {
+    return event.exception && event.exception.values ? event.exception.values[0] : undefined;
+}
+/**
+ * Extracts either message or type+value from an event that can be used for user-facing logs
+ * @returns event's description
+ */
+function getEventDescription(event) {
+    var message = event.message, eventId = event.event_id;
+    if (message) {
+        return message;
+    }
+    var firstException = getFirstException(event);
+    if (firstException) {
+        if (firstException.type && firstException.value) {
+            return firstException.type + ": " + firstException.value;
+        }
+        return firstException.type || firstException.value || eventId || '<unknown>';
+    }
+    return eventId || '<unknown>';
+}
+exports.getEventDescription = getEventDescription;
+/**
+ * Adds exception values, type and value to an synthetic Exception.
+ * @param event The event to modify.
+ * @param value Value of the exception.
+ * @param type Type of the exception.
+ * @hidden
+ */
+function addExceptionTypeValue(event, value, type) {
+    var exception = (event.exception = event.exception || {});
+    var values = (exception.values = exception.values || []);
+    var firstException = (values[0] = values[0] || {});
+    if (!firstException.value) {
+        firstException.value = value || '';
+    }
+    if (!firstException.type) {
+        firstException.type = type || 'Error';
+    }
+}
+exports.addExceptionTypeValue = addExceptionTypeValue;
+/**
+ * Adds exception mechanism data to a given event. Uses defaults if the second parameter is not passed.
+ *
+ * @param event The event to modify.
+ * @param newMechanism Mechanism data to add to the event.
+ * @hidden
+ */
+function addExceptionMechanism(event, newMechanism) {
+    var firstException = getFirstException(event);
+    if (!firstException) {
+        return;
+    }
+    var defaultMechanism = { type: 'generic', handled: true };
+    var currentMechanism = firstException.mechanism;
+    firstException.mechanism = tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({}, defaultMechanism), currentMechanism), newMechanism);
+    if (newMechanism && 'data' in newMechanism) {
+        var mergedData = tslib_1.__assign(tslib_1.__assign({}, (currentMechanism && currentMechanism.data)), newMechanism.data);
+        firstException.mechanism.data = mergedData;
+    }
+}
+exports.addExceptionMechanism = addExceptionMechanism;
+// https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+var SEMVER_REGEXP = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+/**
+ * Parses input into a SemVer interface
+ * @param input string representation of a semver version
+ */
+function parseSemver(input) {
+    var match = input.match(SEMVER_REGEXP) || [];
+    var major = parseInt(match[1], 10);
+    var minor = parseInt(match[2], 10);
+    var patch = parseInt(match[3], 10);
+    return {
+        buildmetadata: match[5],
+        major: isNaN(major) ? undefined : major,
+        minor: isNaN(minor) ? undefined : minor,
+        patch: isNaN(patch) ? undefined : patch,
+        prerelease: match[4],
+    };
+}
+exports.parseSemver = parseSemver;
+/**
+ * This function adds context (pre/post/line) lines to the provided frame
+ *
+ * @param lines string[] containing all lines
+ * @param frame StackFrame that will be mutated
+ * @param linesOfContext number of context lines we want to add pre/post
+ */
+function addContextToFrame(lines, frame, linesOfContext) {
+    if (linesOfContext === void 0) { linesOfContext = 5; }
+    var lineno = frame.lineno || 0;
+    var maxLines = lines.length;
+    var sourceLine = Math.max(Math.min(maxLines, lineno - 1), 0);
+    frame.pre_context = lines
+        .slice(Math.max(0, sourceLine - linesOfContext), sourceLine)
+        .map(function (line) { return string_1.snipLine(line, 0); });
+    frame.context_line = string_1.snipLine(lines[Math.min(maxLines - 1, sourceLine)], frame.colno || 0);
+    frame.post_context = lines
+        .slice(Math.min(sourceLine + 1, maxLines), sourceLine + 1 + linesOfContext)
+        .map(function (line) { return string_1.snipLine(line, 0); });
+}
+exports.addContextToFrame = addContextToFrame;
+/**
+ * Strip the query string and fragment off of a given URL or path (if present)
+ *
+ * @param urlPath Full URL or path, including possible query string and/or fragment
+ * @returns URL or path without query string or fragment
+ */
+function stripUrlQueryAndFragment(urlPath) {
+    // eslint-disable-next-line no-useless-escape
+    return urlPath.split(/[\?#]/, 1)[0];
+}
+exports.stripUrlQueryAndFragment = stripUrlQueryAndFragment;
+/**
+ * Checks whether or not we've already captured the given exception (note: not an identical exception - the very object
+ * in question), and marks it captured if not.
+ *
+ * This is useful because it's possible for an error to get captured by more than one mechanism. After we intercept and
+ * record an error, we rethrow it (assuming we've intercepted it before it's reached the top-level global handlers), so
+ * that we don't interfere with whatever effects the error might have had were the SDK not there. At that point, because
+ * the error has been rethrown, it's possible for it to bubble up to some other code we've instrumented. If it's not
+ * caught after that, it will bubble all the way up to the global handlers (which of course we also instrument). This
+ * function helps us ensure that even if we encounter the same error more than once, we only record it the first time we
+ * see it.
+ *
+ * Note: It will ignore primitives (always return `false` and not mark them as seen), as properties can't be set on
+ * them. {@link: Object.objectify} can be used on exceptions to convert any that are primitives into their equivalent
+ * object wrapper forms so that this check will always work. However, because we need to flag the exact object which
+ * will get rethrown, and because that rethrowing happens outside of the event processing pipeline, the objectification
+ * must be done before the exception captured.
+ *
+ * @param A thrown exception to check or flag as having been seen
+ * @returns `true` if the exception has already been captured, `false` if not (with the side effect of marking it seen)
+ */
+function checkOrSetAlreadyCaught(exception) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    if (exception && exception.__sentry_captured__) {
+        return true;
+    }
+    try {
+        // set it this way rather than by assignment so that it's not ennumerable and therefore isn't recorded by the
+        // `ExtraErrorData` integration
+        object_1.addNonEnumerableProperty(exception, '__sentry_captured__', true);
+    }
+    catch (err) {
+        // `exception` is a primitive, so we can't mark it seen
+    }
+    return false;
+}
+exports.checkOrSetAlreadyCaught = checkOrSetAlreadyCaught;
+//# sourceMappingURL=misc.js.map
+
+/***/ }),
+
+/***/ 16411:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/* module decorator */ module = __nccwpck_require__.nmd(module);
+/**
+ * NOTE: In order to avoid circular dependencies, if you add a function to this module and it needs to print something,
+ * you must either a) use `console.log` rather than the logger, or b) put your function elsewhere.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var env_1 = __nccwpck_require__(31913);
+/**
+ * Checks whether we're in the Node.js or Browser environment
+ *
+ * @returns Answer to given question
+ */
+function isNodeEnv() {
+    // explicitly check for browser bundles as those can be optimized statically
+    // by terser/rollup.
+    return (!env_1.isBrowserBundle() &&
+        Object.prototype.toString.call(typeof process !== 'undefined' ? process : 0) === '[object process]');
+}
+exports.isNodeEnv = isNodeEnv;
+/**
+ * Requires a module which is protected against bundler minification.
+ *
+ * @param request The module path to resolve
+ */
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types, @typescript-eslint/no-explicit-any
+function dynamicRequire(mod, request) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return mod.require(request);
+}
+exports.dynamicRequire = dynamicRequire;
+/**
+ * Helper for dynamically loading module that should work with linked dependencies.
+ * The problem is that we _should_ be using `require(require.resolve(moduleName, { paths: [cwd()] }))`
+ * However it's _not possible_ to do that with Webpack, as it has to know all the dependencies during
+ * build time. `require.resolve` is also not available in any other way, so we cannot create,
+ * a fake helper like we do with `dynamicRequire`.
+ *
+ * We always prefer to use local package, thus the value is not returned early from each `try/catch` block.
+ * That is to mimic the behavior of `require.resolve` exactly.
+ *
+ * @param moduleName module name to require
+ * @returns possibly required module
+ */
+function loadModule(moduleName) {
+    var mod;
+    try {
+        mod = dynamicRequire(module, moduleName);
+    }
+    catch (e) {
+        // no-empty
+    }
+    try {
+        var cwd = dynamicRequire(module, 'process').cwd;
+        mod = dynamicRequire(module, cwd() + "/node_modules/" + moduleName);
+    }
+    catch (e) {
+        // no-empty
+    }
+    return mod;
+}
+exports.loadModule = loadModule;
+//# sourceMappingURL=node.js.map
+
+/***/ }),
+
+/***/ 28592:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var is_1 = __nccwpck_require__(92757);
+var memo_1 = __nccwpck_require__(49515);
+var object_1 = __nccwpck_require__(69249);
+var stacktrace_1 = __nccwpck_require__(5986);
+/**
+ * Recursively normalizes the given object.
+ *
+ * - Creates a copy to prevent original input mutation
+ * - Skips non-enumerable properties
+ * - When stringifying, calls `toJSON` if implemented
+ * - Removes circular references
+ * - Translates non-serializable values (`undefined`/`NaN`/functions) to serializable format
+ * - Translates known global objects/classes to a string representations
+ * - Takes care of `Error` object serialization
+ * - Optionally limits depth of final output
+ * - Optionally limits number of properties/elements included in any single object/array
+ *
+ * @param input The object to be normalized.
+ * @param depth The max depth to which to normalize the object. (Anything deeper stringified whole.)
+ * @param maxProperties The max number of elements or properties to be included in any single array or
+ * object in the normallized output..
+ * @returns A normalized version of the object, or `"**non-serializable**"` if any errors are thrown during normalization.
+ */
+function normalize(input, depth, maxProperties) {
+    if (depth === void 0) { depth = +Infinity; }
+    if (maxProperties === void 0) { maxProperties = +Infinity; }
+    try {
+        // since we're at the outermost level, there is no key
+        return visit('', input, depth, maxProperties);
+    }
+    catch (err) {
+        return { ERROR: "**non-serializable** (" + err + ")" };
+    }
+}
+exports.normalize = normalize;
+/** JSDoc */
+function normalizeToSize(object, 
+// Default Node.js REPL depth
+depth, 
+// 100kB, as 200kB is max payload size, so half sounds reasonable
+maxSize) {
+    if (depth === void 0) { depth = 3; }
+    if (maxSize === void 0) { maxSize = 100 * 1024; }
+    var normalized = normalize(object, depth);
+    if (jsonSize(normalized) > maxSize) {
+        return normalizeToSize(object, depth - 1, maxSize);
+    }
+    return normalized;
+}
+exports.normalizeToSize = normalizeToSize;
+/**
+ * Visits a node to perform normalization on it
+ *
+ * @param key The key corresponding to the given node
+ * @param value The node to be visited
+ * @param depth Optional number indicating the maximum recursion depth
+ * @param maxProperties Optional maximum number of properties/elements included in any single object/array
+ * @param memo Optional Memo class handling decycling
+ */
+function visit(key, value, depth, maxProperties, memo) {
+    if (depth === void 0) { depth = +Infinity; }
+    if (maxProperties === void 0) { maxProperties = +Infinity; }
+    if (memo === void 0) { memo = memo_1.memoBuilder(); }
+    var _a = tslib_1.__read(memo, 2), memoize = _a[0], unmemoize = _a[1];
+    // If the value has a `toJSON` method, see if we can bail and let it do the work
+    var valueWithToJSON = value;
+    if (valueWithToJSON && typeof valueWithToJSON.toJSON === 'function') {
+        try {
+            return valueWithToJSON.toJSON();
+        }
+        catch (err) {
+            // pass (The built-in `toJSON` failed, but we can still try to do it ourselves)
+        }
+    }
+    // Get the simple cases out of the way first
+    if (value === null || (['number', 'boolean', 'string'].includes(typeof value) && !is_1.isNaN(value))) {
+        return value;
+    }
+    var stringified = stringifyValue(key, value);
+    // Anything we could potentially dig into more (objects or arrays) will have come back as `"[object XXXX]"`.
+    // Everything else will have already been serialized, so if we don't see that pattern, we're done.
+    if (!stringified.startsWith('[object ')) {
+        return stringified;
+    }
+    // We're also done if we've reached the max depth
+    if (depth === 0) {
+        // At this point we know `serialized` is a string of the form `"[object XXXX]"`. Clean it up so it's just `"[XXXX]"`.
+        return stringified.replace('object ', '');
+    }
+    // If we've already visited this branch, bail out, as it's circular reference. If not, note that we're seeing it now.
+    if (memoize(value)) {
+        return '[Circular ~]';
+    }
+    // At this point we know we either have an object or an array, we haven't seen it before, and we're going to recurse
+    // because we haven't yet reached the max depth. Create an accumulator to hold the results of visiting each
+    // property/entry, and keep track of the number of items we add to it.
+    var normalized = (Array.isArray(value) ? [] : {});
+    var numAdded = 0;
+    // Before we begin, convert`Error` and`Event` instances into plain objects, since some of each of their relevant
+    // properties are non-enumerable and otherwise would get missed.
+    var visitable = (is_1.isError(value) || is_1.isEvent(value) ? object_1.convertToPlainObject(value) : value);
+    for (var visitKey in visitable) {
+        // Avoid iterating over fields in the prototype if they've somehow been exposed to enumeration.
+        if (!Object.prototype.hasOwnProperty.call(visitable, visitKey)) {
+            continue;
+        }
+        if (numAdded >= maxProperties) {
+            normalized[visitKey] = '[MaxProperties ~]';
+            break;
+        }
+        // Recursively visit all the child nodes
+        var visitValue = visitable[visitKey];
+        normalized[visitKey] = visit(visitKey, visitValue, depth - 1, maxProperties, memo);
+        numAdded += 1;
+    }
+    // Once we've visited all the branches, remove the parent from memo storage
+    unmemoize(value);
+    // Return accumulated values
+    return normalized;
+}
+exports.walk = visit;
+/**
+ * Stringify the given value. Handles various known special values and types.
+ *
+ * Not meant to be used on simple primitives which already have a string representation, as it will, for example, turn
+ * the number 1231 into "[Object Number]", nor on `null`, as it will throw.
+ *
+ * @param value The value to stringify
+ * @returns A stringified representation of the given value
+ */
+function stringifyValue(key, 
+// this type is a tiny bit of a cheat, since this function does handle NaN (which is technically a number), but for
+// our internal use, it'll do
+value) {
+    try {
+        if (key === 'domain' && value && typeof value === 'object' && value._events) {
+            return '[Domain]';
+        }
+        if (key === 'domainEmitter') {
+            return '[DomainEmitter]';
+        }
+        // It's safe to use `global`, `window`, and `document` here in this manner, as we are asserting using `typeof` first
+        // which won't throw if they are not present.
+        if (typeof global !== 'undefined' && value === global) {
+            return '[Global]';
+        }
+        // eslint-disable-next-line no-restricted-globals
+        if (typeof window !== 'undefined' && value === window) {
+            return '[Window]';
+        }
+        // eslint-disable-next-line no-restricted-globals
+        if (typeof document !== 'undefined' && value === document) {
+            return '[Document]';
+        }
+        // React's SyntheticEvent thingy
+        if (is_1.isSyntheticEvent(value)) {
+            return '[SyntheticEvent]';
+        }
+        if (typeof value === 'number' && value !== value) {
+            return '[NaN]';
+        }
+        // this catches `undefined` (but not `null`, which is a primitive and can be serialized on its own)
+        if (value === void 0) {
+            return '[undefined]';
+        }
+        if (typeof value === 'function') {
+            return "[Function: " + stacktrace_1.getFunctionName(value) + "]";
+        }
+        if (typeof value === 'symbol') {
+            return "[" + String(value) + "]";
+        }
+        // stringified BigInts are indistinguishable from regular numbers, so we need to label them to avoid confusion
+        if (typeof value === 'bigint') {
+            return "[BigInt: " + String(value) + "]";
+        }
+        // Now that we've knocked out all the special cases and the primitives, all we have left are objects. Simply casting
+        // them to strings means that instances of classes which haven't defined their `toStringTag` will just come out as
+        // `"[object Object]"`. If we instead look at the constructor's name (which is the same as the name of the class),
+        // we can make sure that only plain objects come out that way.
+        return "[object " + Object.getPrototypeOf(value).constructor.name + "]";
+    }
+    catch (err) {
+        return "**non-serializable** (" + err + ")";
+    }
+}
+/** Calculates bytes size of input string */
+function utf8Length(value) {
+    // eslint-disable-next-line no-bitwise
+    return ~-encodeURI(value).split(/%..|./).length;
+}
+/** Calculates bytes size of input object */
+function jsonSize(value) {
+    return utf8Length(JSON.stringify(value));
+}
+//# sourceMappingURL=normalize.js.map
+
+/***/ }),
+
+/***/ 69249:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var browser_1 = __nccwpck_require__(30597);
+var is_1 = __nccwpck_require__(92757);
+var string_1 = __nccwpck_require__(66538);
+/**
+ * Replace a method in an object with a wrapped version of itself.
+ *
+ * @param source An object that contains a method to be wrapped.
+ * @param name The name of the method to be wrapped.
+ * @param replacementFactory A higher-order function that takes the original version of the given method and returns a
+ * wrapped version. Note: The function returned by `replacementFactory` needs to be a non-arrow function, in order to
+ * preserve the correct value of `this`, and the original method must be called using `origMethod.call(this, <other
+ * args>)` or `origMethod.apply(this, [<other args>])` (rather than being called directly), again to preserve `this`.
+ * @returns void
+ */
+function fill(source, name, replacementFactory) {
+    if (!(name in source)) {
+        return;
+    }
+    var original = source[name];
+    var wrapped = replacementFactory(original);
+    // Make sure it's a function first, as we need to attach an empty prototype for `defineProperties` to work
+    // otherwise it'll throw "TypeError: Object.defineProperties called on non-object"
+    if (typeof wrapped === 'function') {
+        try {
+            markFunctionWrapped(wrapped, original);
+        }
+        catch (_Oo) {
+            // This can throw if multiple fill happens on a global object like XMLHttpRequest
+            // Fixes https://github.com/getsentry/sentry-javascript/issues/2043
+        }
+    }
+    source[name] = wrapped;
+}
+exports.fill = fill;
+/**
+ * Defines a non-enumerable property on the given object.
+ *
+ * @param obj The object on which to set the property
+ * @param name The name of the property to be set
+ * @param value The value to which to set the property
+ */
+function addNonEnumerableProperty(obj, name, value) {
+    Object.defineProperty(obj, name, {
+        // enumerable: false, // the default, so we can save on bundle size by not explicitly setting it
+        value: value,
+        writable: true,
+        configurable: true,
+    });
+}
+exports.addNonEnumerableProperty = addNonEnumerableProperty;
+/**
+ * Remembers the original function on the wrapped function and
+ * patches up the prototype.
+ *
+ * @param wrapped the wrapper function
+ * @param original the original function that gets wrapped
+ */
+function markFunctionWrapped(wrapped, original) {
+    var proto = original.prototype || {};
+    wrapped.prototype = original.prototype = proto;
+    addNonEnumerableProperty(wrapped, '__sentry_original__', original);
+}
+exports.markFunctionWrapped = markFunctionWrapped;
+/**
+ * This extracts the original function if available.  See
+ * `markFunctionWrapped` for more information.
+ *
+ * @param func the function to unwrap
+ * @returns the unwrapped version of the function if available.
+ */
+function getOriginalFunction(func) {
+    return func.__sentry_original__;
+}
+exports.getOriginalFunction = getOriginalFunction;
+/**
+ * Encodes given object into url-friendly format
+ *
+ * @param object An object that contains serializable values
+ * @returns string Encoded
+ */
+function urlEncode(object) {
+    return Object.keys(object)
+        .map(function (key) { return encodeURIComponent(key) + "=" + encodeURIComponent(object[key]); })
+        .join('&');
+}
+exports.urlEncode = urlEncode;
+/**
+ * Transforms any object into an object literal with all its attributes
+ * attached to it.
+ *
+ * @param value Initial source that we have to transform in order for it to be usable by the serializer
+ */
+function convertToPlainObject(value) {
+    var newObj = value;
+    if (is_1.isError(value)) {
+        newObj = tslib_1.__assign({ message: value.message, name: value.name, stack: value.stack }, getOwnProperties(value));
+    }
+    else if (is_1.isEvent(value)) {
+        var event_1 = value;
+        newObj = tslib_1.__assign({ type: event_1.type, target: serializeEventTarget(event_1.target), currentTarget: serializeEventTarget(event_1.currentTarget) }, getOwnProperties(event_1));
+        if (typeof CustomEvent !== 'undefined' && is_1.isInstanceOf(value, CustomEvent)) {
+            newObj.detail = event_1.detail;
+        }
+    }
+    return newObj;
+}
+exports.convertToPlainObject = convertToPlainObject;
+/** Creates a string representation of the target of an `Event` object */
+function serializeEventTarget(target) {
+    try {
+        return is_1.isElement(target) ? browser_1.htmlTreeAsString(target) : Object.prototype.toString.call(target);
+    }
+    catch (_oO) {
+        return '<unknown>';
+    }
+}
+/** Filters out all but an object's own properties */
+function getOwnProperties(obj) {
+    var extractedProps = {};
+    for (var property in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, property)) {
+            extractedProps[property] = obj[property];
+        }
+    }
+    return extractedProps;
+}
+/**
+ * Given any captured exception, extract its keys and create a sorted
+ * and truncated list that will be used inside the event message.
+ * eg. `Non-error exception captured with keys: foo, bar, baz`
+ */
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+function extractExceptionKeysForMessage(exception, maxLength) {
+    if (maxLength === void 0) { maxLength = 40; }
+    var keys = Object.keys(convertToPlainObject(exception));
+    keys.sort();
+    if (!keys.length) {
+        return '[object has no keys]';
+    }
+    if (keys[0].length >= maxLength) {
+        return string_1.truncate(keys[0], maxLength);
+    }
+    for (var includedKeys = keys.length; includedKeys > 0; includedKeys--) {
+        var serialized = keys.slice(0, includedKeys).join(', ');
+        if (serialized.length > maxLength) {
+            continue;
+        }
+        if (includedKeys === keys.length) {
+            return serialized;
+        }
+        return string_1.truncate(serialized, maxLength);
+    }
+    return '';
+}
+exports.extractExceptionKeysForMessage = extractExceptionKeysForMessage;
+/**
+ * Given any object, return the new object with removed keys that value was `undefined`.
+ * Works recursively on objects and arrays.
+ */
+function dropUndefinedKeys(val) {
+    var e_1, _a;
+    if (is_1.isPlainObject(val)) {
+        var rv = {};
+        try {
+            for (var _b = tslib_1.__values(Object.keys(val)), _c = _b.next(); !_c.done; _c = _b.next()) {
+                var key = _c.value;
+                if (typeof val[key] !== 'undefined') {
+                    rv[key] = dropUndefinedKeys(val[key]);
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return rv;
+    }
+    if (Array.isArray(val)) {
+        return val.map(dropUndefinedKeys);
+    }
+    return val;
+}
+exports.dropUndefinedKeys = dropUndefinedKeys;
+/**
+ * Ensure that something is an object.
+ *
+ * Turns `undefined` and `null` into `String`s and all other primitives into instances of their respective wrapper
+ * classes (String, Boolean, Number, etc.). Acts as the identity function on non-primitives.
+ *
+ * @param wat The subject of the objectification
+ * @returns A version of `wat` which can safely be used with `Object` class methods
+ */
+function objectify(wat) {
+    var objectified;
+    switch (true) {
+        case wat === undefined || wat === null:
+            objectified = new String(wat);
+            break;
+        // Though symbols and bigints do have wrapper classes (`Symbol` and `BigInt`, respectively), for whatever reason
+        // those classes don't have constructors which can be used with the `new` keyword. We therefore need to cast each as
+        // an object in order to wrap it.
+        case typeof wat === 'symbol' || typeof wat === 'bigint':
+            objectified = Object(wat);
+            break;
+        // this will catch the remaining primitives: `String`, `Number`, and `Boolean`
+        case is_1.isPrimitive(wat):
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            objectified = new wat.constructor(wat);
+            break;
+        // by process of elimination, at this point we know that `wat` must already be an object
+        default:
+            objectified = wat;
+            break;
+    }
+    return objectified;
+}
+exports.objectify = objectify;
+//# sourceMappingURL=object.js.map
+
+/***/ }),
+
+/***/ 39188:
+/***/ ((__unused_webpack_module, exports) => {
+
+// Slightly modified (no IE8 support, ES6) and transcribed to TypeScript
+// https://raw.githubusercontent.com/calvinmetcalf/rollup-plugin-node-builtins/master/src/es6/path.js
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/** JSDoc */
+function normalizeArray(parts, allowAboveRoot) {
+    // if the path tries to go above the root, `up` ends up > 0
+    var up = 0;
+    for (var i = parts.length - 1; i >= 0; i--) {
+        var last = parts[i];
+        if (last === '.') {
+            parts.splice(i, 1);
+        }
+        else if (last === '..') {
+            parts.splice(i, 1);
+            // eslint-disable-next-line no-plusplus
+            up++;
+        }
+        else if (up) {
+            parts.splice(i, 1);
+            // eslint-disable-next-line no-plusplus
+            up--;
+        }
+    }
+    // if the path is allowed to go above the root, restore leading ..s
+    if (allowAboveRoot) {
+        // eslint-disable-next-line no-plusplus
+        for (; up--; up) {
+            parts.unshift('..');
+        }
+    }
+    return parts;
+}
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe = /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^/]+?|)(\.[^./]*|))(?:[/]*)$/;
+/** JSDoc */
+function splitPath(filename) {
+    var parts = splitPathRe.exec(filename);
+    return parts ? parts.slice(1) : [];
+}
+// path.resolve([from ...], to)
+// posix version
+/** JSDoc */
+function resolve() {
+    var args = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        args[_i] = arguments[_i];
+    }
+    var resolvedPath = '';
+    var resolvedAbsolute = false;
+    for (var i = args.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+        var path = i >= 0 ? args[i] : '/';
+        // Skip empty entries
+        if (!path) {
+            continue;
+        }
+        resolvedPath = path + "/" + resolvedPath;
+        resolvedAbsolute = path.charAt(0) === '/';
+    }
+    // At this point the path should be resolved to a full absolute path, but
+    // handle relative paths to be safe (might happen when process.cwd() fails)
+    // Normalize the path
+    resolvedPath = normalizeArray(resolvedPath.split('/').filter(function (p) { return !!p; }), !resolvedAbsolute).join('/');
+    return (resolvedAbsolute ? '/' : '') + resolvedPath || '.';
+}
+exports.resolve = resolve;
+/** JSDoc */
+function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+        if (arr[start] !== '') {
+            break;
+        }
+    }
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+        if (arr[end] !== '') {
+            break;
+        }
+    }
+    if (start > end) {
+        return [];
+    }
+    return arr.slice(start, end - start + 1);
+}
+// path.relative(from, to)
+// posix version
+/** JSDoc */
+function relative(from, to) {
+    /* eslint-disable no-param-reassign */
+    from = resolve(from).substr(1);
+    to = resolve(to).substr(1);
+    /* eslint-enable no-param-reassign */
+    var fromParts = trim(from.split('/'));
+    var toParts = trim(to.split('/'));
+    var length = Math.min(fromParts.length, toParts.length);
+    var samePartsLength = length;
+    for (var i = 0; i < length; i++) {
+        if (fromParts[i] !== toParts[i]) {
+            samePartsLength = i;
+            break;
+        }
+    }
+    var outputParts = [];
+    for (var i = samePartsLength; i < fromParts.length; i++) {
+        outputParts.push('..');
+    }
+    outputParts = outputParts.concat(toParts.slice(samePartsLength));
+    return outputParts.join('/');
+}
+exports.relative = relative;
+// path.normalize(path)
+// posix version
+/** JSDoc */
+function normalizePath(path) {
+    var isPathAbsolute = isAbsolute(path);
+    var trailingSlash = path.substr(-1) === '/';
+    // Normalize the path
+    var normalizedPath = normalizeArray(path.split('/').filter(function (p) { return !!p; }), !isPathAbsolute).join('/');
+    if (!normalizedPath && !isPathAbsolute) {
+        normalizedPath = '.';
+    }
+    if (normalizedPath && trailingSlash) {
+        normalizedPath += '/';
+    }
+    return (isPathAbsolute ? '/' : '') + normalizedPath;
+}
+exports.normalizePath = normalizePath;
+// posix version
+/** JSDoc */
+function isAbsolute(path) {
+    return path.charAt(0) === '/';
+}
+exports.isAbsolute = isAbsolute;
+// posix version
+/** JSDoc */
+function join() {
+    var args = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        args[_i] = arguments[_i];
+    }
+    return normalizePath(args.join('/'));
+}
+exports.join = join;
+/** JSDoc */
+function dirname(path) {
+    var result = splitPath(path);
+    var root = result[0];
+    var dir = result[1];
+    if (!root && !dir) {
+        // No dirname whatsoever
+        return '.';
+    }
+    if (dir) {
+        // It has a dirname, strip trailing slash
+        dir = dir.substr(0, dir.length - 1);
+    }
+    return root + dir;
+}
+exports.dirname = dirname;
+/** JSDoc */
+function basename(path, ext) {
+    var f = splitPath(path)[2];
+    if (ext && f.substr(ext.length * -1) === ext) {
+        f = f.substr(0, f.length - ext.length);
+    }
+    return f;
+}
+exports.basename = basename;
+//# sourceMappingURL=path.js.map
+
+/***/ }),
+
+/***/ 1243:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.setPrototypeOf = Object.setPrototypeOf || ({ __proto__: [] } instanceof Array ? setProtoOf : mixinProperties);
+/**
+ * setPrototypeOf polyfill using __proto__
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+function setProtoOf(obj, proto) {
+    // @ts-ignore __proto__ does not exist on obj
+    obj.__proto__ = proto;
+    return obj;
+}
+/**
+ * setPrototypeOf polyfill using mixin
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+function mixinProperties(obj, proto) {
+    for (var prop in proto) {
+        if (!Object.prototype.hasOwnProperty.call(obj, prop)) {
+            // @ts-ignore typescript complains about indexing so we remove
+            obj[prop] = proto[prop];
+        }
+    }
+    return obj;
+}
+//# sourceMappingURL=polyfill.js.map
+
+/***/ }),
+
+/***/ 31811:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var error_1 = __nccwpck_require__(66238);
+var syncpromise_1 = __nccwpck_require__(87833);
+/**
+ * Creates an new PromiseBuffer object with the specified limit
+ * @param limit max number of promises that can be stored in the buffer
+ */
+function makePromiseBuffer(limit) {
+    var buffer = [];
+    function isReady() {
+        return limit === undefined || buffer.length < limit;
+    }
+    /**
+     * Remove a promise from the queue.
+     *
+     * @param task Can be any PromiseLike<T>
+     * @returns Removed promise.
+     */
+    function remove(task) {
+        return buffer.splice(buffer.indexOf(task), 1)[0];
+    }
+    /**
+     * Add a promise (representing an in-flight action) to the queue, and set it to remove itself on fulfillment.
+     *
+     * @param taskProducer A function producing any PromiseLike<T>; In previous versions this used to be `task:
+     *        PromiseLike<T>`, but under that model, Promises were instantly created on the call-site and their executor
+     *        functions therefore ran immediately. Thus, even if the buffer was full, the action still happened. By
+     *        requiring the promise to be wrapped in a function, we can defer promise creation until after the buffer
+     *        limit check.
+     * @returns The original promise.
+     */
+    function add(taskProducer) {
+        if (!isReady()) {
+            return syncpromise_1.rejectedSyncPromise(new error_1.SentryError('Not adding Promise due to buffer limit reached.'));
+        }
+        // start the task and add its promise to the queue
+        var task = taskProducer();
+        if (buffer.indexOf(task) === -1) {
+            buffer.push(task);
+        }
+        void task
+            .then(function () { return remove(task); })
+            // Use `then(null, rejectionHandler)` rather than `catch(rejectionHandler)` so that we can use `PromiseLike`
+            // rather than `Promise`. `PromiseLike` doesn't have a `.catch` method, making its polyfill smaller. (ES5 didn't
+            // have promises, so TS has to polyfill when down-compiling.)
+            .then(null, function () {
+            return remove(task).then(null, function () {
+                // We have to add another catch here because `remove()` starts a new promise chain.
+            });
+        });
+        return task;
+    }
+    /**
+     * Wait for all promises in the queue to resolve or for timeout to expire, whichever comes first.
+     *
+     * @param timeout The time, in ms, after which to resolve to `false` if the queue is still non-empty. Passing `0` (or
+     * not passing anything) will make the promise wait as long as it takes for the queue to drain before resolving to
+     * `true`.
+     * @returns A promise which will resolve to `true` if the queue is already empty or drains before the timeout, and
+     * `false` otherwise
+     */
+    function drain(timeout) {
+        return new syncpromise_1.SyncPromise(function (resolve, reject) {
+            var counter = buffer.length;
+            if (!counter) {
+                return resolve(true);
+            }
+            // wait for `timeout` ms and then resolve to `false` (if not cancelled first)
+            var capturedSetTimeout = setTimeout(function () {
+                if (timeout && timeout > 0) {
+                    resolve(false);
+                }
+            }, timeout);
+            // if all promises resolve in time, cancel the timer and resolve to `true`
+            buffer.forEach(function (item) {
+                void syncpromise_1.resolvedSyncPromise(item).then(function () {
+                    // eslint-disable-next-line no-plusplus
+                    if (!--counter) {
+                        clearTimeout(capturedSetTimeout);
+                        resolve(true);
+                    }
+                }, reject);
+            });
+        });
+    }
+    return {
+        $: buffer,
+        add: add,
+        drain: drain,
+    };
+}
+exports.makePromiseBuffer = makePromiseBuffer;
+//# sourceMappingURL=promisebuffer.js.map
+
+/***/ }),
+
+/***/ 69377:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+exports.DEFAULT_RETRY_AFTER = 60 * 1000; // 60 seconds
+/**
+ * Extracts Retry-After value from the request header or returns default value
+ * @param header string representation of 'Retry-After' header
+ * @param now current unix timestamp
+ *
+ */
+function parseRetryAfterHeader(header, now) {
+    if (now === void 0) { now = Date.now(); }
+    var headerDelay = parseInt("" + header, 10);
+    if (!isNaN(headerDelay)) {
+        return headerDelay * 1000;
+    }
+    var headerDate = Date.parse("" + header);
+    if (!isNaN(headerDate)) {
+        return headerDate - now;
+    }
+    return exports.DEFAULT_RETRY_AFTER;
+}
+exports.parseRetryAfterHeader = parseRetryAfterHeader;
+/**
+ * Gets the time that given category is disabled until for rate limiting
+ */
+function disabledUntil(limits, category) {
+    return limits[category] || limits.all || 0;
+}
+exports.disabledUntil = disabledUntil;
+/**
+ * Checks if a category is rate limited
+ */
+function isRateLimited(limits, category, now) {
+    if (now === void 0) { now = Date.now(); }
+    return disabledUntil(limits, category) > now;
+}
+exports.isRateLimited = isRateLimited;
+/**
+ * Update ratelimits from incoming headers.
+ * Returns true if headers contains a non-empty rate limiting header.
+ */
+function updateRateLimits(limits, headers, now) {
+    var e_1, _a, e_2, _b;
