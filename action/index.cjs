@@ -35722,3 +35722,2264 @@ exports.isRateLimited = isRateLimited;
  */
 function updateRateLimits(limits, headers, now) {
     var e_1, _a, e_2, _b;
+    if (now === void 0) { now = Date.now(); }
+    var updatedRateLimits = tslib_1.__assign({}, limits);
+    // "The name is case-insensitive."
+    // https://developer.mozilla.org/en-US/docs/Web/API/Headers/get
+    var rateLimitHeader = headers['x-sentry-rate-limits'];
+    var retryAfterHeader = headers['retry-after'];
+    if (rateLimitHeader) {
+        try {
+            /**
+             * rate limit headers are of the form
+             *     <header>,<header>,..
+             * where each <header> is of the form
+             *     <retry_after>: <categories>: <scope>: <reason_code>
+             * where
+             *     <retry_after> is a delay in seconds
+             *     <categories> is the event type(s) (error, transaction, etc) being rate limited and is of the form
+             *         <category>;<category>;...
+             *     <scope> is what's being limited (org, project, or key) - ignored by SDK
+             *     <reason_code> is an arbitrary string like "org_quota" - ignored by SDK
+             */
+            for (var _c = tslib_1.__values(rateLimitHeader.trim().split(',')), _d = _c.next(); !_d.done; _d = _c.next()) {
+                var limit = _d.value;
+                var parameters = limit.split(':', 2);
+                var headerDelay = parseInt(parameters[0], 10);
+                var delay = (!isNaN(headerDelay) ? headerDelay : 60) * 1000; // 60sec default
+                if (!parameters[1]) {
+                    updatedRateLimits.all = now + delay;
+                }
+                else {
+                    try {
+                        for (var _e = (e_2 = void 0, tslib_1.__values(parameters[1].split(';'))), _f = _e.next(); !_f.done; _f = _e.next()) {
+                            var category = _f.value;
+                            updatedRateLimits[category] = now + delay;
+                        }
+                    }
+                    catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                    finally {
+                        try {
+                            if (_f && !_f.done && (_b = _e.return)) _b.call(_e);
+                        }
+                        finally { if (e_2) throw e_2.error; }
+                    }
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+    }
+    else if (retryAfterHeader) {
+        updatedRateLimits.all = now + parseRetryAfterHeader(retryAfterHeader, now);
+    }
+    return updatedRateLimits;
+}
+exports.updateRateLimits = updateRateLimits;
+//# sourceMappingURL=ratelimit.js.map
+
+/***/ }),
+
+/***/ 68853:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var types_1 = __nccwpck_require__(83789);
+var enums_1 = __nccwpck_require__(19489);
+function isSupportedSeverity(level) {
+    return enums_1.SeverityLevels.indexOf(level) !== -1;
+}
+/**
+ * Converts a string-based level into a {@link Severity}.
+ *
+ * @param level string representation of Severity
+ * @returns Severity
+ */
+function severityFromString(level) {
+    if (level === 'warn')
+        return types_1.Severity.Warning;
+    if (isSupportedSeverity(level)) {
+        return level;
+    }
+    return types_1.Severity.Log;
+}
+exports.severityFromString = severityFromString;
+//# sourceMappingURL=severity.js.map
+
+/***/ }),
+
+/***/ 5986:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var tslib_1 = __nccwpck_require__(21250);
+var STACKTRACE_LIMIT = 50;
+/**
+ * Creates a stack parser with the supplied line parsers
+ *
+ * StackFrames are returned in the correct order for Sentry Exception
+ * frames and with Sentry SDK internal frames removed from the top and bottom
+ *
+ */
+function createStackParser() {
+    var parsers = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+        parsers[_i] = arguments[_i];
+    }
+    var sortedParsers = parsers.sort(function (a, b) { return a[0] - b[0]; }).map(function (p) { return p[1]; });
+    return function (stack, skipFirst) {
+        var e_1, _a, e_2, _b;
+        if (skipFirst === void 0) { skipFirst = 0; }
+        var frames = [];
+        try {
+            for (var _c = tslib_1.__values(stack.split('\n').slice(skipFirst)), _d = _c.next(); !_d.done; _d = _c.next()) {
+                var line = _d.value;
+                try {
+                    for (var sortedParsers_1 = (e_2 = void 0, tslib_1.__values(sortedParsers)), sortedParsers_1_1 = sortedParsers_1.next(); !sortedParsers_1_1.done; sortedParsers_1_1 = sortedParsers_1.next()) {
+                        var parser = sortedParsers_1_1.value;
+                        var frame = parser(line);
+                        if (frame) {
+                            frames.push(frame);
+                            break;
+                        }
+                    }
+                }
+                catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                finally {
+                    try {
+                        if (sortedParsers_1_1 && !sortedParsers_1_1.done && (_b = sortedParsers_1.return)) _b.call(sortedParsers_1);
+                    }
+                    finally { if (e_2) throw e_2.error; }
+                }
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (_d && !_d.done && (_a = _c.return)) _a.call(_c);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return stripSentryFramesAndReverse(frames);
+    };
+}
+exports.createStackParser = createStackParser;
+/**
+ * @hidden
+ */
+function stripSentryFramesAndReverse(stack) {
+    if (!stack.length) {
+        return [];
+    }
+    var localStack = stack;
+    var firstFrameFunction = localStack[0].function || '';
+    var lastFrameFunction = localStack[localStack.length - 1].function || '';
+    // If stack starts with one of our API calls, remove it (starts, meaning it's the top of the stack - aka last call)
+    if (firstFrameFunction.indexOf('captureMessage') !== -1 || firstFrameFunction.indexOf('captureException') !== -1) {
+        localStack = localStack.slice(1);
+    }
+    // If stack ends with one of our internal API calls, remove it (ends, meaning it's the bottom of the stack - aka top-most call)
+    if (lastFrameFunction.indexOf('sentryWrapped') !== -1) {
+        localStack = localStack.slice(0, -1);
+    }
+    // The frame where the crash happened, should be the last entry in the array
+    return localStack
+        .slice(0, STACKTRACE_LIMIT)
+        .map(function (frame) { return (tslib_1.__assign(tslib_1.__assign({}, frame), { filename: frame.filename || localStack[0].filename, function: frame.function || '?' })); })
+        .reverse();
+}
+exports.stripSentryFramesAndReverse = stripSentryFramesAndReverse;
+var defaultFunctionName = '<anonymous>';
+/**
+ * Safely extract function name from itself
+ */
+function getFunctionName(fn) {
+    try {
+        if (!fn || typeof fn !== 'function') {
+            return defaultFunctionName;
+        }
+        return fn.name || defaultFunctionName;
+    }
+    catch (e) {
+        // Just accessing custom props in some Selenium environments
+        // can cause a "Permission denied" exception (see raven-js#495).
+        return defaultFunctionName;
+    }
+}
+exports.getFunctionName = getFunctionName;
+//# sourceMappingURL=stacktrace.js.map
+
+/***/ }),
+
+/***/ 70313:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/**
+ * Converts an HTTP status code to sentry status {@link EventStatus}.
+ *
+ * @param code number HTTP status code
+ * @returns EventStatus
+ */
+function eventStatusFromHttpCode(code) {
+    if (code >= 200 && code < 300) {
+        return 'success';
+    }
+    if (code === 429) {
+        return 'rate_limit';
+    }
+    if (code >= 400 && code < 500) {
+        return 'invalid';
+    }
+    if (code >= 500) {
+        return 'failed';
+    }
+    return 'unknown';
+}
+exports.eventStatusFromHttpCode = eventStatusFromHttpCode;
+//# sourceMappingURL=status.js.map
+
+/***/ }),
+
+/***/ 66538:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var is_1 = __nccwpck_require__(92757);
+/**
+ * Truncates given string to the maximum characters count
+ *
+ * @param str An object that contains serializable values
+ * @param max Maximum number of characters in truncated string (0 = unlimited)
+ * @returns string Encoded
+ */
+function truncate(str, max) {
+    if (max === void 0) { max = 0; }
+    if (typeof str !== 'string' || max === 0) {
+        return str;
+    }
+    return str.length <= max ? str : str.substr(0, max) + "...";
+}
+exports.truncate = truncate;
+/**
+ * This is basically just `trim_line` from
+ * https://github.com/getsentry/sentry/blob/master/src/sentry/lang/javascript/processor.py#L67
+ *
+ * @param str An object that contains serializable values
+ * @param max Maximum number of characters in truncated string
+ * @returns string Encoded
+ */
+function snipLine(line, colno) {
+    var newLine = line;
+    var lineLength = newLine.length;
+    if (lineLength <= 150) {
+        return newLine;
+    }
+    if (colno > lineLength) {
+        // eslint-disable-next-line no-param-reassign
+        colno = lineLength;
+    }
+    var start = Math.max(colno - 60, 0);
+    if (start < 5) {
+        start = 0;
+    }
+    var end = Math.min(start + 140, lineLength);
+    if (end > lineLength - 5) {
+        end = lineLength;
+    }
+    if (end === lineLength) {
+        start = Math.max(end - 140, 0);
+    }
+    newLine = newLine.slice(start, end);
+    if (start > 0) {
+        newLine = "'{snip} " + newLine;
+    }
+    if (end < lineLength) {
+        newLine += ' {snip}';
+    }
+    return newLine;
+}
+exports.snipLine = snipLine;
+/**
+ * Join values in array
+ * @param input array of values to be joined together
+ * @param delimiter string to be placed in-between values
+ * @returns Joined values
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeJoin(input, delimiter) {
+    if (!Array.isArray(input)) {
+        return '';
+    }
+    var output = [];
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
+    for (var i = 0; i < input.length; i++) {
+        var value = input[i];
+        try {
+            output.push(String(value));
+        }
+        catch (e) {
+            output.push('[value cannot be serialized]');
+        }
+    }
+    return output.join(delimiter);
+}
+exports.safeJoin = safeJoin;
+/**
+ * Checks if the value matches a regex or includes the string
+ * @param value The string value to be checked against
+ * @param pattern Either a regex or a string that must be contained in value
+ */
+function isMatchingPattern(value, pattern) {
+    if (!is_1.isString(value)) {
+        return false;
+    }
+    if (is_1.isRegExp(pattern)) {
+        return pattern.test(value);
+    }
+    if (typeof pattern === 'string') {
+        return value.indexOf(pattern) !== -1;
+    }
+    return false;
+}
+exports.isMatchingPattern = isMatchingPattern;
+/**
+ * Given a string, escape characters which have meaning in the regex grammar, such that the result is safe to feed to
+ * `new RegExp()`.
+ *
+ * Based on https://github.com/sindresorhus/escape-string-regexp. Vendored to a) reduce the size by skipping the runtime
+ * type-checking, and b) ensure it gets down-compiled for old versions of Node (the published package only supports Node
+ * 12+).
+ *
+ * @param regexString The string to escape
+ * @returns An version of the string with all special regex characters escaped
+ */
+function escapeStringForRegex(regexString) {
+    // escape the hyphen separately so we can also replace it with a unicode literal hyphen, to avoid the problems
+    // discussed in https://github.com/sindresorhus/escape-string-regexp/issues/20.
+    return regexString.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+}
+exports.escapeStringForRegex = escapeStringForRegex;
+//# sourceMappingURL=string.js.map
+
+/***/ }),
+
+/***/ 88714:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var flags_1 = __nccwpck_require__(23710);
+var global_1 = __nccwpck_require__(68813);
+var logger_1 = __nccwpck_require__(15577);
+/**
+ * Tells whether current environment supports ErrorEvent objects
+ * {@link supportsErrorEvent}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsErrorEvent() {
+    try {
+        new ErrorEvent('');
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+exports.supportsErrorEvent = supportsErrorEvent;
+/**
+ * Tells whether current environment supports DOMError objects
+ * {@link supportsDOMError}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsDOMError() {
+    try {
+        // Chrome: VM89:1 Uncaught TypeError: Failed to construct 'DOMError':
+        // 1 argument required, but only 0 present.
+        // @ts-ignore It really needs 1 argument, not 0.
+        new DOMError('');
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+exports.supportsDOMError = supportsDOMError;
+/**
+ * Tells whether current environment supports DOMException objects
+ * {@link supportsDOMException}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsDOMException() {
+    try {
+        new DOMException('');
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+exports.supportsDOMException = supportsDOMException;
+/**
+ * Tells whether current environment supports Fetch API
+ * {@link supportsFetch}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsFetch() {
+    if (!('fetch' in global_1.getGlobalObject())) {
+        return false;
+    }
+    try {
+        new Headers();
+        new Request('');
+        new Response();
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+exports.supportsFetch = supportsFetch;
+/**
+ * isNativeFetch checks if the given function is a native implementation of fetch()
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+function isNativeFetch(func) {
+    return func && /^function fetch\(\)\s+\{\s+\[native code\]\s+\}$/.test(func.toString());
+}
+exports.isNativeFetch = isNativeFetch;
+/**
+ * Tells whether current environment supports Fetch API natively
+ * {@link supportsNativeFetch}.
+ *
+ * @returns true if `window.fetch` is natively implemented, false otherwise
+ */
+function supportsNativeFetch() {
+    if (!supportsFetch()) {
+        return false;
+    }
+    var global = global_1.getGlobalObject();
+    // Fast path to avoid DOM I/O
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    if (isNativeFetch(global.fetch)) {
+        return true;
+    }
+    // window.fetch is implemented, but is polyfilled or already wrapped (e.g: by a chrome extension)
+    // so create a "pure" iframe to see if that has native fetch
+    var result = false;
+    var doc = global.document;
+    // eslint-disable-next-line deprecation/deprecation
+    if (doc && typeof doc.createElement === 'function') {
+        try {
+            var sandbox = doc.createElement('iframe');
+            sandbox.hidden = true;
+            doc.head.appendChild(sandbox);
+            if (sandbox.contentWindow && sandbox.contentWindow.fetch) {
+                // eslint-disable-next-line @typescript-eslint/unbound-method
+                result = isNativeFetch(sandbox.contentWindow.fetch);
+            }
+            doc.head.removeChild(sandbox);
+        }
+        catch (err) {
+            flags_1.IS_DEBUG_BUILD &&
+                logger_1.logger.warn('Could not create sandbox iframe for pure fetch check, bailing to window.fetch: ', err);
+        }
+    }
+    return result;
+}
+exports.supportsNativeFetch = supportsNativeFetch;
+/**
+ * Tells whether current environment supports ReportingObserver API
+ * {@link supportsReportingObserver}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsReportingObserver() {
+    return 'ReportingObserver' in global_1.getGlobalObject();
+}
+exports.supportsReportingObserver = supportsReportingObserver;
+/**
+ * Tells whether current environment supports Referrer Policy API
+ * {@link supportsReferrerPolicy}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsReferrerPolicy() {
+    // Despite all stars in the sky saying that Edge supports old draft syntax, aka 'never', 'always', 'origin' and 'default'
+    // (see https://caniuse.com/#feat=referrer-policy),
+    // it doesn't. And it throws an exception instead of ignoring this parameter...
+    // REF: https://github.com/getsentry/raven-js/issues/1233
+    if (!supportsFetch()) {
+        return false;
+    }
+    try {
+        new Request('_', {
+            referrerPolicy: 'origin',
+        });
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+exports.supportsReferrerPolicy = supportsReferrerPolicy;
+/**
+ * Tells whether current environment supports History API
+ * {@link supportsHistory}.
+ *
+ * @returns Answer to the given question.
+ */
+function supportsHistory() {
+    // NOTE: in Chrome App environment, touching history.pushState, *even inside
+    //       a try/catch block*, will cause Chrome to output an error to console.error
+    // borrowed from: https://github.com/angular/angular.js/pull/13945/files
+    var global = global_1.getGlobalObject();
+    /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    var chrome = global.chrome;
+    var isChromePackagedApp = chrome && chrome.app && chrome.app.runtime;
+    /* eslint-enable @typescript-eslint/no-unsafe-member-access */
+    var hasHistoryApi = 'history' in global && !!global.history.pushState && !!global.history.replaceState;
+    return !isChromePackagedApp && hasHistoryApi;
+}
+exports.supportsHistory = supportsHistory;
+//# sourceMappingURL=supports.js.map
+
+/***/ }),
+
+/***/ 87833:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* eslint-disable @typescript-eslint/typedef */
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+var is_1 = __nccwpck_require__(92757);
+/**
+ * Creates a resolved sync promise.
+ *
+ * @param value the value to resolve the promise with
+ * @returns the resolved sync promise
+ */
+function resolvedSyncPromise(value) {
+    return new SyncPromise(function (resolve) {
+        resolve(value);
+    });
+}
+exports.resolvedSyncPromise = resolvedSyncPromise;
+/**
+ * Creates a rejected sync promise.
+ *
+ * @param value the value to reject the promise with
+ * @returns the rejected sync promise
+ */
+function rejectedSyncPromise(reason) {
+    return new SyncPromise(function (_, reject) {
+        reject(reason);
+    });
+}
+exports.rejectedSyncPromise = rejectedSyncPromise;
+/**
+ * Thenable class that behaves like a Promise and follows it's interface
+ * but is not async internally
+ */
+var SyncPromise = /** @class */ (function () {
+    function SyncPromise(executor) {
+        var _this = this;
+        this._state = 0 /* PENDING */;
+        this._handlers = [];
+        /** JSDoc */
+        this._resolve = function (value) {
+            _this._setResult(1 /* RESOLVED */, value);
+        };
+        /** JSDoc */
+        this._reject = function (reason) {
+            _this._setResult(2 /* REJECTED */, reason);
+        };
+        /** JSDoc */
+        this._setResult = function (state, value) {
+            if (_this._state !== 0 /* PENDING */) {
+                return;
+            }
+            if (is_1.isThenable(value)) {
+                void value.then(_this._resolve, _this._reject);
+                return;
+            }
+            _this._state = state;
+            _this._value = value;
+            _this._executeHandlers();
+        };
+        /** JSDoc */
+        this._executeHandlers = function () {
+            if (_this._state === 0 /* PENDING */) {
+                return;
+            }
+            var cachedHandlers = _this._handlers.slice();
+            _this._handlers = [];
+            cachedHandlers.forEach(function (handler) {
+                if (handler[0]) {
+                    return;
+                }
+                if (_this._state === 1 /* RESOLVED */) {
+                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                    handler[1](_this._value);
+                }
+                if (_this._state === 2 /* REJECTED */) {
+                    handler[2](_this._value);
+                }
+                handler[0] = true;
+            });
+        };
+        try {
+            executor(this._resolve, this._reject);
+        }
+        catch (e) {
+            this._reject(e);
+        }
+    }
+    /** JSDoc */
+    SyncPromise.prototype.then = function (onfulfilled, onrejected) {
+        var _this = this;
+        return new SyncPromise(function (resolve, reject) {
+            _this._handlers.push([
+                false,
+                function (result) {
+                    if (!onfulfilled) {
+                        // TODO: ¯\_(ツ)_/¯
+                        // TODO: FIXME
+                        resolve(result);
+                    }
+                    else {
+                        try {
+                            resolve(onfulfilled(result));
+                        }
+                        catch (e) {
+                            reject(e);
+                        }
+                    }
+                },
+                function (reason) {
+                    if (!onrejected) {
+                        reject(reason);
+                    }
+                    else {
+                        try {
+                            resolve(onrejected(reason));
+                        }
+                        catch (e) {
+                            reject(e);
+                        }
+                    }
+                },
+            ]);
+            _this._executeHandlers();
+        });
+    };
+    /** JSDoc */
+    SyncPromise.prototype.catch = function (onrejected) {
+        return this.then(function (val) { return val; }, onrejected);
+    };
+    /** JSDoc */
+    SyncPromise.prototype.finally = function (onfinally) {
+        var _this = this;
+        return new SyncPromise(function (resolve, reject) {
+            var val;
+            var isRejected;
+            return _this.then(function (value) {
+                isRejected = false;
+                val = value;
+                if (onfinally) {
+                    onfinally();
+                }
+            }, function (reason) {
+                isRejected = true;
+                val = reason;
+                if (onfinally) {
+                    onfinally();
+                }
+            }).then(function () {
+                if (isRejected) {
+                    reject(val);
+                    return;
+                }
+                resolve(val);
+            });
+        });
+    };
+    return SyncPromise;
+}());
+exports.SyncPromise = SyncPromise;
+//# sourceMappingURL=syncpromise.js.map
+
+/***/ }),
+
+/***/ 1735:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/* module decorator */ module = __nccwpck_require__.nmd(module);
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var global_1 = __nccwpck_require__(68813);
+var node_1 = __nccwpck_require__(16411);
+/**
+ * A TimestampSource implementation for environments that do not support the Performance Web API natively.
+ *
+ * Note that this TimestampSource does not use a monotonic clock. A call to `nowSeconds` may return a timestamp earlier
+ * than a previously returned value. We do not try to emulate a monotonic behavior in order to facilitate debugging. It
+ * is more obvious to explain "why does my span have negative duration" than "why my spans have zero duration".
+ */
+var dateTimestampSource = {
+    nowSeconds: function () { return Date.now() / 1000; },
+};
+/**
+ * Returns a wrapper around the native Performance API browser implementation, or undefined for browsers that do not
+ * support the API.
+ *
+ * Wrapping the native API works around differences in behavior from different browsers.
+ */
+function getBrowserPerformance() {
+    var performance = global_1.getGlobalObject().performance;
+    if (!performance || !performance.now) {
+        return undefined;
+    }
+    // Replace performance.timeOrigin with our own timeOrigin based on Date.now().
+    //
+    // This is a partial workaround for browsers reporting performance.timeOrigin such that performance.timeOrigin +
+    // performance.now() gives a date arbitrarily in the past.
+    //
+    // Additionally, computing timeOrigin in this way fills the gap for browsers where performance.timeOrigin is
+    // undefined.
+    //
+    // The assumption that performance.timeOrigin + performance.now() ~= Date.now() is flawed, but we depend on it to
+    // interact with data coming out of performance entries.
+    //
+    // Note that despite recommendations against it in the spec, browsers implement the Performance API with a clock that
+    // might stop when the computer is asleep (and perhaps under other circumstances). Such behavior causes
+    // performance.timeOrigin + performance.now() to have an arbitrary skew over Date.now(). In laptop computers, we have
+    // observed skews that can be as long as days, weeks or months.
+    //
+    // See https://github.com/getsentry/sentry-javascript/issues/2590.
+    //
+    // BUG: despite our best intentions, this workaround has its limitations. It mostly addresses timings of pageload
+    // transactions, but ignores the skew built up over time that can aversely affect timestamps of navigation
+    // transactions of long-lived web pages.
+    var timeOrigin = Date.now() - performance.now();
+    return {
+        now: function () { return performance.now(); },
+        timeOrigin: timeOrigin,
+    };
+}
+/**
+ * Returns the native Performance API implementation from Node.js. Returns undefined in old Node.js versions that don't
+ * implement the API.
+ */
+function getNodePerformance() {
+    try {
+        var perfHooks = node_1.dynamicRequire(module, 'perf_hooks');
+        return perfHooks.performance;
+    }
+    catch (_) {
+        return undefined;
+    }
+}
+/**
+ * The Performance API implementation for the current platform, if available.
+ */
+var platformPerformance = node_1.isNodeEnv() ? getNodePerformance() : getBrowserPerformance();
+var timestampSource = platformPerformance === undefined
+    ? dateTimestampSource
+    : {
+        nowSeconds: function () { return (platformPerformance.timeOrigin + platformPerformance.now()) / 1000; },
+    };
+/**
+ * Returns a timestamp in seconds since the UNIX epoch using the Date API.
+ */
+exports.dateTimestampInSeconds = dateTimestampSource.nowSeconds.bind(dateTimestampSource);
+/**
+ * Returns a timestamp in seconds since the UNIX epoch using either the Performance or Date APIs, depending on the
+ * availability of the Performance API.
+ *
+ * See `usingPerformanceAPI` to test whether the Performance API is used.
+ *
+ * BUG: Note that because of how browsers implement the Performance API, the clock might stop when the computer is
+ * asleep. This creates a skew between `dateTimestampInSeconds` and `timestampInSeconds`. The
+ * skew can grow to arbitrary amounts like days, weeks or months.
+ * See https://github.com/getsentry/sentry-javascript/issues/2590.
+ */
+exports.timestampInSeconds = timestampSource.nowSeconds.bind(timestampSource);
+// Re-exported with an old name for backwards-compatibility.
+exports.timestampWithMs = exports.timestampInSeconds;
+/**
+ * A boolean that is true when timestampInSeconds uses the Performance API to produce monotonic timestamps.
+ */
+exports.usingPerformanceAPI = platformPerformance !== undefined;
+/**
+ * The number of milliseconds since the UNIX epoch. This value is only usable in a browser, and only when the
+ * performance API is available.
+ */
+exports.browserPerformanceTimeOrigin = (function () {
+    // Unfortunately browsers may report an inaccurate time origin data, through either performance.timeOrigin or
+    // performance.timing.navigationStart, which results in poor results in performance data. We only treat time origin
+    // data as reliable if they are within a reasonable threshold of the current time.
+    var performance = global_1.getGlobalObject().performance;
+    if (!performance || !performance.now) {
+        exports._browserPerformanceTimeOriginMode = 'none';
+        return undefined;
+    }
+    var threshold = 3600 * 1000;
+    var performanceNow = performance.now();
+    var dateNow = Date.now();
+    // if timeOrigin isn't available set delta to threshold so it isn't used
+    var timeOriginDelta = performance.timeOrigin
+        ? Math.abs(performance.timeOrigin + performanceNow - dateNow)
+        : threshold;
+    var timeOriginIsReliable = timeOriginDelta < threshold;
+    // While performance.timing.navigationStart is deprecated in favor of performance.timeOrigin, performance.timeOrigin
+    // is not as widely supported. Namely, performance.timeOrigin is undefined in Safari as of writing.
+    // Also as of writing, performance.timing is not available in Web Workers in mainstream browsers, so it is not always
+    // a valid fallback. In the absence of an initial time provided by the browser, fallback to the current time from the
+    // Date API.
+    // eslint-disable-next-line deprecation/deprecation
+    var navigationStart = performance.timing && performance.timing.navigationStart;
+    var hasNavigationStart = typeof navigationStart === 'number';
+    // if navigationStart isn't available set delta to threshold so it isn't used
+    var navigationStartDelta = hasNavigationStart ? Math.abs(navigationStart + performanceNow - dateNow) : threshold;
+    var navigationStartIsReliable = navigationStartDelta < threshold;
+    if (timeOriginIsReliable || navigationStartIsReliable) {
+        // Use the more reliable time origin
+        if (timeOriginDelta <= navigationStartDelta) {
+            exports._browserPerformanceTimeOriginMode = 'timeOrigin';
+            return performance.timeOrigin;
+        }
+        else {
+            exports._browserPerformanceTimeOriginMode = 'navigationStart';
+            return navigationStart;
+        }
+    }
+    // Either both timeOrigin and navigationStart are skewed or neither is available, fallback to Date.
+    exports._browserPerformanceTimeOriginMode = 'dateNow';
+    return dateNow;
+})();
+//# sourceMappingURL=time.js.map
+
+/***/ }),
+
+/***/ 66850:
+/***/ ((__unused_webpack_module, exports) => {
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TRACEPARENT_REGEXP = new RegExp('^[ \\t]*' + // whitespace
+    '([0-9a-f]{32})?' + // trace_id
+    '-?([0-9a-f]{16})?' + // span_id
+    '-?([01])?' + // sampled
+    '[ \\t]*$');
+/**
+ * Extract transaction context data from a `sentry-trace` header.
+ *
+ * @param traceparent Traceparent string
+ *
+ * @returns Object containing data from the header, or undefined if traceparent string is malformed
+ */
+function extractTraceparentData(traceparent) {
+    var matches = traceparent.match(exports.TRACEPARENT_REGEXP);
+    if (matches) {
+        var parentSampled = void 0;
+        if (matches[3] === '1') {
+            parentSampled = true;
+        }
+        else if (matches[3] === '0') {
+            parentSampled = false;
+        }
+        return {
+            traceId: matches[1],
+            parentSampled: parentSampled,
+            parentSpanId: matches[2],
+        };
+    }
+    return undefined;
+}
+exports.extractTraceparentData = extractTraceparentData;
+//# sourceMappingURL=tracing.js.map
+
+/***/ }),
+
+/***/ 21250:
+/***/ ((module) => {
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+/* global global, define, System, Reflect, Promise */
+var __extends;
+var __assign;
+var __rest;
+var __decorate;
+var __param;
+var __metadata;
+var __awaiter;
+var __generator;
+var __exportStar;
+var __values;
+var __read;
+var __spread;
+var __spreadArrays;
+var __await;
+var __asyncGenerator;
+var __asyncDelegator;
+var __asyncValues;
+var __makeTemplateObject;
+var __importStar;
+var __importDefault;
+var __classPrivateFieldGet;
+var __classPrivateFieldSet;
+var __createBinding;
+(function (factory) {
+    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
+    if (typeof define === "function" && define.amd) {
+        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
+    }
+    else if ( true && typeof module.exports === "object") {
+        factory(createExporter(root, createExporter(module.exports)));
+    }
+    else {
+        factory(createExporter(root));
+    }
+    function createExporter(exports, previous) {
+        if (exports !== root) {
+            if (typeof Object.create === "function") {
+                Object.defineProperty(exports, "__esModule", { value: true });
+            }
+            else {
+                exports.__esModule = true;
+            }
+        }
+        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
+    }
+})
+(function (exporter) {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+
+    __extends = function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+
+    __assign = Object.assign || function (t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+
+    __rest = function (s, e) {
+        var t = {};
+        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+            t[p] = s[p];
+        if (s != null && typeof Object.getOwnPropertySymbols === "function")
+            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+                if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                    t[p[i]] = s[p[i]];
+            }
+        return t;
+    };
+
+    __decorate = function (decorators, target, key, desc) {
+        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+        return c > 3 && r && Object.defineProperty(target, key, r), r;
+    };
+
+    __param = function (paramIndex, decorator) {
+        return function (target, key) { decorator(target, key, paramIndex); }
+    };
+
+    __metadata = function (metadataKey, metadataValue) {
+        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
+    };
+
+    __awaiter = function (thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+        return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+    };
+
+    __generator = function (thisArg, body) {
+        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+        function verb(n) { return function (v) { return step([n, v]); }; }
+        function step(op) {
+            if (f) throw new TypeError("Generator is already executing.");
+            while (_) try {
+                if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+                if (y = 0, t) op = [op[0] & 2, t.value];
+                switch (op[0]) {
+                    case 0: case 1: t = op; break;
+                    case 4: _.label++; return { value: op[1], done: false };
+                    case 5: _.label++; y = op[1]; op = [0]; continue;
+                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                    default:
+                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                        if (t[2]) _.ops.pop();
+                        _.trys.pop(); continue;
+                }
+                op = body.call(thisArg, _);
+            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+        }
+    };
+
+    __createBinding = function(o, m, k, k2) {
+        if (k2 === undefined) k2 = k;
+        o[k2] = m[k];
+    };
+
+    __exportStar = function (m, exports) {
+        for (var p in m) if (p !== "default" && !exports.hasOwnProperty(p)) exports[p] = m[p];
+    };
+
+    __values = function (o) {
+        var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
+        if (m) return m.call(o);
+        if (o && typeof o.length === "number") return {
+            next: function () {
+                if (o && i >= o.length) o = void 0;
+                return { value: o && o[i++], done: !o };
+            }
+        };
+        throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
+    };
+
+    __read = function (o, n) {
+        var m = typeof Symbol === "function" && o[Symbol.iterator];
+        if (!m) return o;
+        var i = m.call(o), r, ar = [], e;
+        try {
+            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+        }
+        catch (error) { e = { error: error }; }
+        finally {
+            try {
+                if (r && !r.done && (m = i["return"])) m.call(i);
+            }
+            finally { if (e) throw e.error; }
+        }
+        return ar;
+    };
+
+    __spread = function () {
+        for (var ar = [], i = 0; i < arguments.length; i++)
+            ar = ar.concat(__read(arguments[i]));
+        return ar;
+    };
+
+    __spreadArrays = function () {
+        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+        for (var r = Array(s), k = 0, i = 0; i < il; i++)
+            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+                r[k] = a[j];
+        return r;
+    };
+
+    __await = function (v) {
+        return this instanceof __await ? (this.v = v, this) : new __await(v);
+    };
+
+    __asyncGenerator = function (thisArg, _arguments, generator) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var g = generator.apply(thisArg, _arguments || []), i, q = [];
+        return i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i;
+        function verb(n) { if (g[n]) i[n] = function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]) > 1 || resume(n, v); }); }; }
+        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(q[0][3], e); } }
+        function step(r) { r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);  }
+        function fulfill(value) { resume("next", value); }
+        function reject(value) { resume("throw", value); }
+        function settle(f, v) { if (f(v), q.shift(), q.length) resume(q[0][0], q[0][1]); }
+    };
+
+    __asyncDelegator = function (o) {
+        var i, p;
+        return i = {}, verb("next"), verb("throw", function (e) { throw e; }), verb("return"), i[Symbol.iterator] = function () { return this; }, i;
+        function verb(n, f) { i[n] = o[n] ? function (v) { return (p = !p) ? { value: __await(o[n](v)), done: n === "return" } : f ? f(v) : v; } : f; }
+    };
+
+    __asyncValues = function (o) {
+        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+        var m = o[Symbol.asyncIterator], i;
+        return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+        function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+        function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+    };
+
+    __makeTemplateObject = function (cooked, raw) {
+        if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+        return cooked;
+    };
+
+    __importStar = function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
+        result["default"] = mod;
+        return result;
+    };
+
+    __importDefault = function (mod) {
+        return (mod && mod.__esModule) ? mod : { "default": mod };
+    };
+
+    __classPrivateFieldGet = function (receiver, privateMap) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to get private field on non-instance");
+        }
+        return privateMap.get(receiver);
+    };
+
+    __classPrivateFieldSet = function (receiver, privateMap, value) {
+        if (!privateMap.has(receiver)) {
+            throw new TypeError("attempted to set private field on non-instance");
+        }
+        privateMap.set(receiver, value);
+        return value;
+    };
+
+    exporter("__extends", __extends);
+    exporter("__assign", __assign);
+    exporter("__rest", __rest);
+    exporter("__decorate", __decorate);
+    exporter("__param", __param);
+    exporter("__metadata", __metadata);
+    exporter("__awaiter", __awaiter);
+    exporter("__generator", __generator);
+    exporter("__exportStar", __exportStar);
+    exporter("__createBinding", __createBinding);
+    exporter("__values", __values);
+    exporter("__read", __read);
+    exporter("__spread", __spread);
+    exporter("__spreadArrays", __spreadArrays);
+    exporter("__await", __await);
+    exporter("__asyncGenerator", __asyncGenerator);
+    exporter("__asyncDelegator", __asyncDelegator);
+    exporter("__asyncValues", __asyncValues);
+    exporter("__makeTemplateObject", __makeTemplateObject);
+    exporter("__importStar", __importStar);
+    exporter("__importDefault", __importDefault);
+    exporter("__classPrivateFieldGet", __classPrivateFieldGet);
+    exporter("__classPrivateFieldSet", __classPrivateFieldSet);
+});
+
+
+/***/ }),
+
+/***/ 83633:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * accepts
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var Negotiator = __nccwpck_require__(95385)
+var mime = __nccwpck_require__(43583)
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = Accepts
+
+/**
+ * Create a new Accepts object for the given req.
+ *
+ * @param {object} req
+ * @public
+ */
+
+function Accepts (req) {
+  if (!(this instanceof Accepts)) {
+    return new Accepts(req)
+  }
+
+  this.headers = req.headers
+  this.negotiator = new Negotiator(req)
+}
+
+/**
+ * Check if the given `type(s)` is acceptable, returning
+ * the best match when true, otherwise `undefined`, in which
+ * case you should respond with 406 "Not Acceptable".
+ *
+ * The `type` value may be a single mime type string
+ * such as "application/json", the extension name
+ * such as "json" or an array `["json", "html", "text/plain"]`. When a list
+ * or array is given the _best_ match, if any is returned.
+ *
+ * Examples:
+ *
+ *     // Accept: text/html
+ *     this.types('html');
+ *     // => "html"
+ *
+ *     // Accept: text/*, application/json
+ *     this.types('html');
+ *     // => "html"
+ *     this.types('text/html');
+ *     // => "text/html"
+ *     this.types('json', 'text');
+ *     // => "json"
+ *     this.types('application/json');
+ *     // => "application/json"
+ *
+ *     // Accept: text/*, application/json
+ *     this.types('image/png');
+ *     this.types('png');
+ *     // => undefined
+ *
+ *     // Accept: text/*;q=.5, application/json
+ *     this.types(['html', 'json']);
+ *     this.types('html', 'json');
+ *     // => "json"
+ *
+ * @param {String|Array} types...
+ * @return {String|Array|Boolean}
+ * @public
+ */
+
+Accepts.prototype.type =
+Accepts.prototype.types = function (types_) {
+  var types = types_
+
+  // support flattened arguments
+  if (types && !Array.isArray(types)) {
+    types = new Array(arguments.length)
+    for (var i = 0; i < types.length; i++) {
+      types[i] = arguments[i]
+    }
+  }
+
+  // no types, return all requested types
+  if (!types || types.length === 0) {
+    return this.negotiator.mediaTypes()
+  }
+
+  // no accept header, return first given type
+  if (!this.headers.accept) {
+    return types[0]
+  }
+
+  var mimes = types.map(extToMime)
+  var accepts = this.negotiator.mediaTypes(mimes.filter(validMime))
+  var first = accepts[0]
+
+  return first
+    ? types[mimes.indexOf(first)]
+    : false
+}
+
+/**
+ * Return accepted encodings or best fit based on `encodings`.
+ *
+ * Given `Accept-Encoding: gzip, deflate`
+ * an array sorted by quality is returned:
+ *
+ *     ['gzip', 'deflate']
+ *
+ * @param {String|Array} encodings...
+ * @return {String|Array}
+ * @public
+ */
+
+Accepts.prototype.encoding =
+Accepts.prototype.encodings = function (encodings_) {
+  var encodings = encodings_
+
+  // support flattened arguments
+  if (encodings && !Array.isArray(encodings)) {
+    encodings = new Array(arguments.length)
+    for (var i = 0; i < encodings.length; i++) {
+      encodings[i] = arguments[i]
+    }
+  }
+
+  // no encodings, return all requested encodings
+  if (!encodings || encodings.length === 0) {
+    return this.negotiator.encodings()
+  }
+
+  return this.negotiator.encodings(encodings)[0] || false
+}
+
+/**
+ * Return accepted charsets or best fit based on `charsets`.
+ *
+ * Given `Accept-Charset: utf-8, iso-8859-1;q=0.2, utf-7;q=0.5`
+ * an array sorted by quality is returned:
+ *
+ *     ['utf-8', 'utf-7', 'iso-8859-1']
+ *
+ * @param {String|Array} charsets...
+ * @return {String|Array}
+ * @public
+ */
+
+Accepts.prototype.charset =
+Accepts.prototype.charsets = function (charsets_) {
+  var charsets = charsets_
+
+  // support flattened arguments
+  if (charsets && !Array.isArray(charsets)) {
+    charsets = new Array(arguments.length)
+    for (var i = 0; i < charsets.length; i++) {
+      charsets[i] = arguments[i]
+    }
+  }
+
+  // no charsets, return all requested charsets
+  if (!charsets || charsets.length === 0) {
+    return this.negotiator.charsets()
+  }
+
+  return this.negotiator.charsets(charsets)[0] || false
+}
+
+/**
+ * Return accepted languages or best fit based on `langs`.
+ *
+ * Given `Accept-Language: en;q=0.8, es, pt`
+ * an array sorted by quality is returned:
+ *
+ *     ['es', 'pt', 'en']
+ *
+ * @param {String|Array} langs...
+ * @return {Array|String}
+ * @public
+ */
+
+Accepts.prototype.lang =
+Accepts.prototype.langs =
+Accepts.prototype.language =
+Accepts.prototype.languages = function (languages_) {
+  var languages = languages_
+
+  // support flattened arguments
+  if (languages && !Array.isArray(languages)) {
+    languages = new Array(arguments.length)
+    for (var i = 0; i < languages.length; i++) {
+      languages[i] = arguments[i]
+    }
+  }
+
+  // no languages, return all requested languages
+  if (!languages || languages.length === 0) {
+    return this.negotiator.languages()
+  }
+
+  return this.negotiator.languages(languages)[0] || false
+}
+
+/**
+ * Convert extnames to mime.
+ *
+ * @param {String} type
+ * @return {String}
+ * @private
+ */
+
+function extToMime (type) {
+  return type.indexOf('/') === -1
+    ? mime.lookup(type)
+    : type
+}
+
+/**
+ * Check if mime is valid.
+ *
+ * @param {String} type
+ * @return {String}
+ * @private
+ */
+
+function validMime (type) {
+  return typeof type === 'string'
+}
+
+
+/***/ }),
+
+/***/ 49690:
+/***/ (function(module, __unused_webpack_exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+const events_1 = __nccwpck_require__(82361);
+const debug_1 = __importDefault(__nccwpck_require__(38237));
+const promisify_1 = __importDefault(__nccwpck_require__(66570));
+const debug = debug_1.default('agent-base');
+function isAgent(v) {
+    return Boolean(v) && typeof v.addRequest === 'function';
+}
+function isSecureEndpoint() {
+    const { stack } = new Error();
+    if (typeof stack !== 'string')
+        return false;
+    return stack.split('\n').some(l => l.indexOf('(https.js:') !== -1 || l.indexOf('node:https:') !== -1);
+}
+function createAgent(callback, opts) {
+    return new createAgent.Agent(callback, opts);
+}
+(function (createAgent) {
+    /**
+     * Base `http.Agent` implementation.
+     * No pooling/keep-alive is implemented by default.
+     *
+     * @param {Function} callback
+     * @api public
+     */
+    class Agent extends events_1.EventEmitter {
+        constructor(callback, _opts) {
+            super();
+            let opts = _opts;
+            if (typeof callback === 'function') {
+                this.callback = callback;
+            }
+            else if (callback) {
+                opts = callback;
+            }
+            // Timeout for the socket to be returned from the callback
+            this.timeout = null;
+            if (opts && typeof opts.timeout === 'number') {
+                this.timeout = opts.timeout;
+            }
+            // These aren't actually used by `agent-base`, but are required
+            // for the TypeScript definition files in `@types/node` :/
+            this.maxFreeSockets = 1;
+            this.maxSockets = 1;
+            this.maxTotalSockets = Infinity;
+            this.sockets = {};
+            this.freeSockets = {};
+            this.requests = {};
+            this.options = {};
+        }
+        get defaultPort() {
+            if (typeof this.explicitDefaultPort === 'number') {
+                return this.explicitDefaultPort;
+            }
+            return isSecureEndpoint() ? 443 : 80;
+        }
+        set defaultPort(v) {
+            this.explicitDefaultPort = v;
+        }
+        get protocol() {
+            if (typeof this.explicitProtocol === 'string') {
+                return this.explicitProtocol;
+            }
+            return isSecureEndpoint() ? 'https:' : 'http:';
+        }
+        set protocol(v) {
+            this.explicitProtocol = v;
+        }
+        callback(req, opts, fn) {
+            throw new Error('"agent-base" has no default implementation, you must subclass and override `callback()`');
+        }
+        /**
+         * Called by node-core's "_http_client.js" module when creating
+         * a new HTTP request with this Agent instance.
+         *
+         * @api public
+         */
+        addRequest(req, _opts) {
+            const opts = Object.assign({}, _opts);
+            if (typeof opts.secureEndpoint !== 'boolean') {
+                opts.secureEndpoint = isSecureEndpoint();
+            }
+            if (opts.host == null) {
+                opts.host = 'localhost';
+            }
+            if (opts.port == null) {
+                opts.port = opts.secureEndpoint ? 443 : 80;
+            }
+            if (opts.protocol == null) {
+                opts.protocol = opts.secureEndpoint ? 'https:' : 'http:';
+            }
+            if (opts.host && opts.path) {
+                // If both a `host` and `path` are specified then it's most
+                // likely the result of a `url.parse()` call... we need to
+                // remove the `path` portion so that `net.connect()` doesn't
+                // attempt to open that as a unix socket file.
+                delete opts.path;
+            }
+            delete opts.agent;
+            delete opts.hostname;
+            delete opts._defaultAgent;
+            delete opts.defaultPort;
+            delete opts.createConnection;
+            // Hint to use "Connection: close"
+            // XXX: non-documented `http` module API :(
+            req._last = true;
+            req.shouldKeepAlive = false;
+            let timedOut = false;
+            let timeoutId = null;
+            const timeoutMs = opts.timeout || this.timeout;
+            const onerror = (err) => {
+                if (req._hadError)
+                    return;
+                req.emit('error', err);
+                // For Safety. Some additional errors might fire later on
+                // and we need to make sure we don't double-fire the error event.
+                req._hadError = true;
+            };
+            const ontimeout = () => {
+                timeoutId = null;
+                timedOut = true;
+                const err = new Error(`A "socket" was not created for HTTP request before ${timeoutMs}ms`);
+                err.code = 'ETIMEOUT';
+                onerror(err);
+            };
+            const callbackError = (err) => {
+                if (timedOut)
+                    return;
+                if (timeoutId !== null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                onerror(err);
+            };
+            const onsocket = (socket) => {
+                if (timedOut)
+                    return;
+                if (timeoutId != null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                if (isAgent(socket)) {
+                    // `socket` is actually an `http.Agent` instance, so
+                    // relinquish responsibility for this `req` to the Agent
+                    // from here on
+                    debug('Callback returned another Agent instance %o', socket.constructor.name);
+                    socket.addRequest(req, opts);
+                    return;
+                }
+                if (socket) {
+                    socket.once('free', () => {
+                        this.freeSocket(socket, opts);
+                    });
+                    req.onSocket(socket);
+                    return;
+                }
+                const err = new Error(`no Duplex stream was returned to agent-base for \`${req.method} ${req.path}\``);
+                onerror(err);
+            };
+            if (typeof this.callback !== 'function') {
+                onerror(new Error('`callback` is not defined'));
+                return;
+            }
+            if (!this.promisifiedCallback) {
+                if (this.callback.length >= 3) {
+                    debug('Converting legacy callback function to promise');
+                    this.promisifiedCallback = promisify_1.default(this.callback);
+                }
+                else {
+                    this.promisifiedCallback = this.callback;
+                }
+            }
+            if (typeof timeoutMs === 'number' && timeoutMs > 0) {
+                timeoutId = setTimeout(ontimeout, timeoutMs);
+            }
+            if ('port' in opts && typeof opts.port !== 'number') {
+                opts.port = Number(opts.port);
+            }
+            try {
+                debug('Resolving socket for %o request: %o', opts.protocol, `${req.method} ${req.path}`);
+                Promise.resolve(this.promisifiedCallback(req, opts)).then(onsocket, callbackError);
+            }
+            catch (err) {
+                Promise.reject(err).catch(callbackError);
+            }
+        }
+        freeSocket(socket, opts) {
+            debug('Freeing socket %o %o', socket.constructor.name, opts);
+            socket.destroy();
+        }
+        destroy() {
+            debug('Destroying agent %o', this.constructor.name);
+        }
+    }
+    createAgent.Agent = Agent;
+    // So that `instanceof` works correctly
+    createAgent.prototype = createAgent.Agent.prototype;
+})(createAgent || (createAgent = {}));
+module.exports = createAgent;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 66570:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+function promisify(fn) {
+    return function (req, opts) {
+        return new Promise((resolve, reject) => {
+            fn.call(this, req, opts, (err, rtn) => {
+                if (err) {
+                    reject(err);
+                }
+                else {
+                    resolve(rtn);
+                }
+            });
+        });
+    };
+}
+exports["default"] = promisify;
+//# sourceMappingURL=promisify.js.map
+
+/***/ }),
+
+/***/ 61231:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const indentString = __nccwpck_require__(98043);
+const cleanStack = __nccwpck_require__(27972);
+
+const cleanInternalStack = stack => stack.replace(/\s+at .*aggregate-error\/index.js:\d+:\d+\)?/g, '');
+
+class AggregateError extends Error {
+	constructor(errors) {
+		if (!Array.isArray(errors)) {
+			throw new TypeError(`Expected input to be an Array, got ${typeof errors}`);
+		}
+
+		errors = [...errors].map(error => {
+			if (error instanceof Error) {
+				return error;
+			}
+
+			if (error !== null && typeof error === 'object') {
+				// Handle plain error objects with message property and/or possibly other metadata
+				return Object.assign(new Error(error.message), error);
+			}
+
+			return new Error(error);
+		});
+
+		let message = errors
+			.map(error => {
+				// The `stack` property is not standardized, so we can't assume it exists
+				return typeof error.stack === 'string' ? cleanInternalStack(cleanStack(error.stack)) : String(error);
+			})
+			.join('\n');
+		message = '\n' + indentString(message, 4);
+		super(message);
+
+		this.name = 'AggregateError';
+
+		Object.defineProperty(this, '_errors', {value: errors});
+	}
+
+	* [Symbol.iterator]() {
+		for (const error of this._errors) {
+			yield error;
+		}
+	}
+}
+
+module.exports = AggregateError;
+
+
+/***/ }),
+
+/***/ 62003:
+/***/ ((module) => {
+
+"use strict";
+
+
+/**
+ * Expose `arrayFlatten`.
+ */
+module.exports = arrayFlatten
+
+/**
+ * Recursive flatten function with depth.
+ *
+ * @param  {Array}  array
+ * @param  {Array}  result
+ * @param  {Number} depth
+ * @return {Array}
+ */
+function flattenWithDepth (array, result, depth) {
+  for (var i = 0; i < array.length; i++) {
+    var value = array[i]
+
+    if (depth > 0 && Array.isArray(value)) {
+      flattenWithDepth(value, result, depth - 1)
+    } else {
+      result.push(value)
+    }
+  }
+
+  return result
+}
+
+/**
+ * Recursive flatten function. Omitting depth is slightly faster.
+ *
+ * @param  {Array} array
+ * @param  {Array} result
+ * @return {Array}
+ */
+function flattenForever (array, result) {
+  for (var i = 0; i < array.length; i++) {
+    var value = array[i]
+
+    if (Array.isArray(value)) {
+      flattenForever(value, result)
+    } else {
+      result.push(value)
+    }
+  }
+
+  return result
+}
+
+/**
+ * Flatten an array, with the ability to define a depth.
+ *
+ * @param  {Array}  array
+ * @param  {Number} depth
+ * @return {Array}
+ */
+function arrayFlatten (array, depth) {
+  if (depth == null) {
+    return flattenForever(array, [])
+  }
+
+  return flattenWithDepth(array, [], depth)
+}
+
+
+/***/ }),
+
+/***/ 87943:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var rawAsap = __nccwpck_require__(83691);
+var freeTasks = [];
+
+/**
+ * Calls a task as soon as possible after returning, in its own event, with
+ * priority over IO events. An exception thrown in a task can be handled by
+ * `process.on("uncaughtException") or `domain.on("error")`, but will otherwise
+ * crash the process. If the error is handled, all subsequent tasks will
+ * resume.
+ *
+ * @param {{call}} task A callable object, typically a function that takes no
+ * arguments.
+ */
+module.exports = asap;
+function asap(task) {
+    var rawTask;
+    if (freeTasks.length) {
+        rawTask = freeTasks.pop();
+    } else {
+        rawTask = new RawTask();
+    }
+    rawTask.task = task;
+    rawTask.domain = process.domain;
+    rawAsap(rawTask);
+}
+
+function RawTask() {
+    this.task = null;
+    this.domain = null;
+}
+
+RawTask.prototype.call = function () {
+    if (this.domain) {
+        this.domain.enter();
+    }
+    var threw = true;
+    try {
+        this.task.call();
+        threw = false;
+        // If the task throws an exception (presumably) Node.js restores the
+        // domain stack for the next event.
+        if (this.domain) {
+            this.domain.exit();
+        }
+    } finally {
+        // We use try/finally and a threw flag to avoid messing up stack traces
+        // when we catch and release errors.
+        if (threw) {
+            // In Node.js, uncaught exceptions are considered fatal errors.
+            // Re-throw them to interrupt flushing!
+            // Ensure that flushing continues if an uncaught exception is
+            // suppressed listening process.on("uncaughtException") or
+            // domain.on("error").
+            rawAsap.requestFlush();
+        }
+        // If the task threw an error, we do not want to exit the domain here.
+        // Exiting the domain would prevent the domain from catching the error.
+        this.task = null;
+        this.domain = null;
+        freeTasks.push(this);
+    }
+};
+
+
+
+/***/ }),
+
+/***/ 83691:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var domain; // The domain module is executed on demand
+var hasSetImmediate = typeof setImmediate === "function";
+
+// Use the fastest means possible to execute a task in its own turn, with
+// priority over other events including network IO events in Node.js.
+//
+// An exception thrown by a task will permanently interrupt the processing of
+// subsequent tasks. The higher level `asap` function ensures that if an
+// exception is thrown by a task, that the task queue will continue flushing as
+// soon as possible, but if you use `rawAsap` directly, you are responsible to
+// either ensure that no exceptions are thrown from your task, or to manually
+// call `rawAsap.requestFlush` if an exception is thrown.
+module.exports = rawAsap;
+function rawAsap(task) {
+    if (!queue.length) {
+        requestFlush();
+        flushing = true;
+    }
+    // Avoids a function call
+    queue[queue.length] = task;
+}
+
+var queue = [];
+// Once a flush has been requested, no further calls to `requestFlush` are
+// necessary until the next `flush` completes.
+var flushing = false;
+// The position of the next task to execute in the task queue. This is
+// preserved between calls to `flush` so that it can be resumed if
+// a task throws an exception.
+var index = 0;
+// If a task schedules additional tasks recursively, the task queue can grow
+// unbounded. To prevent memory excaustion, the task queue will periodically
+// truncate already-completed tasks.
+var capacity = 1024;
+
+// The flush function processes all tasks that have been scheduled with
+// `rawAsap` unless and until one of those tasks throws an exception.
+// If a task throws an exception, `flush` ensures that its state will remain
+// consistent and will resume where it left off when called again.
+// However, `flush` does not make any arrangements to be called again if an
+// exception is thrown.
+function flush() {
+    while (index < queue.length) {
+        var currentIndex = index;
+        // Advance the index before calling the task. This ensures that we will
+        // begin flushing on the next task the task throws an error.
+        index = index + 1;
+        queue[currentIndex].call();
+        // Prevent leaking memory for long chains of recursive calls to `asap`.
+        // If we call `asap` within tasks scheduled by `asap`, the queue will
+        // grow, but to avoid an O(n) walk for every task we execute, we don't
+        // shift tasks off the queue after they have been executed.
+        // Instead, we periodically shift 1024 tasks off the queue.
+        if (index > capacity) {
+            // Manually shift all values starting at the index back to the
+            // beginning of the queue.
+            for (var scan = 0, newLength = queue.length - index; scan < newLength; scan++) {
+                queue[scan] = queue[scan + index];
+            }
+            queue.length -= index;
+            index = 0;
+        }
+    }
+    queue.length = 0;
+    index = 0;
+    flushing = false;
+}
+
+rawAsap.requestFlush = requestFlush;
+function requestFlush() {
+    // Ensure flushing is not bound to any domain.
+    // It is not sufficient to exit the domain, because domains exist on a stack.
+    // To execute code outside of any domain, the following dance is necessary.
+    var parentDomain = process.domain;
+    if (parentDomain) {
+        if (!domain) {
+            // Lazy execute the domain module.
+            // Only employed if the user elects to use domains.
+            domain = __nccwpck_require__(13639);
+        }
+        domain.active = process.domain = null;
+    }
+
+    // `setImmediate` is slower that `process.nextTick`, but `process.nextTick`
+    // cannot handle recursion.
+    // `requestFlush` will only be called recursively from `asap.js`, to resume
+    // flushing after an error is thrown into a domain.
+    // Conveniently, `setImmediate` was introduced in the same version
+    // `process.nextTick` started throwing recursion errors.
+    if (flushing && hasSetImmediate) {
+        setImmediate(flush);
+    } else {
+        process.nextTick(flush);
+    }
+
+    if (parentDomain) {
+        domain.active = process.domain = parentDomain;
+    }
+}
+
+
+/***/ }),
+
+/***/ 14812:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+module.exports =
+{
+  parallel      : __nccwpck_require__(8210),
+  serial        : __nccwpck_require__(50445),
+  serialOrdered : __nccwpck_require__(3578)
+};
+
+
+/***/ }),
+
+/***/ 1700:
+/***/ ((module) => {
+
+// API
+module.exports = abort;
+
+/**
+ * Aborts leftover active jobs
+ *
+ * @param {object} state - current state object
+ */
+function abort(state)
+{
+  Object.keys(state.jobs).forEach(clean.bind(state));
+
+  // reset leftover jobs
+  state.jobs = {};
+}
+
+/**
+ * Cleans up leftover job by invoking abort function for the provided job id
+ *
+ * @this  state
+ * @param {string|number} key - job id to abort
+ */
+function clean(key)
+{
+  if (typeof this.jobs[key] == 'function')
+  {
+    this.jobs[key]();
+  }
+}
+
+
+/***/ }),
+
+/***/ 72794:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var defer = __nccwpck_require__(15295);
+
+// API
+module.exports = async;
+
+/**
+ * Runs provided callback asynchronously
+ * even if callback itself is not
+ *
+ * @param   {function} callback - callback to invoke
+ * @returns {function} - augmented callback
+ */
+function async(callback)
+{
+  var isAsync = false;
+
+  // check if async happened
+  defer(function() { isAsync = true; });
+
+  return function async_callback(err, result)
+  {
+    if (isAsync)
+    {
+      callback(err, result);
+    }
+    else
+    {
+      defer(function nextTick_callback()
+      {
+        callback(err, result);
+      });
+    }
+  };
+}
+
+
+/***/ }),
+
+/***/ 15295:
+/***/ ((module) => {
+
+module.exports = defer;
+
+/**
+ * Runs provided function on next iteration of the event loop
+ *
+ * @param {function} fn - function to run
+ */
+function defer(fn)
+{
+  var nextTick = typeof setImmediate == 'function'
+    ? setImmediate
+    : (
+      typeof process == 'object' && typeof process.nextTick == 'function'
+      ? process.nextTick
+      : null
+    );
+
+  if (nextTick)
+  {
+    nextTick(fn);
+  }
+  else
+  {
+    setTimeout(fn, 0);
+  }
+}
+
+
+/***/ }),
+
+/***/ 9023:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var async = __nccwpck_require__(72794)
+  , abort = __nccwpck_require__(1700)
+  ;
+
+// API
+module.exports = iterate;
+
+/**
+ * Iterates over each job object
+ *
+ * @param {array|object} list - array or object (named list) to iterate over
+ * @param {function} iterator - iterator to run
+ * @param {object} state - current job status
+ * @param {function} callback - invoked when all elements processed
+ */
+function iterate(list, iterator, state, callback)
+{
+  // store current index
+  var key = state['keyedList'] ? state['keyedList'][state.index] : state.index;
+
+  state.jobs[key] = runJob(iterator, key, list[key], function(error, output)
+  {
+    // don't repeat yourself
+    // skip secondary callbacks
+    if (!(key in state.jobs))
+    {
+      return;
+    }
+
+    // clean up jobs
+    delete state.jobs[key];
+
+    if (error)
+    {
+      // don't process rest of the results
+      // stop still active jobs
+      // and reset the list
+      abort(state);
+    }
+    else
+    {
+      state.results[key] = output;
+    }
+
+    // return salvaged results
+    callback(error, state.results);
+  });
+}
+
+/**
+ * Runs iterator over provided job element
+ *
+ * @param   {function} iterator - iterator to invoke
+ * @param   {string|number} key - key/index of the element in the list of jobs
+ * @param   {mixed} item - job description
+ * @param   {function} callback - invoked after iterator is done with the job
+ * @returns {function|mixed} - job abort function or something else
+ */
+function runJob(iterator, key, item, callback)
+{
+  var aborter;
+
+  // allow shortcut if iterator expects only two arguments
+  if (iterator.length == 2)
+  {
+    aborter = iterator(item, async(callback));
+  }
+  // otherwise go with full three arguments
+  else
+  {
+    aborter = iterator(item, key, async(callback));
+  }
+
+  return aborter;
+}
+
+
+/***/ }),
+
+/***/ 42474:
+/***/ ((module) => {
+
+// API
+module.exports = state;
+
+/**
+ * Creates initial state object
+ * for iteration over list
+ *
+ * @param   {array|object} list - list to iterate over
+ * @param   {function|null} sortMethod - function to use for keys sort,
+ *                                     or `null` to keep them as is
+ * @returns {object} - initial state object
+ */
+function state(list, sortMethod)
+{
+  var isNamedList = !Array.isArray(list)
+    , initState =
+    {
+      index    : 0,
+      keyedList: isNamedList || sortMethod ? Object.keys(list) : null,
+      jobs     : {},
+      results  : isNamedList ? {} : [],
+      size     : isNamedList ? Object.keys(list).length : list.length
+    }
+    ;
+
+  if (sortMethod)
+  {
+    // sort array keys based on it's values
+    // sort object's keys just on own merit
+    initState.keyedList.sort(isNamedList ? sortMethod : function(a, b)
+    {
+      return sortMethod(list[a], list[b]);
+    });
+  }
+
+  return initState;
+}
+
+
+/***/ }),
+
+/***/ 37942:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var abort = __nccwpck_require__(1700)
+  , async = __nccwpck_require__(72794)
+  ;
+
+// API
+module.exports = terminator;
+
+/**
+ * Terminates jobs in the attached state context
+ *
+ * @this  AsyncKitState#
+ * @param {function} callback - final callback to invoke after termination
+ */
+function terminator(callback)
+{
+  if (!Object.keys(this.jobs).length)
+  {
+    return;
+  }
+
+  // fast forward iteration index
+  this.index = this.size;
+
+  // abort jobs
+  abort(this);
+
+  // send back results we have so far
+  async(callback)(null, this.results);
+}
+
+
+/***/ }),
+
+/***/ 8210:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var iterate    = __nccwpck_require__(9023)
+  , initState  = __nccwpck_require__(42474)
+  , terminator = __nccwpck_require__(37942)
