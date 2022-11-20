@@ -37983,3 +37983,2169 @@ function terminator(callback)
 var iterate    = __nccwpck_require__(9023)
   , initState  = __nccwpck_require__(42474)
   , terminator = __nccwpck_require__(37942)
+  ;
+
+// Public API
+module.exports = parallel;
+
+/**
+ * Runs iterator over provided array elements in parallel
+ *
+ * @param   {array|object} list - array or object (named list) to iterate over
+ * @param   {function} iterator - iterator to run
+ * @param   {function} callback - invoked when all elements processed
+ * @returns {function} - jobs terminator
+ */
+function parallel(list, iterator, callback)
+{
+  var state = initState(list);
+
+  while (state.index < (state['keyedList'] || list).length)
+  {
+    iterate(list, iterator, state, function(error, result)
+    {
+      if (error)
+      {
+        callback(error, result);
+        return;
+      }
+
+      // looks like it's the last one
+      if (Object.keys(state.jobs).length === 0)
+      {
+        callback(null, state.results);
+        return;
+      }
+    });
+
+    state.index++;
+  }
+
+  return terminator.bind(state, callback);
+}
+
+
+/***/ }),
+
+/***/ 50445:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var serialOrdered = __nccwpck_require__(3578);
+
+// Public API
+module.exports = serial;
+
+/**
+ * Runs iterator over provided array elements in series
+ *
+ * @param   {array|object} list - array or object (named list) to iterate over
+ * @param   {function} iterator - iterator to run
+ * @param   {function} callback - invoked when all elements processed
+ * @returns {function} - jobs terminator
+ */
+function serial(list, iterator, callback)
+{
+  return serialOrdered(list, iterator, null, callback);
+}
+
+
+/***/ }),
+
+/***/ 3578:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var iterate    = __nccwpck_require__(9023)
+  , initState  = __nccwpck_require__(42474)
+  , terminator = __nccwpck_require__(37942)
+  ;
+
+// Public API
+module.exports = serialOrdered;
+// sorting helpers
+module.exports.ascending  = ascending;
+module.exports.descending = descending;
+
+/**
+ * Runs iterator over provided sorted array elements in series
+ *
+ * @param   {array|object} list - array or object (named list) to iterate over
+ * @param   {function} iterator - iterator to run
+ * @param   {function} sortMethod - custom sort function
+ * @param   {function} callback - invoked when all elements processed
+ * @returns {function} - jobs terminator
+ */
+function serialOrdered(list, iterator, sortMethod, callback)
+{
+  var state = initState(list, sortMethod);
+
+  iterate(list, iterator, state, function iteratorHandler(error, result)
+  {
+    if (error)
+    {
+      callback(error, result);
+      return;
+    }
+
+    state.index++;
+
+    // are we there yet?
+    if (state.index < (state['keyedList'] || list).length)
+    {
+      iterate(list, iterator, state, iteratorHandler);
+      return;
+    }
+
+    // done here
+    callback(null, state.results);
+  });
+
+  return terminator.bind(state, callback);
+}
+
+/*
+ * -- Sort methods
+ */
+
+/**
+ * sort helper to sort array elements in ascending order
+ *
+ * @param   {mixed} a - an item to compare
+ * @param   {mixed} b - an item to compare
+ * @returns {number} - comparison result
+ */
+function ascending(a, b)
+{
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * sort helper to sort array elements in descending order
+ *
+ * @param   {mixed} a - an item to compare
+ * @param   {mixed} b - an item to compare
+ * @returns {number} - comparison result
+ */
+function descending(a, b)
+{
+  return -1 * ascending(a, b);
+}
+
+
+/***/ }),
+
+/***/ 86950:
+/***/ ((module) => {
+
+"use strict";
+
+
+/* global SharedArrayBuffer, Atomics */
+
+if (typeof SharedArrayBuffer !== 'undefined' && typeof Atomics !== 'undefined') {
+  const nil = new Int32Array(new SharedArrayBuffer(4))
+
+  function sleep (ms) {
+    // also filters out NaN, non-number types, including empty strings, but allows bigints
+    const valid = ms > 0 && ms < Infinity 
+    if (valid === false) {
+      if (typeof ms !== 'number' && typeof ms !== 'bigint') {
+        throw TypeError('sleep: ms must be a number')
+      }
+      throw RangeError('sleep: ms must be a number that is greater than 0 but less than Infinity')
+    }
+
+    Atomics.wait(nil, 0, 0, Number(ms))
+  }
+  module.exports = sleep
+} else {
+
+  function sleep (ms) {
+    // also filters out NaN, non-number types, including empty strings, but allows bigints
+    const valid = ms > 0 && ms < Infinity 
+    if (valid === false) {
+      if (typeof ms !== 'number' && typeof ms !== 'bigint') {
+        throw TypeError('sleep: ms must be a number')
+      }
+      throw RangeError('sleep: ms must be a number that is greater than 0 but less than Infinity')
+    }
+    const target = Date.now() + Number(ms)
+    while (target > Date.now()){}
+  }
+
+  module.exports = sleep
+
+}
+
+
+/***/ }),
+
+/***/ 9417:
+/***/ ((module) => {
+
+"use strict";
+
+module.exports = balanced;
+function balanced(a, b, str) {
+  if (a instanceof RegExp) a = maybeMatch(a, str);
+  if (b instanceof RegExp) b = maybeMatch(b, str);
+
+  var r = range(a, b, str);
+
+  return r && {
+    start: r[0],
+    end: r[1],
+    pre: str.slice(0, r[0]),
+    body: str.slice(r[0] + a.length, r[1]),
+    post: str.slice(r[1] + b.length)
+  };
+}
+
+function maybeMatch(reg, str) {
+  var m = str.match(reg);
+  return m ? m[0] : null;
+}
+
+balanced.range = range;
+function range(a, b, str) {
+  var begs, beg, left, right, result;
+  var ai = str.indexOf(a);
+  var bi = str.indexOf(b, ai + 1);
+  var i = ai;
+
+  if (ai >= 0 && bi > 0) {
+    if(a===b) {
+      return [ai, bi];
+    }
+    begs = [];
+    left = str.length;
+
+    while (i >= 0 && !result) {
+      if (i == ai) {
+        begs.push(i);
+        ai = str.indexOf(a, i + 1);
+      } else if (begs.length == 1) {
+        result = [ begs.pop(), bi ];
+      } else {
+        beg = begs.pop();
+        if (beg < left) {
+          left = beg;
+          right = bi;
+        }
+
+        bi = str.indexOf(b, i + 1);
+      }
+
+      i = ai < bi && ai >= 0 ? ai : bi;
+    }
+
+    if (begs.length) {
+      result = [ left, right ];
+    }
+  }
+
+  return result;
+}
+
+
+/***/ }),
+
+/***/ 83682:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var register = __nccwpck_require__(44670);
+var addHook = __nccwpck_require__(5549);
+var removeHook = __nccwpck_require__(6819);
+
+// bind with array of arguments: https://stackoverflow.com/a/21792913
+var bind = Function.bind;
+var bindable = bind.bind(bind);
+
+function bindApi(hook, state, name) {
+  var removeHookRef = bindable(removeHook, null).apply(
+    null,
+    name ? [state, name] : [state]
+  );
+  hook.api = { remove: removeHookRef };
+  hook.remove = removeHookRef;
+  ["before", "error", "after", "wrap"].forEach(function (kind) {
+    var args = name ? [state, kind, name] : [state, kind];
+    hook[kind] = hook.api[kind] = bindable(addHook, null).apply(null, args);
+  });
+}
+
+function HookSingular() {
+  var singularHookName = "h";
+  var singularHookState = {
+    registry: {},
+  };
+  var singularHook = register.bind(null, singularHookState, singularHookName);
+  bindApi(singularHook, singularHookState, singularHookName);
+  return singularHook;
+}
+
+function HookCollection() {
+  var state = {
+    registry: {},
+  };
+
+  var hook = register.bind(null, state);
+  bindApi(hook, state);
+
+  return hook;
+}
+
+var collectionHookDeprecationMessageDisplayed = false;
+function Hook() {
+  if (!collectionHookDeprecationMessageDisplayed) {
+    console.warn(
+      '[before-after-hook]: "Hook()" repurposing warning, use "Hook.Collection()". Read more: https://git.io/upgrade-before-after-hook-to-1.4'
+    );
+    collectionHookDeprecationMessageDisplayed = true;
+  }
+  return HookCollection();
+}
+
+Hook.Singular = HookSingular.bind();
+Hook.Collection = HookCollection.bind();
+
+module.exports = Hook;
+// expose constructors as a named property for TypeScript
+module.exports.Hook = Hook;
+module.exports.Singular = Hook.Singular;
+module.exports.Collection = Hook.Collection;
+
+
+/***/ }),
+
+/***/ 5549:
+/***/ ((module) => {
+
+module.exports = addHook;
+
+function addHook(state, kind, name, hook) {
+  var orig = hook;
+  if (!state.registry[name]) {
+    state.registry[name] = [];
+  }
+
+  if (kind === "before") {
+    hook = function (method, options) {
+      return Promise.resolve()
+        .then(orig.bind(null, options))
+        .then(method.bind(null, options));
+    };
+  }
+
+  if (kind === "after") {
+    hook = function (method, options) {
+      var result;
+      return Promise.resolve()
+        .then(method.bind(null, options))
+        .then(function (result_) {
+          result = result_;
+          return orig(result, options);
+        })
+        .then(function () {
+          return result;
+        });
+    };
+  }
+
+  if (kind === "error") {
+    hook = function (method, options) {
+      return Promise.resolve()
+        .then(method.bind(null, options))
+        .catch(function (error) {
+          return orig(error, options);
+        });
+    };
+  }
+
+  state.registry[name].push({
+    hook: hook,
+    orig: orig,
+  });
+}
+
+
+/***/ }),
+
+/***/ 44670:
+/***/ ((module) => {
+
+module.exports = register;
+
+function register(state, name, method, options) {
+  if (typeof method !== "function") {
+    throw new Error("method for before hook must be a function");
+  }
+
+  if (!options) {
+    options = {};
+  }
+
+  if (Array.isArray(name)) {
+    return name.reverse().reduce(function (callback, name) {
+      return register.bind(null, state, name, callback, options);
+    }, method)();
+  }
+
+  return Promise.resolve().then(function () {
+    if (!state.registry[name]) {
+      return method(options);
+    }
+
+    return state.registry[name].reduce(function (method, registered) {
+      return registered.hook.bind(null, method, options);
+    }, method)();
+  });
+}
+
+
+/***/ }),
+
+/***/ 6819:
+/***/ ((module) => {
+
+module.exports = removeHook;
+
+function removeHook(state, name, method) {
+  if (!state.registry[name]) {
+    return;
+  }
+
+  var index = state.registry[name]
+    .map(function (registered) {
+      return registered.orig;
+    })
+    .indexOf(method);
+
+  if (index === -1) {
+    return;
+  }
+
+  state.registry[name].splice(index, 1);
+}
+
+
+/***/ }),
+
+/***/ 97076:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var deprecate = __nccwpck_require__(18883)('body-parser')
+
+/**
+ * Cache of loaded parsers.
+ * @private
+ */
+
+var parsers = Object.create(null)
+
+/**
+ * @typedef Parsers
+ * @type {function}
+ * @property {function} json
+ * @property {function} raw
+ * @property {function} text
+ * @property {function} urlencoded
+ */
+
+/**
+ * Module exports.
+ * @type {Parsers}
+ */
+
+exports = module.exports = deprecate.function(bodyParser,
+  'bodyParser: use individual json/urlencoded middlewares')
+
+/**
+ * JSON parser.
+ * @public
+ */
+
+Object.defineProperty(exports, "json", ({
+  configurable: true,
+  enumerable: true,
+  get: createParserGetter('json')
+}))
+
+/**
+ * Raw parser.
+ * @public
+ */
+
+Object.defineProperty(exports, "raw", ({
+  configurable: true,
+  enumerable: true,
+  get: createParserGetter('raw')
+}))
+
+/**
+ * Text parser.
+ * @public
+ */
+
+Object.defineProperty(exports, "text", ({
+  configurable: true,
+  enumerable: true,
+  get: createParserGetter('text')
+}))
+
+/**
+ * URL-encoded parser.
+ * @public
+ */
+
+Object.defineProperty(exports, "urlencoded", ({
+  configurable: true,
+  enumerable: true,
+  get: createParserGetter('urlencoded')
+}))
+
+/**
+ * Create a middleware to parse json and urlencoded bodies.
+ *
+ * @param {object} [options]
+ * @return {function}
+ * @deprecated
+ * @public
+ */
+
+function bodyParser (options) {
+  // use default type for parsers
+  var opts = Object.create(options || null, {
+    type: {
+      configurable: true,
+      enumerable: true,
+      value: undefined,
+      writable: true
+    }
+  })
+
+  var _urlencoded = exports.urlencoded(opts)
+  var _json = exports.json(opts)
+
+  return function bodyParser (req, res, next) {
+    _json(req, res, function (err) {
+      if (err) return next(err)
+      _urlencoded(req, res, next)
+    })
+  }
+}
+
+/**
+ * Create a getter for loading a parser.
+ * @private
+ */
+
+function createParserGetter (name) {
+  return function get () {
+    return loadParser(name)
+  }
+}
+
+/**
+ * Load a parser module.
+ * @private
+ */
+
+function loadParser (parserName) {
+  var parser = parsers[parserName]
+
+  if (parser !== undefined) {
+    return parser
+  }
+
+  // this uses a switch for static require analysis
+  switch (parserName) {
+    case 'json':
+      parser = __nccwpck_require__(20859)
+      break
+    case 'raw':
+      parser = __nccwpck_require__(49609)
+      break
+    case 'text':
+      parser = __nccwpck_require__(26382)
+      break
+    case 'urlencoded':
+      parser = __nccwpck_require__(76100)
+      break
+  }
+
+  // store to prevent invoking require()
+  return (parsers[parserName] = parser)
+}
+
+
+/***/ }),
+
+/***/ 88862:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var createError = __nccwpck_require__(95193)
+var destroy = __nccwpck_require__(43225)
+var getBody = __nccwpck_require__(47742)
+var iconv = __nccwpck_require__(19032)
+var onFinished = __nccwpck_require__(24694)
+var unpipe = __nccwpck_require__(3124)
+var zlib = __nccwpck_require__(59796)
+
+/**
+ * Module exports.
+ */
+
+module.exports = read
+
+/**
+ * Read a request into a buffer and parse.
+ *
+ * @param {object} req
+ * @param {object} res
+ * @param {function} next
+ * @param {function} parse
+ * @param {function} debug
+ * @param {object} options
+ * @private
+ */
+
+function read (req, res, next, parse, debug, options) {
+  var length
+  var opts = options
+  var stream
+
+  // flag as parsed
+  req._body = true
+
+  // read options
+  var encoding = opts.encoding !== null
+    ? opts.encoding
+    : null
+  var verify = opts.verify
+
+  try {
+    // get the content stream
+    stream = contentstream(req, debug, opts.inflate)
+    length = stream.length
+    stream.length = undefined
+  } catch (err) {
+    return next(err)
+  }
+
+  // set raw-body options
+  opts.length = length
+  opts.encoding = verify
+    ? null
+    : encoding
+
+  // assert charset is supported
+  if (opts.encoding === null && encoding !== null && !iconv.encodingExists(encoding)) {
+    return next(createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
+      charset: encoding.toLowerCase(),
+      type: 'charset.unsupported'
+    }))
+  }
+
+  // read body
+  debug('read body')
+  getBody(stream, opts, function (error, body) {
+    if (error) {
+      var _error
+
+      if (error.type === 'encoding.unsupported') {
+        // echo back charset
+        _error = createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
+          charset: encoding.toLowerCase(),
+          type: 'charset.unsupported'
+        })
+      } else {
+        // set status code on error
+        _error = createError(400, error)
+      }
+
+      // unpipe from stream and destroy
+      if (stream !== req) {
+        unpipe(req)
+        destroy(stream, true)
+      }
+
+      // read off entire request
+      dump(req, function onfinished () {
+        next(createError(400, _error))
+      })
+      return
+    }
+
+    // verify
+    if (verify) {
+      try {
+        debug('verify body')
+        verify(req, res, body, encoding)
+      } catch (err) {
+        next(createError(403, err, {
+          body: body,
+          type: err.type || 'entity.verify.failed'
+        }))
+        return
+      }
+    }
+
+    // parse
+    var str = body
+    try {
+      debug('parse body')
+      str = typeof body !== 'string' && encoding !== null
+        ? iconv.decode(body, encoding)
+        : body
+      req.body = parse(str)
+    } catch (err) {
+      next(createError(400, err, {
+        body: str,
+        type: err.type || 'entity.parse.failed'
+      }))
+      return
+    }
+
+    next()
+  })
+}
+
+/**
+ * Get the content stream of the request.
+ *
+ * @param {object} req
+ * @param {function} debug
+ * @param {boolean} [inflate=true]
+ * @return {object}
+ * @api private
+ */
+
+function contentstream (req, debug, inflate) {
+  var encoding = (req.headers['content-encoding'] || 'identity').toLowerCase()
+  var length = req.headers['content-length']
+  var stream
+
+  debug('content-encoding "%s"', encoding)
+
+  if (inflate === false && encoding !== 'identity') {
+    throw createError(415, 'content encoding unsupported', {
+      encoding: encoding,
+      type: 'encoding.unsupported'
+    })
+  }
+
+  switch (encoding) {
+    case 'deflate':
+      stream = zlib.createInflate()
+      debug('inflate body')
+      req.pipe(stream)
+      break
+    case 'gzip':
+      stream = zlib.createGunzip()
+      debug('gunzip body')
+      req.pipe(stream)
+      break
+    case 'identity':
+      stream = req
+      stream.length = length
+      break
+    default:
+      throw createError(415, 'unsupported content encoding "' + encoding + '"', {
+        encoding: encoding,
+        type: 'encoding.unsupported'
+      })
+  }
+
+  return stream
+}
+
+/**
+ * Dump the contents of a request.
+ *
+ * @param {object} req
+ * @param {function} callback
+ * @api private
+ */
+
+function dump (req, callback) {
+  if (onFinished.isFinished(req)) {
+    callback(null)
+  } else {
+    onFinished(req, callback)
+    req.resume()
+  }
+}
+
+
+/***/ }),
+
+/***/ 20859:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * body-parser
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var bytes = __nccwpck_require__(86966)
+var contentType = __nccwpck_require__(99915)
+var createError = __nccwpck_require__(95193)
+var debug = __nccwpck_require__(7471)('body-parser:json')
+var read = __nccwpck_require__(88862)
+var typeis = __nccwpck_require__(71159)
+
+/**
+ * Module exports.
+ */
+
+module.exports = json
+
+/**
+ * RegExp to match the first non-space in a string.
+ *
+ * Allowed whitespace is defined in RFC 7159:
+ *
+ *    ws = *(
+ *            %x20 /              ; Space
+ *            %x09 /              ; Horizontal tab
+ *            %x0A /              ; Line feed or New line
+ *            %x0D )              ; Carriage return
+ */
+
+var FIRST_CHAR_REGEXP = /^[\x20\x09\x0a\x0d]*([^\x20\x09\x0a\x0d])/ // eslint-disable-line no-control-regex
+
+/**
+ * Create a middleware to parse JSON bodies.
+ *
+ * @param {object} [options]
+ * @return {function}
+ * @public
+ */
+
+function json (options) {
+  var opts = options || {}
+
+  var limit = typeof opts.limit !== 'number'
+    ? bytes.parse(opts.limit || '100kb')
+    : opts.limit
+  var inflate = opts.inflate !== false
+  var reviver = opts.reviver
+  var strict = opts.strict !== false
+  var type = opts.type || 'application/json'
+  var verify = opts.verify || false
+
+  if (verify !== false && typeof verify !== 'function') {
+    throw new TypeError('option verify must be function')
+  }
+
+  // create the appropriate type checking function
+  var shouldParse = typeof type !== 'function'
+    ? typeChecker(type)
+    : type
+
+  function parse (body) {
+    if (body.length === 0) {
+      // special-case empty json body, as it's a common client-side mistake
+      // TODO: maybe make this configurable or part of "strict" option
+      return {}
+    }
+
+    if (strict) {
+      var first = firstchar(body)
+
+      if (first !== '{' && first !== '[') {
+        debug('strict violation')
+        throw createStrictSyntaxError(body, first)
+      }
+    }
+
+    try {
+      debug('parse json')
+      return JSON.parse(body, reviver)
+    } catch (e) {
+      throw normalizeJsonSyntaxError(e, {
+        message: e.message,
+        stack: e.stack
+      })
+    }
+  }
+
+  return function jsonParser (req, res, next) {
+    if (req._body) {
+      debug('body already parsed')
+      next()
+      return
+    }
+
+    req.body = req.body || {}
+
+    // skip requests without bodies
+    if (!typeis.hasBody(req)) {
+      debug('skip empty body')
+      next()
+      return
+    }
+
+    debug('content-type %j', req.headers['content-type'])
+
+    // determine if request should be parsed
+    if (!shouldParse(req)) {
+      debug('skip parsing')
+      next()
+      return
+    }
+
+    // assert charset per RFC 7159 sec 8.1
+    var charset = getCharset(req) || 'utf-8'
+    if (charset.slice(0, 4) !== 'utf-') {
+      debug('invalid charset')
+      next(createError(415, 'unsupported charset "' + charset.toUpperCase() + '"', {
+        charset: charset,
+        type: 'charset.unsupported'
+      }))
+      return
+    }
+
+    // read
+    read(req, res, next, parse, debug, {
+      encoding: charset,
+      inflate: inflate,
+      limit: limit,
+      verify: verify
+    })
+  }
+}
+
+/**
+ * Create strict violation syntax error matching native error.
+ *
+ * @param {string} str
+ * @param {string} char
+ * @return {Error}
+ * @private
+ */
+
+function createStrictSyntaxError (str, char) {
+  var index = str.indexOf(char)
+  var partial = index !== -1
+    ? str.substring(0, index) + '#'
+    : ''
+
+  try {
+    JSON.parse(partial); /* istanbul ignore next */ throw new SyntaxError('strict violation')
+  } catch (e) {
+    return normalizeJsonSyntaxError(e, {
+      message: e.message.replace('#', char),
+      stack: e.stack
+    })
+  }
+}
+
+/**
+ * Get the first non-whitespace character in a string.
+ *
+ * @param {string} str
+ * @return {function}
+ * @private
+ */
+
+function firstchar (str) {
+  var match = FIRST_CHAR_REGEXP.exec(str)
+
+  return match
+    ? match[1]
+    : undefined
+}
+
+/**
+ * Get the charset of a request.
+ *
+ * @param {object} req
+ * @api private
+ */
+
+function getCharset (req) {
+  try {
+    return (contentType.parse(req).parameters.charset || '').toLowerCase()
+  } catch (e) {
+    return undefined
+  }
+}
+
+/**
+ * Normalize a SyntaxError for JSON.parse.
+ *
+ * @param {SyntaxError} error
+ * @param {object} obj
+ * @return {SyntaxError}
+ */
+
+function normalizeJsonSyntaxError (error, obj) {
+  var keys = Object.getOwnPropertyNames(error)
+
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i]
+    if (key !== 'stack' && key !== 'message') {
+      delete error[key]
+    }
+  }
+
+  // replace stack before message for Node.js 0.10 and below
+  error.stack = obj.stack.replace(error.message, obj.message)
+  error.message = obj.message
+
+  return error
+}
+
+/**
+ * Get the simple type checker.
+ *
+ * @param {string} type
+ * @return {function}
+ */
+
+function typeChecker (type) {
+  return function checkType (req) {
+    return Boolean(typeis(req, type))
+  }
+}
+
+
+/***/ }),
+
+/***/ 49609:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ */
+
+var bytes = __nccwpck_require__(86966)
+var debug = __nccwpck_require__(7471)('body-parser:raw')
+var read = __nccwpck_require__(88862)
+var typeis = __nccwpck_require__(71159)
+
+/**
+ * Module exports.
+ */
+
+module.exports = raw
+
+/**
+ * Create a middleware to parse raw bodies.
+ *
+ * @param {object} [options]
+ * @return {function}
+ * @api public
+ */
+
+function raw (options) {
+  var opts = options || {}
+
+  var inflate = opts.inflate !== false
+  var limit = typeof opts.limit !== 'number'
+    ? bytes.parse(opts.limit || '100kb')
+    : opts.limit
+  var type = opts.type || 'application/octet-stream'
+  var verify = opts.verify || false
+
+  if (verify !== false && typeof verify !== 'function') {
+    throw new TypeError('option verify must be function')
+  }
+
+  // create the appropriate type checking function
+  var shouldParse = typeof type !== 'function'
+    ? typeChecker(type)
+    : type
+
+  function parse (buf) {
+    return buf
+  }
+
+  return function rawParser (req, res, next) {
+    if (req._body) {
+      debug('body already parsed')
+      next()
+      return
+    }
+
+    req.body = req.body || {}
+
+    // skip requests without bodies
+    if (!typeis.hasBody(req)) {
+      debug('skip empty body')
+      next()
+      return
+    }
+
+    debug('content-type %j', req.headers['content-type'])
+
+    // determine if request should be parsed
+    if (!shouldParse(req)) {
+      debug('skip parsing')
+      next()
+      return
+    }
+
+    // read
+    read(req, res, next, parse, debug, {
+      encoding: null,
+      inflate: inflate,
+      limit: limit,
+      verify: verify
+    })
+  }
+}
+
+/**
+ * Get the simple type checker.
+ *
+ * @param {string} type
+ * @return {function}
+ */
+
+function typeChecker (type) {
+  return function checkType (req) {
+    return Boolean(typeis(req, type))
+  }
+}
+
+
+/***/ }),
+
+/***/ 26382:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * body-parser
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ */
+
+var bytes = __nccwpck_require__(86966)
+var contentType = __nccwpck_require__(99915)
+var debug = __nccwpck_require__(7471)('body-parser:text')
+var read = __nccwpck_require__(88862)
+var typeis = __nccwpck_require__(71159)
+
+/**
+ * Module exports.
+ */
+
+module.exports = text
+
+/**
+ * Create a middleware to parse text bodies.
+ *
+ * @param {object} [options]
+ * @return {function}
+ * @api public
+ */
+
+function text (options) {
+  var opts = options || {}
+
+  var defaultCharset = opts.defaultCharset || 'utf-8'
+  var inflate = opts.inflate !== false
+  var limit = typeof opts.limit !== 'number'
+    ? bytes.parse(opts.limit || '100kb')
+    : opts.limit
+  var type = opts.type || 'text/plain'
+  var verify = opts.verify || false
+
+  if (verify !== false && typeof verify !== 'function') {
+    throw new TypeError('option verify must be function')
+  }
+
+  // create the appropriate type checking function
+  var shouldParse = typeof type !== 'function'
+    ? typeChecker(type)
+    : type
+
+  function parse (buf) {
+    return buf
+  }
+
+  return function textParser (req, res, next) {
+    if (req._body) {
+      debug('body already parsed')
+      next()
+      return
+    }
+
+    req.body = req.body || {}
+
+    // skip requests without bodies
+    if (!typeis.hasBody(req)) {
+      debug('skip empty body')
+      next()
+      return
+    }
+
+    debug('content-type %j', req.headers['content-type'])
+
+    // determine if request should be parsed
+    if (!shouldParse(req)) {
+      debug('skip parsing')
+      next()
+      return
+    }
+
+    // get charset
+    var charset = getCharset(req) || defaultCharset
+
+    // read
+    read(req, res, next, parse, debug, {
+      encoding: charset,
+      inflate: inflate,
+      limit: limit,
+      verify: verify
+    })
+  }
+}
+
+/**
+ * Get the charset of a request.
+ *
+ * @param {object} req
+ * @api private
+ */
+
+function getCharset (req) {
+  try {
+    return (contentType.parse(req).parameters.charset || '').toLowerCase()
+  } catch (e) {
+    return undefined
+  }
+}
+
+/**
+ * Get the simple type checker.
+ *
+ * @param {string} type
+ * @return {function}
+ */
+
+function typeChecker (type) {
+  return function checkType (req) {
+    return Boolean(typeis(req, type))
+  }
+}
+
+
+/***/ }),
+
+/***/ 76100:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * body-parser
+ * Copyright(c) 2014 Jonathan Ong
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var bytes = __nccwpck_require__(86966)
+var contentType = __nccwpck_require__(99915)
+var createError = __nccwpck_require__(95193)
+var debug = __nccwpck_require__(7471)('body-parser:urlencoded')
+var deprecate = __nccwpck_require__(18883)('body-parser')
+var read = __nccwpck_require__(88862)
+var typeis = __nccwpck_require__(71159)
+
+/**
+ * Module exports.
+ */
+
+module.exports = urlencoded
+
+/**
+ * Cache of parser modules.
+ */
+
+var parsers = Object.create(null)
+
+/**
+ * Create a middleware to parse urlencoded bodies.
+ *
+ * @param {object} [options]
+ * @return {function}
+ * @public
+ */
+
+function urlencoded (options) {
+  var opts = options || {}
+
+  // notice because option default will flip in next major
+  if (opts.extended === undefined) {
+    deprecate('undefined extended: provide extended option')
+  }
+
+  var extended = opts.extended !== false
+  var inflate = opts.inflate !== false
+  var limit = typeof opts.limit !== 'number'
+    ? bytes.parse(opts.limit || '100kb')
+    : opts.limit
+  var type = opts.type || 'application/x-www-form-urlencoded'
+  var verify = opts.verify || false
+
+  if (verify !== false && typeof verify !== 'function') {
+    throw new TypeError('option verify must be function')
+  }
+
+  // create the appropriate query parser
+  var queryparse = extended
+    ? extendedparser(opts)
+    : simpleparser(opts)
+
+  // create the appropriate type checking function
+  var shouldParse = typeof type !== 'function'
+    ? typeChecker(type)
+    : type
+
+  function parse (body) {
+    return body.length
+      ? queryparse(body)
+      : {}
+  }
+
+  return function urlencodedParser (req, res, next) {
+    if (req._body) {
+      debug('body already parsed')
+      next()
+      return
+    }
+
+    req.body = req.body || {}
+
+    // skip requests without bodies
+    if (!typeis.hasBody(req)) {
+      debug('skip empty body')
+      next()
+      return
+    }
+
+    debug('content-type %j', req.headers['content-type'])
+
+    // determine if request should be parsed
+    if (!shouldParse(req)) {
+      debug('skip parsing')
+      next()
+      return
+    }
+
+    // assert charset
+    var charset = getCharset(req) || 'utf-8'
+    if (charset !== 'utf-8') {
+      debug('invalid charset')
+      next(createError(415, 'unsupported charset "' + charset.toUpperCase() + '"', {
+        charset: charset,
+        type: 'charset.unsupported'
+      }))
+      return
+    }
+
+    // read
+    read(req, res, next, parse, debug, {
+      debug: debug,
+      encoding: charset,
+      inflate: inflate,
+      limit: limit,
+      verify: verify
+    })
+  }
+}
+
+/**
+ * Get the extended query parser.
+ *
+ * @param {object} options
+ */
+
+function extendedparser (options) {
+  var parameterLimit = options.parameterLimit !== undefined
+    ? options.parameterLimit
+    : 1000
+  var parse = parser('qs')
+
+  if (isNaN(parameterLimit) || parameterLimit < 1) {
+    throw new TypeError('option parameterLimit must be a positive number')
+  }
+
+  if (isFinite(parameterLimit)) {
+    parameterLimit = parameterLimit | 0
+  }
+
+  return function queryparse (body) {
+    var paramCount = parameterCount(body, parameterLimit)
+
+    if (paramCount === undefined) {
+      debug('too many parameters')
+      throw createError(413, 'too many parameters', {
+        type: 'parameters.too.many'
+      })
+    }
+
+    var arrayLimit = Math.max(100, paramCount)
+
+    debug('parse extended urlencoding')
+    return parse(body, {
+      allowPrototypes: true,
+      arrayLimit: arrayLimit,
+      depth: Infinity,
+      parameterLimit: parameterLimit
+    })
+  }
+}
+
+/**
+ * Get the charset of a request.
+ *
+ * @param {object} req
+ * @api private
+ */
+
+function getCharset (req) {
+  try {
+    return (contentType.parse(req).parameters.charset || '').toLowerCase()
+  } catch (e) {
+    return undefined
+  }
+}
+
+/**
+ * Count the number of parameters, stopping once limit reached
+ *
+ * @param {string} body
+ * @param {number} limit
+ * @api private
+ */
+
+function parameterCount (body, limit) {
+  var count = 0
+  var index = 0
+
+  while ((index = body.indexOf('&', index)) !== -1) {
+    count++
+    index++
+
+    if (count === limit) {
+      return undefined
+    }
+  }
+
+  return count
+}
+
+/**
+ * Get parser for module name dynamically.
+ *
+ * @param {string} name
+ * @return {function}
+ * @api private
+ */
+
+function parser (name) {
+  var mod = parsers[name]
+
+  if (mod !== undefined) {
+    return mod.parse
+  }
+
+  // this uses a switch for static require analysis
+  switch (name) {
+    case 'qs':
+      mod = __nccwpck_require__(22760)
+      break
+    case 'querystring':
+      mod = __nccwpck_require__(63477)
+      break
+  }
+
+  // store to prevent invoking require()
+  parsers[name] = mod
+
+  return mod.parse
+}
+
+/**
+ * Get the simple query parser.
+ *
+ * @param {object} options
+ */
+
+function simpleparser (options) {
+  var parameterLimit = options.parameterLimit !== undefined
+    ? options.parameterLimit
+    : 1000
+  var parse = parser('querystring')
+
+  if (isNaN(parameterLimit) || parameterLimit < 1) {
+    throw new TypeError('option parameterLimit must be a positive number')
+  }
+
+  if (isFinite(parameterLimit)) {
+    parameterLimit = parameterLimit | 0
+  }
+
+  return function queryparse (body) {
+    var paramCount = parameterCount(body, parameterLimit)
+
+    if (paramCount === undefined) {
+      debug('too many parameters')
+      throw createError(413, 'too many parameters', {
+        type: 'parameters.too.many'
+      })
+    }
+
+    debug('parse urlencoding')
+    return parse(body, undefined, undefined, { maxKeys: parameterLimit })
+  }
+}
+
+/**
+ * Get the simple type checker.
+ *
+ * @param {string} type
+ * @return {function}
+ */
+
+function typeChecker (type) {
+  return function checkType (req) {
+    return Boolean(typeis(req, type))
+  }
+}
+
+
+/***/ }),
+
+/***/ 15377:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * This is the web browser implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = __nccwpck_require__(22552);
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+exports.storage = 'undefined' != typeof chrome
+               && 'undefined' != typeof chrome.storage
+                  ? chrome.storage.local
+                  : localstorage();
+
+/**
+ * Colors.
+ */
+
+exports.colors = [
+  'lightseagreen',
+  'forestgreen',
+  'goldenrod',
+  'dodgerblue',
+  'darkorchid',
+  'crimson'
+];
+
+/**
+ * Currently only WebKit-based Web Inspectors, Firefox >= v31,
+ * and the Firebug extension (any Firefox version) are known
+ * to support "%c" CSS customizations.
+ *
+ * TODO: add a `localStorage` variable to explicitly enable/disable colors
+ */
+
+function useColors() {
+  // NB: In an Electron preload script, document will be defined but not fully
+  // initialized. Since we know we're in Chrome, we'll just detect this case
+  // explicitly
+  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+    return true;
+  }
+
+  // is webkit? http://stackoverflow.com/a/16459606/376773
+  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
+    // is firebug? http://stackoverflow.com/a/398120/376773
+    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
+    // is firefox >= v31?
+    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
+    // double check webkit in userAgent just in case we are in a worker
+    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
+}
+
+/**
+ * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
+ */
+
+exports.formatters.j = function(v) {
+  try {
+    return JSON.stringify(v);
+  } catch (err) {
+    return '[UnexpectedJSONParseError]: ' + err.message;
+  }
+};
+
+
+/**
+ * Colorize log arguments if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+  var useColors = this.useColors;
+
+  args[0] = (useColors ? '%c' : '')
+    + this.namespace
+    + (useColors ? ' %c' : ' ')
+    + args[0]
+    + (useColors ? '%c ' : ' ')
+    + '+' + exports.humanize(this.diff);
+
+  if (!useColors) return;
+
+  var c = 'color: ' + this.color;
+  args.splice(1, 0, c, 'color: inherit')
+
+  // the final "%c" is somewhat tricky, because there could be other
+  // arguments passed either before or after the %c, so we need to
+  // figure out the correct index to insert the CSS into
+  var index = 0;
+  var lastC = 0;
+  args[0].replace(/%[a-zA-Z%]/g, function(match) {
+    if ('%%' === match) return;
+    index++;
+    if ('%c' === match) {
+      // we only are interested in the *last* %c
+      // (the user may have provided their own)
+      lastC = index;
+    }
+  });
+
+  args.splice(lastC, 0, c);
+}
+
+/**
+ * Invokes `console.log()` when available.
+ * No-op when `console.log` is not a "function".
+ *
+ * @api public
+ */
+
+function log() {
+  // this hackery is required for IE8/9, where
+  // the `console.log` function doesn't have 'apply'
+  return 'object' === typeof console
+    && console.log
+    && Function.prototype.apply.call(console.log, console, arguments);
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+
+function save(namespaces) {
+  try {
+    if (null == namespaces) {
+      exports.storage.removeItem('debug');
+    } else {
+      exports.storage.debug = namespaces;
+    }
+  } catch(e) {}
+}
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+
+function load() {
+  var r;
+  try {
+    r = exports.storage.debug;
+  } catch(e) {}
+
+  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
+  if (!r && typeof process !== 'undefined' && 'env' in process) {
+    r = process.env.DEBUG;
+  }
+
+  return r;
+}
+
+/**
+ * Enable namespaces listed in `localStorage.debug` initially.
+ */
+
+exports.enable(load());
+
+/**
+ * Localstorage attempts to return the localstorage.
+ *
+ * This is necessary because safari throws
+ * when a user disables cookies/localstorage
+ * and you attempt to access it.
+ *
+ * @return {LocalStorage}
+ * @api private
+ */
+
+function localstorage() {
+  try {
+    return window.localStorage;
+  } catch (e) {}
+}
+
+
+/***/ }),
+
+/***/ 22552:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+
+/**
+ * This is the common logic for both the Node.js and web browser
+ * implementations of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+exports.coerce = coerce;
+exports.disable = disable;
+exports.enable = enable;
+exports.enabled = enabled;
+exports.humanize = __nccwpck_require__(73233);
+
+/**
+ * The currently active debug mode names, and names to skip.
+ */
+
+exports.names = [];
+exports.skips = [];
+
+/**
+ * Map of special "%n" handling functions, for the debug "format" argument.
+ *
+ * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
+ */
+
+exports.formatters = {};
+
+/**
+ * Previous log timestamp.
+ */
+
+var prevTime;
+
+/**
+ * Select a color.
+ * @param {String} namespace
+ * @return {Number}
+ * @api private
+ */
+
+function selectColor(namespace) {
+  var hash = 0, i;
+
+  for (i in namespace) {
+    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+
+  return exports.colors[Math.abs(hash) % exports.colors.length];
+}
+
+/**
+ * Create a debugger with the given `namespace`.
+ *
+ * @param {String} namespace
+ * @return {Function}
+ * @api public
+ */
+
+function createDebug(namespace) {
+
+  function debug() {
+    // disabled?
+    if (!debug.enabled) return;
+
+    var self = debug;
+
+    // set `diff` timestamp
+    var curr = +new Date();
+    var ms = curr - (prevTime || curr);
+    self.diff = ms;
+    self.prev = prevTime;
+    self.curr = curr;
+    prevTime = curr;
+
+    // turn the `arguments` into a proper Array
+    var args = new Array(arguments.length);
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i];
+    }
+
+    args[0] = exports.coerce(args[0]);
+
+    if ('string' !== typeof args[0]) {
+      // anything else let's inspect with %O
+      args.unshift('%O');
+    }
+
+    // apply any `formatters` transformations
+    var index = 0;
+    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+      // if we encounter an escaped % then don't increase the array index
+      if (match === '%%') return match;
+      index++;
+      var formatter = exports.formatters[format];
+      if ('function' === typeof formatter) {
+        var val = args[index];
+        match = formatter.call(self, val);
+
+        // now we need to remove `args[index]` since it's inlined in the `format`
+        args.splice(index, 1);
+        index--;
+      }
+      return match;
+    });
+
+    // apply env-specific formatting (colors, etc.)
+    exports.formatArgs.call(self, args);
+
+    var logFn = debug.log || exports.log || console.log.bind(console);
+    logFn.apply(self, args);
+  }
+
+  debug.namespace = namespace;
+  debug.enabled = exports.enabled(namespace);
+  debug.useColors = exports.useColors();
+  debug.color = selectColor(namespace);
+
+  // env-specific initialization logic for debug instances
+  if ('function' === typeof exports.init) {
+    exports.init(debug);
+  }
+
+  return debug;
+}
+
+/**
+ * Enables a debug mode by namespaces. This can include modes
+ * separated by a colon and wildcards.
+ *
+ * @param {String} namespaces
+ * @api public
+ */
+
+function enable(namespaces) {
+  exports.save(namespaces);
+
+  exports.names = [];
+  exports.skips = [];
+
+  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
+  var len = split.length;
+
+  for (var i = 0; i < len; i++) {
+    if (!split[i]) continue; // ignore empty strings
+    namespaces = split[i].replace(/\*/g, '.*?');
+    if (namespaces[0] === '-') {
+      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+    } else {
+      exports.names.push(new RegExp('^' + namespaces + '$'));
+    }
+  }
+}
+
+/**
+ * Disable debug output.
+ *
+ * @api public
+ */
+
+function disable() {
+  exports.enable('');
+}
+
+/**
+ * Returns true if the given mode name is enabled, false otherwise.
+ *
+ * @param {String} name
+ * @return {Boolean}
+ * @api public
+ */
+
+function enabled(name) {
+  var i, len;
+  for (i = 0, len = exports.skips.length; i < len; i++) {
+    if (exports.skips[i].test(name)) {
+      return false;
+    }
+  }
+  for (i = 0, len = exports.names.length; i < len; i++) {
+    if (exports.names[i].test(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Coerce `val`.
+ *
+ * @param {Mixed} val
+ * @return {Mixed}
+ * @api private
+ */
+
+function coerce(val) {
+  if (val instanceof Error) return val.stack || val.message;
+  return val;
+}
+
+
+/***/ }),
+
+/***/ 7471:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/**
+ * Detect Electron renderer process, which is node, but we should
+ * treat as a browser.
+ */
+
+if (typeof process !== 'undefined' && process.type === 'renderer') {
+  module.exports = __nccwpck_require__(15377);
+} else {
+  module.exports = __nccwpck_require__(74117);
+}
+
+
+/***/ }),
+
+/***/ 74117:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * Module dependencies.
+ */
+
+var tty = __nccwpck_require__(76224);
+var util = __nccwpck_require__(73837);
+
+/**
+ * This is the Node.js implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = __nccwpck_require__(22552);
+exports.init = init;
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+
+/**
+ * Colors.
+ */
+
+exports.colors = [6, 2, 3, 4, 5, 1];
+
+/**
+ * Build up the default `inspectOpts` object from the environment variables.
+ *
+ *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+ */
+
+exports.inspectOpts = Object.keys(process.env).filter(function (key) {
+  return /^debug_/i.test(key);
+}).reduce(function (obj, key) {
+  // camel-case
+  var prop = key
+    .substring(6)
+    .toLowerCase()
+    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
+
+  // coerce string value into JS value
+  var val = process.env[key];
+  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+  else if (val === 'null') val = null;
+  else val = Number(val);
+
+  obj[prop] = val;
+  return obj;
+}, {});
+
+/**
+ * The file descriptor to write the `debug()` calls to.
+ * Set the `DEBUG_FD` env variable to override with another value. i.e.:
+ *
+ *   $ DEBUG_FD=3 node script.js 3>debug.log
+ */
+
+var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+
+if (1 !== fd && 2 !== fd) {
+  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')()
+}
+
+var stream = 1 === fd ? process.stdout :
+             2 === fd ? process.stderr :
+             createWritableStdioStream(fd);
+
+/**
+ * Is stdout a TTY? Colored output is enabled when `true`.
+ */
+
+function useColors() {
+  return 'colors' in exports.inspectOpts
+    ? Boolean(exports.inspectOpts.colors)
+    : tty.isatty(fd);
+}
+
+/**
+ * Map %o to `util.inspect()`, all on a single line.
+ */
+
+exports.formatters.o = function(v) {
+  this.inspectOpts.colors = this.useColors;
+  return util.inspect(v, this.inspectOpts)
+    .split('\n').map(function(str) {
+      return str.trim()
+    }).join(' ');
+};
+
+/**
+ * Map %o to `util.inspect()`, allowing multiple lines if needed.
+ */
+
+exports.formatters.O = function(v) {
+  this.inspectOpts.colors = this.useColors;
+  return util.inspect(v, this.inspectOpts);
+};
+
+/**
+ * Adds ANSI color escape codes if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+  var name = this.namespace;
+  var useColors = this.useColors;
+
+  if (useColors) {
+    var c = this.color;
+    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
+
+    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
+  } else {
+    args[0] = new Date().toUTCString()
+      + ' ' + name + ' ' + args[0];
+  }
+}
+
+/**
+ * Invokes `util.format()` with the specified arguments and writes to `stream`.
+ */
+
+function log() {
+  return stream.write(util.format.apply(util, arguments) + '\n');
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+
+function save(namespaces) {
+  if (null == namespaces) {
+    // If you set a process.env field to null or undefined, it gets cast to the
+    // string 'null' or 'undefined'. Just delete instead.
+    delete process.env.DEBUG;
+  } else {
+    process.env.DEBUG = namespaces;
+  }
+}
