@@ -40149,3 +40149,2233 @@ function save(namespaces) {
     process.env.DEBUG = namespaces;
   }
 }
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+
+function load() {
+  return process.env.DEBUG;
+}
+
+/**
+ * Copied from `node/src/node.js`.
+ *
+ * XXX: It's lame that node doesn't expose this API out-of-the-box. It also
+ * relies on the undocumented `tty_wrap.guessHandleType()` which is also lame.
+ */
+
+function createWritableStdioStream (fd) {
+  var stream;
+  var tty_wrap = process.binding('tty_wrap');
+
+  // Note stream._type is used for test-module-load-list.js
+
+  switch (tty_wrap.guessHandleType(fd)) {
+    case 'TTY':
+      stream = new tty.WriteStream(fd);
+      stream._type = 'tty';
+
+      // Hack to have stream not keep the event loop alive.
+      // See https://github.com/joyent/node/issues/1726
+      if (stream._handle && stream._handle.unref) {
+        stream._handle.unref();
+      }
+      break;
+
+    case 'FILE':
+      var fs = __nccwpck_require__(57147);
+      stream = new fs.SyncWriteStream(fd, { autoClose: false });
+      stream._type = 'fs';
+      break;
+
+    case 'PIPE':
+    case 'TCP':
+      var net = __nccwpck_require__(41808);
+      stream = new net.Socket({
+        fd: fd,
+        readable: false,
+        writable: true
+      });
+
+      // FIXME Should probably have an option in net.Socket to create a
+      // stream from an existing fd which is writable only. But for now
+      // we'll just add this hack and set the `readable` member to false.
+      // Test: ./node test/fixtures/echo.js < /etc/passwd
+      stream.readable = false;
+      stream.read = null;
+      stream._type = 'pipe';
+
+      // FIXME Hack to have stream not keep the event loop alive.
+      // See https://github.com/joyent/node/issues/1726
+      if (stream._handle && stream._handle.unref) {
+        stream._handle.unref();
+      }
+      break;
+
+    default:
+      // Probably an error on in uv_guess_handle()
+      throw new Error('Implement me. Unknown stream file type!');
+  }
+
+  // For supporting legacy API we put the FD here.
+  stream.fd = fd;
+
+  stream._isStdio = true;
+
+  return stream;
+}
+
+/**
+ * Init logic for `debug` instances.
+ *
+ * Create a new `inspectOpts` object in case `useColors` is set
+ * differently for a particular `debug` instance.
+ */
+
+function init (debug) {
+  debug.inspectOpts = {};
+
+  var keys = Object.keys(exports.inspectOpts);
+  for (var i = 0; i < keys.length; i++) {
+    debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+  }
+}
+
+/**
+ * Enable namespaces listed in `process.env.DEBUG` initially.
+ */
+
+exports.enable(load());
+
+
+/***/ }),
+
+/***/ 73233:
+/***/ ((module) => {
+
+/**
+ * Helpers.
+ */
+
+var s = 1000;
+var m = s * 60;
+var h = m * 60;
+var d = h * 24;
+var y = d * 365.25;
+
+/**
+ * Parse or format the given `val`.
+ *
+ * Options:
+ *
+ *  - `long` verbose formatting [false]
+ *
+ * @param {String|Number} val
+ * @param {Object} [options]
+ * @throws {Error} throw an error if val is not a non-empty string or a number
+ * @return {String|Number}
+ * @api public
+ */
+
+module.exports = function(val, options) {
+  options = options || {};
+  var type = typeof val;
+  if (type === 'string' && val.length > 0) {
+    return parse(val);
+  } else if (type === 'number' && isNaN(val) === false) {
+    return options.long ? fmtLong(val) : fmtShort(val);
+  }
+  throw new Error(
+    'val is not a non-empty string or a valid number. val=' +
+      JSON.stringify(val)
+  );
+};
+
+/**
+ * Parse the given `str` and return milliseconds.
+ *
+ * @param {String} str
+ * @return {Number}
+ * @api private
+ */
+
+function parse(str) {
+  str = String(str);
+  if (str.length > 100) {
+    return;
+  }
+  var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
+    str
+  );
+  if (!match) {
+    return;
+  }
+  var n = parseFloat(match[1]);
+  var type = (match[2] || 'ms').toLowerCase();
+  switch (type) {
+    case 'years':
+    case 'year':
+    case 'yrs':
+    case 'yr':
+    case 'y':
+      return n * y;
+    case 'days':
+    case 'day':
+    case 'd':
+      return n * d;
+    case 'hours':
+    case 'hour':
+    case 'hrs':
+    case 'hr':
+    case 'h':
+      return n * h;
+    case 'minutes':
+    case 'minute':
+    case 'mins':
+    case 'min':
+    case 'm':
+      return n * m;
+    case 'seconds':
+    case 'second':
+    case 'secs':
+    case 'sec':
+    case 's':
+      return n * s;
+    case 'milliseconds':
+    case 'millisecond':
+    case 'msecs':
+    case 'msec':
+    case 'ms':
+      return n;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Short format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtShort(ms) {
+  if (ms >= d) {
+    return Math.round(ms / d) + 'd';
+  }
+  if (ms >= h) {
+    return Math.round(ms / h) + 'h';
+  }
+  if (ms >= m) {
+    return Math.round(ms / m) + 'm';
+  }
+  if (ms >= s) {
+    return Math.round(ms / s) + 's';
+  }
+  return ms + 'ms';
+}
+
+/**
+ * Long format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtLong(ms) {
+  return plural(ms, d, 'day') ||
+    plural(ms, h, 'hour') ||
+    plural(ms, m, 'minute') ||
+    plural(ms, s, 'second') ||
+    ms + ' ms';
+}
+
+/**
+ * Pluralization helper.
+ */
+
+function plural(ms, n, name) {
+  if (ms < n) {
+    return;
+  }
+  if (ms < n * 1.5) {
+    return Math.floor(ms / n) + ' ' + name;
+  }
+  return Math.ceil(ms / n) + ' ' + name + 's';
+}
+
+
+/***/ }),
+
+/***/ 85442:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Batcher, Events, parser;
+parser = __nccwpck_require__(67823);
+Events = __nccwpck_require__(107);
+
+Batcher = function () {
+  class Batcher {
+    constructor(options = {}) {
+      this.options = options;
+      parser.load(this.options, this.defaults, this);
+      this.Events = new Events(this);
+      this._arr = [];
+
+      this._resetPromise();
+
+      this._lastFlush = Date.now();
+    }
+
+    _resetPromise() {
+      return this._promise = new this.Promise((res, rej) => {
+        return this._resolve = res;
+      });
+    }
+
+    _flush() {
+      clearTimeout(this._timeout);
+      this._lastFlush = Date.now();
+
+      this._resolve();
+
+      this.Events.trigger("batch", this._arr);
+      this._arr = [];
+      return this._resetPromise();
+    }
+
+    add(data) {
+      var ret;
+
+      this._arr.push(data);
+
+      ret = this._promise;
+
+      if (this._arr.length === this.maxSize) {
+        this._flush();
+      } else if (this.maxTime != null && this._arr.length === 1) {
+        this._timeout = setTimeout(() => {
+          return this._flush();
+        }, this.maxTime);
+      }
+
+      return ret;
+    }
+
+  }
+
+  ;
+  Batcher.prototype.defaults = {
+    maxTime: null,
+    maxSize: null,
+    Promise: Promise
+  };
+  return Batcher;
+}.call(void 0);
+
+module.exports = Batcher;
+
+/***/ }),
+
+/***/ 83911:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+function _toArray(arr) { return _arrayWithHoles(arr) || _iterableToArray(arr) || _nonIterableRest(); }
+
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+function _iterableToArray(iter) { if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter); }
+
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Bottleneck,
+    DEFAULT_PRIORITY,
+    Events,
+    Job,
+    LocalDatastore,
+    NUM_PRIORITIES,
+    Queues,
+    RedisDatastore,
+    States,
+    Sync,
+    parser,
+    splice = [].splice;
+NUM_PRIORITIES = 10;
+DEFAULT_PRIORITY = 5;
+parser = __nccwpck_require__(67823);
+Queues = __nccwpck_require__(65893);
+Job = __nccwpck_require__(25949);
+LocalDatastore = __nccwpck_require__(38979);
+RedisDatastore = __nccwpck_require__(4946);
+Events = __nccwpck_require__(107);
+States = __nccwpck_require__(2527);
+Sync = __nccwpck_require__(56029);
+
+Bottleneck = function () {
+  class Bottleneck {
+    constructor(options = {}, ...invalid) {
+      var storeInstanceOptions, storeOptions;
+      this._addToQueue = this._addToQueue.bind(this);
+
+      this._validateOptions(options, invalid);
+
+      parser.load(options, this.instanceDefaults, this);
+      this._queues = new Queues(NUM_PRIORITIES);
+      this._scheduled = {};
+      this._states = new States(["RECEIVED", "QUEUED", "RUNNING", "EXECUTING"].concat(this.trackDoneStatus ? ["DONE"] : []));
+      this._limiter = null;
+      this.Events = new Events(this);
+      this._submitLock = new Sync("submit", this.Promise);
+      this._registerLock = new Sync("register", this.Promise);
+      storeOptions = parser.load(options, this.storeDefaults, {});
+
+      this._store = function () {
+        if (this.datastore === "redis" || this.datastore === "ioredis" || this.connection != null) {
+          storeInstanceOptions = parser.load(options, this.redisStoreDefaults, {});
+          return new RedisDatastore(this, storeOptions, storeInstanceOptions);
+        } else if (this.datastore === "local") {
+          storeInstanceOptions = parser.load(options, this.localStoreDefaults, {});
+          return new LocalDatastore(this, storeOptions, storeInstanceOptions);
+        } else {
+          throw new Bottleneck.prototype.BottleneckError(`Invalid datastore type: ${this.datastore}`);
+        }
+      }.call(this);
+
+      this._queues.on("leftzero", () => {
+        var ref;
+        return (ref = this._store.heartbeat) != null ? typeof ref.ref === "function" ? ref.ref() : void 0 : void 0;
+      });
+
+      this._queues.on("zero", () => {
+        var ref;
+        return (ref = this._store.heartbeat) != null ? typeof ref.unref === "function" ? ref.unref() : void 0 : void 0;
+      });
+    }
+
+    _validateOptions(options, invalid) {
+      if (!(options != null && typeof options === "object" && invalid.length === 0)) {
+        throw new Bottleneck.prototype.BottleneckError("Bottleneck v2 takes a single object argument. Refer to https://github.com/SGrondin/bottleneck#upgrading-to-v2 if you're upgrading from Bottleneck v1.");
+      }
+    }
+
+    ready() {
+      return this._store.ready;
+    }
+
+    clients() {
+      return this._store.clients;
+    }
+
+    channel() {
+      return `b_${this.id}`;
+    }
+
+    channel_client() {
+      return `b_${this.id}_${this._store.clientId}`;
+    }
+
+    publish(message) {
+      return this._store.__publish__(message);
+    }
+
+    disconnect(flush = true) {
+      return this._store.__disconnect__(flush);
+    }
+
+    chain(_limiter) {
+      this._limiter = _limiter;
+      return this;
+    }
+
+    queued(priority) {
+      return this._queues.queued(priority);
+    }
+
+    clusterQueued() {
+      return this._store.__queued__();
+    }
+
+    empty() {
+      return this.queued() === 0 && this._submitLock.isEmpty();
+    }
+
+    running() {
+      return this._store.__running__();
+    }
+
+    done() {
+      return this._store.__done__();
+    }
+
+    jobStatus(id) {
+      return this._states.jobStatus(id);
+    }
+
+    jobs(status) {
+      return this._states.statusJobs(status);
+    }
+
+    counts() {
+      return this._states.statusCounts();
+    }
+
+    _randomIndex() {
+      return Math.random().toString(36).slice(2);
+    }
+
+    check(weight = 1) {
+      return this._store.__check__(weight);
+    }
+
+    _clearGlobalState(index) {
+      if (this._scheduled[index] != null) {
+        clearTimeout(this._scheduled[index].expiration);
+        delete this._scheduled[index];
+        return true;
+      } else {
+        return false;
+      }
+    }
+
+    _free(index, job, options, eventInfo) {
+      var _this = this;
+
+      return _asyncToGenerator(function* () {
+        var e, running;
+
+        try {
+          var _ref = yield _this._store.__free__(index, options.weight);
+
+          running = _ref.running;
+
+          _this.Events.trigger("debug", `Freed ${options.id}`, eventInfo);
+
+          if (running === 0 && _this.empty()) {
+            return _this.Events.trigger("idle");
+          }
+        } catch (error1) {
+          e = error1;
+          return _this.Events.trigger("error", e);
+        }
+      })();
+    }
+
+    _run(index, job, wait) {
+      var clearGlobalState, free, run;
+      job.doRun();
+      clearGlobalState = this._clearGlobalState.bind(this, index);
+      run = this._run.bind(this, index, job);
+      free = this._free.bind(this, index, job);
+      return this._scheduled[index] = {
+        timeout: setTimeout(() => {
+          return job.doExecute(this._limiter, clearGlobalState, run, free);
+        }, wait),
+        expiration: job.options.expiration != null ? setTimeout(function () {
+          return job.doExpire(clearGlobalState, run, free);
+        }, wait + job.options.expiration) : void 0,
+        job: job
+      };
+    }
+
+    _drainOne(capacity) {
+      return this._registerLock.schedule(() => {
+        var args, index, next, options, queue;
+
+        if (this.queued() === 0) {
+          return this.Promise.resolve(null);
+        }
+
+        queue = this._queues.getFirst();
+
+        var _next2 = next = queue.first();
+
+        options = _next2.options;
+        args = _next2.args;
+
+        if (capacity != null && options.weight > capacity) {
+          return this.Promise.resolve(null);
+        }
+
+        this.Events.trigger("debug", `Draining ${options.id}`, {
+          args,
+          options
+        });
+        index = this._randomIndex();
+        return this._store.__register__(index, options.weight, options.expiration).then(({
+          success,
+          wait,
+          reservoir
+        }) => {
+          var empty;
+          this.Events.trigger("debug", `Drained ${options.id}`, {
+            success,
+            args,
+            options
+          });
+
+          if (success) {
+            queue.shift();
+            empty = this.empty();
+
+            if (empty) {
+              this.Events.trigger("empty");
+            }
+
+            if (reservoir === 0) {
+              this.Events.trigger("depleted", empty);
+            }
+
+            this._run(index, next, wait);
+
+            return this.Promise.resolve(options.weight);
+          } else {
+            return this.Promise.resolve(null);
+          }
+        });
+      });
+    }
+
+    _drainAll(capacity, total = 0) {
+      return this._drainOne(capacity).then(drained => {
+        var newCapacity;
+
+        if (drained != null) {
+          newCapacity = capacity != null ? capacity - drained : capacity;
+          return this._drainAll(newCapacity, total + drained);
+        } else {
+          return this.Promise.resolve(total);
+        }
+      }).catch(e => {
+        return this.Events.trigger("error", e);
+      });
+    }
+
+    _dropAllQueued(message) {
+      return this._queues.shiftAll(function (job) {
+        return job.doDrop({
+          message
+        });
+      });
+    }
+
+    stop(options = {}) {
+      var done, waitForExecuting;
+      options = parser.load(options, this.stopDefaults);
+
+      waitForExecuting = at => {
+        var finished;
+
+        finished = () => {
+          var counts;
+          counts = this._states.counts;
+          return counts[0] + counts[1] + counts[2] + counts[3] === at;
+        };
+
+        return new this.Promise((resolve, reject) => {
+          if (finished()) {
+            return resolve();
+          } else {
+            return this.on("done", () => {
+              if (finished()) {
+                this.removeAllListeners("done");
+                return resolve();
+              }
+            });
+          }
+        });
+      };
+
+      done = options.dropWaitingJobs ? (this._run = function (index, next) {
+        return next.doDrop({
+          message: options.dropErrorMessage
+        });
+      }, this._drainOne = () => {
+        return this.Promise.resolve(null);
+      }, this._registerLock.schedule(() => {
+        return this._submitLock.schedule(() => {
+          var k, ref, v;
+          ref = this._scheduled;
+
+          for (k in ref) {
+            v = ref[k];
+
+            if (this.jobStatus(v.job.options.id) === "RUNNING") {
+              clearTimeout(v.timeout);
+              clearTimeout(v.expiration);
+              v.job.doDrop({
+                message: options.dropErrorMessage
+              });
+            }
+          }
+
+          this._dropAllQueued(options.dropErrorMessage);
+
+          return waitForExecuting(0);
+        });
+      })) : this.schedule({
+        priority: NUM_PRIORITIES - 1,
+        weight: 0
+      }, () => {
+        return waitForExecuting(1);
+      });
+
+      this._receive = function (job) {
+        return job._reject(new Bottleneck.prototype.BottleneckError(options.enqueueErrorMessage));
+      };
+
+      this.stop = () => {
+        return this.Promise.reject(new Bottleneck.prototype.BottleneckError("stop() has already been called"));
+      };
+
+      return done;
+    }
+
+    _addToQueue(job) {
+      var _this2 = this;
+
+      return _asyncToGenerator(function* () {
+        var args, blocked, error, options, reachedHWM, shifted, strategy;
+        args = job.args;
+        options = job.options;
+
+        try {
+          var _ref2 = yield _this2._store.__submit__(_this2.queued(), options.weight);
+
+          reachedHWM = _ref2.reachedHWM;
+          blocked = _ref2.blocked;
+          strategy = _ref2.strategy;
+        } catch (error1) {
+          error = error1;
+
+          _this2.Events.trigger("debug", `Could not queue ${options.id}`, {
+            args,
+            options,
+            error
+          });
+
+          job.doDrop({
+            error
+          });
+          return false;
+        }
+
+        if (blocked) {
+          job.doDrop();
+          return true;
+        } else if (reachedHWM) {
+          shifted = strategy === Bottleneck.prototype.strategy.LEAK ? _this2._queues.shiftLastFrom(options.priority) : strategy === Bottleneck.prototype.strategy.OVERFLOW_PRIORITY ? _this2._queues.shiftLastFrom(options.priority + 1) : strategy === Bottleneck.prototype.strategy.OVERFLOW ? job : void 0;
+
+          if (shifted != null) {
+            shifted.doDrop();
+          }
+
+          if (shifted == null || strategy === Bottleneck.prototype.strategy.OVERFLOW) {
+            if (shifted == null) {
+              job.doDrop();
+            }
+
+            return reachedHWM;
+          }
+        }
+
+        job.doQueue(reachedHWM, blocked);
+
+        _this2._queues.push(job);
+
+        yield _this2._drainAll();
+        return reachedHWM;
+      })();
+    }
+
+    _receive(job) {
+      if (this._states.jobStatus(job.options.id) != null) {
+        job._reject(new Bottleneck.prototype.BottleneckError(`A job with the same id already exists (id=${job.options.id})`));
+
+        return false;
+      } else {
+        job.doReceive();
+        return this._submitLock.schedule(this._addToQueue, job);
+      }
+    }
+
+    submit(...args) {
+      var cb, fn, job, options, ref, ref1, task;
+
+      if (typeof args[0] === "function") {
+        var _ref3, _ref4, _splice$call, _splice$call2;
+
+        ref = args, (_ref3 = ref, _ref4 = _toArray(_ref3), fn = _ref4[0], args = _ref4.slice(1), _ref3), (_splice$call = splice.call(args, -1), _splice$call2 = _slicedToArray(_splice$call, 1), cb = _splice$call2[0], _splice$call);
+        options = parser.load({}, this.jobDefaults);
+      } else {
+        var _ref5, _ref6, _splice$call3, _splice$call4;
+
+        ref1 = args, (_ref5 = ref1, _ref6 = _toArray(_ref5), options = _ref6[0], fn = _ref6[1], args = _ref6.slice(2), _ref5), (_splice$call3 = splice.call(args, -1), _splice$call4 = _slicedToArray(_splice$call3, 1), cb = _splice$call4[0], _splice$call3);
+        options = parser.load(options, this.jobDefaults);
+      }
+
+      task = (...args) => {
+        return new this.Promise(function (resolve, reject) {
+          return fn(...args, function (...args) {
+            return (args[0] != null ? reject : resolve)(args);
+          });
+        });
+      };
+
+      job = new Job(task, args, options, this.jobDefaults, this.rejectOnDrop, this.Events, this._states, this.Promise);
+      job.promise.then(function (args) {
+        return typeof cb === "function" ? cb(...args) : void 0;
+      }).catch(function (args) {
+        if (Array.isArray(args)) {
+          return typeof cb === "function" ? cb(...args) : void 0;
+        } else {
+          return typeof cb === "function" ? cb(args) : void 0;
+        }
+      });
+      return this._receive(job);
+    }
+
+    schedule(...args) {
+      var job, options, task;
+
+      if (typeof args[0] === "function") {
+        var _args = args;
+
+        var _args2 = _toArray(_args);
+
+        task = _args2[0];
+        args = _args2.slice(1);
+        options = {};
+      } else {
+        var _args3 = args;
+
+        var _args4 = _toArray(_args3);
+
+        options = _args4[0];
+        task = _args4[1];
+        args = _args4.slice(2);
+      }
+
+      job = new Job(task, args, options, this.jobDefaults, this.rejectOnDrop, this.Events, this._states, this.Promise);
+
+      this._receive(job);
+
+      return job.promise;
+    }
+
+    wrap(fn) {
+      var schedule, wrapped;
+      schedule = this.schedule.bind(this);
+
+      wrapped = function wrapped(...args) {
+        return schedule(fn.bind(this), ...args);
+      };
+
+      wrapped.withOptions = function (options, ...args) {
+        return schedule(options, fn, ...args);
+      };
+
+      return wrapped;
+    }
+
+    updateSettings(options = {}) {
+      var _this3 = this;
+
+      return _asyncToGenerator(function* () {
+        yield _this3._store.__updateSettings__(parser.overwrite(options, _this3.storeDefaults));
+        parser.overwrite(options, _this3.instanceDefaults, _this3);
+        return _this3;
+      })();
+    }
+
+    currentReservoir() {
+      return this._store.__currentReservoir__();
+    }
+
+    incrementReservoir(incr = 0) {
+      return this._store.__incrementReservoir__(incr);
+    }
+
+  }
+
+  ;
+  Bottleneck.default = Bottleneck;
+  Bottleneck.Events = Events;
+  Bottleneck.version = Bottleneck.prototype.version = (__nccwpck_require__(82636)/* .version */ .i);
+  Bottleneck.strategy = Bottleneck.prototype.strategy = {
+    LEAK: 1,
+    OVERFLOW: 2,
+    OVERFLOW_PRIORITY: 4,
+    BLOCK: 3
+  };
+  Bottleneck.BottleneckError = Bottleneck.prototype.BottleneckError = __nccwpck_require__(93529);
+  Bottleneck.Group = Bottleneck.prototype.Group = __nccwpck_require__(53068);
+  Bottleneck.RedisConnection = Bottleneck.prototype.RedisConnection = __nccwpck_require__(29992);
+  Bottleneck.IORedisConnection = Bottleneck.prototype.IORedisConnection = __nccwpck_require__(47710);
+  Bottleneck.Batcher = Bottleneck.prototype.Batcher = __nccwpck_require__(85442);
+  Bottleneck.prototype.jobDefaults = {
+    priority: DEFAULT_PRIORITY,
+    weight: 1,
+    expiration: null,
+    id: "<no-id>"
+  };
+  Bottleneck.prototype.storeDefaults = {
+    maxConcurrent: null,
+    minTime: 0,
+    highWater: null,
+    strategy: Bottleneck.prototype.strategy.LEAK,
+    penalty: null,
+    reservoir: null,
+    reservoirRefreshInterval: null,
+    reservoirRefreshAmount: null,
+    reservoirIncreaseInterval: null,
+    reservoirIncreaseAmount: null,
+    reservoirIncreaseMaximum: null
+  };
+  Bottleneck.prototype.localStoreDefaults = {
+    Promise: Promise,
+    timeout: null,
+    heartbeatInterval: 250
+  };
+  Bottleneck.prototype.redisStoreDefaults = {
+    Promise: Promise,
+    timeout: null,
+    heartbeatInterval: 5000,
+    clientTimeout: 10000,
+    Redis: null,
+    clientOptions: {},
+    clusterNodes: null,
+    clearDatastore: false,
+    connection: null
+  };
+  Bottleneck.prototype.instanceDefaults = {
+    datastore: "local",
+    connection: null,
+    id: "<no-id>",
+    rejectOnDrop: true,
+    trackDoneStatus: false,
+    Promise: Promise
+  };
+  Bottleneck.prototype.stopDefaults = {
+    enqueueErrorMessage: "This limiter has been stopped and cannot accept new jobs.",
+    dropWaitingJobs: true,
+    dropErrorMessage: "This limiter has been stopped."
+  };
+  return Bottleneck;
+}.call(void 0);
+
+module.exports = Bottleneck;
+
+/***/ }),
+
+/***/ 93529:
+/***/ ((module) => {
+
+"use strict";
+
+
+var BottleneckError;
+BottleneckError = class BottleneckError extends Error {};
+module.exports = BottleneckError;
+
+/***/ }),
+
+/***/ 38579:
+/***/ ((module) => {
+
+"use strict";
+
+
+var DLList;
+DLList = class DLList {
+  constructor(incr, decr) {
+    this.incr = incr;
+    this.decr = decr;
+    this._first = null;
+    this._last = null;
+    this.length = 0;
+  }
+
+  push(value) {
+    var node;
+    this.length++;
+
+    if (typeof this.incr === "function") {
+      this.incr();
+    }
+
+    node = {
+      value,
+      prev: this._last,
+      next: null
+    };
+
+    if (this._last != null) {
+      this._last.next = node;
+      this._last = node;
+    } else {
+      this._first = this._last = node;
+    }
+
+    return void 0;
+  }
+
+  shift() {
+    var value;
+
+    if (this._first == null) {
+      return;
+    } else {
+      this.length--;
+
+      if (typeof this.decr === "function") {
+        this.decr();
+      }
+    }
+
+    value = this._first.value;
+
+    if ((this._first = this._first.next) != null) {
+      this._first.prev = null;
+    } else {
+      this._last = null;
+    }
+
+    return value;
+  }
+
+  first() {
+    if (this._first != null) {
+      return this._first.value;
+    }
+  }
+
+  getArray() {
+    var node, ref, results;
+    node = this._first;
+    results = [];
+
+    while (node != null) {
+      results.push((ref = node, node = node.next, ref.value));
+    }
+
+    return results;
+  }
+
+  forEachShift(cb) {
+    var node;
+    node = this.shift();
+
+    while (node != null) {
+      cb(node), node = this.shift();
+    }
+
+    return void 0;
+  }
+
+  debug() {
+    var node, ref, ref1, ref2, results;
+    node = this._first;
+    results = [];
+
+    while (node != null) {
+      results.push((ref = node, node = node.next, {
+        value: ref.value,
+        prev: (ref1 = ref.prev) != null ? ref1.value : void 0,
+        next: (ref2 = ref.next) != null ? ref2.value : void 0
+      }));
+    }
+
+    return results;
+  }
+
+};
+module.exports = DLList;
+
+/***/ }),
+
+/***/ 107:
+/***/ ((module) => {
+
+"use strict";
+
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events;
+Events = class Events {
+  constructor(instance) {
+    this.instance = instance;
+    this._events = {};
+
+    if (this.instance.on != null || this.instance.once != null || this.instance.removeAllListeners != null) {
+      throw new Error("An Emitter already exists for this object");
+    }
+
+    this.instance.on = (name, cb) => {
+      return this._addListener(name, "many", cb);
+    };
+
+    this.instance.once = (name, cb) => {
+      return this._addListener(name, "once", cb);
+    };
+
+    this.instance.removeAllListeners = (name = null) => {
+      if (name != null) {
+        return delete this._events[name];
+      } else {
+        return this._events = {};
+      }
+    };
+  }
+
+  _addListener(name, status, cb) {
+    var base;
+
+    if ((base = this._events)[name] == null) {
+      base[name] = [];
+    }
+
+    this._events[name].push({
+      cb,
+      status
+    });
+
+    return this.instance;
+  }
+
+  listenerCount(name) {
+    if (this._events[name] != null) {
+      return this._events[name].length;
+    } else {
+      return 0;
+    }
+  }
+
+  trigger(name, ...args) {
+    var _this = this;
+
+    return _asyncToGenerator(function* () {
+      var e, promises;
+
+      try {
+        if (name !== "debug") {
+          _this.trigger("debug", `Event triggered: ${name}`, args);
+        }
+
+        if (_this._events[name] == null) {
+          return;
+        }
+
+        _this._events[name] = _this._events[name].filter(function (listener) {
+          return listener.status !== "none";
+        });
+        promises = _this._events[name].map(
+        /*#__PURE__*/
+        function () {
+          var _ref = _asyncToGenerator(function* (listener) {
+            var e, returned;
+
+            if (listener.status === "none") {
+              return;
+            }
+
+            if (listener.status === "once") {
+              listener.status = "none";
+            }
+
+            try {
+              returned = typeof listener.cb === "function" ? listener.cb(...args) : void 0;
+
+              if (typeof (returned != null ? returned.then : void 0) === "function") {
+                return yield returned;
+              } else {
+                return returned;
+              }
+            } catch (error) {
+              e = error;
+
+              if (true) {
+                _this.trigger("error", e);
+              }
+
+              return null;
+            }
+          });
+
+          return function (_x) {
+            return _ref.apply(this, arguments);
+          };
+        }());
+        return (yield Promise.all(promises)).find(function (x) {
+          return x != null;
+        });
+      } catch (error) {
+        e = error;
+
+        if (true) {
+          _this.trigger("error", e);
+        }
+
+        return null;
+      }
+    })();
+  }
+
+};
+module.exports = Events;
+
+/***/ }),
+
+/***/ 53068:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events, Group, IORedisConnection, RedisConnection, Scripts, parser;
+parser = __nccwpck_require__(67823);
+Events = __nccwpck_require__(107);
+RedisConnection = __nccwpck_require__(29992);
+IORedisConnection = __nccwpck_require__(47710);
+Scripts = __nccwpck_require__(4169);
+
+Group = function () {
+  class Group {
+    constructor(limiterOptions = {}) {
+      this.deleteKey = this.deleteKey.bind(this);
+      this.limiterOptions = limiterOptions;
+      parser.load(this.limiterOptions, this.defaults, this);
+      this.Events = new Events(this);
+      this.instances = {};
+      this.Bottleneck = __nccwpck_require__(83911);
+
+      this._startAutoCleanup();
+
+      this.sharedConnection = this.connection != null;
+
+      if (this.connection == null) {
+        if (this.limiterOptions.datastore === "redis") {
+          this.connection = new RedisConnection(Object.assign({}, this.limiterOptions, {
+            Events: this.Events
+          }));
+        } else if (this.limiterOptions.datastore === "ioredis") {
+          this.connection = new IORedisConnection(Object.assign({}, this.limiterOptions, {
+            Events: this.Events
+          }));
+        }
+      }
+    }
+
+    key(key = "") {
+      var ref;
+      return (ref = this.instances[key]) != null ? ref : (() => {
+        var limiter;
+        limiter = this.instances[key] = new this.Bottleneck(Object.assign(this.limiterOptions, {
+          id: `${this.id}-${key}`,
+          timeout: this.timeout,
+          connection: this.connection
+        }));
+        this.Events.trigger("created", limiter, key);
+        return limiter;
+      })();
+    }
+
+    deleteKey(key = "") {
+      var _this = this;
+
+      return _asyncToGenerator(function* () {
+        var deleted, instance;
+        instance = _this.instances[key];
+
+        if (_this.connection) {
+          deleted = yield _this.connection.__runCommand__(['del', ...Scripts.allKeys(`${_this.id}-${key}`)]);
+        }
+
+        if (instance != null) {
+          delete _this.instances[key];
+          yield instance.disconnect();
+        }
+
+        return instance != null || deleted > 0;
+      })();
+    }
+
+    limiters() {
+      var k, ref, results, v;
+      ref = this.instances;
+      results = [];
+
+      for (k in ref) {
+        v = ref[k];
+        results.push({
+          key: k,
+          limiter: v
+        });
+      }
+
+      return results;
+    }
+
+    keys() {
+      return Object.keys(this.instances);
+    }
+
+    clusterKeys() {
+      var _this2 = this;
+
+      return _asyncToGenerator(function* () {
+        var cursor, end, found, i, k, keys, len, next, start;
+
+        if (_this2.connection == null) {
+          return _this2.Promise.resolve(_this2.keys());
+        }
+
+        keys = [];
+        cursor = null;
+        start = `b_${_this2.id}-`.length;
+        end = "_settings".length;
+
+        while (cursor !== 0) {
+          var _ref = yield _this2.connection.__runCommand__(["scan", cursor != null ? cursor : 0, "match", `b_${_this2.id}-*_settings`, "count", 10000]);
+
+          var _ref2 = _slicedToArray(_ref, 2);
+
+          next = _ref2[0];
+          found = _ref2[1];
+          cursor = ~~next;
+
+          for (i = 0, len = found.length; i < len; i++) {
+            k = found[i];
+            keys.push(k.slice(start, -end));
+          }
+        }
+
+        return keys;
+      })();
+    }
+
+    _startAutoCleanup() {
+      var _this3 = this;
+
+      var base;
+      clearInterval(this.interval);
+      return typeof (base = this.interval = setInterval(
+      /*#__PURE__*/
+      _asyncToGenerator(function* () {
+        var e, k, ref, results, time, v;
+        time = Date.now();
+        ref = _this3.instances;
+        results = [];
+
+        for (k in ref) {
+          v = ref[k];
+
+          try {
+            if (yield v._store.__groupCheck__(time)) {
+              results.push(_this3.deleteKey(k));
+            } else {
+              results.push(void 0);
+            }
+          } catch (error) {
+            e = error;
+            results.push(v.Events.trigger("error", e));
+          }
+        }
+
+        return results;
+      }), this.timeout / 2)).unref === "function" ? base.unref() : void 0;
+    }
+
+    updateSettings(options = {}) {
+      parser.overwrite(options, this.defaults, this);
+      parser.overwrite(options, options, this.limiterOptions);
+
+      if (options.timeout != null) {
+        return this._startAutoCleanup();
+      }
+    }
+
+    disconnect(flush = true) {
+      var ref;
+
+      if (!this.sharedConnection) {
+        return (ref = this.connection) != null ? ref.disconnect(flush) : void 0;
+      }
+    }
+
+  }
+
+  ;
+  Group.prototype.defaults = {
+    timeout: 1000 * 60 * 5,
+    connection: null,
+    Promise: Promise,
+    id: "group-key"
+  };
+  return Group;
+}.call(void 0);
+
+module.exports = Group;
+
+/***/ }),
+
+/***/ 47710:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+function _slicedToArray(arr, i) { return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest(); }
+
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance"); }
+
+function _iterableToArrayLimit(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"] != null) _i["return"](); } finally { if (_d) throw _e; } } return _arr; }
+
+function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events, IORedisConnection, Scripts, parser;
+parser = __nccwpck_require__(67823);
+Events = __nccwpck_require__(107);
+Scripts = __nccwpck_require__(4169);
+
+IORedisConnection = function () {
+  class IORedisConnection {
+    constructor(options = {}) {
+      parser.load(options, this.defaults, this);
+
+      if (this.Redis == null) {
+        this.Redis = eval("require")("ioredis"); // Obfuscated or else Webpack/Angular will try to inline the optional ioredis module. To override this behavior: pass the ioredis module to Bottleneck as the 'Redis' option.
+      }
+
+      if (this.Events == null) {
+        this.Events = new Events(this);
+      }
+
+      this.terminated = false;
+
+      if (this.clusterNodes != null) {
+        this.client = new this.Redis.Cluster(this.clusterNodes, this.clientOptions);
+        this.subscriber = new this.Redis.Cluster(this.clusterNodes, this.clientOptions);
+      } else if (this.client != null && this.client.duplicate == null) {
+        this.subscriber = new this.Redis.Cluster(this.client.startupNodes, this.client.options);
+      } else {
+        if (this.client == null) {
+          this.client = new this.Redis(this.clientOptions);
+        }
+
+        this.subscriber = this.client.duplicate();
+      }
+
+      this.limiters = {};
+      this.ready = this.Promise.all([this._setup(this.client, false), this._setup(this.subscriber, true)]).then(() => {
+        this._loadScripts();
+
+        return {
+          client: this.client,
+          subscriber: this.subscriber
+        };
+      });
+    }
+
+    _setup(client, sub) {
+      client.setMaxListeners(0);
+      return new this.Promise((resolve, reject) => {
+        client.on("error", e => {
+          return this.Events.trigger("error", e);
+        });
+
+        if (sub) {
+          client.on("message", (channel, message) => {
+            var ref;
+            return (ref = this.limiters[channel]) != null ? ref._store.onMessage(channel, message) : void 0;
+          });
+        }
+
+        if (client.status === "ready") {
+          return resolve();
+        } else {
+          return client.once("ready", resolve);
+        }
+      });
+    }
+
+    _loadScripts() {
+      return Scripts.names.forEach(name => {
+        return this.client.defineCommand(name, {
+          lua: Scripts.payload(name)
+        });
+      });
+    }
+
+    __runCommand__(cmd) {
+      var _this = this;
+
+      return _asyncToGenerator(function* () {
+        var _, deleted;
+
+        yield _this.ready;
+
+        var _ref = yield _this.client.pipeline([cmd]).exec();
+
+        var _ref2 = _slicedToArray(_ref, 1);
+
+        var _ref2$ = _slicedToArray(_ref2[0], 2);
+
+        _ = _ref2$[0];
+        deleted = _ref2$[1];
+        return deleted;
+      })();
+    }
+
+    __addLimiter__(instance) {
+      return this.Promise.all([instance.channel(), instance.channel_client()].map(channel => {
+        return new this.Promise((resolve, reject) => {
+          return this.subscriber.subscribe(channel, () => {
+            this.limiters[channel] = instance;
+            return resolve();
+          });
+        });
+      }));
+    }
+
+    __removeLimiter__(instance) {
+      var _this2 = this;
+
+      return [instance.channel(), instance.channel_client()].forEach(
+      /*#__PURE__*/
+      function () {
+        var _ref3 = _asyncToGenerator(function* (channel) {
+          if (!_this2.terminated) {
+            yield _this2.subscriber.unsubscribe(channel);
+          }
+
+          return delete _this2.limiters[channel];
+        });
+
+        return function (_x) {
+          return _ref3.apply(this, arguments);
+        };
+      }());
+    }
+
+    __scriptArgs__(name, id, args, cb) {
+      var keys;
+      keys = Scripts.keys(name, id);
+      return [keys.length].concat(keys, args, cb);
+    }
+
+    __scriptFn__(name) {
+      return this.client[name].bind(this.client);
+    }
+
+    disconnect(flush = true) {
+      var i, k, len, ref;
+      ref = Object.keys(this.limiters);
+
+      for (i = 0, len = ref.length; i < len; i++) {
+        k = ref[i];
+        clearInterval(this.limiters[k]._store.heartbeat);
+      }
+
+      this.limiters = {};
+      this.terminated = true;
+
+      if (flush) {
+        return this.Promise.all([this.client.quit(), this.subscriber.quit()]);
+      } else {
+        this.client.disconnect();
+        this.subscriber.disconnect();
+        return this.Promise.resolve();
+      }
+    }
+
+  }
+
+  ;
+  IORedisConnection.prototype.datastore = "ioredis";
+  IORedisConnection.prototype.defaults = {
+    Redis: null,
+    clientOptions: {},
+    clusterNodes: null,
+    client: null,
+    Promise: Promise,
+    Events: null
+  };
+  return IORedisConnection;
+}.call(void 0);
+
+module.exports = IORedisConnection;
+
+/***/ }),
+
+/***/ 25949:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var BottleneckError, DEFAULT_PRIORITY, Job, NUM_PRIORITIES, parser;
+NUM_PRIORITIES = 10;
+DEFAULT_PRIORITY = 5;
+parser = __nccwpck_require__(67823);
+BottleneckError = __nccwpck_require__(93529);
+Job = class Job {
+  constructor(task, args, options, jobDefaults, rejectOnDrop, Events, _states, Promise) {
+    this.task = task;
+    this.args = args;
+    this.rejectOnDrop = rejectOnDrop;
+    this.Events = Events;
+    this._states = _states;
+    this.Promise = Promise;
+    this.options = parser.load(options, jobDefaults);
+    this.options.priority = this._sanitizePriority(this.options.priority);
+
+    if (this.options.id === jobDefaults.id) {
+      this.options.id = `${this.options.id}-${this._randomIndex()}`;
+    }
+
+    this.promise = new this.Promise((_resolve, _reject) => {
+      this._resolve = _resolve;
+      this._reject = _reject;
+    });
+    this.retryCount = 0;
+  }
+
+  _sanitizePriority(priority) {
+    var sProperty;
+    sProperty = ~~priority !== priority ? DEFAULT_PRIORITY : priority;
+
+    if (sProperty < 0) {
+      return 0;
+    } else if (sProperty > NUM_PRIORITIES - 1) {
+      return NUM_PRIORITIES - 1;
+    } else {
+      return sProperty;
+    }
+  }
+
+  _randomIndex() {
+    return Math.random().toString(36).slice(2);
+  }
+
+  doDrop({
+    error,
+    message = "This job has been dropped by Bottleneck"
+  } = {}) {
+    if (this._states.remove(this.options.id)) {
+      if (this.rejectOnDrop) {
+        this._reject(error != null ? error : new BottleneckError(message));
+      }
+
+      this.Events.trigger("dropped", {
+        args: this.args,
+        options: this.options,
+        task: this.task,
+        promise: this.promise
+      });
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  _assertStatus(expected) {
+    var status;
+    status = this._states.jobStatus(this.options.id);
+
+    if (!(status === expected || expected === "DONE" && status === null)) {
+      throw new BottleneckError(`Invalid job status ${status}, expected ${expected}. Please open an issue at https://github.com/SGrondin/bottleneck/issues`);
+    }
+  }
+
+  doReceive() {
+    this._states.start(this.options.id);
+
+    return this.Events.trigger("received", {
+      args: this.args,
+      options: this.options
+    });
+  }
+
+  doQueue(reachedHWM, blocked) {
+    this._assertStatus("RECEIVED");
+
+    this._states.next(this.options.id);
+
+    return this.Events.trigger("queued", {
+      args: this.args,
+      options: this.options,
+      reachedHWM,
+      blocked
+    });
+  }
+
+  doRun() {
+    if (this.retryCount === 0) {
+      this._assertStatus("QUEUED");
+
+      this._states.next(this.options.id);
+    } else {
+      this._assertStatus("EXECUTING");
+    }
+
+    return this.Events.trigger("scheduled", {
+      args: this.args,
+      options: this.options
+    });
+  }
+
+  doExecute(chained, clearGlobalState, run, free) {
+    var _this = this;
+
+    return _asyncToGenerator(function* () {
+      var error, eventInfo, passed;
+
+      if (_this.retryCount === 0) {
+        _this._assertStatus("RUNNING");
+
+        _this._states.next(_this.options.id);
+      } else {
+        _this._assertStatus("EXECUTING");
+      }
+
+      eventInfo = {
+        args: _this.args,
+        options: _this.options,
+        retryCount: _this.retryCount
+      };
+
+      _this.Events.trigger("executing", eventInfo);
+
+      try {
+        passed = yield chained != null ? chained.schedule(_this.options, _this.task, ..._this.args) : _this.task(..._this.args);
+
+        if (clearGlobalState()) {
+          _this.doDone(eventInfo);
+
+          yield free(_this.options, eventInfo);
+
+          _this._assertStatus("DONE");
+
+          return _this._resolve(passed);
+        }
+      } catch (error1) {
+        error = error1;
+        return _this._onFailure(error, eventInfo, clearGlobalState, run, free);
+      }
+    })();
+  }
+
+  doExpire(clearGlobalState, run, free) {
+    var error, eventInfo;
+
+    if (this._states.jobStatus(this.options.id === "RUNNING")) {
+      this._states.next(this.options.id);
+    }
+
+    this._assertStatus("EXECUTING");
+
+    eventInfo = {
+      args: this.args,
+      options: this.options,
+      retryCount: this.retryCount
+    };
+    error = new BottleneckError(`This job timed out after ${this.options.expiration} ms.`);
+    return this._onFailure(error, eventInfo, clearGlobalState, run, free);
+  }
+
+  _onFailure(error, eventInfo, clearGlobalState, run, free) {
+    var _this2 = this;
+
+    return _asyncToGenerator(function* () {
+      var retry, retryAfter;
+
+      if (clearGlobalState()) {
+        retry = yield _this2.Events.trigger("failed", error, eventInfo);
+
+        if (retry != null) {
+          retryAfter = ~~retry;
+
+          _this2.Events.trigger("retry", `Retrying ${_this2.options.id} after ${retryAfter} ms`, eventInfo);
+
+          _this2.retryCount++;
+          return run(retryAfter);
+        } else {
+          _this2.doDone(eventInfo);
+
+          yield free(_this2.options, eventInfo);
+
+          _this2._assertStatus("DONE");
+
+          return _this2._reject(error);
+        }
+      }
+    })();
+  }
+
+  doDone(eventInfo) {
+    this._assertStatus("EXECUTING");
+
+    this._states.next(this.options.id);
+
+    return this.Events.trigger("done", eventInfo);
+  }
+
+};
+module.exports = Job;
+
+/***/ }),
+
+/***/ 38979:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var BottleneckError, LocalDatastore, parser;
+parser = __nccwpck_require__(67823);
+BottleneckError = __nccwpck_require__(93529);
+LocalDatastore = class LocalDatastore {
+  constructor(instance, storeOptions, storeInstanceOptions) {
+    this.instance = instance;
+    this.storeOptions = storeOptions;
+    this.clientId = this.instance._randomIndex();
+    parser.load(storeInstanceOptions, storeInstanceOptions, this);
+    this._nextRequest = this._lastReservoirRefresh = this._lastReservoirIncrease = Date.now();
+    this._running = 0;
+    this._done = 0;
+    this._unblockTime = 0;
+    this.ready = this.Promise.resolve();
+    this.clients = {};
+
+    this._startHeartbeat();
+  }
+
+  _startHeartbeat() {
+    var base;
+
+    if (this.heartbeat == null && (this.storeOptions.reservoirRefreshInterval != null && this.storeOptions.reservoirRefreshAmount != null || this.storeOptions.reservoirIncreaseInterval != null && this.storeOptions.reservoirIncreaseAmount != null)) {
+      return typeof (base = this.heartbeat = setInterval(() => {
+        var amount, incr, maximum, now, reservoir;
+        now = Date.now();
+
+        if (this.storeOptions.reservoirRefreshInterval != null && now >= this._lastReservoirRefresh + this.storeOptions.reservoirRefreshInterval) {
+          this._lastReservoirRefresh = now;
+          this.storeOptions.reservoir = this.storeOptions.reservoirRefreshAmount;
+
+          this.instance._drainAll(this.computeCapacity());
+        }
+
+        if (this.storeOptions.reservoirIncreaseInterval != null && now >= this._lastReservoirIncrease + this.storeOptions.reservoirIncreaseInterval) {
+          var _this$storeOptions = this.storeOptions;
+          amount = _this$storeOptions.reservoirIncreaseAmount;
+          maximum = _this$storeOptions.reservoirIncreaseMaximum;
+          reservoir = _this$storeOptions.reservoir;
+          this._lastReservoirIncrease = now;
+          incr = maximum != null ? Math.min(amount, maximum - reservoir) : amount;
+
+          if (incr > 0) {
+            this.storeOptions.reservoir += incr;
+            return this.instance._drainAll(this.computeCapacity());
+          }
+        }
+      }, this.heartbeatInterval)).unref === "function" ? base.unref() : void 0;
+    } else {
+      return clearInterval(this.heartbeat);
+    }
+  }
+
+  __publish__(message) {
+    var _this = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this.yieldLoop();
+      return _this.instance.Events.trigger("message", message.toString());
+    })();
+  }
+
+  __disconnect__(flush) {
+    var _this2 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this2.yieldLoop();
+      clearInterval(_this2.heartbeat);
+      return _this2.Promise.resolve();
+    })();
+  }
+
+  yieldLoop(t = 0) {
+    return new this.Promise(function (resolve, reject) {
+      return setTimeout(resolve, t);
+    });
+  }
+
+  computePenalty() {
+    var ref;
+    return (ref = this.storeOptions.penalty) != null ? ref : 15 * this.storeOptions.minTime || 5000;
+  }
+
+  __updateSettings__(options) {
+    var _this3 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this3.yieldLoop();
+      parser.overwrite(options, options, _this3.storeOptions);
+
+      _this3._startHeartbeat();
+
+      _this3.instance._drainAll(_this3.computeCapacity());
+
+      return true;
+    })();
+  }
+
+  __running__() {
+    var _this4 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this4.yieldLoop();
+      return _this4._running;
+    })();
+  }
+
+  __queued__() {
+    var _this5 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this5.yieldLoop();
+      return _this5.instance.queued();
+    })();
+  }
+
+  __done__() {
+    var _this6 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this6.yieldLoop();
+      return _this6._done;
+    })();
+  }
+
+  __groupCheck__(time) {
+    var _this7 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this7.yieldLoop();
+      return _this7._nextRequest + _this7.timeout < time;
+    })();
+  }
+
+  computeCapacity() {
+    var maxConcurrent, reservoir;
+    var _this$storeOptions2 = this.storeOptions;
+    maxConcurrent = _this$storeOptions2.maxConcurrent;
+    reservoir = _this$storeOptions2.reservoir;
+
+    if (maxConcurrent != null && reservoir != null) {
+      return Math.min(maxConcurrent - this._running, reservoir);
+    } else if (maxConcurrent != null) {
+      return maxConcurrent - this._running;
+    } else if (reservoir != null) {
+      return reservoir;
+    } else {
+      return null;
+    }
+  }
+
+  conditionsCheck(weight) {
+    var capacity;
+    capacity = this.computeCapacity();
+    return capacity == null || weight <= capacity;
+  }
+
+  __incrementReservoir__(incr) {
+    var _this8 = this;
+
+    return _asyncToGenerator(function* () {
+      var reservoir;
+      yield _this8.yieldLoop();
+      reservoir = _this8.storeOptions.reservoir += incr;
+
+      _this8.instance._drainAll(_this8.computeCapacity());
+
+      return reservoir;
+    })();
+  }
+
+  __currentReservoir__() {
+    var _this9 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this9.yieldLoop();
+      return _this9.storeOptions.reservoir;
+    })();
+  }
+
+  isBlocked(now) {
+    return this._unblockTime >= now;
+  }
+
+  check(weight, now) {
+    return this.conditionsCheck(weight) && this._nextRequest - now <= 0;
+  }
+
+  __check__(weight) {
+    var _this10 = this;
+
+    return _asyncToGenerator(function* () {
+      var now;
+      yield _this10.yieldLoop();
+      now = Date.now();
+      return _this10.check(weight, now);
+    })();
+  }
+
+  __register__(index, weight, expiration) {
+    var _this11 = this;
+
+    return _asyncToGenerator(function* () {
+      var now, wait;
+      yield _this11.yieldLoop();
+      now = Date.now();
+
+      if (_this11.conditionsCheck(weight)) {
+        _this11._running += weight;
+
+        if (_this11.storeOptions.reservoir != null) {
+          _this11.storeOptions.reservoir -= weight;
+        }
+
+        wait = Math.max(_this11._nextRequest - now, 0);
+        _this11._nextRequest = now + wait + _this11.storeOptions.minTime;
+        return {
+          success: true,
+          wait,
+          reservoir: _this11.storeOptions.reservoir
+        };
+      } else {
+        return {
+          success: false
+        };
+      }
+    })();
+  }
+
+  strategyIsBlock() {
+    return this.storeOptions.strategy === 3;
+  }
+
+  __submit__(queueLength, weight) {
+    var _this12 = this;
+
+    return _asyncToGenerator(function* () {
+      var blocked, now, reachedHWM;
+      yield _this12.yieldLoop();
+
+      if (_this12.storeOptions.maxConcurrent != null && weight > _this12.storeOptions.maxConcurrent) {
+        throw new BottleneckError(`Impossible to add a job having a weight of ${weight} to a limiter having a maxConcurrent setting of ${_this12.storeOptions.maxConcurrent}`);
+      }
+
+      now = Date.now();
+      reachedHWM = _this12.storeOptions.highWater != null && queueLength === _this12.storeOptions.highWater && !_this12.check(weight, now);
+      blocked = _this12.strategyIsBlock() && (reachedHWM || _this12.isBlocked(now));
+
+      if (blocked) {
+        _this12._unblockTime = now + _this12.computePenalty();
+        _this12._nextRequest = _this12._unblockTime + _this12.storeOptions.minTime;
+
+        _this12.instance._dropAllQueued();
+      }
+
+      return {
+        reachedHWM,
+        blocked,
+        strategy: _this12.storeOptions.strategy
+      };
+    })();
+  }
+
+  __free__(index, weight) {
+    var _this13 = this;
+
+    return _asyncToGenerator(function* () {
+      yield _this13.yieldLoop();
+      _this13._running -= weight;
+      _this13._done += weight;
+
+      _this13.instance._drainAll(_this13.computeCapacity());
+
+      return {
+        running: _this13._running
+      };
+    })();
+  }
+
+};
+module.exports = LocalDatastore;
+
+/***/ }),
+
+/***/ 65893:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var DLList, Events, Queues;
+DLList = __nccwpck_require__(38579);
+Events = __nccwpck_require__(107);
+Queues = class Queues {
+  constructor(num_priorities) {
+    var i;
+    this.Events = new Events(this);
+    this._length = 0;
+
+    this._lists = function () {
+      var j, ref, results;
+      results = [];
+
+      for (i = j = 1, ref = num_priorities; 1 <= ref ? j <= ref : j >= ref; i = 1 <= ref ? ++j : --j) {
+        results.push(new DLList(() => {
+          return this.incr();
+        }, () => {
+          return this.decr();
+        }));
+      }
+
+      return results;
+    }.call(this);
+  }
+
+  incr() {
+    if (this._length++ === 0) {
+      return this.Events.trigger("leftzero");
+    }
+  }
+
+  decr() {
+    if (--this._length === 0) {
+      return this.Events.trigger("zero");
+    }
+  }
+
+  push(job) {
+    return this._lists[job.options.priority].push(job);
+  }
+
+  queued(priority) {
+    if (priority != null) {
+      return this._lists[priority].length;
+    } else {
+      return this._length;
+    }
+  }
+
+  shiftAll(fn) {
+    return this._lists.forEach(function (list) {
+      return list.forEachShift(fn);
+    });
+  }
+
+  getFirst(arr = this._lists) {
+    var j, len, list;
+
+    for (j = 0, len = arr.length; j < len; j++) {
+      list = arr[j];
+
+      if (list.length > 0) {
+        return list;
+      }
+    }
+
+    return [];
+  }
+
+  shiftLastFrom(priority) {
+    return this.getFirst(this._lists.slice(priority).reverse()).shift();
+  }
+
+};
+module.exports = Queues;
+
+/***/ }),
+
+/***/ 29992:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
+
+function _asyncToGenerator(fn) { return function () { var self = this, args = arguments; return new Promise(function (resolve, reject) { var gen = fn.apply(self, args); function _next(value) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value); } function _throw(err) { asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err); } _next(undefined); }); }; }
+
+var Events, RedisConnection, Scripts, parser;
+parser = __nccwpck_require__(67823);
+Events = __nccwpck_require__(107);
+Scripts = __nccwpck_require__(4169);
+
+RedisConnection = function () {
+  class RedisConnection {
+    constructor(options = {}) {
+      parser.load(options, this.defaults, this);
+
+      if (this.Redis == null) {
+        this.Redis = eval("require")("redis"); // Obfuscated or else Webpack/Angular will try to inline the optional redis module. To override this behavior: pass the redis module to Bottleneck as the 'Redis' option.
+      }
+
+      if (this.Events == null) {
+        this.Events = new Events(this);
+      }
+
+      this.terminated = false;
+
+      if (this.client == null) {
+        this.client = this.Redis.createClient(this.clientOptions);
+      }
