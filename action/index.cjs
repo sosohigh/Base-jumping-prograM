@@ -44584,3 +44584,2183 @@ exports.overwrite = function (received, defaults, onto = {}) {
 	                this.removeAllListeners("done");
 	                return resolve();
 	              }
+	            });
+	          }
+	        });
+	      };
+	      done = options.dropWaitingJobs ? (this._run = function(index, next) {
+	        return next.doDrop({
+	          message: options.dropErrorMessage
+	        });
+	      }, this._drainOne = () => {
+	        return this.Promise.resolve(null);
+	      }, this._registerLock.schedule(() => {
+	        return this._submitLock.schedule(() => {
+	          var k, ref, v;
+	          ref = this._scheduled;
+	          for (k in ref) {
+	            v = ref[k];
+	            if (this.jobStatus(v.job.options.id) === "RUNNING") {
+	              clearTimeout(v.timeout);
+	              clearTimeout(v.expiration);
+	              v.job.doDrop({
+	                message: options.dropErrorMessage
+	              });
+	            }
+	          }
+	          this._dropAllQueued(options.dropErrorMessage);
+	          return waitForExecuting(0);
+	        });
+	      })) : this.schedule({
+	        priority: NUM_PRIORITIES$1 - 1,
+	        weight: 0
+	      }, () => {
+	        return waitForExecuting(1);
+	      });
+	      this._receive = function(job) {
+	        return job._reject(new Bottleneck.prototype.BottleneckError(options.enqueueErrorMessage));
+	      };
+	      this.stop = () => {
+	        return this.Promise.reject(new Bottleneck.prototype.BottleneckError("stop() has already been called"));
+	      };
+	      return done;
+	    }
+
+	    async _addToQueue(job) {
+	      var args, blocked, error, options, reachedHWM, shifted, strategy;
+	      ({args, options} = job);
+	      try {
+	        ({reachedHWM, blocked, strategy} = (await this._store.__submit__(this.queued(), options.weight)));
+	      } catch (error1) {
+	        error = error1;
+	        this.Events.trigger("debug", `Could not queue ${options.id}`, {args, options, error});
+	        job.doDrop({error});
+	        return false;
+	      }
+	      if (blocked) {
+	        job.doDrop();
+	        return true;
+	      } else if (reachedHWM) {
+	        shifted = strategy === Bottleneck.prototype.strategy.LEAK ? this._queues.shiftLastFrom(options.priority) : strategy === Bottleneck.prototype.strategy.OVERFLOW_PRIORITY ? this._queues.shiftLastFrom(options.priority + 1) : strategy === Bottleneck.prototype.strategy.OVERFLOW ? job : void 0;
+	        if (shifted != null) {
+	          shifted.doDrop();
+	        }
+	        if ((shifted == null) || strategy === Bottleneck.prototype.strategy.OVERFLOW) {
+	          if (shifted == null) {
+	            job.doDrop();
+	          }
+	          return reachedHWM;
+	        }
+	      }
+	      job.doQueue(reachedHWM, blocked);
+	      this._queues.push(job);
+	      await this._drainAll();
+	      return reachedHWM;
+	    }
+
+	    _receive(job) {
+	      if (this._states.jobStatus(job.options.id) != null) {
+	        job._reject(new Bottleneck.prototype.BottleneckError(`A job with the same id already exists (id=${job.options.id})`));
+	        return false;
+	      } else {
+	        job.doReceive();
+	        return this._submitLock.schedule(this._addToQueue, job);
+	      }
+	    }
+
+	    submit(...args) {
+	      var cb, fn, job, options, ref, ref1, task;
+	      if (typeof args[0] === "function") {
+	        ref = args, [fn, ...args] = ref, [cb] = splice.call(args, -1);
+	        options = parser$5.load({}, this.jobDefaults);
+	      } else {
+	        ref1 = args, [options, fn, ...args] = ref1, [cb] = splice.call(args, -1);
+	        options = parser$5.load(options, this.jobDefaults);
+	      }
+	      task = (...args) => {
+	        return new this.Promise(function(resolve, reject) {
+	          return fn(...args, function(...args) {
+	            return (args[0] != null ? reject : resolve)(args);
+	          });
+	        });
+	      };
+	      job = new Job$1(task, args, options, this.jobDefaults, this.rejectOnDrop, this.Events, this._states, this.Promise);
+	      job.promise.then(function(args) {
+	        return typeof cb === "function" ? cb(...args) : void 0;
+	      }).catch(function(args) {
+	        if (Array.isArray(args)) {
+	          return typeof cb === "function" ? cb(...args) : void 0;
+	        } else {
+	          return typeof cb === "function" ? cb(args) : void 0;
+	        }
+	      });
+	      return this._receive(job);
+	    }
+
+	    schedule(...args) {
+	      var job, options, task;
+	      if (typeof args[0] === "function") {
+	        [task, ...args] = args;
+	        options = {};
+	      } else {
+	        [options, task, ...args] = args;
+	      }
+	      job = new Job$1(task, args, options, this.jobDefaults, this.rejectOnDrop, this.Events, this._states, this.Promise);
+	      this._receive(job);
+	      return job.promise;
+	    }
+
+	    wrap(fn) {
+	      var schedule, wrapped;
+	      schedule = this.schedule.bind(this);
+	      wrapped = function(...args) {
+	        return schedule(fn.bind(this), ...args);
+	      };
+	      wrapped.withOptions = function(options, ...args) {
+	        return schedule(options, fn, ...args);
+	      };
+	      return wrapped;
+	    }
+
+	    async updateSettings(options = {}) {
+	      await this._store.__updateSettings__(parser$5.overwrite(options, this.storeDefaults));
+	      parser$5.overwrite(options, this.instanceDefaults, this);
+	      return this;
+	    }
+
+	    currentReservoir() {
+	      return this._store.__currentReservoir__();
+	    }
+
+	    incrementReservoir(incr = 0) {
+	      return this._store.__incrementReservoir__(incr);
+	    }
+
+	  }
+	  Bottleneck.default = Bottleneck;
+
+	  Bottleneck.Events = Events$4;
+
+	  Bottleneck.version = Bottleneck.prototype.version = require$$8.version;
+
+	  Bottleneck.strategy = Bottleneck.prototype.strategy = {
+	    LEAK: 1,
+	    OVERFLOW: 2,
+	    OVERFLOW_PRIORITY: 4,
+	    BLOCK: 3
+	  };
+
+	  Bottleneck.BottleneckError = Bottleneck.prototype.BottleneckError = BottleneckError_1;
+
+	  Bottleneck.Group = Bottleneck.prototype.Group = Group_1;
+
+	  Bottleneck.RedisConnection = Bottleneck.prototype.RedisConnection = require$$2;
+
+	  Bottleneck.IORedisConnection = Bottleneck.prototype.IORedisConnection = require$$3;
+
+	  Bottleneck.Batcher = Bottleneck.prototype.Batcher = Batcher_1;
+
+	  Bottleneck.prototype.jobDefaults = {
+	    priority: DEFAULT_PRIORITY$1,
+	    weight: 1,
+	    expiration: null,
+	    id: "<no-id>"
+	  };
+
+	  Bottleneck.prototype.storeDefaults = {
+	    maxConcurrent: null,
+	    minTime: 0,
+	    highWater: null,
+	    strategy: Bottleneck.prototype.strategy.LEAK,
+	    penalty: null,
+	    reservoir: null,
+	    reservoirRefreshInterval: null,
+	    reservoirRefreshAmount: null,
+	    reservoirIncreaseInterval: null,
+	    reservoirIncreaseAmount: null,
+	    reservoirIncreaseMaximum: null
+	  };
+
+	  Bottleneck.prototype.localStoreDefaults = {
+	    Promise: Promise,
+	    timeout: null,
+	    heartbeatInterval: 250
+	  };
+
+	  Bottleneck.prototype.redisStoreDefaults = {
+	    Promise: Promise,
+	    timeout: null,
+	    heartbeatInterval: 5000,
+	    clientTimeout: 10000,
+	    Redis: null,
+	    clientOptions: {},
+	    clusterNodes: null,
+	    clearDatastore: false,
+	    connection: null
+	  };
+
+	  Bottleneck.prototype.instanceDefaults = {
+	    datastore: "local",
+	    connection: null,
+	    id: "<no-id>",
+	    rejectOnDrop: true,
+	    trackDoneStatus: false,
+	    Promise: Promise
+	  };
+
+	  Bottleneck.prototype.stopDefaults = {
+	    enqueueErrorMessage: "This limiter has been stopped and cannot accept new jobs.",
+	    dropWaitingJobs: true,
+	    dropErrorMessage: "This limiter has been stopped."
+	  };
+
+	  return Bottleneck;
+
+	}).call(commonjsGlobal);
+
+	var Bottleneck_1 = Bottleneck;
+
+	var lib = Bottleneck_1;
+
+	return lib;
+
+})));
+
+
+/***/ }),
+
+/***/ 33717:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var balanced = __nccwpck_require__(9417);
+
+module.exports = expandTop;
+
+var escSlash = '\0SLASH'+Math.random()+'\0';
+var escOpen = '\0OPEN'+Math.random()+'\0';
+var escClose = '\0CLOSE'+Math.random()+'\0';
+var escComma = '\0COMMA'+Math.random()+'\0';
+var escPeriod = '\0PERIOD'+Math.random()+'\0';
+
+function numeric(str) {
+  return parseInt(str, 10) == str
+    ? parseInt(str, 10)
+    : str.charCodeAt(0);
+}
+
+function escapeBraces(str) {
+  return str.split('\\\\').join(escSlash)
+            .split('\\{').join(escOpen)
+            .split('\\}').join(escClose)
+            .split('\\,').join(escComma)
+            .split('\\.').join(escPeriod);
+}
+
+function unescapeBraces(str) {
+  return str.split(escSlash).join('\\')
+            .split(escOpen).join('{')
+            .split(escClose).join('}')
+            .split(escComma).join(',')
+            .split(escPeriod).join('.');
+}
+
+
+// Basically just str.split(","), but handling cases
+// where we have nested braced sections, which should be
+// treated as individual members, like {a,{b,c},d}
+function parseCommaParts(str) {
+  if (!str)
+    return [''];
+
+  var parts = [];
+  var m = balanced('{', '}', str);
+
+  if (!m)
+    return str.split(',');
+
+  var pre = m.pre;
+  var body = m.body;
+  var post = m.post;
+  var p = pre.split(',');
+
+  p[p.length-1] += '{' + body + '}';
+  var postParts = parseCommaParts(post);
+  if (post.length) {
+    p[p.length-1] += postParts.shift();
+    p.push.apply(p, postParts);
+  }
+
+  parts.push.apply(parts, p);
+
+  return parts;
+}
+
+function expandTop(str) {
+  if (!str)
+    return [];
+
+  // I don't know why Bash 4.3 does this, but it does.
+  // Anything starting with {} will have the first two bytes preserved
+  // but *only* at the top level, so {},a}b will not expand to anything,
+  // but a{},b}c will be expanded to [a}c,abc].
+  // One could argue that this is a bug in Bash, but since the goal of
+  // this module is to match Bash's rules, we escape a leading {}
+  if (str.substr(0, 2) === '{}') {
+    str = '\\{\\}' + str.substr(2);
+  }
+
+  return expand(escapeBraces(str), true).map(unescapeBraces);
+}
+
+function embrace(str) {
+  return '{' + str + '}';
+}
+function isPadded(el) {
+  return /^-?0\d/.test(el);
+}
+
+function lte(i, y) {
+  return i <= y;
+}
+function gte(i, y) {
+  return i >= y;
+}
+
+function expand(str, isTop) {
+  var expansions = [];
+
+  var m = balanced('{', '}', str);
+  if (!m) return [str];
+
+  // no need to expand pre, since it is guaranteed to be free of brace-sets
+  var pre = m.pre;
+  var post = m.post.length
+    ? expand(m.post, false)
+    : [''];
+
+  if (/\$$/.test(m.pre)) {    
+    for (var k = 0; k < post.length; k++) {
+      var expansion = pre+ '{' + m.body + '}' + post[k];
+      expansions.push(expansion);
+    }
+  } else {
+    var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
+    var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
+    var isSequence = isNumericSequence || isAlphaSequence;
+    var isOptions = m.body.indexOf(',') >= 0;
+    if (!isSequence && !isOptions) {
+      // {a},b}
+      if (m.post.match(/,.*\}/)) {
+        str = m.pre + '{' + m.body + escClose + m.post;
+        return expand(str);
+      }
+      return [str];
+    }
+
+    var n;
+    if (isSequence) {
+      n = m.body.split(/\.\./);
+    } else {
+      n = parseCommaParts(m.body);
+      if (n.length === 1) {
+        // x{{a,b}}y ==> x{a}y x{b}y
+        n = expand(n[0], false).map(embrace);
+        if (n.length === 1) {
+          return post.map(function(p) {
+            return m.pre + n[0] + p;
+          });
+        }
+      }
+    }
+
+    // at this point, n is the parts, and we know it's not a comma set
+    // with a single entry.
+    var N;
+
+    if (isSequence) {
+      var x = numeric(n[0]);
+      var y = numeric(n[1]);
+      var width = Math.max(n[0].length, n[1].length)
+      var incr = n.length == 3
+        ? Math.abs(numeric(n[2]))
+        : 1;
+      var test = lte;
+      var reverse = y < x;
+      if (reverse) {
+        incr *= -1;
+        test = gte;
+      }
+      var pad = n.some(isPadded);
+
+      N = [];
+
+      for (var i = x; test(i, y); i += incr) {
+        var c;
+        if (isAlphaSequence) {
+          c = String.fromCharCode(i);
+          if (c === '\\')
+            c = '';
+        } else {
+          c = String(i);
+          if (pad) {
+            var need = width - c.length;
+            if (need > 0) {
+              var z = new Array(need + 1).join('0');
+              if (i < 0)
+                c = '-' + z + c.slice(1);
+              else
+                c = z + c;
+            }
+          }
+        }
+        N.push(c);
+      }
+    } else {
+      N = [];
+
+      for (var j = 0; j < n.length; j++) {
+        N.push.apply(N, expand(n[j], false));
+      }
+    }
+
+    for (var j = 0; j < N.length; j++) {
+      for (var k = 0; k < post.length; k++) {
+        var expansion = pre + N[j] + post[k];
+        if (!isTop || isSequence || expansion)
+          expansions.push(expansion);
+      }
+    }
+  }
+
+  return expansions;
+}
+
+
+
+/***/ }),
+
+/***/ 72358:
+/***/ ((module) => {
+
+module.exports = function btoa(str) {
+  return new Buffer(str).toString('base64')
+}
+
+
+/***/ }),
+
+/***/ 9239:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*jshint node:true */
+
+var Buffer = (__nccwpck_require__(14300).Buffer); // browserify
+var SlowBuffer = (__nccwpck_require__(14300).SlowBuffer);
+
+module.exports = bufferEq;
+
+function bufferEq(a, b) {
+
+  // shortcutting on type is necessary for correctness
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
+    return false;
+  }
+
+  // buffer sizes should be well-known information, so despite this
+  // shortcutting, it doesn't leak any information about the *contents* of the
+  // buffers.
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  var c = 0;
+  for (var i = 0; i < a.length; i++) {
+    /*jshint bitwise:false */
+    c |= a[i] ^ b[i]; // XOR
+  }
+  return c === 0;
+}
+
+bufferEq.install = function() {
+  Buffer.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
+    return bufferEq(this, that);
+  };
+};
+
+var origBufEqual = Buffer.prototype.equal;
+var origSlowBufEqual = SlowBuffer.prototype.equal;
+bufferEq.restore = function() {
+  Buffer.prototype.equal = origBufEqual;
+  SlowBuffer.prototype.equal = origSlowBufEqual;
+};
+
+
+/***/ }),
+
+/***/ 86966:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * bytes
+ * Copyright(c) 2012-2014 TJ Holowaychuk
+ * Copyright(c) 2015 Jed Watson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = bytes;
+module.exports.format = format;
+module.exports.parse = parse;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var formatThousandsRegExp = /\B(?=(\d{3})+(?!\d))/g;
+
+var formatDecimalsRegExp = /(?:\.0*|(\.[^0]+)0+)$/;
+
+var map = {
+  b:  1,
+  kb: 1 << 10,
+  mb: 1 << 20,
+  gb: 1 << 30,
+  tb: Math.pow(1024, 4),
+  pb: Math.pow(1024, 5),
+};
+
+var parseRegExp = /^((-|\+)?(\d+(?:\.\d+)?)) *(kb|mb|gb|tb|pb)$/i;
+
+/**
+ * Convert the given value in bytes into a string or parse to string to an integer in bytes.
+ *
+ * @param {string|number} value
+ * @param {{
+ *  case: [string],
+ *  decimalPlaces: [number]
+ *  fixedDecimals: [boolean]
+ *  thousandsSeparator: [string]
+ *  unitSeparator: [string]
+ *  }} [options] bytes options.
+ *
+ * @returns {string|number|null}
+ */
+
+function bytes(value, options) {
+  if (typeof value === 'string') {
+    return parse(value);
+  }
+
+  if (typeof value === 'number') {
+    return format(value, options);
+  }
+
+  return null;
+}
+
+/**
+ * Format the given value in bytes into a string.
+ *
+ * If the value is negative, it is kept as such. If it is a float,
+ * it is rounded.
+ *
+ * @param {number} value
+ * @param {object} [options]
+ * @param {number} [options.decimalPlaces=2]
+ * @param {number} [options.fixedDecimals=false]
+ * @param {string} [options.thousandsSeparator=]
+ * @param {string} [options.unit=]
+ * @param {string} [options.unitSeparator=]
+ *
+ * @returns {string|null}
+ * @public
+ */
+
+function format(value, options) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  var mag = Math.abs(value);
+  var thousandsSeparator = (options && options.thousandsSeparator) || '';
+  var unitSeparator = (options && options.unitSeparator) || '';
+  var decimalPlaces = (options && options.decimalPlaces !== undefined) ? options.decimalPlaces : 2;
+  var fixedDecimals = Boolean(options && options.fixedDecimals);
+  var unit = (options && options.unit) || '';
+
+  if (!unit || !map[unit.toLowerCase()]) {
+    if (mag >= map.pb) {
+      unit = 'PB';
+    } else if (mag >= map.tb) {
+      unit = 'TB';
+    } else if (mag >= map.gb) {
+      unit = 'GB';
+    } else if (mag >= map.mb) {
+      unit = 'MB';
+    } else if (mag >= map.kb) {
+      unit = 'KB';
+    } else {
+      unit = 'B';
+    }
+  }
+
+  var val = value / map[unit.toLowerCase()];
+  var str = val.toFixed(decimalPlaces);
+
+  if (!fixedDecimals) {
+    str = str.replace(formatDecimalsRegExp, '$1');
+  }
+
+  if (thousandsSeparator) {
+    str = str.split('.').map(function (s, i) {
+      return i === 0
+        ? s.replace(formatThousandsRegExp, thousandsSeparator)
+        : s
+    }).join('.');
+  }
+
+  return str + unitSeparator + unit;
+}
+
+/**
+ * Parse the string value into an integer in bytes.
+ *
+ * If no unit is given, it is assumed the value is in bytes.
+ *
+ * @param {number|string} val
+ *
+ * @returns {number|null}
+ * @public
+ */
+
+function parse(val) {
+  if (typeof val === 'number' && !isNaN(val)) {
+    return val;
+  }
+
+  if (typeof val !== 'string') {
+    return null;
+  }
+
+  // Test if the string passed is valid
+  var results = parseRegExp.exec(val);
+  var floatValue;
+  var unit = 'b';
+
+  if (!results) {
+    // Nothing could be extracted from the given string
+    floatValue = parseInt(val, 10);
+    unit = 'b'
+  } else {
+    // Retrieve the value and the unit
+    floatValue = parseFloat(results[1]);
+    unit = results[4].toLowerCase();
+  }
+
+  if (isNaN(floatValue)) {
+    return null;
+  }
+
+  return Math.floor(map[unit] * floatValue);
+}
+
+
+/***/ }),
+
+/***/ 28803:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var GetIntrinsic = __nccwpck_require__(74538);
+
+var callBind = __nccwpck_require__(62977);
+
+var $indexOf = callBind(GetIntrinsic('String.prototype.indexOf'));
+
+module.exports = function callBoundIntrinsic(name, allowMissing) {
+	var intrinsic = GetIntrinsic(name, !!allowMissing);
+	if (typeof intrinsic === 'function' && $indexOf(name, '.prototype.') > -1) {
+		return callBind(intrinsic);
+	}
+	return intrinsic;
+};
+
+
+/***/ }),
+
+/***/ 62977:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var bind = __nccwpck_require__(88334);
+var GetIntrinsic = __nccwpck_require__(74538);
+
+var $apply = GetIntrinsic('%Function.prototype.apply%');
+var $call = GetIntrinsic('%Function.prototype.call%');
+var $reflectApply = GetIntrinsic('%Reflect.apply%', true) || bind.call($call, $apply);
+
+var $gOPD = GetIntrinsic('%Object.getOwnPropertyDescriptor%', true);
+var $defineProperty = GetIntrinsic('%Object.defineProperty%', true);
+var $max = GetIntrinsic('%Math.max%');
+
+if ($defineProperty) {
+	try {
+		$defineProperty({}, 'a', { value: 1 });
+	} catch (e) {
+		// IE 8 has a broken defineProperty
+		$defineProperty = null;
+	}
+}
+
+module.exports = function callBind(originalFunction) {
+	var func = $reflectApply(bind, $call, arguments);
+	if ($gOPD && $defineProperty) {
+		var desc = $gOPD(func, 'length');
+		if (desc.configurable) {
+			// original length, plus the receiver, minus any additional arguments (after the receiver)
+			$defineProperty(
+				func,
+				'length',
+				{ value: 1 + $max(0, originalFunction.length - (arguments.length - 1)) }
+			);
+		}
+	}
+	return func;
+};
+
+var applyBind = function applyBind() {
+	return $reflectApply(bind, $apply, arguments);
+};
+
+if ($defineProperty) {
+	$defineProperty(module.exports, 'apply', { value: applyBind });
+} else {
+	module.exports.apply = applyBind;
+}
+
+
+/***/ }),
+
+/***/ 27972:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const os = __nccwpck_require__(22037);
+
+const extractPathRegex = /\s+at.*(?:\(|\s)(.*)\)?/;
+const pathRegex = /^(?:(?:(?:node|(?:internal\/[\w/]*|.*node_modules\/(?:babel-polyfill|pirates)\/.*)?\w+)\.js:\d+:\d+)|native)/;
+const homeDir = typeof os.homedir === 'undefined' ? '' : os.homedir();
+
+module.exports = (stack, options) => {
+	options = Object.assign({pretty: false}, options);
+
+	return stack.replace(/\\/g, '/')
+		.split('\n')
+		.filter(line => {
+			const pathMatches = line.match(extractPathRegex);
+			if (pathMatches === null || !pathMatches[1]) {
+				return true;
+			}
+
+			const match = pathMatches[1];
+
+			// Electron
+			if (
+				match.includes('.app/Contents/Resources/electron.asar') ||
+				match.includes('.app/Contents/Resources/default_app.asar')
+			) {
+				return false;
+			}
+
+			return !pathRegex.test(match);
+		})
+		.filter(line => line.trim() !== '')
+		.map(line => {
+			if (options.pretty) {
+				return line.replace(extractPathRegex, (m, p1) => m.replace(p1, p1.replace(homeDir, '~')));
+			}
+
+			return line;
+		})
+		.join('\n');
+};
+
+
+/***/ }),
+
+/***/ 48481:
+/***/ ((module) => {
+
+/*
+ * Copyright 2001-2010 Georges Menie (www.menie.org)
+ * Copyright 2010 Salvatore Sanfilippo (adapted to Redis coding style)
+ * Copyright 2015 Zihua Li (http://zihua.li) (ported to JavaScript)
+ * Copyright 2016 Mike Diarmid (http://github.com/salakar) (re-write for performance, ~700% perf inc)
+ * All rights reserved.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the University of California, Berkeley nor the
+ *       names of its contributors may be used to endorse or promote products
+ *       derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/* CRC16 implementation according to CCITT standards.
+ *
+ * Note by @antirez: this is actually the XMODEM CRC 16 algorithm, using the
+ * following parameters:
+ *
+ * Name                       : "XMODEM", also known as "ZMODEM", "CRC-16/ACORN"
+ * Width                      : 16 bit
+ * Poly                       : 1021 (That is actually x^16 + x^12 + x^5 + 1)
+ * Initialization             : 0000
+ * Reflect Input byte         : False
+ * Reflect Output CRC         : False
+ * Xor constant to output CRC : 0000
+ * Output for "123456789"     : 31C3
+ */
+
+var lookup = [
+  0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5, 0x60c6, 0x70e7,
+  0x8108, 0x9129, 0xa14a, 0xb16b, 0xc18c, 0xd1ad, 0xe1ce, 0xf1ef,
+  0x1231, 0x0210, 0x3273, 0x2252, 0x52b5, 0x4294, 0x72f7, 0x62d6,
+  0x9339, 0x8318, 0xb37b, 0xa35a, 0xd3bd, 0xc39c, 0xf3ff, 0xe3de,
+  0x2462, 0x3443, 0x0420, 0x1401, 0x64e6, 0x74c7, 0x44a4, 0x5485,
+  0xa56a, 0xb54b, 0x8528, 0x9509, 0xe5ee, 0xf5cf, 0xc5ac, 0xd58d,
+  0x3653, 0x2672, 0x1611, 0x0630, 0x76d7, 0x66f6, 0x5695, 0x46b4,
+  0xb75b, 0xa77a, 0x9719, 0x8738, 0xf7df, 0xe7fe, 0xd79d, 0xc7bc,
+  0x48c4, 0x58e5, 0x6886, 0x78a7, 0x0840, 0x1861, 0x2802, 0x3823,
+  0xc9cc, 0xd9ed, 0xe98e, 0xf9af, 0x8948, 0x9969, 0xa90a, 0xb92b,
+  0x5af5, 0x4ad4, 0x7ab7, 0x6a96, 0x1a71, 0x0a50, 0x3a33, 0x2a12,
+  0xdbfd, 0xcbdc, 0xfbbf, 0xeb9e, 0x9b79, 0x8b58, 0xbb3b, 0xab1a,
+  0x6ca6, 0x7c87, 0x4ce4, 0x5cc5, 0x2c22, 0x3c03, 0x0c60, 0x1c41,
+  0xedae, 0xfd8f, 0xcdec, 0xddcd, 0xad2a, 0xbd0b, 0x8d68, 0x9d49,
+  0x7e97, 0x6eb6, 0x5ed5, 0x4ef4, 0x3e13, 0x2e32, 0x1e51, 0x0e70,
+  0xff9f, 0xefbe, 0xdfdd, 0xcffc, 0xbf1b, 0xaf3a, 0x9f59, 0x8f78,
+  0x9188, 0x81a9, 0xb1ca, 0xa1eb, 0xd10c, 0xc12d, 0xf14e, 0xe16f,
+  0x1080, 0x00a1, 0x30c2, 0x20e3, 0x5004, 0x4025, 0x7046, 0x6067,
+  0x83b9, 0x9398, 0xa3fb, 0xb3da, 0xc33d, 0xd31c, 0xe37f, 0xf35e,
+  0x02b1, 0x1290, 0x22f3, 0x32d2, 0x4235, 0x5214, 0x6277, 0x7256,
+  0xb5ea, 0xa5cb, 0x95a8, 0x8589, 0xf56e, 0xe54f, 0xd52c, 0xc50d,
+  0x34e2, 0x24c3, 0x14a0, 0x0481, 0x7466, 0x6447, 0x5424, 0x4405,
+  0xa7db, 0xb7fa, 0x8799, 0x97b8, 0xe75f, 0xf77e, 0xc71d, 0xd73c,
+  0x26d3, 0x36f2, 0x0691, 0x16b0, 0x6657, 0x7676, 0x4615, 0x5634,
+  0xd94c, 0xc96d, 0xf90e, 0xe92f, 0x99c8, 0x89e9, 0xb98a, 0xa9ab,
+  0x5844, 0x4865, 0x7806, 0x6827, 0x18c0, 0x08e1, 0x3882, 0x28a3,
+  0xcb7d, 0xdb5c, 0xeb3f, 0xfb1e, 0x8bf9, 0x9bd8, 0xabbb, 0xbb9a,
+  0x4a75, 0x5a54, 0x6a37, 0x7a16, 0x0af1, 0x1ad0, 0x2ab3, 0x3a92,
+  0xfd2e, 0xed0f, 0xdd6c, 0xcd4d, 0xbdaa, 0xad8b, 0x9de8, 0x8dc9,
+  0x7c26, 0x6c07, 0x5c64, 0x4c45, 0x3ca2, 0x2c83, 0x1ce0, 0x0cc1,
+  0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba, 0x8fd9, 0x9ff8,
+  0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0
+];
+
+/**
+ * Convert a string to a UTF8 array - faster than via buffer
+ * @param str
+ * @returns {Array}
+ */
+var toUTF8Array = function toUTF8Array(str) {
+  var char;
+  var i = 0;
+  var p = 0;
+  var utf8 = [];
+  var len = str.length;
+
+  for (; i < len; i++) {
+    char = str.charCodeAt(i);
+    if (char < 128) {
+      utf8[p++] = char;
+    } else if (char < 2048) {
+      utf8[p++] = (char >> 6) | 192;
+      utf8[p++] = (char & 63) | 128;
+    } else if (
+        ((char & 0xFC00) === 0xD800) && (i + 1) < str.length &&
+        ((str.charCodeAt(i + 1) & 0xFC00) === 0xDC00)) {
+      char = 0x10000 + ((char & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
+      utf8[p++] = (char >> 18) | 240;
+      utf8[p++] = ((char >> 12) & 63) | 128;
+      utf8[p++] = ((char >> 6) & 63) | 128;
+      utf8[p++] = (char & 63) | 128;
+    } else {
+      utf8[p++] = (char >> 12) | 224;
+      utf8[p++] = ((char >> 6) & 63) | 128;
+      utf8[p++] = (char & 63) | 128;
+    }
+  }
+
+  return utf8;
+};
+
+/**
+ * Convert a string into a redis slot hash.
+ * @param str
+ * @returns {number}
+ */
+var generate = module.exports = function generate(str) {
+  var char;
+  var i = 0;
+  var start = -1;
+  var result = 0;
+  var resultHash = 0;
+  var utf8 = typeof str === 'string' ? toUTF8Array(str) : str;
+  var len = utf8.length;
+
+  while (i < len) {
+    char = utf8[i++];
+    if (start === -1) {
+      if (char === 0x7B) {
+        start = i;
+      }
+    } else if (char !== 0x7D) {
+      resultHash = lookup[(char ^ (resultHash >> 8)) & 0xFF] ^ (resultHash << 8);
+    } else if (i - 1 !== start) {
+      return resultHash & 0x3FFF;
+    }
+
+    result = lookup[(char ^ (result >> 8)) & 0xFF] ^ (result << 8);
+  }
+
+  return result & 0x3FFF;
+};
+
+/**
+ * Convert an array of multiple strings into a redis slot hash.
+ * Returns -1 if one of the keys is not for the same slot as the others
+ * @param keys
+ * @returns {number}
+ */
+module.exports.generateMulti = function generateMulti(keys) {
+  var i = 1;
+  var len = keys.length;
+  var base = generate(keys[0]);
+
+  while (i < len) {
+    if (generate(keys[i++]) !== base) return -1;
+  }
+
+  return base;
+};
+
+
+/***/ }),
+
+/***/ 85443:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var util = __nccwpck_require__(73837);
+var Stream = (__nccwpck_require__(12781).Stream);
+var DelayedStream = __nccwpck_require__(18611);
+
+module.exports = CombinedStream;
+function CombinedStream() {
+  this.writable = false;
+  this.readable = true;
+  this.dataSize = 0;
+  this.maxDataSize = 2 * 1024 * 1024;
+  this.pauseStreams = true;
+
+  this._released = false;
+  this._streams = [];
+  this._currentStream = null;
+  this._insideLoop = false;
+  this._pendingNext = false;
+}
+util.inherits(CombinedStream, Stream);
+
+CombinedStream.create = function(options) {
+  var combinedStream = new this();
+
+  options = options || {};
+  for (var option in options) {
+    combinedStream[option] = options[option];
+  }
+
+  return combinedStream;
+};
+
+CombinedStream.isStreamLike = function(stream) {
+  return (typeof stream !== 'function')
+    && (typeof stream !== 'string')
+    && (typeof stream !== 'boolean')
+    && (typeof stream !== 'number')
+    && (!Buffer.isBuffer(stream));
+};
+
+CombinedStream.prototype.append = function(stream) {
+  var isStreamLike = CombinedStream.isStreamLike(stream);
+
+  if (isStreamLike) {
+    if (!(stream instanceof DelayedStream)) {
+      var newStream = DelayedStream.create(stream, {
+        maxDataSize: Infinity,
+        pauseStream: this.pauseStreams,
+      });
+      stream.on('data', this._checkDataSize.bind(this));
+      stream = newStream;
+    }
+
+    this._handleErrors(stream);
+
+    if (this.pauseStreams) {
+      stream.pause();
+    }
+  }
+
+  this._streams.push(stream);
+  return this;
+};
+
+CombinedStream.prototype.pipe = function(dest, options) {
+  Stream.prototype.pipe.call(this, dest, options);
+  this.resume();
+  return dest;
+};
+
+CombinedStream.prototype._getNext = function() {
+  this._currentStream = null;
+
+  if (this._insideLoop) {
+    this._pendingNext = true;
+    return; // defer call
+  }
+
+  this._insideLoop = true;
+  try {
+    do {
+      this._pendingNext = false;
+      this._realGetNext();
+    } while (this._pendingNext);
+  } finally {
+    this._insideLoop = false;
+  }
+};
+
+CombinedStream.prototype._realGetNext = function() {
+  var stream = this._streams.shift();
+
+
+  if (typeof stream == 'undefined') {
+    this.end();
+    return;
+  }
+
+  if (typeof stream !== 'function') {
+    this._pipeNext(stream);
+    return;
+  }
+
+  var getStream = stream;
+  getStream(function(stream) {
+    var isStreamLike = CombinedStream.isStreamLike(stream);
+    if (isStreamLike) {
+      stream.on('data', this._checkDataSize.bind(this));
+      this._handleErrors(stream);
+    }
+
+    this._pipeNext(stream);
+  }.bind(this));
+};
+
+CombinedStream.prototype._pipeNext = function(stream) {
+  this._currentStream = stream;
+
+  var isStreamLike = CombinedStream.isStreamLike(stream);
+  if (isStreamLike) {
+    stream.on('end', this._getNext.bind(this));
+    stream.pipe(this, {end: false});
+    return;
+  }
+
+  var value = stream;
+  this.write(value);
+  this._getNext();
+};
+
+CombinedStream.prototype._handleErrors = function(stream) {
+  var self = this;
+  stream.on('error', function(err) {
+    self._emitError(err);
+  });
+};
+
+CombinedStream.prototype.write = function(data) {
+  this.emit('data', data);
+};
+
+CombinedStream.prototype.pause = function() {
+  if (!this.pauseStreams) {
+    return;
+  }
+
+  if(this.pauseStreams && this._currentStream && typeof(this._currentStream.pause) == 'function') this._currentStream.pause();
+  this.emit('pause');
+};
+
+CombinedStream.prototype.resume = function() {
+  if (!this._released) {
+    this._released = true;
+    this.writable = true;
+    this._getNext();
+  }
+
+  if(this.pauseStreams && this._currentStream && typeof(this._currentStream.resume) == 'function') this._currentStream.resume();
+  this.emit('resume');
+};
+
+CombinedStream.prototype.end = function() {
+  this._reset();
+  this.emit('end');
+};
+
+CombinedStream.prototype.destroy = function() {
+  this._reset();
+  this.emit('close');
+};
+
+CombinedStream.prototype._reset = function() {
+  this.writable = false;
+  this._streams = [];
+  this._currentStream = null;
+};
+
+CombinedStream.prototype._checkDataSize = function() {
+  this._updateDataSize();
+  if (this.dataSize <= this.maxDataSize) {
+    return;
+  }
+
+  var message =
+    'DelayedStream#maxDataSize of ' + this.maxDataSize + ' bytes exceeded.';
+  this._emitError(new Error(message));
+};
+
+CombinedStream.prototype._updateDataSize = function() {
+  this.dataSize = 0;
+
+  var self = this;
+  this._streams.forEach(function(stream) {
+    if (!stream.dataSize) {
+      return;
+    }
+
+    self.dataSize += stream.dataSize;
+  });
+
+  if (this._currentStream && this._currentStream.dataSize) {
+    this.dataSize += this._currentStream.dataSize;
+  }
+};
+
+CombinedStream.prototype._emitError = function(err) {
+  this._reset();
+  this.emit('error', err);
+};
+
+
+/***/ }),
+
+/***/ 61904:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * Module dependencies.
+ */
+
+const EventEmitter = (__nccwpck_require__(82361).EventEmitter);
+const spawn = (__nccwpck_require__(32081).spawn);
+const path = __nccwpck_require__(71017);
+const fs = __nccwpck_require__(57147);
+
+// @ts-check
+
+class Option {
+  /**
+   * Initialize a new `Option` with the given `flags` and `description`.
+   *
+   * @param {string} flags
+   * @param {string} description
+   * @api public
+   */
+
+  constructor(flags, description) {
+    this.flags = flags;
+    this.required = flags.includes('<'); // A value must be supplied when the option is specified.
+    this.optional = flags.includes('['); // A value is optional when the option is specified.
+    // variadic test ignores <value,...> et al which might be used to describe custom splitting of single argument
+    this.variadic = /\w\.\.\.[>\]]$/.test(flags); // The option can take multiple values.
+    this.mandatory = false; // The option must have a value after parsing, which usually means it must be specified on command line.
+    const optionFlags = _parseOptionFlags(flags);
+    this.short = optionFlags.shortFlag;
+    this.long = optionFlags.longFlag;
+    this.negate = false;
+    if (this.long) {
+      this.negate = this.long.startsWith('--no-');
+    }
+    this.description = description || '';
+    this.defaultValue = undefined;
+  }
+
+  /**
+   * Return option name.
+   *
+   * @return {string}
+   * @api private
+   */
+
+  name() {
+    if (this.long) {
+      return this.long.replace(/^--/, '');
+    }
+    return this.short.replace(/^-/, '');
+  };
+
+  /**
+   * Return option name, in a camelcase format that can be used
+   * as a object attribute key.
+   *
+   * @return {string}
+   * @api private
+   */
+
+  attributeName() {
+    return camelcase(this.name().replace(/^no-/, ''));
+  };
+
+  /**
+   * Check if `arg` matches the short or long flag.
+   *
+   * @param {string} arg
+   * @return {boolean}
+   * @api private
+   */
+
+  is(arg) {
+    return this.short === arg || this.long === arg;
+  };
+}
+
+/**
+ * CommanderError class
+ * @class
+ */
+class CommanderError extends Error {
+  /**
+   * Constructs the CommanderError class
+   * @param {number} exitCode suggested exit code which could be used with process.exit
+   * @param {string} code an id string representing the error
+   * @param {string} message human-readable description of the error
+   * @constructor
+   */
+  constructor(exitCode, code, message) {
+    super(message);
+    // properly capture stack trace in Node.js
+    Error.captureStackTrace(this, this.constructor);
+    this.name = this.constructor.name;
+    this.code = code;
+    this.exitCode = exitCode;
+    this.nestedError = undefined;
+  }
+}
+
+class Command extends EventEmitter {
+  /**
+   * Initialize a new `Command`.
+   *
+   * @param {string} [name]
+   * @api public
+   */
+
+  constructor(name) {
+    super();
+    this.commands = [];
+    this.options = [];
+    this.parent = null;
+    this._allowUnknownOption = false;
+    this._args = [];
+    this.rawArgs = null;
+    this._scriptPath = null;
+    this._name = name || '';
+    this._optionValues = {};
+    this._storeOptionsAsProperties = true; // backwards compatible by default
+    this._storeOptionsAsPropertiesCalled = false;
+    this._passCommandToAction = true; // backwards compatible by default
+    this._actionResults = [];
+    this._actionHandler = null;
+    this._executableHandler = false;
+    this._executableFile = null; // custom name for executable
+    this._defaultCommandName = null;
+    this._exitCallback = null;
+    this._aliases = [];
+    this._combineFlagAndOptionalValue = true;
+
+    this._hidden = false;
+    this._hasHelpOption = true;
+    this._helpFlags = '-h, --help';
+    this._helpDescription = 'display help for command';
+    this._helpShortFlag = '-h';
+    this._helpLongFlag = '--help';
+    this._hasImplicitHelpCommand = undefined; // Deliberately undefined, not decided whether true or false
+    this._helpCommandName = 'help';
+    this._helpCommandnameAndArgs = 'help [command]';
+    this._helpCommandDescription = 'display help for command';
+  }
+
+  /**
+   * Define a command.
+   *
+   * There are two styles of command: pay attention to where to put the description.
+   *
+   * Examples:
+   *
+   *      // Command implemented using action handler (description is supplied separately to `.command`)
+   *      program
+   *        .command('clone <source> [destination]')
+   *        .description('clone a repository into a newly created directory')
+   *        .action((source, destination) => {
+   *          console.log('clone command called');
+   *        });
+   *
+   *      // Command implemented using separate executable file (description is second parameter to `.command`)
+   *      program
+   *        .command('start <service>', 'start named service')
+   *        .command('stop [service]', 'stop named service, or all if no name supplied');
+   *
+   * @param {string} nameAndArgs - command name and arguments, args are `<required>` or `[optional]` and last may also be `variadic...`
+   * @param {Object|string} [actionOptsOrExecDesc] - configuration options (for action), or description (for executable)
+   * @param {Object} [execOpts] - configuration options (for executable)
+   * @return {Command} returns new command for action handler, or `this` for executable command
+   * @api public
+   */
+
+  command(nameAndArgs, actionOptsOrExecDesc, execOpts) {
+    let desc = actionOptsOrExecDesc;
+    let opts = execOpts;
+    if (typeof desc === 'object' && desc !== null) {
+      opts = desc;
+      desc = null;
+    }
+    opts = opts || {};
+    const args = nameAndArgs.split(/ +/);
+    const cmd = this.createCommand(args.shift());
+
+    if (desc) {
+      cmd.description(desc);
+      cmd._executableHandler = true;
+    }
+    if (opts.isDefault) this._defaultCommandName = cmd._name;
+
+    cmd._hidden = !!(opts.noHelp || opts.hidden);
+    cmd._hasHelpOption = this._hasHelpOption;
+    cmd._helpFlags = this._helpFlags;
+    cmd._helpDescription = this._helpDescription;
+    cmd._helpShortFlag = this._helpShortFlag;
+    cmd._helpLongFlag = this._helpLongFlag;
+    cmd._helpCommandName = this._helpCommandName;
+    cmd._helpCommandnameAndArgs = this._helpCommandnameAndArgs;
+    cmd._helpCommandDescription = this._helpCommandDescription;
+    cmd._exitCallback = this._exitCallback;
+    cmd._storeOptionsAsProperties = this._storeOptionsAsProperties;
+    cmd._passCommandToAction = this._passCommandToAction;
+    cmd._combineFlagAndOptionalValue = this._combineFlagAndOptionalValue;
+
+    cmd._executableFile = opts.executableFile || null; // Custom name for executable file, set missing to null to match constructor
+    this.commands.push(cmd);
+    cmd._parseExpectedArgs(args);
+    cmd.parent = this;
+
+    if (desc) return this;
+    return cmd;
+  };
+
+  /**
+   * Factory routine to create a new unattached command.
+   *
+   * See .command() for creating an attached subcommand, which uses this routine to
+   * create the command. You can override createCommand to customise subcommands.
+   *
+   * @param {string} [name]
+   * @return {Command} new command
+   * @api public
+   */
+
+  createCommand(name) {
+    return new Command(name);
+  };
+
+  /**
+   * Add a prepared subcommand.
+   *
+   * See .command() for creating an attached subcommand which inherits settings from its parent.
+   *
+   * @param {Command} cmd - new subcommand
+   * @param {Object} [opts] - configuration options
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  addCommand(cmd, opts) {
+    if (!cmd._name) throw new Error('Command passed to .addCommand() must have a name');
+
+    // To keep things simple, block automatic name generation for deeply nested executables.
+    // Fail fast and detect when adding rather than later when parsing.
+    function checkExplicitNames(commandArray) {
+      commandArray.forEach((cmd) => {
+        if (cmd._executableHandler && !cmd._executableFile) {
+          throw new Error(`Must specify executableFile for deeply nested executable: ${cmd.name()}`);
+        }
+        checkExplicitNames(cmd.commands);
+      });
+    }
+    checkExplicitNames(cmd.commands);
+
+    opts = opts || {};
+    if (opts.isDefault) this._defaultCommandName = cmd._name;
+    if (opts.noHelp || opts.hidden) cmd._hidden = true; // modifying passed command due to existing implementation
+
+    this.commands.push(cmd);
+    cmd.parent = this;
+    return this;
+  };
+
+  /**
+   * Define argument syntax for the command.
+   *
+   * @api public
+   */
+
+  arguments(desc) {
+    return this._parseExpectedArgs(desc.split(/ +/));
+  };
+
+  /**
+   * Override default decision whether to add implicit help command.
+   *
+   *    addHelpCommand() // force on
+   *    addHelpCommand(false); // force off
+   *    addHelpCommand('help [cmd]', 'display help for [cmd]'); // force on with custom details
+   *
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  addHelpCommand(enableOrNameAndArgs, description) {
+    if (enableOrNameAndArgs === false) {
+      this._hasImplicitHelpCommand = false;
+    } else {
+      this._hasImplicitHelpCommand = true;
+      if (typeof enableOrNameAndArgs === 'string') {
+        this._helpCommandName = enableOrNameAndArgs.split(' ')[0];
+        this._helpCommandnameAndArgs = enableOrNameAndArgs;
+      }
+      this._helpCommandDescription = description || this._helpCommandDescription;
+    }
+    return this;
+  };
+
+  /**
+   * @return {boolean}
+   * @api private
+   */
+
+  _lazyHasImplicitHelpCommand() {
+    if (this._hasImplicitHelpCommand === undefined) {
+      this._hasImplicitHelpCommand = this.commands.length && !this._actionHandler && !this._findCommand('help');
+    }
+    return this._hasImplicitHelpCommand;
+  };
+
+  /**
+   * Parse expected `args`.
+   *
+   * For example `["[type]"]` becomes `[{ required: false, name: 'type' }]`.
+   *
+   * @param {Array} args
+   * @return {Command} `this` command for chaining
+   * @api private
+   */
+
+  _parseExpectedArgs(args) {
+    if (!args.length) return;
+    args.forEach((arg) => {
+      const argDetails = {
+        required: false,
+        name: '',
+        variadic: false
+      };
+
+      switch (arg[0]) {
+        case '<':
+          argDetails.required = true;
+          argDetails.name = arg.slice(1, -1);
+          break;
+        case '[':
+          argDetails.name = arg.slice(1, -1);
+          break;
+      }
+
+      if (argDetails.name.length > 3 && argDetails.name.slice(-3) === '...') {
+        argDetails.variadic = true;
+        argDetails.name = argDetails.name.slice(0, -3);
+      }
+      if (argDetails.name) {
+        this._args.push(argDetails);
+      }
+    });
+    this._args.forEach((arg, i) => {
+      if (arg.variadic && i < this._args.length - 1) {
+        throw new Error(`only the last argument can be variadic '${arg.name}'`);
+      }
+    });
+    return this;
+  };
+
+  /**
+   * Register callback to use as replacement for calling process.exit.
+   *
+   * @param {Function} [fn] optional callback which will be passed a CommanderError, defaults to throwing
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  exitOverride(fn) {
+    if (fn) {
+      this._exitCallback = fn;
+    } else {
+      this._exitCallback = (err) => {
+        if (err.code !== 'commander.executeSubCommandAsync') {
+          throw err;
+        } else {
+          // Async callback from spawn events, not useful to throw.
+        }
+      };
+    }
+    return this;
+  };
+
+  /**
+   * Call process.exit, and _exitCallback if defined.
+   *
+   * @param {number} exitCode exit code for using with process.exit
+   * @param {string} code an id string representing the error
+   * @param {string} message human-readable description of the error
+   * @return never
+   * @api private
+   */
+
+  _exit(exitCode, code, message) {
+    if (this._exitCallback) {
+      this._exitCallback(new CommanderError(exitCode, code, message));
+      // Expecting this line is not reached.
+    }
+    process.exit(exitCode);
+  };
+
+  /**
+   * Register callback `fn` for the command.
+   *
+   * Examples:
+   *
+   *      program
+   *        .command('help')
+   *        .description('display verbose help')
+   *        .action(function() {
+   *           // output help here
+   *        });
+   *
+   * @param {Function} fn
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  action(fn) {
+    const listener = (args) => {
+      // The .action callback takes an extra parameter which is the command or options.
+      const expectedArgsCount = this._args.length;
+      const actionArgs = args.slice(0, expectedArgsCount);
+      if (this._passCommandToAction) {
+        actionArgs[expectedArgsCount] = this;
+      } else {
+        actionArgs[expectedArgsCount] = this.opts();
+      }
+      // Add the extra arguments so available too.
+      if (args.length > expectedArgsCount) {
+        actionArgs.push(args.slice(expectedArgsCount));
+      }
+
+      const actionResult = fn.apply(this, actionArgs);
+      // Remember result in case it is async. Assume parseAsync getting called on root.
+      let rootCommand = this;
+      while (rootCommand.parent) {
+        rootCommand = rootCommand.parent;
+      }
+      rootCommand._actionResults.push(actionResult);
+    };
+    this._actionHandler = listener;
+    return this;
+  };
+
+  /**
+   * Internal routine to check whether there is a clash storing option value with a Command property.
+   *
+   * @param {Option} option
+   * @api private
+   */
+
+  _checkForOptionNameClash(option) {
+    if (!this._storeOptionsAsProperties || this._storeOptionsAsPropertiesCalled) {
+      // Storing options safely, or user has been explicit and up to them.
+      return;
+    }
+    // User may override help, and hard to tell if worth warning.
+    if (option.name() === 'help') {
+      return;
+    }
+
+    const commandProperty = this._getOptionValue(option.attributeName());
+    if (commandProperty === undefined) {
+      // no clash
+      return;
+    }
+
+    let foundClash = true;
+    if (option.negate) {
+      // It is ok if define foo before --no-foo.
+      const positiveLongFlag = option.long.replace(/^--no-/, '--');
+      foundClash = !this._findOption(positiveLongFlag);
+    } else if (option.long) {
+      const negativeLongFlag = option.long.replace(/^--/, '--no-');
+      foundClash = !this._findOption(negativeLongFlag);
+    }
+
+    if (foundClash) {
+      throw new Error(`option '${option.name()}' clashes with existing property '${option.attributeName()}' on Command
+- call storeOptionsAsProperties(false) to store option values safely,
+- or call storeOptionsAsProperties(true) to suppress this check,
+- or change option name
+
+Read more on https://git.io/JJc0W`);
+    }
+  };
+
+  /**
+   * Internal implementation shared by .option() and .requiredOption()
+   *
+   * @param {Object} config
+   * @param {string} flags
+   * @param {string} description
+   * @param {Function|*} [fn] - custom option processing function or default value
+   * @param {*} [defaultValue]
+   * @return {Command} `this` command for chaining
+   * @api private
+   */
+
+  _optionEx(config, flags, description, fn, defaultValue) {
+    const option = new Option(flags, description);
+    const oname = option.name();
+    const name = option.attributeName();
+    option.mandatory = !!config.mandatory;
+
+    this._checkForOptionNameClash(option);
+
+    // default as 3rd arg
+    if (typeof fn !== 'function') {
+      if (fn instanceof RegExp) {
+        // This is a bit simplistic (especially no error messages), and probably better handled by caller using custom option processing.
+        // No longer documented in README, but still present for backwards compatibility.
+        const regex = fn;
+        fn = (val, def) => {
+          const m = regex.exec(val);
+          return m ? m[0] : def;
+        };
+      } else {
+        defaultValue = fn;
+        fn = null;
+      }
+    }
+
+    // preassign default value for --no-*, [optional], <required>, or plain flag if boolean value
+    if (option.negate || option.optional || option.required || typeof defaultValue === 'boolean') {
+      // when --no-foo we make sure default is true, unless a --foo option is already defined
+      if (option.negate) {
+        const positiveLongFlag = option.long.replace(/^--no-/, '--');
+        defaultValue = this._findOption(positiveLongFlag) ? this._getOptionValue(name) : true;
+      }
+      // preassign only if we have a default
+      if (defaultValue !== undefined) {
+        this._setOptionValue(name, defaultValue);
+        option.defaultValue = defaultValue;
+      }
+    }
+
+    // register the option
+    this.options.push(option);
+
+    // when it's passed assign the value
+    // and conditionally invoke the callback
+    this.on('option:' + oname, (val) => {
+      const oldValue = this._getOptionValue(name);
+
+      // custom processing
+      if (val !== null && fn) {
+        val = fn(val, oldValue === undefined ? defaultValue : oldValue);
+      } else if (val !== null && option.variadic) {
+        if (oldValue === defaultValue || !Array.isArray(oldValue)) {
+          val = [val];
+        } else {
+          val = oldValue.concat(val);
+        }
+      }
+
+      // unassigned or boolean value
+      if (typeof oldValue === 'boolean' || typeof oldValue === 'undefined') {
+        // if no value, negate false, and we have a default, then use it!
+        if (val == null) {
+          this._setOptionValue(name, option.negate
+            ? false
+            : defaultValue || true);
+        } else {
+          this._setOptionValue(name, val);
+        }
+      } else if (val !== null) {
+        // reassign
+        this._setOptionValue(name, option.negate ? false : val);
+      }
+    });
+
+    return this;
+  };
+
+  /**
+   * Define option with `flags`, `description` and optional
+   * coercion `fn`.
+   *
+   * The `flags` string should contain both the short and long flags,
+   * separated by comma, a pipe or space. The following are all valid
+   * all will output this way when `--help` is used.
+   *
+   *    "-p, --pepper"
+   *    "-p|--pepper"
+   *    "-p --pepper"
+   *
+   * Examples:
+   *
+   *     // simple boolean defaulting to undefined
+   *     program.option('-p, --pepper', 'add pepper');
+   *
+   *     program.pepper
+   *     // => undefined
+   *
+   *     --pepper
+   *     program.pepper
+   *     // => true
+   *
+   *     // simple boolean defaulting to true (unless non-negated option is also defined)
+   *     program.option('-C, --no-cheese', 'remove cheese');
+   *
+   *     program.cheese
+   *     // => true
+   *
+   *     --no-cheese
+   *     program.cheese
+   *     // => false
+   *
+   *     // required argument
+   *     program.option('-C, --chdir <path>', 'change the working directory');
+   *
+   *     --chdir /tmp
+   *     program.chdir
+   *     // => "/tmp"
+   *
+   *     // optional argument
+   *     program.option('-c, --cheese [type]', 'add cheese [marble]');
+   *
+   * @param {string} flags
+   * @param {string} description
+   * @param {Function|*} [fn] - custom option processing function or default value
+   * @param {*} [defaultValue]
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  option(flags, description, fn, defaultValue) {
+    return this._optionEx({}, flags, description, fn, defaultValue);
+  };
+
+  /**
+  * Add a required option which must have a value after parsing. This usually means
+  * the option must be specified on the command line. (Otherwise the same as .option().)
+  *
+  * The `flags` string should contain both the short and long flags, separated by comma, a pipe or space.
+  *
+  * @param {string} flags
+  * @param {string} description
+  * @param {Function|*} [fn] - custom option processing function or default value
+  * @param {*} [defaultValue]
+  * @return {Command} `this` command for chaining
+  * @api public
+  */
+
+  requiredOption(flags, description, fn, defaultValue) {
+    return this._optionEx({ mandatory: true }, flags, description, fn, defaultValue);
+  };
+
+  /**
+   * Alter parsing of short flags with optional values.
+   *
+   * Examples:
+   *
+   *    // for `.option('-f,--flag [value]'):
+   *    .combineFlagAndOptionalValue(true)  // `-f80` is treated like `--flag=80`, this is the default behaviour
+   *    .combineFlagAndOptionalValue(false) // `-fb` is treated like `-f -b`
+   *
+   * @param {Boolean} [arg] - if `true` or omitted, an optional value can be specified directly after the flag.
+   * @api public
+   */
+  combineFlagAndOptionalValue(arg) {
+    this._combineFlagAndOptionalValue = (arg === undefined) || arg;
+    return this;
+  };
+
+  /**
+   * Allow unknown options on the command line.
+   *
+   * @param {Boolean} [arg] - if `true` or omitted, no error will be thrown
+   * for unknown options.
+   * @api public
+   */
+  allowUnknownOption(arg) {
+    this._allowUnknownOption = (arg === undefined) || arg;
+    return this;
+  };
+
+  /**
+    * Whether to store option values as properties on command object,
+    * or store separately (specify false). In both cases the option values can be accessed using .opts().
+    *
+    * @param {boolean} value
+    * @return {Command} `this` command for chaining
+    * @api public
+    */
+
+  storeOptionsAsProperties(value) {
+    this._storeOptionsAsPropertiesCalled = true;
+    this._storeOptionsAsProperties = (value === undefined) || value;
+    if (this.options.length) {
+      throw new Error('call .storeOptionsAsProperties() before adding options');
+    }
+    return this;
+  };
+
+  /**
+    * Whether to pass command to action handler,
+    * or just the options (specify false).
+    *
+    * @param {boolean} value
+    * @return {Command} `this` command for chaining
+    * @api public
+    */
+
+  passCommandToAction(value) {
+    this._passCommandToAction = (value === undefined) || value;
+    return this;
+  };
+
+  /**
+   * Store option value
+   *
+   * @param {string} key
+   * @param {Object} value
+   * @api private
+   */
+
+  _setOptionValue(key, value) {
+    if (this._storeOptionsAsProperties) {
+      this[key] = value;
+    } else {
+      this._optionValues[key] = value;
+    }
+  };
+
+  /**
+   * Retrieve option value
+   *
+   * @param {string} key
+   * @return {Object} value
+   * @api private
+   */
+
+  _getOptionValue(key) {
+    if (this._storeOptionsAsProperties) {
+      return this[key];
+    }
+    return this._optionValues[key];
+  };
+
+  /**
+   * Parse `argv`, setting options and invoking commands when defined.
+   *
+   * The default expectation is that the arguments are from node and have the application as argv[0]
+   * and the script being run in argv[1], with user parameters after that.
+   *
+   * Examples:
+   *
+   *      program.parse(process.argv);
+   *      program.parse(); // implicitly use process.argv and auto-detect node vs electron conventions
+   *      program.parse(my-args, { from: 'user' }); // just user supplied arguments, nothing special about argv[0]
+   *
+   * @param {string[]} [argv] - optional, defaults to process.argv
+   * @param {Object} [parseOptions] - optionally specify style of options with from: node/user/electron
+   * @param {string} [parseOptions.from] - where the args are from: 'node', 'user', 'electron'
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  parse(argv, parseOptions) {
+    if (argv !== undefined && !Array.isArray(argv)) {
+      throw new Error('first parameter to parse must be array or undefined');
+    }
+    parseOptions = parseOptions || {};
+
+    // Default to using process.argv
+    if (argv === undefined) {
+      argv = process.argv;
+      // @ts-ignore
+      if (process.versions && process.versions.electron) {
+        parseOptions.from = 'electron';
+      }
+    }
+    this.rawArgs = argv.slice();
+
+    // make it a little easier for callers by supporting various argv conventions
+    let userArgs;
+    switch (parseOptions.from) {
+      case undefined:
+      case 'node':
+        this._scriptPath = argv[1];
+        userArgs = argv.slice(2);
+        break;
+      case 'electron':
+        // @ts-ignore
+        if (process.defaultApp) {
+          this._scriptPath = argv[1];
+          userArgs = argv.slice(2);
+        } else {
+          userArgs = argv.slice(1);
+        }
+        break;
+      case 'user':
+        userArgs = argv.slice(0);
+        break;
+      default:
+        throw new Error(`unexpected parse option { from: '${parseOptions.from}' }`);
+    }
+    if (!this._scriptPath && process.mainModule) {
+      this._scriptPath = process.mainModule.filename;
+    }
+
+    // Guess name, used in usage in help.
+    this._name = this._name || (this._scriptPath && path.basename(this._scriptPath, path.extname(this._scriptPath)));
+
+    // Let's go!
+    this._parseCommand([], userArgs);
+
+    return this;
+  };
+
+  /**
+   * Parse `argv`, setting options and invoking commands when defined.
+   *
+   * Use parseAsync instead of parse if any of your action handlers are async. Returns a Promise.
+   *
+   * The default expectation is that the arguments are from node and have the application as argv[0]
+   * and the script being run in argv[1], with user parameters after that.
+   *
+   * Examples:
+   *
+   *      program.parseAsync(process.argv);
+   *      program.parseAsync(); // implicitly use process.argv and auto-detect node vs electron conventions
+   *      program.parseAsync(my-args, { from: 'user' }); // just user supplied arguments, nothing special about argv[0]
+   *
+   * @param {string[]} [argv]
+   * @param {Object} [parseOptions]
+   * @param {string} parseOptions.from - where the args are from: 'node', 'user', 'electron'
+   * @return {Promise}
+   * @api public
+   */
+
+  parseAsync(argv, parseOptions) {
+    this.parse(argv, parseOptions);
+    return Promise.all(this._actionResults).then(() => this);
+  };
+
+  /**
+   * Execute a sub-command executable.
+   *
+   * @api private
+   */
+
+  _executeSubCommand(subcommand, args) {
+    args = args.slice();
+    let launchWithNode = false; // Use node for source targets so do not need to get permissions correct, and on Windows.
+    const sourceExt = ['.js', '.ts', '.tsx', '.mjs'];
+
+    // Not checking for help first. Unlikely to have mandatory and executable, and can't robustly test for help flags in external command.
+    this._checkForMissingMandatoryOptions();
+
+    // Want the entry script as the reference for command name and directory for searching for other files.
+    let scriptPath = this._scriptPath;
+    // Fallback in case not set, due to how Command created or called.
+    if (!scriptPath && process.mainModule) {
+      scriptPath = process.mainModule.filename;
+    }
+
+    let baseDir;
+    try {
+      const resolvedLink = fs.realpathSync(scriptPath);
+      baseDir = path.dirname(resolvedLink);
+    } catch (e) {
+      baseDir = '.'; // dummy, probably not going to find executable!
+    }
+
+    // name of the subcommand, like `pm-install`
+    let bin = path.basename(scriptPath, path.extname(scriptPath)) + '-' + subcommand._name;
+    if (subcommand._executableFile) {
+      bin = subcommand._executableFile;
+    }
+
+    const localBin = path.join(baseDir, bin);
+    if (fs.existsSync(localBin)) {
+      // prefer local `./<bin>` to bin in the $PATH
+      bin = localBin;
+    } else {
+      // Look for source files.
+      sourceExt.forEach((ext) => {
+        if (fs.existsSync(`${localBin}${ext}`)) {
+          bin = `${localBin}${ext}`;
+        }
+      });
+    }
+    launchWithNode = sourceExt.includes(path.extname(bin));
+
+    let proc;
+    if (process.platform !== 'win32') {
+      if (launchWithNode) {
+        args.unshift(bin);
+        // add executable arguments to spawn
+        args = incrementNodeInspectorPort(process.execArgv).concat(args);
+
+        proc = spawn(process.argv[0], args, { stdio: 'inherit' });
+      } else {
+        proc = spawn(bin, args, { stdio: 'inherit' });
+      }
+    } else {
+      args.unshift(bin);
+      // add executable arguments to spawn
+      args = incrementNodeInspectorPort(process.execArgv).concat(args);
+      proc = spawn(process.execPath, args, { stdio: 'inherit' });
+    }
+
+    const signals = ['SIGUSR1', 'SIGUSR2', 'SIGTERM', 'SIGINT', 'SIGHUP'];
+    signals.forEach((signal) => {
+      // @ts-ignore
+      process.on(signal, () => {
+        if (proc.killed === false && proc.exitCode === null) {
+          proc.kill(signal);
+        }
+      });
+    });
+
+    // By default terminate process when spawned process terminates.
+    // Suppressing the exit if exitCallback defined is a bit messy and of limited use, but does allow process to stay running!
+    const exitCallback = this._exitCallback;
+    if (!exitCallback) {
+      proc.on('close', process.exit.bind(process));
+    } else {
+      proc.on('close', () => {
+        exitCallback(new CommanderError(process.exitCode || 0, 'commander.executeSubCommandAsync', '(close)'));
+      });
+    }
+    proc.on('error', (err) => {
+      // @ts-ignore
+      if (err.code === 'ENOENT') {
+        const executableMissing = `'${bin}' does not exist
+ - if '${subcommand._name}' is not meant to be an executable command, remove description parameter from '.command()' and use '.description()' instead
+ - if the default executable name is not suitable, use the executableFile option to supply a custom name`;
+        throw new Error(executableMissing);
+      // @ts-ignore
+      } else if (err.code === 'EACCES') {
+        throw new Error(`'${bin}' not executable`);
+      }
+      if (!exitCallback) {
+        process.exit(1);
+      } else {
+        const wrappedError = new CommanderError(1, 'commander.executeSubCommandAsync', '(error)');
+        wrappedError.nestedError = err;
+        exitCallback(wrappedError);
+      }
+    });
+
+    // Store the reference to the child process
+    this.runningCommand = proc;
+  };
+
+  /**
+   * @api private
+   */
+  _dispatchSubcommand(commandName, operands, unknown) {
+    const subCommand = this._findCommand(commandName);
+    if (!subCommand) this._helpAndError();
+
+    if (subCommand._executableHandler) {
+      this._executeSubCommand(subCommand, operands.concat(unknown));
+    } else {
+      subCommand._parseCommand(operands, unknown);
+    }
+  };
+
+  /**
+   * Process arguments in context of this command.
+   *
+   * @api private
+   */
+
+  _parseCommand(operands, unknown) {
+    const parsed = this.parseOptions(unknown);
+    operands = operands.concat(parsed.operands);
+    unknown = parsed.unknown;
+    this.args = operands.concat(unknown);
+
+    if (operands && this._findCommand(operands[0])) {
+      this._dispatchSubcommand(operands[0], operands.slice(1), unknown);
+    } else if (this._lazyHasImplicitHelpCommand() && operands[0] === this._helpCommandName) {
