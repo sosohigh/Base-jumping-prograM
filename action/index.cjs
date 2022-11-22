@@ -46764,3 +46764,2246 @@ Read more on https://git.io/JJc0W`);
     if (operands && this._findCommand(operands[0])) {
       this._dispatchSubcommand(operands[0], operands.slice(1), unknown);
     } else if (this._lazyHasImplicitHelpCommand() && operands[0] === this._helpCommandName) {
+      if (operands.length === 1) {
+        this.help();
+      } else {
+        this._dispatchSubcommand(operands[1], [], [this._helpLongFlag]);
+      }
+    } else if (this._defaultCommandName) {
+      outputHelpIfRequested(this, unknown); // Run the help for default command from parent rather than passing to default command
+      this._dispatchSubcommand(this._defaultCommandName, operands, unknown);
+    } else {
+      if (this.commands.length && this.args.length === 0 && !this._actionHandler && !this._defaultCommandName) {
+        // probably missing subcommand and no handler, user needs help
+        this._helpAndError();
+      }
+
+      outputHelpIfRequested(this, parsed.unknown);
+      this._checkForMissingMandatoryOptions();
+      if (parsed.unknown.length > 0) {
+        this.unknownOption(parsed.unknown[0]);
+      }
+
+      if (this._actionHandler) {
+        const args = this.args.slice();
+        this._args.forEach((arg, i) => {
+          if (arg.required && args[i] == null) {
+            this.missingArgument(arg.name);
+          } else if (arg.variadic) {
+            args[i] = args.splice(i);
+          }
+        });
+
+        this._actionHandler(args);
+        this.emit('command:' + this.name(), operands, unknown);
+      } else if (operands.length) {
+        if (this._findCommand('*')) {
+          this._dispatchSubcommand('*', operands, unknown);
+        } else if (this.listenerCount('command:*')) {
+          this.emit('command:*', operands, unknown);
+        } else if (this.commands.length) {
+          this.unknownCommand();
+        }
+      } else if (this.commands.length) {
+        // This command has subcommands and nothing hooked up at this level, so display help.
+        this._helpAndError();
+      } else {
+        // fall through for caller to handle after calling .parse()
+      }
+    }
+  };
+
+  /**
+   * Find matching command.
+   *
+   * @api private
+   */
+  _findCommand(name) {
+    if (!name) return undefined;
+    return this.commands.find(cmd => cmd._name === name || cmd._aliases.includes(name));
+  };
+
+  /**
+   * Return an option matching `arg` if any.
+   *
+   * @param {string} arg
+   * @return {Option}
+   * @api private
+   */
+
+  _findOption(arg) {
+    return this.options.find(option => option.is(arg));
+  };
+
+  /**
+   * Display an error message if a mandatory option does not have a value.
+   * Lazy calling after checking for help flags from leaf subcommand.
+   *
+   * @api private
+   */
+
+  _checkForMissingMandatoryOptions() {
+    // Walk up hierarchy so can call in subcommand after checking for displaying help.
+    for (let cmd = this; cmd; cmd = cmd.parent) {
+      cmd.options.forEach((anOption) => {
+        if (anOption.mandatory && (cmd._getOptionValue(anOption.attributeName()) === undefined)) {
+          cmd.missingMandatoryOptionValue(anOption);
+        }
+      });
+    }
+  };
+
+  /**
+   * Parse options from `argv` removing known options,
+   * and return argv split into operands and unknown arguments.
+   *
+   * Examples:
+   *
+   *    argv => operands, unknown
+   *    --known kkk op => [op], []
+   *    op --known kkk => [op], []
+   *    sub --unknown uuu op => [sub], [--unknown uuu op]
+   *    sub -- --unknown uuu op => [sub --unknown uuu op], []
+   *
+   * @param {String[]} argv
+   * @return {{operands: String[], unknown: String[]}}
+   * @api public
+   */
+
+  parseOptions(argv) {
+    const operands = []; // operands, not options or values
+    const unknown = []; // first unknown option and remaining unknown args
+    let dest = operands;
+    const args = argv.slice();
+
+    function maybeOption(arg) {
+      return arg.length > 1 && arg[0] === '-';
+    }
+
+    // parse options
+    let activeVariadicOption = null;
+    while (args.length) {
+      const arg = args.shift();
+
+      // literal
+      if (arg === '--') {
+        if (dest === unknown) dest.push(arg);
+        dest.push(...args);
+        break;
+      }
+
+      if (activeVariadicOption && !maybeOption(arg)) {
+        this.emit(`option:${activeVariadicOption.name()}`, arg);
+        continue;
+      }
+      activeVariadicOption = null;
+
+      if (maybeOption(arg)) {
+        const option = this._findOption(arg);
+        // recognised option, call listener to assign value with possible custom processing
+        if (option) {
+          if (option.required) {
+            const value = args.shift();
+            if (value === undefined) this.optionMissingArgument(option);
+            this.emit(`option:${option.name()}`, value);
+          } else if (option.optional) {
+            let value = null;
+            // historical behaviour is optional value is following arg unless an option
+            if (args.length > 0 && !maybeOption(args[0])) {
+              value = args.shift();
+            }
+            this.emit(`option:${option.name()}`, value);
+          } else { // boolean flag
+            this.emit(`option:${option.name()}`);
+          }
+          activeVariadicOption = option.variadic ? option : null;
+          continue;
+        }
+      }
+
+      // Look for combo options following single dash, eat first one if known.
+      if (arg.length > 2 && arg[0] === '-' && arg[1] !== '-') {
+        const option = this._findOption(`-${arg[1]}`);
+        if (option) {
+          if (option.required || (option.optional && this._combineFlagAndOptionalValue)) {
+            // option with value following in same argument
+            this.emit(`option:${option.name()}`, arg.slice(2));
+          } else {
+            // boolean option, emit and put back remainder of arg for further processing
+            this.emit(`option:${option.name()}`);
+            args.unshift(`-${arg.slice(2)}`);
+          }
+          continue;
+        }
+      }
+
+      // Look for known long flag with value, like --foo=bar
+      if (/^--[^=]+=/.test(arg)) {
+        const index = arg.indexOf('=');
+        const option = this._findOption(arg.slice(0, index));
+        if (option && (option.required || option.optional)) {
+          this.emit(`option:${option.name()}`, arg.slice(index + 1));
+          continue;
+        }
+      }
+
+      // looks like an option but unknown, unknowns from here
+      if (arg.length > 1 && arg[0] === '-') {
+        dest = unknown;
+      }
+
+      // add arg
+      dest.push(arg);
+    }
+
+    return { operands, unknown };
+  };
+
+  /**
+   * Return an object containing options as key-value pairs
+   *
+   * @return {Object}
+   * @api public
+   */
+  opts() {
+    if (this._storeOptionsAsProperties) {
+      // Preserve original behaviour so backwards compatible when still using properties
+      const result = {};
+      const len = this.options.length;
+
+      for (let i = 0; i < len; i++) {
+        const key = this.options[i].attributeName();
+        result[key] = key === this._versionOptionName ? this._version : this[key];
+      }
+      return result;
+    }
+
+    return this._optionValues;
+  };
+
+  /**
+   * Argument `name` is missing.
+   *
+   * @param {string} name
+   * @api private
+   */
+
+  missingArgument(name) {
+    const message = `error: missing required argument '${name}'`;
+    console.error(message);
+    this._exit(1, 'commander.missingArgument', message);
+  };
+
+  /**
+   * `Option` is missing an argument, but received `flag` or nothing.
+   *
+   * @param {Option} option
+   * @param {string} [flag]
+   * @api private
+   */
+
+  optionMissingArgument(option, flag) {
+    let message;
+    if (flag) {
+      message = `error: option '${option.flags}' argument missing, got '${flag}'`;
+    } else {
+      message = `error: option '${option.flags}' argument missing`;
+    }
+    console.error(message);
+    this._exit(1, 'commander.optionMissingArgument', message);
+  };
+
+  /**
+   * `Option` does not have a value, and is a mandatory option.
+   *
+   * @param {Option} option
+   * @api private
+   */
+
+  missingMandatoryOptionValue(option) {
+    const message = `error: required option '${option.flags}' not specified`;
+    console.error(message);
+    this._exit(1, 'commander.missingMandatoryOptionValue', message);
+  };
+
+  /**
+   * Unknown option `flag`.
+   *
+   * @param {string} flag
+   * @api private
+   */
+
+  unknownOption(flag) {
+    if (this._allowUnknownOption) return;
+    const message = `error: unknown option '${flag}'`;
+    console.error(message);
+    this._exit(1, 'commander.unknownOption', message);
+  };
+
+  /**
+   * Unknown command.
+   *
+   * @api private
+   */
+
+  unknownCommand() {
+    const partCommands = [this.name()];
+    for (let parentCmd = this.parent; parentCmd; parentCmd = parentCmd.parent) {
+      partCommands.unshift(parentCmd.name());
+    }
+    const fullCommand = partCommands.join(' ');
+    const message = `error: unknown command '${this.args[0]}'.` +
+      (this._hasHelpOption ? ` See '${fullCommand} ${this._helpLongFlag}'.` : '');
+    console.error(message);
+    this._exit(1, 'commander.unknownCommand', message);
+  };
+
+  /**
+   * Set the program version to `str`.
+   *
+   * This method auto-registers the "-V, --version" flag
+   * which will print the version number when passed.
+   *
+   * You can optionally supply the  flags and description to override the defaults.
+   *
+   * @param {string} str
+   * @param {string} [flags]
+   * @param {string} [description]
+   * @return {this | string} `this` command for chaining, or version string if no arguments
+   * @api public
+   */
+
+  version(str, flags, description) {
+    if (str === undefined) return this._version;
+    this._version = str;
+    flags = flags || '-V, --version';
+    description = description || 'output the version number';
+    const versionOption = new Option(flags, description);
+    this._versionOptionName = versionOption.attributeName();
+    this.options.push(versionOption);
+    this.on('option:' + versionOption.name(), () => {
+      process.stdout.write(str + '\n');
+      this._exit(0, 'commander.version', str);
+    });
+    return this;
+  };
+
+  /**
+   * Set the description to `str`.
+   *
+   * @param {string} str
+   * @param {Object} [argsDescription]
+   * @return {string|Command}
+   * @api public
+   */
+
+  description(str, argsDescription) {
+    if (str === undefined && argsDescription === undefined) return this._description;
+    this._description = str;
+    this._argsDescription = argsDescription;
+    return this;
+  };
+
+  /**
+   * Set an alias for the command.
+   *
+   * You may call more than once to add multiple aliases. Only the first alias is shown in the auto-generated help.
+   *
+   * @param {string} [alias]
+   * @return {string|Command}
+   * @api public
+   */
+
+  alias(alias) {
+    if (alias === undefined) return this._aliases[0]; // just return first, for backwards compatibility
+
+    let command = this;
+    if (this.commands.length !== 0 && this.commands[this.commands.length - 1]._executableHandler) {
+      // assume adding alias for last added executable subcommand, rather than this
+      command = this.commands[this.commands.length - 1];
+    }
+
+    if (alias === command._name) throw new Error('Command alias can\'t be the same as its name');
+
+    command._aliases.push(alias);
+    return this;
+  };
+
+  /**
+   * Set aliases for the command.
+   *
+   * Only the first alias is shown in the auto-generated help.
+   *
+   * @param {string[]} [aliases]
+   * @return {string[]|Command}
+   * @api public
+   */
+
+  aliases(aliases) {
+    // Getter for the array of aliases is the main reason for having aliases() in addition to alias().
+    if (aliases === undefined) return this._aliases;
+
+    aliases.forEach((alias) => this.alias(alias));
+    return this;
+  };
+
+  /**
+   * Set / get the command usage `str`.
+   *
+   * @param {string} [str]
+   * @return {String|Command}
+   * @api public
+   */
+
+  usage(str) {
+    if (str === undefined) {
+      if (this._usage) return this._usage;
+
+      const args = this._args.map((arg) => {
+        return humanReadableArgName(arg);
+      });
+      return [].concat(
+        (this.options.length || this._hasHelpOption ? '[options]' : []),
+        (this.commands.length ? '[command]' : []),
+        (this._args.length ? args : [])
+      ).join(' ');
+    }
+
+    this._usage = str;
+    return this;
+  };
+
+  /**
+   * Get or set the name of the command
+   *
+   * @param {string} [str]
+   * @return {String|Command}
+   * @api public
+   */
+
+  name(str) {
+    if (str === undefined) return this._name;
+    this._name = str;
+    return this;
+  };
+
+  /**
+   * Return prepared commands.
+   *
+   * @return {Array}
+   * @api private
+   */
+
+  prepareCommands() {
+    const commandDetails = this.commands.filter((cmd) => {
+      return !cmd._hidden;
+    }).map((cmd) => {
+      const args = cmd._args.map((arg) => {
+        return humanReadableArgName(arg);
+      }).join(' ');
+
+      return [
+        cmd._name +
+          (cmd._aliases[0] ? '|' + cmd._aliases[0] : '') +
+          (cmd.options.length ? ' [options]' : '') +
+          (args ? ' ' + args : ''),
+        cmd._description
+      ];
+    });
+
+    if (this._lazyHasImplicitHelpCommand()) {
+      commandDetails.push([this._helpCommandnameAndArgs, this._helpCommandDescription]);
+    }
+    return commandDetails;
+  };
+
+  /**
+   * Return the largest command length.
+   *
+   * @return {number}
+   * @api private
+   */
+
+  largestCommandLength() {
+    const commands = this.prepareCommands();
+    return commands.reduce((max, command) => {
+      return Math.max(max, command[0].length);
+    }, 0);
+  };
+
+  /**
+   * Return the largest option length.
+   *
+   * @return {number}
+   * @api private
+   */
+
+  largestOptionLength() {
+    const options = [].slice.call(this.options);
+    options.push({
+      flags: this._helpFlags
+    });
+
+    return options.reduce((max, option) => {
+      return Math.max(max, option.flags.length);
+    }, 0);
+  };
+
+  /**
+   * Return the largest arg length.
+   *
+   * @return {number}
+   * @api private
+   */
+
+  largestArgLength() {
+    return this._args.reduce((max, arg) => {
+      return Math.max(max, arg.name.length);
+    }, 0);
+  };
+
+  /**
+   * Return the pad width.
+   *
+   * @return {number}
+   * @api private
+   */
+
+  padWidth() {
+    let width = this.largestOptionLength();
+    if (this._argsDescription && this._args.length) {
+      if (this.largestArgLength() > width) {
+        width = this.largestArgLength();
+      }
+    }
+
+    if (this.commands && this.commands.length) {
+      if (this.largestCommandLength() > width) {
+        width = this.largestCommandLength();
+      }
+    }
+
+    return width;
+  };
+
+  /**
+   * Return help for options.
+   *
+   * @return {string}
+   * @api private
+   */
+
+  optionHelp() {
+    const width = this.padWidth();
+    const columns = process.stdout.columns || 80;
+    const descriptionWidth = columns - width - 4;
+    function padOptionDetails(flags, description) {
+      return pad(flags, width) + '  ' + optionalWrap(description, descriptionWidth, width + 2);
+    };
+
+    // Explicit options (including version)
+    const help = this.options.map((option) => {
+      const fullDesc = option.description +
+        ((!option.negate && option.defaultValue !== undefined) ? ' (default: ' + JSON.stringify(option.defaultValue) + ')' : '');
+      return padOptionDetails(option.flags, fullDesc);
+    });
+
+    // Implicit help
+    const showShortHelpFlag = this._hasHelpOption && this._helpShortFlag && !this._findOption(this._helpShortFlag);
+    const showLongHelpFlag = this._hasHelpOption && !this._findOption(this._helpLongFlag);
+    if (showShortHelpFlag || showLongHelpFlag) {
+      let helpFlags = this._helpFlags;
+      if (!showShortHelpFlag) {
+        helpFlags = this._helpLongFlag;
+      } else if (!showLongHelpFlag) {
+        helpFlags = this._helpShortFlag;
+      }
+      help.push(padOptionDetails(helpFlags, this._helpDescription));
+    }
+
+    return help.join('\n');
+  };
+
+  /**
+   * Return command help documentation.
+   *
+   * @return {string}
+   * @api private
+   */
+
+  commandHelp() {
+    if (!this.commands.length && !this._lazyHasImplicitHelpCommand()) return '';
+
+    const commands = this.prepareCommands();
+    const width = this.padWidth();
+
+    const columns = process.stdout.columns || 80;
+    const descriptionWidth = columns - width - 4;
+
+    return [
+      'Commands:',
+      commands.map((cmd) => {
+        const desc = cmd[1] ? '  ' + cmd[1] : '';
+        return (desc ? pad(cmd[0], width) : cmd[0]) + optionalWrap(desc, descriptionWidth, width + 2);
+      }).join('\n').replace(/^/gm, '  '),
+      ''
+    ].join('\n');
+  };
+
+  /**
+   * Return program help documentation.
+   *
+   * @return {string}
+   * @api public
+   */
+
+  helpInformation() {
+    let desc = [];
+    if (this._description) {
+      desc = [
+        this._description,
+        ''
+      ];
+
+      const argsDescription = this._argsDescription;
+      if (argsDescription && this._args.length) {
+        const width = this.padWidth();
+        const columns = process.stdout.columns || 80;
+        const descriptionWidth = columns - width - 5;
+        desc.push('Arguments:');
+        this._args.forEach((arg) => {
+          desc.push('  ' + pad(arg.name, width) + '  ' + wrap(argsDescription[arg.name] || '', descriptionWidth, width + 4));
+        });
+        desc.push('');
+      }
+    }
+
+    let cmdName = this._name;
+    if (this._aliases[0]) {
+      cmdName = cmdName + '|' + this._aliases[0];
+    }
+    let parentCmdNames = '';
+    for (let parentCmd = this.parent; parentCmd; parentCmd = parentCmd.parent) {
+      parentCmdNames = parentCmd.name() + ' ' + parentCmdNames;
+    }
+    const usage = [
+      'Usage: ' + parentCmdNames + cmdName + ' ' + this.usage(),
+      ''
+    ];
+
+    let cmds = [];
+    const commandHelp = this.commandHelp();
+    if (commandHelp) cmds = [commandHelp];
+
+    let options = [];
+    if (this._hasHelpOption || this.options.length > 0) {
+      options = [
+        'Options:',
+        '' + this.optionHelp().replace(/^/gm, '  '),
+        ''
+      ];
+    }
+
+    return usage
+      .concat(desc)
+      .concat(options)
+      .concat(cmds)
+      .join('\n');
+  };
+
+  /**
+   * Output help information for this command.
+   *
+   * When listener(s) are available for the helpLongFlag
+   * those callbacks are invoked.
+   *
+   * @api public
+   */
+
+  outputHelp(cb) {
+    if (!cb) {
+      cb = (passthru) => {
+        return passthru;
+      };
+    }
+    const cbOutput = cb(this.helpInformation());
+    if (typeof cbOutput !== 'string' && !Buffer.isBuffer(cbOutput)) {
+      throw new Error('outputHelp callback must return a string or a Buffer');
+    }
+    process.stdout.write(cbOutput);
+    this.emit(this._helpLongFlag);
+  };
+
+  /**
+   * You can pass in flags and a description to override the help
+   * flags and help description for your command. Pass in false to
+   * disable the built-in help option.
+   *
+   * @param {string | boolean} [flags]
+   * @param {string} [description]
+   * @return {Command} `this` command for chaining
+   * @api public
+   */
+
+  helpOption(flags, description) {
+    if (typeof flags === 'boolean') {
+      this._hasHelpOption = flags;
+      return this;
+    }
+    this._helpFlags = flags || this._helpFlags;
+    this._helpDescription = description || this._helpDescription;
+
+    const helpFlags = _parseOptionFlags(this._helpFlags);
+    this._helpShortFlag = helpFlags.shortFlag;
+    this._helpLongFlag = helpFlags.longFlag;
+
+    return this;
+  };
+
+  /**
+   * Output help information and exit.
+   *
+   * @param {Function} [cb]
+   * @api public
+   */
+
+  help(cb) {
+    this.outputHelp(cb);
+    // exitCode: preserving original behaviour which was calling process.exit()
+    // message: do not have all displayed text available so only passing placeholder.
+    this._exit(process.exitCode || 0, 'commander.help', '(outputHelp)');
+  };
+
+  /**
+   * Output help information and exit. Display for error situations.
+   *
+   * @api private
+   */
+
+  _helpAndError() {
+    this.outputHelp();
+    // message: do not have all displayed text available so only passing placeholder.
+    this._exit(1, 'commander.help', '(outputHelp)');
+  };
+};
+
+/**
+ * Expose the root command.
+ */
+
+exports = module.exports = new Command();
+exports.program = exports; // More explicit access to global command.
+
+/**
+ * Expose classes
+ */
+
+exports.Command = Command;
+exports.Option = Option;
+exports.CommanderError = CommanderError;
+
+/**
+ * Camel-case the given `flag`
+ *
+ * @param {string} flag
+ * @return {string}
+ * @api private
+ */
+
+function camelcase(flag) {
+  return flag.split('-').reduce((str, word) => {
+    return str + word[0].toUpperCase() + word.slice(1);
+  });
+}
+
+/**
+ * Pad `str` to `width`.
+ *
+ * @param {string} str
+ * @param {number} width
+ * @return {string}
+ * @api private
+ */
+
+function pad(str, width) {
+  const len = Math.max(0, width - str.length);
+  return str + Array(len + 1).join(' ');
+}
+
+/**
+ * Wraps the given string with line breaks at the specified width while breaking
+ * words and indenting every but the first line on the left.
+ *
+ * @param {string} str
+ * @param {number} width
+ * @param {number} indent
+ * @return {string}
+ * @api private
+ */
+function wrap(str, width, indent) {
+  const regex = new RegExp('.{1,' + (width - 1) + '}([\\s\u200B]|$)|[^\\s\u200B]+?([\\s\u200B]|$)', 'g');
+  const lines = str.match(regex) || [];
+  return lines.map((line, i) => {
+    if (line.slice(-1) === '\n') {
+      line = line.slice(0, line.length - 1);
+    }
+    return ((i > 0 && indent) ? Array(indent + 1).join(' ') : '') + line.trimRight();
+  }).join('\n');
+}
+
+/**
+ * Optionally wrap the given str to a max width of width characters per line
+ * while indenting with indent spaces. Do not wrap if insufficient width or
+ * string is manually formatted.
+ *
+ * @param {string} str
+ * @param {number} width
+ * @param {number} indent
+ * @return {string}
+ * @api private
+ */
+function optionalWrap(str, width, indent) {
+  // Detect manually wrapped and indented strings by searching for line breaks
+  // followed by multiple spaces/tabs.
+  if (str.match(/[\n]\s+/)) return str;
+  // Do not wrap to narrow columns (or can end up with a word per line).
+  const minWidth = 40;
+  if (width < minWidth) return str;
+
+  return wrap(str, width, indent);
+}
+
+/**
+ * Output help information if help flags specified
+ *
+ * @param {Command} cmd - command to output help for
+ * @param {Array} args - array of options to search for help flags
+ * @api private
+ */
+
+function outputHelpIfRequested(cmd, args) {
+  const helpOption = cmd._hasHelpOption && args.find(arg => arg === cmd._helpLongFlag || arg === cmd._helpShortFlag);
+  if (helpOption) {
+    cmd.outputHelp();
+    // (Do not have all displayed text available so only passing placeholder.)
+    cmd._exit(0, 'commander.helpDisplayed', '(outputHelp)');
+  }
+}
+
+/**
+ * Takes an argument and returns its human readable equivalent for help usage.
+ *
+ * @param {Object} arg
+ * @return {string}
+ * @api private
+ */
+
+function humanReadableArgName(arg) {
+  const nameOutput = arg.name + (arg.variadic === true ? '...' : '');
+
+  return arg.required
+    ? '<' + nameOutput + '>'
+    : '[' + nameOutput + ']';
+}
+
+/**
+ * Parse the short and long flag out of something like '-m,--mixed <value>'
+ *
+ * @api private
+ */
+
+function _parseOptionFlags(flags) {
+  let shortFlag;
+  let longFlag;
+  // Use original very loose parsing to maintain backwards compatibility for now,
+  // which allowed for example unintended `-sw, --short-word` [sic].
+  const flagParts = flags.split(/[ |,]+/);
+  if (flagParts.length > 1 && !/^[[<]/.test(flagParts[1])) shortFlag = flagParts.shift();
+  longFlag = flagParts.shift();
+  // Add support for lone short flag without significantly changing parsing!
+  if (!shortFlag && /^-[^-]$/.test(longFlag)) {
+    shortFlag = longFlag;
+    longFlag = undefined;
+  }
+  return { shortFlag, longFlag };
+}
+
+/**
+ * Scan arguments and increment port number for inspect calls (to avoid conflicts when spawning new command).
+ *
+ * @param {string[]} args - array of arguments from node.execArgv
+ * @returns {string[]}
+ * @api private
+ */
+
+function incrementNodeInspectorPort(args) {
+  // Testing for these options:
+  //  --inspect[=[host:]port]
+  //  --inspect-brk[=[host:]port]
+  //  --inspect-port=[host:]port
+  return args.map((arg) => {
+    if (!arg.startsWith('--inspect')) {
+      return arg;
+    }
+    let debugOption;
+    let debugHost = '127.0.0.1';
+    let debugPort = '9229';
+    let match;
+    if ((match = arg.match(/^(--inspect(-brk)?)$/)) !== null) {
+      // e.g. --inspect
+      debugOption = match[1];
+    } else if ((match = arg.match(/^(--inspect(-brk|-port)?)=([^:]+)$/)) !== null) {
+      debugOption = match[1];
+      if (/^\d+$/.test(match[3])) {
+        // e.g. --inspect=1234
+        debugPort = match[3];
+      } else {
+        // e.g. --inspect=localhost
+        debugHost = match[3];
+      }
+    } else if ((match = arg.match(/^(--inspect(-brk|-port)?)=([^:]+):(\d+)$/)) !== null) {
+      // e.g. --inspect=localhost:1234
+      debugOption = match[1];
+      debugHost = match[3];
+      debugPort = match[4];
+    }
+
+    if (debugOption && debugPort !== '0') {
+      return `${debugOption}=${debugHost}:${parseInt(debugPort) + 1}`;
+    }
+    return arg;
+  });
+}
+
+
+/***/ }),
+
+/***/ 53921:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * content-disposition
+ * Copyright(c) 2014-2017 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = contentDisposition
+module.exports.parse = parse
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var basename = (__nccwpck_require__(71017).basename)
+var Buffer = (__nccwpck_require__(21867).Buffer)
+
+/**
+ * RegExp to match non attr-char, *after* encodeURIComponent (i.e. not including "%")
+ * @private
+ */
+
+var ENCODE_URL_ATTR_CHAR_REGEXP = /[\x00-\x20"'()*,/:;<=>?@[\\\]{}\x7f]/g // eslint-disable-line no-control-regex
+
+/**
+ * RegExp to match percent encoding escape.
+ * @private
+ */
+
+var HEX_ESCAPE_REGEXP = /%[0-9A-Fa-f]{2}/
+var HEX_ESCAPE_REPLACE_REGEXP = /%([0-9A-Fa-f]{2})/g
+
+/**
+ * RegExp to match non-latin1 characters.
+ * @private
+ */
+
+var NON_LATIN1_REGEXP = /[^\x20-\x7e\xa0-\xff]/g
+
+/**
+ * RegExp to match quoted-pair in RFC 2616
+ *
+ * quoted-pair = "\" CHAR
+ * CHAR        = <any US-ASCII character (octets 0 - 127)>
+ * @private
+ */
+
+var QESC_REGEXP = /\\([\u0000-\u007f])/g // eslint-disable-line no-control-regex
+
+/**
+ * RegExp to match chars that must be quoted-pair in RFC 2616
+ * @private
+ */
+
+var QUOTE_REGEXP = /([\\"])/g
+
+/**
+ * RegExp for various RFC 2616 grammar
+ *
+ * parameter     = token "=" ( token | quoted-string )
+ * token         = 1*<any CHAR except CTLs or separators>
+ * separators    = "(" | ")" | "<" | ">" | "@"
+ *               | "," | ";" | ":" | "\" | <">
+ *               | "/" | "[" | "]" | "?" | "="
+ *               | "{" | "}" | SP | HT
+ * quoted-string = ( <"> *(qdtext | quoted-pair ) <"> )
+ * qdtext        = <any TEXT except <">>
+ * quoted-pair   = "\" CHAR
+ * CHAR          = <any US-ASCII character (octets 0 - 127)>
+ * TEXT          = <any OCTET except CTLs, but including LWS>
+ * LWS           = [CRLF] 1*( SP | HT )
+ * CRLF          = CR LF
+ * CR            = <US-ASCII CR, carriage return (13)>
+ * LF            = <US-ASCII LF, linefeed (10)>
+ * SP            = <US-ASCII SP, space (32)>
+ * HT            = <US-ASCII HT, horizontal-tab (9)>
+ * CTL           = <any US-ASCII control character (octets 0 - 31) and DEL (127)>
+ * OCTET         = <any 8-bit sequence of data>
+ * @private
+ */
+
+var PARAM_REGEXP = /;[\x09\x20]*([!#$%&'*+.0-9A-Z^_`a-z|~-]+)[\x09\x20]*=[\x09\x20]*("(?:[\x20!\x23-\x5b\x5d-\x7e\x80-\xff]|\\[\x20-\x7e])*"|[!#$%&'*+.0-9A-Z^_`a-z|~-]+)[\x09\x20]*/g // eslint-disable-line no-control-regex
+var TEXT_REGEXP = /^[\x20-\x7e\x80-\xff]+$/
+var TOKEN_REGEXP = /^[!#$%&'*+.0-9A-Z^_`a-z|~-]+$/
+
+/**
+ * RegExp for various RFC 5987 grammar
+ *
+ * ext-value     = charset  "'" [ language ] "'" value-chars
+ * charset       = "UTF-8" / "ISO-8859-1" / mime-charset
+ * mime-charset  = 1*mime-charsetc
+ * mime-charsetc = ALPHA / DIGIT
+ *               / "!" / "#" / "$" / "%" / "&"
+ *               / "+" / "-" / "^" / "_" / "`"
+ *               / "{" / "}" / "~"
+ * language      = ( 2*3ALPHA [ extlang ] )
+ *               / 4ALPHA
+ *               / 5*8ALPHA
+ * extlang       = *3( "-" 3ALPHA )
+ * value-chars   = *( pct-encoded / attr-char )
+ * pct-encoded   = "%" HEXDIG HEXDIG
+ * attr-char     = ALPHA / DIGIT
+ *               / "!" / "#" / "$" / "&" / "+" / "-" / "."
+ *               / "^" / "_" / "`" / "|" / "~"
+ * @private
+ */
+
+var EXT_VALUE_REGEXP = /^([A-Za-z0-9!#$%&+\-^_`{}~]+)'(?:[A-Za-z]{2,3}(?:-[A-Za-z]{3}){0,3}|[A-Za-z]{4,8}|)'((?:%[0-9A-Fa-f]{2}|[A-Za-z0-9!#$&+.^_`|~-])+)$/
+
+/**
+ * RegExp for various RFC 6266 grammar
+ *
+ * disposition-type = "inline" | "attachment" | disp-ext-type
+ * disp-ext-type    = token
+ * disposition-parm = filename-parm | disp-ext-parm
+ * filename-parm    = "filename" "=" value
+ *                  | "filename*" "=" ext-value
+ * disp-ext-parm    = token "=" value
+ *                  | ext-token "=" ext-value
+ * ext-token        = <the characters in token, followed by "*">
+ * @private
+ */
+
+var DISPOSITION_TYPE_REGEXP = /^([!#$%&'*+.0-9A-Z^_`a-z|~-]+)[\x09\x20]*(?:$|;)/ // eslint-disable-line no-control-regex
+
+/**
+ * Create an attachment Content-Disposition header.
+ *
+ * @param {string} [filename]
+ * @param {object} [options]
+ * @param {string} [options.type=attachment]
+ * @param {string|boolean} [options.fallback=true]
+ * @return {string}
+ * @public
+ */
+
+function contentDisposition (filename, options) {
+  var opts = options || {}
+
+  // get type
+  var type = opts.type || 'attachment'
+
+  // get parameters
+  var params = createparams(filename, opts.fallback)
+
+  // format into string
+  return format(new ContentDisposition(type, params))
+}
+
+/**
+ * Create parameters object from filename and fallback.
+ *
+ * @param {string} [filename]
+ * @param {string|boolean} [fallback=true]
+ * @return {object}
+ * @private
+ */
+
+function createparams (filename, fallback) {
+  if (filename === undefined) {
+    return
+  }
+
+  var params = {}
+
+  if (typeof filename !== 'string') {
+    throw new TypeError('filename must be a string')
+  }
+
+  // fallback defaults to true
+  if (fallback === undefined) {
+    fallback = true
+  }
+
+  if (typeof fallback !== 'string' && typeof fallback !== 'boolean') {
+    throw new TypeError('fallback must be a string or boolean')
+  }
+
+  if (typeof fallback === 'string' && NON_LATIN1_REGEXP.test(fallback)) {
+    throw new TypeError('fallback must be ISO-8859-1 string')
+  }
+
+  // restrict to file base name
+  var name = basename(filename)
+
+  // determine if name is suitable for quoted string
+  var isQuotedString = TEXT_REGEXP.test(name)
+
+  // generate fallback name
+  var fallbackName = typeof fallback !== 'string'
+    ? fallback && getlatin1(name)
+    : basename(fallback)
+  var hasFallback = typeof fallbackName === 'string' && fallbackName !== name
+
+  // set extended filename parameter
+  if (hasFallback || !isQuotedString || HEX_ESCAPE_REGEXP.test(name)) {
+    params['filename*'] = name
+  }
+
+  // set filename parameter
+  if (isQuotedString || hasFallback) {
+    params.filename = hasFallback
+      ? fallbackName
+      : name
+  }
+
+  return params
+}
+
+/**
+ * Format object to Content-Disposition header.
+ *
+ * @param {object} obj
+ * @param {string} obj.type
+ * @param {object} [obj.parameters]
+ * @return {string}
+ * @private
+ */
+
+function format (obj) {
+  var parameters = obj.parameters
+  var type = obj.type
+
+  if (!type || typeof type !== 'string' || !TOKEN_REGEXP.test(type)) {
+    throw new TypeError('invalid type')
+  }
+
+  // start with normalized type
+  var string = String(type).toLowerCase()
+
+  // append parameters
+  if (parameters && typeof parameters === 'object') {
+    var param
+    var params = Object.keys(parameters).sort()
+
+    for (var i = 0; i < params.length; i++) {
+      param = params[i]
+
+      var val = param.substr(-1) === '*'
+        ? ustring(parameters[param])
+        : qstring(parameters[param])
+
+      string += '; ' + param + '=' + val
+    }
+  }
+
+  return string
+}
+
+/**
+ * Decode a RFC 5987 field value (gracefully).
+ *
+ * @param {string} str
+ * @return {string}
+ * @private
+ */
+
+function decodefield (str) {
+  var match = EXT_VALUE_REGEXP.exec(str)
+
+  if (!match) {
+    throw new TypeError('invalid extended field value')
+  }
+
+  var charset = match[1].toLowerCase()
+  var encoded = match[2]
+  var value
+
+  // to binary string
+  var binary = encoded.replace(HEX_ESCAPE_REPLACE_REGEXP, pdecode)
+
+  switch (charset) {
+    case 'iso-8859-1':
+      value = getlatin1(binary)
+      break
+    case 'utf-8':
+      value = Buffer.from(binary, 'binary').toString('utf8')
+      break
+    default:
+      throw new TypeError('unsupported charset in extended field')
+  }
+
+  return value
+}
+
+/**
+ * Get ISO-8859-1 version of string.
+ *
+ * @param {string} val
+ * @return {string}
+ * @private
+ */
+
+function getlatin1 (val) {
+  // simple Unicode -> ISO-8859-1 transformation
+  return String(val).replace(NON_LATIN1_REGEXP, '?')
+}
+
+/**
+ * Parse Content-Disposition header string.
+ *
+ * @param {string} string
+ * @return {object}
+ * @public
+ */
+
+function parse (string) {
+  if (!string || typeof string !== 'string') {
+    throw new TypeError('argument string is required')
+  }
+
+  var match = DISPOSITION_TYPE_REGEXP.exec(string)
+
+  if (!match) {
+    throw new TypeError('invalid type format')
+  }
+
+  // normalize type
+  var index = match[0].length
+  var type = match[1].toLowerCase()
+
+  var key
+  var names = []
+  var params = {}
+  var value
+
+  // calculate index to start at
+  index = PARAM_REGEXP.lastIndex = match[0].substr(-1) === ';'
+    ? index - 1
+    : index
+
+  // match parameters
+  while ((match = PARAM_REGEXP.exec(string))) {
+    if (match.index !== index) {
+      throw new TypeError('invalid parameter format')
+    }
+
+    index += match[0].length
+    key = match[1].toLowerCase()
+    value = match[2]
+
+    if (names.indexOf(key) !== -1) {
+      throw new TypeError('invalid duplicate parameter')
+    }
+
+    names.push(key)
+
+    if (key.indexOf('*') + 1 === key.length) {
+      // decode extended value
+      key = key.slice(0, -1)
+      value = decodefield(value)
+
+      // overwrite existing value
+      params[key] = value
+      continue
+    }
+
+    if (typeof params[key] === 'string') {
+      continue
+    }
+
+    if (value[0] === '"') {
+      // remove quotes and escapes
+      value = value
+        .substr(1, value.length - 2)
+        .replace(QESC_REGEXP, '$1')
+    }
+
+    params[key] = value
+  }
+
+  if (index !== -1 && index !== string.length) {
+    throw new TypeError('invalid parameter format')
+  }
+
+  return new ContentDisposition(type, params)
+}
+
+/**
+ * Percent decode a single character.
+ *
+ * @param {string} str
+ * @param {string} hex
+ * @return {string}
+ * @private
+ */
+
+function pdecode (str, hex) {
+  return String.fromCharCode(parseInt(hex, 16))
+}
+
+/**
+ * Percent encode a single character.
+ *
+ * @param {string} char
+ * @return {string}
+ * @private
+ */
+
+function pencode (char) {
+  return '%' + String(char)
+    .charCodeAt(0)
+    .toString(16)
+    .toUpperCase()
+}
+
+/**
+ * Quote a string for HTTP.
+ *
+ * @param {string} val
+ * @return {string}
+ * @private
+ */
+
+function qstring (val) {
+  var str = String(val)
+
+  return '"' + str.replace(QUOTE_REGEXP, '\\$1') + '"'
+}
+
+/**
+ * Encode a Unicode string for HTTP (RFC 5987).
+ *
+ * @param {string} val
+ * @return {string}
+ * @private
+ */
+
+function ustring (val) {
+  var str = String(val)
+
+  // percent encode as UTF-8
+  var encoded = encodeURIComponent(str)
+    .replace(ENCODE_URL_ATTR_CHAR_REGEXP, pencode)
+
+  return 'UTF-8\'\'' + encoded
+}
+
+/**
+ * Class for parsed Content-Disposition header for v8 optimization
+ *
+ * @public
+ * @param {string} type
+ * @param {object} parameters
+ * @constructor
+ */
+
+function ContentDisposition (type, parameters) {
+  this.type = type
+  this.parameters = parameters
+}
+
+
+/***/ }),
+
+/***/ 99915:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+/*!
+ * content-type
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * RegExp to match *( ";" parameter ) in RFC 7231 sec 3.1.1.1
+ *
+ * parameter     = token "=" ( token / quoted-string )
+ * token         = 1*tchar
+ * tchar         = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+ *               / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+ *               / DIGIT / ALPHA
+ *               ; any VCHAR, except delimiters
+ * quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
+ * qdtext        = HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text
+ * obs-text      = %x80-FF
+ * quoted-pair   = "\" ( HTAB / SP / VCHAR / obs-text )
+ */
+var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g // eslint-disable-line no-control-regex
+var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/ // eslint-disable-line no-control-regex
+var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/**
+ * RegExp to match quoted-pair in RFC 7230 sec 3.2.6
+ *
+ * quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
+ * obs-text    = %x80-FF
+ */
+var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g // eslint-disable-line no-control-regex
+
+/**
+ * RegExp to match chars that must be quoted-pair in RFC 7230 sec 3.2.6
+ */
+var QUOTE_REGEXP = /([\\"])/g
+
+/**
+ * RegExp to match type in RFC 7231 sec 3.1.1.1
+ *
+ * media-type = type "/" subtype
+ * type       = token
+ * subtype    = token
+ */
+var TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+/**
+ * Module exports.
+ * @public
+ */
+
+exports.format = format
+exports.parse = parse
+
+/**
+ * Format object to media type.
+ *
+ * @param {object} obj
+ * @return {string}
+ * @public
+ */
+
+function format (obj) {
+  if (!obj || typeof obj !== 'object') {
+    throw new TypeError('argument obj is required')
+  }
+
+  var parameters = obj.parameters
+  var type = obj.type
+
+  if (!type || !TYPE_REGEXP.test(type)) {
+    throw new TypeError('invalid type')
+  }
+
+  var string = type
+
+  // append parameters
+  if (parameters && typeof parameters === 'object') {
+    var param
+    var params = Object.keys(parameters).sort()
+
+    for (var i = 0; i < params.length; i++) {
+      param = params[i]
+
+      if (!TOKEN_REGEXP.test(param)) {
+        throw new TypeError('invalid parameter name')
+      }
+
+      string += '; ' + param + '=' + qstring(parameters[param])
+    }
+  }
+
+  return string
+}
+
+/**
+ * Parse media type to object.
+ *
+ * @param {string|object} string
+ * @return {Object}
+ * @public
+ */
+
+function parse (string) {
+  if (!string) {
+    throw new TypeError('argument string is required')
+  }
+
+  // support req/res-like objects as argument
+  var header = typeof string === 'object'
+    ? getcontenttype(string)
+    : string
+
+  if (typeof header !== 'string') {
+    throw new TypeError('argument string is required to be a string')
+  }
+
+  var index = header.indexOf(';')
+  var type = index !== -1
+    ? header.slice(0, index).trim()
+    : header.trim()
+
+  if (!TYPE_REGEXP.test(type)) {
+    throw new TypeError('invalid media type')
+  }
+
+  var obj = new ContentType(type.toLowerCase())
+
+  // parse parameters
+  if (index !== -1) {
+    var key
+    var match
+    var value
+
+    PARAM_REGEXP.lastIndex = index
+
+    while ((match = PARAM_REGEXP.exec(header))) {
+      if (match.index !== index) {
+        throw new TypeError('invalid parameter format')
+      }
+
+      index += match[0].length
+      key = match[1].toLowerCase()
+      value = match[2]
+
+      if (value.charCodeAt(0) === 0x22 /* " */) {
+        // remove quotes
+        value = value.slice(1, -1)
+
+        // remove escapes
+        if (value.indexOf('\\') !== -1) {
+          value = value.replace(QESC_REGEXP, '$1')
+        }
+      }
+
+      obj.parameters[key] = value
+    }
+
+    if (index !== header.length) {
+      throw new TypeError('invalid parameter format')
+    }
+  }
+
+  return obj
+}
+
+/**
+ * Get content-type from req/res objects.
+ *
+ * @param {object}
+ * @return {Object}
+ * @private
+ */
+
+function getcontenttype (obj) {
+  var header
+
+  if (typeof obj.getHeader === 'function') {
+    // res-like
+    header = obj.getHeader('content-type')
+  } else if (typeof obj.headers === 'object') {
+    // req-like
+    header = obj.headers && obj.headers['content-type']
+  }
+
+  if (typeof header !== 'string') {
+    throw new TypeError('content-type header is missing from object')
+  }
+
+  return header
+}
+
+/**
+ * Quote a string if necessary.
+ *
+ * @param {string} val
+ * @return {string}
+ * @private
+ */
+
+function qstring (val) {
+  var str = String(val)
+
+  // no need to quote tokens
+  if (TOKEN_REGEXP.test(str)) {
+    return str
+  }
+
+  if (str.length > 0 && !TEXT_REGEXP.test(str)) {
+    throw new TypeError('invalid parameter value')
+  }
+
+  return '"' + str.replace(QUOTE_REGEXP, '\\$1') + '"'
+}
+
+/**
+ * Class to represent a content type.
+ * @private
+ */
+function ContentType (type) {
+  this.parameters = Object.create(null)
+  this.type = type
+}
+
+
+/***/ }),
+
+/***/ 61579:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+/**
+ * Module dependencies.
+ */
+
+var crypto = __nccwpck_require__(6113);
+
+/**
+ * Sign the given `val` with `secret`.
+ *
+ * @param {String} val
+ * @param {String} secret
+ * @return {String}
+ * @api private
+ */
+
+exports.sign = function(val, secret){
+  if ('string' != typeof val) throw new TypeError("Cookie value must be provided as a string.");
+  if ('string' != typeof secret) throw new TypeError("Secret string must be provided.");
+  return val + '.' + crypto
+    .createHmac('sha256', secret)
+    .update(val)
+    .digest('base64')
+    .replace(/\=+$/, '');
+};
+
+/**
+ * Unsign and decode the given `val` with `secret`,
+ * returning `false` if the signature is invalid.
+ *
+ * @param {String} val
+ * @param {String} secret
+ * @return {String|Boolean}
+ * @api private
+ */
+
+exports.unsign = function(val, secret){
+  if ('string' != typeof val) throw new TypeError("Signed cookie string must be provided.");
+  if ('string' != typeof secret) throw new TypeError("Secret string must be provided.");
+  var str = val.slice(0, val.lastIndexOf('.'))
+    , mac = exports.sign(str, secret);
+  
+  return sha1(mac) == sha1(val) ? str : false;
+};
+
+/**
+ * Private
+ */
+
+function sha1(str){
+  return crypto.createHash('sha1').update(str).digest('hex');
+}
+
+
+/***/ }),
+
+/***/ 93658:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+/*!
+ * cookie
+ * Copyright(c) 2012-2014 Roman Shtylman
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+exports.parse = parse;
+exports.serialize = serialize;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var decode = decodeURIComponent;
+var encode = encodeURIComponent;
+
+/**
+ * RegExp to match field-content in RFC 7230 sec 3.2
+ *
+ * field-content = field-vchar [ 1*( SP / HTAB ) field-vchar ]
+ * field-vchar   = VCHAR / obs-text
+ * obs-text      = %x80-FF
+ */
+
+var fieldContentRegExp = /^[\u0009\u0020-\u007e\u0080-\u00ff]+$/;
+
+/**
+ * Parse a cookie header.
+ *
+ * Parse the given cookie header string into an object
+ * The object has the various cookies as keys(names) => values
+ *
+ * @param {string} str
+ * @param {object} [options]
+ * @return {object}
+ * @public
+ */
+
+function parse(str, options) {
+  if (typeof str !== 'string') {
+    throw new TypeError('argument str must be a string');
+  }
+
+  var obj = {}
+  var opt = options || {};
+  var pairs = str.split(';')
+  var dec = opt.decode || decode;
+
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i];
+    var index = pair.indexOf('=')
+
+    // skip things that don't look like key=value
+    if (index < 0) {
+      continue;
+    }
+
+    var key = pair.substring(0, index).trim()
+
+    // only assign once
+    if (undefined == obj[key]) {
+      var val = pair.substring(index + 1, pair.length).trim()
+
+      // quoted values
+      if (val[0] === '"') {
+        val = val.slice(1, -1)
+      }
+
+      obj[key] = tryDecode(val, dec);
+    }
+  }
+
+  return obj;
+}
+
+/**
+ * Serialize data into a cookie header.
+ *
+ * Serialize the a name value pair into a cookie string suitable for
+ * http headers. An optional options object specified cookie parameters.
+ *
+ * serialize('foo', 'bar', { httpOnly: true })
+ *   => "foo=bar; httpOnly"
+ *
+ * @param {string} name
+ * @param {string} val
+ * @param {object} [options]
+ * @return {string}
+ * @public
+ */
+
+function serialize(name, val, options) {
+  var opt = options || {};
+  var enc = opt.encode || encode;
+
+  if (typeof enc !== 'function') {
+    throw new TypeError('option encode is invalid');
+  }
+
+  if (!fieldContentRegExp.test(name)) {
+    throw new TypeError('argument name is invalid');
+  }
+
+  var value = enc(val);
+
+  if (value && !fieldContentRegExp.test(value)) {
+    throw new TypeError('argument val is invalid');
+  }
+
+  var str = name + '=' + value;
+
+  if (null != opt.maxAge) {
+    var maxAge = opt.maxAge - 0;
+
+    if (isNaN(maxAge) || !isFinite(maxAge)) {
+      throw new TypeError('option maxAge is invalid')
+    }
+
+    str += '; Max-Age=' + Math.floor(maxAge);
+  }
+
+  if (opt.domain) {
+    if (!fieldContentRegExp.test(opt.domain)) {
+      throw new TypeError('option domain is invalid');
+    }
+
+    str += '; Domain=' + opt.domain;
+  }
+
+  if (opt.path) {
+    if (!fieldContentRegExp.test(opt.path)) {
+      throw new TypeError('option path is invalid');
+    }
+
+    str += '; Path=' + opt.path;
+  }
+
+  if (opt.expires) {
+    if (typeof opt.expires.toUTCString !== 'function') {
+      throw new TypeError('option expires is invalid');
+    }
+
+    str += '; Expires=' + opt.expires.toUTCString();
+  }
+
+  if (opt.httpOnly) {
+    str += '; HttpOnly';
+  }
+
+  if (opt.secure) {
+    str += '; Secure';
+  }
+
+  if (opt.sameSite) {
+    var sameSite = typeof opt.sameSite === 'string'
+      ? opt.sameSite.toLowerCase() : opt.sameSite;
+
+    switch (sameSite) {
+      case true:
+        str += '; SameSite=Strict';
+        break;
+      case 'lax':
+        str += '; SameSite=Lax';
+        break;
+      case 'strict':
+        str += '; SameSite=Strict';
+        break;
+      case 'none':
+        str += '; SameSite=None';
+        break;
+      default:
+        throw new TypeError('option sameSite is invalid');
+    }
+  }
+
+  return str;
+}
+
+/**
+ * Try decoding a string using a decoding function.
+ *
+ * @param {string} str
+ * @param {function} decode
+ * @private
+ */
+
+function tryDecode(str, decode) {
+  try {
+    return decode(str);
+  } catch (e) {
+    return str;
+  }
+}
+
+
+/***/ }),
+
+/***/ 65507:
+/***/ ((__unused_webpack_module, exports) => {
+
+/* jshint node: true */
+(function () {
+    "use strict";
+
+    function CookieAccessInfo(domain, path, secure, script) {
+        if (this instanceof CookieAccessInfo) {
+            this.domain = domain || undefined;
+            this.path = path || "/";
+            this.secure = !!secure;
+            this.script = !!script;
+            return this;
+        }
+        return new CookieAccessInfo(domain, path, secure, script);
+    }
+    CookieAccessInfo.All = Object.freeze(Object.create(null));
+    exports.CookieAccessInfo = CookieAccessInfo;
+
+    function Cookie(cookiestr, request_domain, request_path) {
+        if (cookiestr instanceof Cookie) {
+            return cookiestr;
+        }
+        if (this instanceof Cookie) {
+            this.name = null;
+            this.value = null;
+            this.expiration_date = Infinity;
+            this.path = String(request_path || "/");
+            this.explicit_path = false;
+            this.domain = request_domain || null;
+            this.explicit_domain = false;
+            this.secure = false; //how to define default?
+            this.noscript = false; //httponly
+            if (cookiestr) {
+                this.parse(cookiestr, request_domain, request_path);
+            }
+            return this;
+        }
+        return new Cookie(cookiestr, request_domain, request_path);
+    }
+    exports.Cookie = Cookie;
+
+    Cookie.prototype.toString = function toString() {
+        var str = [this.name + "=" + this.value];
+        if (this.expiration_date !== Infinity) {
+            str.push("expires=" + (new Date(this.expiration_date)).toGMTString());
+        }
+        if (this.domain) {
+            str.push("domain=" + this.domain);
+        }
+        if (this.path) {
+            str.push("path=" + this.path);
+        }
+        if (this.secure) {
+            str.push("secure");
+        }
+        if (this.noscript) {
+            str.push("httponly");
+        }
+        return str.join("; ");
+    };
+
+    Cookie.prototype.toValueString = function toValueString() {
+        return this.name + "=" + this.value;
+    };
+
+    var cookie_str_splitter = /[:](?=\s*[a-zA-Z0-9_\-]+\s*[=])/g;
+    Cookie.prototype.parse = function parse(str, request_domain, request_path) {
+        if (this instanceof Cookie) {
+            if ( str.length > 32768 ) {
+                console.warn("Cookie too long for parsing (>32768 characters)");
+                return;
+            }
+    
+            var parts = str.split(";").filter(function (value) {
+                    return !!value;
+                });
+            var i;
+
+            var pair = parts[0].match(/([^=]+)=([\s\S]*)/);
+            if (!pair) {
+                console.warn("Invalid cookie header encountered. Header: '"+str+"'");
+                return;
+            }
+
+            var key = pair[1];
+            var value = pair[2];
+            if ( typeof key !== 'string' || key.length === 0 || typeof value !== 'string' ) {
+                console.warn("Unable to extract values from cookie header. Cookie: '"+str+"'");
+                return;
+            }
+
+            this.name = key;
+            this.value = value;
+
+            for (i = 1; i < parts.length; i += 1) {
+                pair = parts[i].match(/([^=]+)(?:=([\s\S]*))?/);
+                key = pair[1].trim().toLowerCase();
+                value = pair[2];
+                switch (key) {
+                case "httponly":
+                    this.noscript = true;
+                    break;
+                case "expires":
+                    this.expiration_date = value ?
+                            Number(Date.parse(value)) :
+                            Infinity;
+                    break;
+                case "path":
+                    this.path = value ?
+                            value.trim() :
+                            "";
+                    this.explicit_path = true;
+                    break;
+                case "domain":
+                    this.domain = value ?
+                            value.trim() :
+                            "";
+                    this.explicit_domain = !!this.domain;
+                    break;
+                case "secure":
+                    this.secure = true;
+                    break;
+                }
+            }
+
+            if (!this.explicit_path) {
+               this.path = request_path || "/";
+            }
+            if (!this.explicit_domain) {
+               this.domain = request_domain;
+            }
+
+            return this;
+        }
+        return new Cookie().parse(str, request_domain, request_path);
+    };
+
+    Cookie.prototype.matches = function matches(access_info) {
+        if (access_info === CookieAccessInfo.All) {
+          return true;
+        }
+        if (this.noscript && access_info.script ||
+                this.secure && !access_info.secure ||
+                !this.collidesWith(access_info)) {
+            return false;
+        }
+        return true;
+    };
+
+    Cookie.prototype.collidesWith = function collidesWith(access_info) {
+        if ((this.path && !access_info.path) || (this.domain && !access_info.domain)) {
+            return false;
+        }
+        if (this.path && access_info.path.indexOf(this.path) !== 0) {
+            return false;
+        }
+        if (this.explicit_path && access_info.path.indexOf( this.path ) !== 0) {
+           return false;
+        }
+        var access_domain = access_info.domain && access_info.domain.replace(/^[\.]/,'');
+        var cookie_domain = this.domain && this.domain.replace(/^[\.]/,'');
+        if (cookie_domain === access_domain) {
+            return true;
+        }
+        if (cookie_domain) {
+            if (!this.explicit_domain) {
+                return false; // we already checked if the domains were exactly the same
+            }
+            var wildcard = access_domain.indexOf(cookie_domain);
+            if (wildcard === -1 || wildcard !== access_domain.length - cookie_domain.length) {
+                return false;
+            }
+            return true;
+        }
+        return true;
+    };
+
+    function CookieJar() {
+        var cookies, cookies_list, collidable_cookie;
+        if (this instanceof CookieJar) {
+            cookies = Object.create(null); //name: [Cookie]
+
+            this.setCookie = function setCookie(cookie, request_domain, request_path) {
+                var remove, i;
+                cookie = new Cookie(cookie, request_domain, request_path);
+                //Delete the cookie if the set is past the current time
+                remove = cookie.expiration_date <= Date.now();
+                if (cookies[cookie.name] !== undefined) {
+                    cookies_list = cookies[cookie.name];
+                    for (i = 0; i < cookies_list.length; i += 1) {
+                        collidable_cookie = cookies_list[i];
+                        if (collidable_cookie.collidesWith(cookie)) {
+                            if (remove) {
+                                cookies_list.splice(i, 1);
+                                if (cookies_list.length === 0) {
+                                    delete cookies[cookie.name];
+                                }
+                                return false;
+                            }
+                            cookies_list[i] = cookie;
+                            return cookie;
+                        }
+                    }
+                    if (remove) {
+                        return false;
+                    }
+                    cookies_list.push(cookie);
+                    return cookie;
+                }
+                if (remove) {
+                    return false;
+                }
+                cookies[cookie.name] = [cookie];
+                return cookies[cookie.name];
+            };
+            //returns a cookie
+            this.getCookie = function getCookie(cookie_name, access_info) {
+                var cookie, i;
+                cookies_list = cookies[cookie_name];
+                if (!cookies_list) {
+                    return;
+                }
+                for (i = 0; i < cookies_list.length; i += 1) {
+                    cookie = cookies_list[i];
+                    if (cookie.expiration_date <= Date.now()) {
+                        if (cookies_list.length === 0) {
+                            delete cookies[cookie.name];
+                        }
+                        continue;
+                    }
+
+                    if (cookie.matches(access_info)) {
+                        return cookie;
+                    }
+                }
+            };
+            //returns a list of cookies
+            this.getCookies = function getCookies(access_info) {
+                var matches = [], cookie_name, cookie;
+                for (cookie_name in cookies) {
+                    cookie = this.getCookie(cookie_name, access_info);
+                    if (cookie) {
+                        matches.push(cookie);
+                    }
+                }
+                matches.toString = function toString() {
+                    return matches.join(":");
+                };
+                matches.toValueString = function toValueString() {
+                    return matches.map(function (c) {
+                        return c.toValueString();
+                    }).join('; ');
+                };
+                return matches;
+            };
+
+            return this;
+        }
+        return new CookieJar();
+    }
+    exports.CookieJar = CookieJar;
+
+    //returns list of cookies that were set correctly. Cookies that are expired and removed are not returned.
+    CookieJar.prototype.setCookies = function setCookies(cookies, request_domain, request_path) {
+        cookies = Array.isArray(cookies) ?
+                cookies :
+                cookies.split(cookie_str_splitter);
+        var successful = [],
+            i,
+            cookie;
+        cookies = cookies.map(function(item){
+            return new Cookie(item, request_domain, request_path);
+        });
+        for (i = 0; i < cookies.length; i += 1) {
+            cookie = cookies[i];
+            if (this.setCookie(cookie, request_domain, request_path)) {
+                successful.push(cookie);
+            }
+        }
+        return successful;
+    };
+}());
+
+
+/***/ }),
+
+/***/ 51512:
+/***/ ((module, exports) => {
+
+"use strict";
+function _typeof(obj){"@babel/helpers - typeof";if(typeof Symbol==="function"&&typeof Symbol.iterator==="symbol"){_typeof=function _typeof(obj){return typeof obj}}else{_typeof=function _typeof(obj){return obj&&typeof Symbol==="function"&&obj.constructor===Symbol&&obj!==Symbol.prototype?"symbol":typeof obj}}return _typeof(obj)}(function(global){var _arguments=arguments;var dateFormat=function(){var token=/d{1,4}|D{3,4}|m{1,4}|yy(?:yy)?|([HhMsTt])\1?|W{1,2}|[LlopSZN]|"[^"]*"|'[^']*'/g;var timezone=/\b(?:[PMCEA][SDP]T|(?:Pacific|Mountain|Central|Eastern|Atlantic) (?:Standard|Daylight|Prevailing) Time|(?:GMT|UTC)(?:[-+]\d{4})?)\b/g;var timezoneClip=/[^-+\dA-Z]/g;return function(date,mask,utc,gmt){if(_arguments.length===1&&kindOf(date)==="string"&&!/\d/.test(date)){mask=date;date=undefined}date=date||date===0?date:new Date;if(!(date instanceof Date)){date=new Date(date)}if(isNaN(date)){throw TypeError("Invalid date")}mask=String(dateFormat.masks[mask]||mask||dateFormat.masks["default"]);var maskSlice=mask.slice(0,4);if(maskSlice==="UTC:"||maskSlice==="GMT:"){mask=mask.slice(4);utc=true;if(maskSlice==="GMT:"){gmt=true}}var _=function _(){return utc?"getUTC":"get"};var _d=function d(){return date[_()+"Date"]()};var D=function D(){return date[_()+"Day"]()};var _m=function m(){return date[_()+"Month"]()};var y=function y(){return date[_()+"FullYear"]()};var _H=function H(){return date[_()+"Hours"]()};var _M=function M(){return date[_()+"Minutes"]()};var _s=function s(){return date[_()+"Seconds"]()};var _L=function L(){return date[_()+"Milliseconds"]()};var _o=function o(){return utc?0:date.getTimezoneOffset()};var _W=function W(){return getWeek(date)};var _N=function N(){return getDayOfWeek(date)};var flags={d:function d(){return _d()},dd:function dd(){return pad(_d())},ddd:function ddd(){return dateFormat.i18n.dayNames[D()]},DDD:function DDD(){return getDayName({y:y(),m:_m(),d:_d(),_:_(),dayName:dateFormat.i18n.dayNames[D()],short:true})},dddd:function dddd(){return dateFormat.i18n.dayNames[D()+7]},DDDD:function DDDD(){return getDayName({y:y(),m:_m(),d:_d(),_:_(),dayName:dateFormat.i18n.dayNames[D()+7]})},m:function m(){return _m()+1},mm:function mm(){return pad(_m()+1)},mmm:function mmm(){return dateFormat.i18n.monthNames[_m()]},mmmm:function mmmm(){return dateFormat.i18n.monthNames[_m()+12]},yy:function yy(){return String(y()).slice(2)},yyyy:function yyyy(){return pad(y(),4)},h:function h(){return _H()%12||12},hh:function hh(){return pad(_H()%12||12)},H:function H(){return _H()},HH:function HH(){return pad(_H())},M:function M(){return _M()},MM:function MM(){return pad(_M())},s:function s(){return _s()},ss:function ss(){return pad(_s())},l:function l(){return pad(_L(),3)},L:function L(){return pad(Math.floor(_L()/10))},t:function t(){return _H()<12?dateFormat.i18n.timeNames[0]:dateFormat.i18n.timeNames[1]},tt:function tt(){return _H()<12?dateFormat.i18n.timeNames[2]:dateFormat.i18n.timeNames[3]},T:function T(){return _H()<12?dateFormat.i18n.timeNames[4]:dateFormat.i18n.timeNames[5]},TT:function TT(){return _H()<12?dateFormat.i18n.timeNames[6]:dateFormat.i18n.timeNames[7]},Z:function Z(){return gmt?"GMT":utc?"UTC":(String(date).match(timezone)||[""]).pop().replace(timezoneClip,"").replace(/GMT\+0000/g,"UTC")},o:function o(){return(_o()>0?"-":"+")+pad(Math.floor(Math.abs(_o())/60)*100+Math.abs(_o())%60,4)},p:function p(){return(_o()>0?"-":"+")+pad(Math.floor(Math.abs(_o())/60),2)+":"+pad(Math.floor(Math.abs(_o())%60),2)},S:function S(){return["th","st","nd","rd"][_d()%10>3?0:(_d()%100-_d()%10!=10)*_d()%10]},W:function W(){return _W()},WW:function WW(){return pad(_W())},N:function N(){return _N()}};return mask.replace(token,function(match){if(match in flags){return flags[match]()}return match.slice(1,match.length-1)})}}();dateFormat.masks={default:"ddd mmm dd yyyy HH:MM:ss",shortDate:"m/d/yy",paddedShortDate:"mm/dd/yyyy",mediumDate:"mmm d, yyyy",longDate:"mmmm d, yyyy",fullDate:"dddd, mmmm d, yyyy",shortTime:"h:MM TT",mediumTime:"h:MM:ss TT",longTime:"h:MM:ss TT Z",isoDate:"yyyy-mm-dd",isoTime:"HH:MM:ss",isoDateTime:"yyyy-mm-dd'T'HH:MM:sso",isoUtcDateTime:"UTC:yyyy-mm-dd'T'HH:MM:ss'Z'",expiresHeaderFormat:"ddd, dd mmm yyyy HH:MM:ss Z"};dateFormat.i18n={dayNames:["Sun","Mon","Tue","Wed","Thu","Fri","Sat","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],monthNames:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","January","February","March","April","May","June","July","August","September","October","November","December"],timeNames:["a","p","am","pm","A","P","AM","PM"]};var pad=function pad(val,len){val=String(val);len=len||2;while(val.length<len){val="0"+val}return val};var getDayName=function getDayName(_ref){var y=_ref.y,m=_ref.m,d=_ref.d,_=_ref._,dayName=_ref.dayName,_ref$short=_ref["short"],_short=_ref$short===void 0?false:_ref$short;var today=new Date;var yesterday=new Date;yesterday.setDate(yesterday[_+"Date"]()-1);var tomorrow=new Date;tomorrow.setDate(tomorrow[_+"Date"]()+1);var today_d=function today_d(){return today[_+"Date"]()};var today_m=function today_m(){return today[_+"Month"]()};var today_y=function today_y(){return today[_+"FullYear"]()};var yesterday_d=function yesterday_d(){return yesterday[_+"Date"]()};var yesterday_m=function yesterday_m(){return yesterday[_+"Month"]()};var yesterday_y=function yesterday_y(){return yesterday[_+"FullYear"]()};var tomorrow_d=function tomorrow_d(){return tomorrow[_+"Date"]()};var tomorrow_m=function tomorrow_m(){return tomorrow[_+"Month"]()};var tomorrow_y=function tomorrow_y(){return tomorrow[_+"FullYear"]()};if(today_y()===y&&today_m()===m&&today_d()===d){return _short?"Tdy":"Today"}else if(yesterday_y()===y&&yesterday_m()===m&&yesterday_d()===d){return _short?"Ysd":"Yesterday"}else if(tomorrow_y()===y&&tomorrow_m()===m&&tomorrow_d()===d){return _short?"Tmw":"Tomorrow"}return dayName};var getWeek=function getWeek(date){var targetThursday=new Date(date.getFullYear(),date.getMonth(),date.getDate());targetThursday.setDate(targetThursday.getDate()-(targetThursday.getDay()+6)%7+3);var firstThursday=new Date(targetThursday.getFullYear(),0,4);firstThursday.setDate(firstThursday.getDate()-(firstThursday.getDay()+6)%7+3);var ds=targetThursday.getTimezoneOffset()-firstThursday.getTimezoneOffset();targetThursday.setHours(targetThursday.getHours()-ds);var weekDiff=(targetThursday-firstThursday)/(864e5*7);return 1+Math.floor(weekDiff)};var getDayOfWeek=function getDayOfWeek(date){var dow=date.getDay();if(dow===0){dow=7}return dow};var kindOf=function kindOf(val){if(val===null){return"null"}if(val===undefined){return"undefined"}if(_typeof(val)!=="object"){return _typeof(val)}if(Array.isArray(val)){return"array"}return{}.toString.call(val).slice(8,-1).toLowerCase()};if(typeof define==="function"&&define.amd){define(function(){return dateFormat})}else if(( false?0:_typeof(exports))==="object"){module.exports=dateFormat}else{global.dateFormat=dateFormat}})(void 0);
+
+/***/ }),
+
+/***/ 28222:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/* eslint-env browser */
+
+/**
+ * This is the web browser implementation of `debug()`.
+ */
+
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+exports.storage = localstorage();
+exports.destroy = (() => {
+	let warned = false;
+
+	return () => {
+		if (!warned) {
+			warned = true;
+			console.warn('Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.');
+		}
+	};
+})();
+
+/**
+ * Colors.
+ */
+
+exports.colors = [
+	'#0000CC',
+	'#0000FF',
+	'#0033CC',
+	'#0033FF',
+	'#0066CC',
+	'#0066FF',
+	'#0099CC',
+	'#0099FF',
+	'#00CC00',
+	'#00CC33',
+	'#00CC66',
+	'#00CC99',
+	'#00CCCC',
+	'#00CCFF',
+	'#3300CC',
+	'#3300FF',
+	'#3333CC',
+	'#3333FF',
+	'#3366CC',
+	'#3366FF',
+	'#3399CC',
+	'#3399FF',
+	'#33CC00',
+	'#33CC33',
+	'#33CC66',
+	'#33CC99',
+	'#33CCCC',
+	'#33CCFF',
+	'#6600CC',
+	'#6600FF',
+	'#6633CC',
+	'#6633FF',
+	'#66CC00',
+	'#66CC33',
+	'#9900CC',
+	'#9900FF',
