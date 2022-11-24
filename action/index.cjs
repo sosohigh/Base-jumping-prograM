@@ -51118,3 +51118,2199 @@ function destroy (stream, suppress) {
 
   return stream
 }
+
+/**
+ * Destroy a ReadStream.
+ *
+ * @param {object} stream
+ * @private
+ */
+
+function destroyReadStream (stream) {
+  stream.destroy()
+
+  if (typeof stream.close === 'function') {
+    // node.js core bug work-around
+    stream.on('open', onOpenClose)
+  }
+}
+
+/**
+ * Close a Zlib stream.
+ *
+ * Zlib streams below Node.js 4.5.5 have a buggy implementation
+ * of .close() when zlib encountered an error.
+ *
+ * @param {object} stream
+ * @private
+ */
+
+function closeZlibStream (stream) {
+  if (stream._hadError === true) {
+    var prop = stream._binding === null
+      ? '_binding'
+      : '_handle'
+
+    stream[prop] = {
+      close: function () { this[prop] = null }
+    }
+  }
+
+  stream.close()
+}
+
+/**
+ * Destroy a Zlib stream.
+ *
+ * Zlib streams don't have a destroy function in Node.js 6. On top of that
+ * simply calling destroy on a zlib stream in Node.js 8+ will result in a
+ * memory leak. So until that is fixed, we need to call both close AND destroy.
+ *
+ * PR to fix memory leak: https://github.com/nodejs/node/pull/23734
+ *
+ * In Node.js 6+8, it's important that destroy is called before close as the
+ * stream would otherwise emit the error 'zlib binding closed'.
+ *
+ * @param {object} stream
+ * @private
+ */
+
+function destroyZlibStream (stream) {
+  if (typeof stream.destroy === 'function') {
+    // node.js core bug work-around
+    // istanbul ignore if: node.js 0.8
+    if (stream._binding) {
+      // node.js < 0.10.0
+      stream.destroy()
+      if (stream._processing) {
+        stream._needDrain = true
+        stream.once('drain', onDrainClearBinding)
+      } else {
+        stream._binding.clear()
+      }
+    } else if (stream._destroy && stream._destroy !== Stream.Transform.prototype._destroy) {
+      // node.js >= 12, ^11.1.0, ^10.15.1
+      stream.destroy()
+    } else if (stream._destroy && typeof stream.close === 'function') {
+      // node.js 7, 8
+      stream.destroyed = true
+      stream.close()
+    } else {
+      // fallback
+      // istanbul ignore next
+      stream.destroy()
+    }
+  } else if (typeof stream.close === 'function') {
+    // node.js < 8 fallback
+    closeZlibStream(stream)
+  }
+}
+
+/**
+ * Determine if stream has destroy.
+ * @private
+ */
+
+function hasDestroy (stream) {
+  return stream instanceof Stream &&
+    typeof stream.destroy === 'function'
+}
+
+/**
+ * Determine if val is EventEmitter.
+ * @private
+ */
+
+function isEventEmitter (val) {
+  return val instanceof EventEmitter
+}
+
+/**
+ * Determine if stream is fs.ReadStream stream.
+ * @private
+ */
+
+function isFsReadStream (stream) {
+  return stream instanceof ReadStream
+}
+
+/**
+ * Determine if stream is Zlib stream.
+ * @private
+ */
+
+function isZlibStream (stream) {
+  return stream instanceof Zlib.Gzip ||
+    stream instanceof Zlib.Gunzip ||
+    stream instanceof Zlib.Deflate ||
+    stream instanceof Zlib.DeflateRaw ||
+    stream instanceof Zlib.Inflate ||
+    stream instanceof Zlib.InflateRaw ||
+    stream instanceof Zlib.Unzip
+}
+
+/**
+ * No-op function.
+ * @private
+ */
+
+function noop () {}
+
+/**
+ * On drain handler to clear binding.
+ * @private
+ */
+
+// istanbul ignore next: node.js 0.8
+function onDrainClearBinding () {
+  this._binding.clear()
+}
+
+/**
+ * On open handler to close stream.
+ * @private
+ */
+
+function onOpenClose () {
+  if (typeof this.fd === 'number') {
+    // actually close down the fd
+    this.close()
+  }
+}
+
+
+/***/ }),
+
+/***/ 74308:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var wrappy = __nccwpck_require__(62940)
+module.exports = wrappy(dezalgo)
+
+var asap = __nccwpck_require__(87943)
+
+function dezalgo (cb) {
+  var sync = true
+  asap(function () {
+    sync = false
+  })
+
+  return function zalgoSafe() {
+    var args = arguments
+    var me = this
+    if (sync)
+      asap(function() {
+        cb.apply(me, args)
+      })
+    else
+      cb.apply(me, args)
+  }
+}
+
+
+/***/ }),
+
+/***/ 12437:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(57147)
+const path = __nccwpck_require__(71017)
+const os = __nccwpck_require__(22037)
+const packageJson = __nccwpck_require__(49968)
+
+const version = packageJson.version
+
+const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg
+
+// Parser src into an Object
+function parse (src) {
+  const obj = {}
+
+  // Convert buffer to string
+  let lines = src.toString()
+
+  // Convert line breaks to same format
+  lines = lines.replace(/\r\n?/mg, '\n')
+
+  let match
+  while ((match = LINE.exec(lines)) != null) {
+    const key = match[1]
+
+    // Default undefined or null to empty string
+    let value = (match[2] || '')
+
+    // Remove whitespace
+    value = value.trim()
+
+    // Check if double quoted
+    const maybeQuote = value[0]
+
+    // Remove surrounding quotes
+    value = value.replace(/^(['"`])([\s\S]*)\1$/mg, '$2')
+
+    // Expand newlines if double quoted
+    if (maybeQuote === '"') {
+      value = value.replace(/\\n/g, '\n')
+      value = value.replace(/\\r/g, '\r')
+    }
+
+    // Add to object
+    obj[key] = value
+  }
+
+  return obj
+}
+
+function _log (message) {
+  console.log(`[dotenv@${version}][DEBUG] ${message}`)
+}
+
+function _resolveHome (envPath) {
+  return envPath[0] === '~' ? path.join(os.homedir(), envPath.slice(1)) : envPath
+}
+
+// Populates process.env from .env file
+function config (options) {
+  let dotenvPath = path.resolve(process.cwd(), '.env')
+  let encoding = 'utf8'
+  const debug = Boolean(options && options.debug)
+  const override = Boolean(options && options.override)
+
+  if (options) {
+    if (options.path != null) {
+      dotenvPath = _resolveHome(options.path)
+    }
+    if (options.encoding != null) {
+      encoding = options.encoding
+    }
+  }
+
+  try {
+    // Specifying an encoding returns a string instead of a buffer
+    const parsed = DotenvModule.parse(fs.readFileSync(dotenvPath, { encoding }))
+
+    Object.keys(parsed).forEach(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(process.env, key)) {
+        process.env[key] = parsed[key]
+      } else {
+        if (override === true) {
+          process.env[key] = parsed[key]
+        }
+
+        if (debug) {
+          if (override === true) {
+            _log(`"${key}" is already defined in \`process.env\` and WAS overwritten`)
+          } else {
+            _log(`"${key}" is already defined in \`process.env\` and was NOT overwritten`)
+          }
+        }
+      }
+    })
+
+    return { parsed }
+  } catch (e) {
+    if (debug) {
+      _log(`Failed to load ${dotenvPath} ${e.message}`)
+    }
+
+    return { error: e }
+  }
+}
+
+const DotenvModule = {
+  config,
+  parse
+}
+
+module.exports.config = DotenvModule.config
+module.exports.parse = DotenvModule.parse
+module.exports = DotenvModule
+
+
+/***/ }),
+
+/***/ 11728:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Buffer = (__nccwpck_require__(21867).Buffer);
+
+var getParamBytesForAlg = __nccwpck_require__(30528);
+
+var MAX_OCTET = 0x80,
+	CLASS_UNIVERSAL = 0,
+	PRIMITIVE_BIT = 0x20,
+	TAG_SEQ = 0x10,
+	TAG_INT = 0x02,
+	ENCODED_TAG_SEQ = (TAG_SEQ | PRIMITIVE_BIT) | (CLASS_UNIVERSAL << 6),
+	ENCODED_TAG_INT = TAG_INT | (CLASS_UNIVERSAL << 6);
+
+function base64Url(base64) {
+	return base64
+		.replace(/=/g, '')
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_');
+}
+
+function signatureAsBuffer(signature) {
+	if (Buffer.isBuffer(signature)) {
+		return signature;
+	} else if ('string' === typeof signature) {
+		return Buffer.from(signature, 'base64');
+	}
+
+	throw new TypeError('ECDSA signature must be a Base64 string or a Buffer');
+}
+
+function derToJose(signature, alg) {
+	signature = signatureAsBuffer(signature);
+	var paramBytes = getParamBytesForAlg(alg);
+
+	// the DER encoded param should at most be the param size, plus a padding
+	// zero, since due to being a signed integer
+	var maxEncodedParamLength = paramBytes + 1;
+
+	var inputLength = signature.length;
+
+	var offset = 0;
+	if (signature[offset++] !== ENCODED_TAG_SEQ) {
+		throw new Error('Could not find expected "seq"');
+	}
+
+	var seqLength = signature[offset++];
+	if (seqLength === (MAX_OCTET | 1)) {
+		seqLength = signature[offset++];
+	}
+
+	if (inputLength - offset < seqLength) {
+		throw new Error('"seq" specified length of "' + seqLength + '", only "' + (inputLength - offset) + '" remaining');
+	}
+
+	if (signature[offset++] !== ENCODED_TAG_INT) {
+		throw new Error('Could not find expected "int" for "r"');
+	}
+
+	var rLength = signature[offset++];
+
+	if (inputLength - offset - 2 < rLength) {
+		throw new Error('"r" specified length of "' + rLength + '", only "' + (inputLength - offset - 2) + '" available');
+	}
+
+	if (maxEncodedParamLength < rLength) {
+		throw new Error('"r" specified length of "' + rLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
+	}
+
+	var rOffset = offset;
+	offset += rLength;
+
+	if (signature[offset++] !== ENCODED_TAG_INT) {
+		throw new Error('Could not find expected "int" for "s"');
+	}
+
+	var sLength = signature[offset++];
+
+	if (inputLength - offset !== sLength) {
+		throw new Error('"s" specified length of "' + sLength + '", expected "' + (inputLength - offset) + '"');
+	}
+
+	if (maxEncodedParamLength < sLength) {
+		throw new Error('"s" specified length of "' + sLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
+	}
+
+	var sOffset = offset;
+	offset += sLength;
+
+	if (offset !== inputLength) {
+		throw new Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
+	}
+
+	var rPadding = paramBytes - rLength,
+		sPadding = paramBytes - sLength;
+
+	var dst = Buffer.allocUnsafe(rPadding + rLength + sPadding + sLength);
+
+	for (offset = 0; offset < rPadding; ++offset) {
+		dst[offset] = 0;
+	}
+	signature.copy(dst, offset, rOffset + Math.max(-rPadding, 0), rOffset + rLength);
+
+	offset = paramBytes;
+
+	for (var o = offset; offset < o + sPadding; ++offset) {
+		dst[offset] = 0;
+	}
+	signature.copy(dst, offset, sOffset + Math.max(-sPadding, 0), sOffset + sLength);
+
+	dst = dst.toString('base64');
+	dst = base64Url(dst);
+
+	return dst;
+}
+
+function countPadding(buf, start, stop) {
+	var padding = 0;
+	while (start + padding < stop && buf[start + padding] === 0) {
+		++padding;
+	}
+
+	var needsSign = buf[start + padding] >= MAX_OCTET;
+	if (needsSign) {
+		--padding;
+	}
+
+	return padding;
+}
+
+function joseToDer(signature, alg) {
+	signature = signatureAsBuffer(signature);
+	var paramBytes = getParamBytesForAlg(alg);
+
+	var signatureBytes = signature.length;
+	if (signatureBytes !== paramBytes * 2) {
+		throw new TypeError('"' + alg + '" signatures must be "' + paramBytes * 2 + '" bytes, saw "' + signatureBytes + '"');
+	}
+
+	var rPadding = countPadding(signature, 0, paramBytes);
+	var sPadding = countPadding(signature, paramBytes, signature.length);
+	var rLength = paramBytes - rPadding;
+	var sLength = paramBytes - sPadding;
+
+	var rsBytes = 1 + 1 + rLength + 1 + 1 + sLength;
+
+	var shortLength = rsBytes < MAX_OCTET;
+
+	var dst = Buffer.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
+
+	var offset = 0;
+	dst[offset++] = ENCODED_TAG_SEQ;
+	if (shortLength) {
+		// Bit 8 has value "0"
+		// bits 7-1 give the length.
+		dst[offset++] = rsBytes;
+	} else {
+		// Bit 8 of first octet has value "1"
+		// bits 7-1 give the number of additional length octets.
+		dst[offset++] = MAX_OCTET	| 1;
+		// length, base 256
+		dst[offset++] = rsBytes & 0xff;
+	}
+	dst[offset++] = ENCODED_TAG_INT;
+	dst[offset++] = rLength;
+	if (rPadding < 0) {
+		dst[offset++] = 0;
+		offset += signature.copy(dst, offset, 0, paramBytes);
+	} else {
+		offset += signature.copy(dst, offset, rPadding, paramBytes);
+	}
+	dst[offset++] = ENCODED_TAG_INT;
+	dst[offset++] = sLength;
+	if (sPadding < 0) {
+		dst[offset++] = 0;
+		signature.copy(dst, offset, paramBytes);
+	} else {
+		signature.copy(dst, offset, paramBytes + sPadding);
+	}
+
+	return dst;
+}
+
+module.exports = {
+	derToJose: derToJose,
+	joseToDer: joseToDer
+};
+
+
+/***/ }),
+
+/***/ 30528:
+/***/ ((module) => {
+
+"use strict";
+
+
+function getParamSize(keySize) {
+	var result = ((keySize / 8) | 0) + (keySize % 8 === 0 ? 0 : 1);
+	return result;
+}
+
+var paramBytesForAlg = {
+	ES256: getParamSize(256),
+	ES384: getParamSize(384),
+	ES512: getParamSize(521)
+};
+
+function getParamBytesForAlg(alg) {
+	var paramBytes = paramBytesForAlg[alg];
+	if (paramBytes) {
+		return paramBytes;
+	}
+
+	throw new Error('Unknown algorithm "' + alg + '"');
+}
+
+module.exports = getParamBytesForAlg;
+
+
+/***/ }),
+
+/***/ 14401:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * ee-first
+ * Copyright(c) 2014 Jonathan Ong
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = first
+
+/**
+ * Get the first event in a set of event emitters and event pairs.
+ *
+ * @param {array} stuff
+ * @param {function} done
+ * @public
+ */
+
+function first(stuff, done) {
+  if (!Array.isArray(stuff))
+    throw new TypeError('arg must be an array of [ee, events...] arrays')
+
+  var cleanups = []
+
+  for (var i = 0; i < stuff.length; i++) {
+    var arr = stuff[i]
+
+    if (!Array.isArray(arr) || arr.length < 2)
+      throw new TypeError('each array member must be [ee, events...]')
+
+    var ee = arr[0]
+
+    for (var j = 1; j < arr.length; j++) {
+      var event = arr[j]
+      var fn = listener(event, callback)
+
+      // listen to the event
+      ee.on(event, fn)
+      // push this listener to the list of cleanups
+      cleanups.push({
+        ee: ee,
+        event: event,
+        fn: fn,
+      })
+    }
+  }
+
+  function callback() {
+    cleanup()
+    done.apply(null, arguments)
+  }
+
+  function cleanup() {
+    var x
+    for (var i = 0; i < cleanups.length; i++) {
+      x = cleanups[i]
+      x.ee.removeListener(x.event, x.fn)
+    }
+  }
+
+  function thunk(fn) {
+    done = fn
+  }
+
+  thunk.cancel = cleanup
+
+  return thunk
+}
+
+/**
+ * Create the event listener.
+ * @private
+ */
+
+function listener(event, done) {
+  return function onevent(arg1) {
+    var args = new Array(arguments.length)
+    var ee = this
+    var err = event === 'error'
+      ? arg1
+      : null
+
+    // copy args to prevent arguments escaping scope
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i]
+    }
+
+    done(err, ee, event, args)
+  }
+}
+
+
+/***/ }),
+
+/***/ 16592:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * encodeurl
+ * Copyright(c) 2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = encodeUrl
+
+/**
+ * RegExp to match non-URL code points, *after* encoding (i.e. not including "%")
+ * and including invalid escape sequences.
+ * @private
+ */
+
+var ENCODE_CHARS_REGEXP = /(?:[^\x21\x25\x26-\x3B\x3D\x3F-\x5B\x5D\x5F\x61-\x7A\x7E]|%(?:[^0-9A-Fa-f]|[0-9A-Fa-f][^0-9A-Fa-f]|$))+/g
+
+/**
+ * RegExp to match unmatched surrogate pair.
+ * @private
+ */
+
+var UNMATCHED_SURROGATE_PAIR_REGEXP = /(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]|[\uD800-\uDBFF]([^\uDC00-\uDFFF]|$)/g
+
+/**
+ * String to replace unmatched surrogate pair with.
+ * @private
+ */
+
+var UNMATCHED_SURROGATE_PAIR_REPLACE = '$1\uFFFD$2'
+
+/**
+ * Encode a URL to a percent-encoded form, excluding already-encoded sequences.
+ *
+ * This function will take an already-encoded URL and encode all the non-URL
+ * code points. This function will not encode the "%" character unless it is
+ * not part of a valid sequence (`%20` will be left as-is, but `%foo` will
+ * be encoded as `%25foo`).
+ *
+ * This encode is meant to be "safe" and does not throw errors. It will try as
+ * hard as it can to properly encode the given URL, including replacing any raw,
+ * unpaired surrogate pairs with the Unicode replacement character prior to
+ * encoding.
+ *
+ * @param {string} url
+ * @return {string}
+ * @public
+ */
+
+function encodeUrl (url) {
+  return String(url)
+    .replace(UNMATCHED_SURROGATE_PAIR_REGEXP, UNMATCHED_SURROGATE_PAIR_REPLACE)
+    .replace(ENCODE_CHARS_REGEXP, encodeURI)
+}
+
+
+/***/ }),
+
+/***/ 23505:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var util = __nccwpck_require__(73837);
+var isArrayish = __nccwpck_require__(7604);
+
+var errorEx = function errorEx(name, properties) {
+	if (!name || name.constructor !== String) {
+		properties = name || {};
+		name = Error.name;
+	}
+
+	var errorExError = function ErrorEXError(message) {
+		if (!this) {
+			return new ErrorEXError(message);
+		}
+
+		message = message instanceof Error
+			? message.message
+			: (message || this.message);
+
+		Error.call(this, message);
+		Error.captureStackTrace(this, errorExError);
+
+		this.name = name;
+
+		Object.defineProperty(this, 'message', {
+			configurable: true,
+			enumerable: false,
+			get: function () {
+				var newMessage = message.split(/\r?\n/g);
+
+				for (var key in properties) {
+					if (!properties.hasOwnProperty(key)) {
+						continue;
+					}
+
+					var modifier = properties[key];
+
+					if ('message' in modifier) {
+						newMessage = modifier.message(this[key], newMessage) || newMessage;
+						if (!isArrayish(newMessage)) {
+							newMessage = [newMessage];
+						}
+					}
+				}
+
+				return newMessage.join('\n');
+			},
+			set: function (v) {
+				message = v;
+			}
+		});
+
+		var overwrittenStack = null;
+
+		var stackDescriptor = Object.getOwnPropertyDescriptor(this, 'stack');
+		var stackGetter = stackDescriptor.get;
+		var stackValue = stackDescriptor.value;
+		delete stackDescriptor.value;
+		delete stackDescriptor.writable;
+
+		stackDescriptor.set = function (newstack) {
+			overwrittenStack = newstack;
+		};
+
+		stackDescriptor.get = function () {
+			var stack = (overwrittenStack || ((stackGetter)
+				? stackGetter.call(this)
+				: stackValue)).split(/\r?\n+/g);
+
+			// starting in Node 7, the stack builder caches the message.
+			// just replace it.
+			if (!overwrittenStack) {
+				stack[0] = this.name + ': ' + this.message;
+			}
+
+			var lineCount = 1;
+			for (var key in properties) {
+				if (!properties.hasOwnProperty(key)) {
+					continue;
+				}
+
+				var modifier = properties[key];
+
+				if ('line' in modifier) {
+					var line = modifier.line(this[key]);
+					if (line) {
+						stack.splice(lineCount++, 0, '    ' + line);
+					}
+				}
+
+				if ('stack' in modifier) {
+					modifier.stack(this[key], stack);
+				}
+			}
+
+			return stack.join('\n');
+		};
+
+		Object.defineProperty(this, 'stack', stackDescriptor);
+	};
+
+	if (Object.setPrototypeOf) {
+		Object.setPrototypeOf(errorExError.prototype, Error.prototype);
+		Object.setPrototypeOf(errorExError, Error);
+	} else {
+		util.inherits(errorExError, Error);
+	}
+
+	return errorExError;
+};
+
+errorEx.append = function (str, def) {
+	return {
+		message: function (v, message) {
+			v = v || def;
+
+			if (v) {
+				message[0] += ' ' + str.replace('%s', v.toString());
+			}
+
+			return message;
+		}
+	};
+};
+
+errorEx.line = function (str, def) {
+	return {
+		line: function (v) {
+			v = v || def;
+
+			if (v) {
+				return str.replace('%s', v.toString());
+			}
+
+			return null;
+		}
+	};
+};
+
+module.exports = errorEx;
+
+
+/***/ }),
+
+/***/ 94070:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * escape-html
+ * Copyright(c) 2012-2013 TJ Holowaychuk
+ * Copyright(c) 2015 Andreas Lubbe
+ * Copyright(c) 2015 Tiancheng "Timothy" Gu
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var matchHtmlRegExp = /["'&<>]/;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = escapeHtml;
+
+/**
+ * Escape special characters in the given string of html.
+ *
+ * @param  {string} string The string to escape for inserting into HTML
+ * @return {string}
+ * @public
+ */
+
+function escapeHtml(string) {
+  var str = '' + string;
+  var match = matchHtmlRegExp.exec(str);
+
+  if (!match) {
+    return str;
+  }
+
+  var escape;
+  var html = '';
+  var index = 0;
+  var lastIndex = 0;
+
+  for (index = match.index; index < str.length; index++) {
+    switch (str.charCodeAt(index)) {
+      case 34: // "
+        escape = '&quot;';
+        break;
+      case 38: // &
+        escape = '&amp;';
+        break;
+      case 39: // '
+        escape = '&#39;';
+        break;
+      case 60: // <
+        escape = '&lt;';
+        break;
+      case 62: // >
+        escape = '&gt;';
+        break;
+      default:
+        continue;
+    }
+
+    if (lastIndex !== index) {
+      html += str.substring(lastIndex, index);
+    }
+
+    lastIndex = index + 1;
+    html += escape;
+  }
+
+  return lastIndex !== index
+    ? html + str.substring(lastIndex, index)
+    : html;
+}
+
+
+/***/ }),
+
+/***/ 69972:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * etag
+ * Copyright(c) 2014-2016 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = etag
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var crypto = __nccwpck_require__(6113)
+var Stats = (__nccwpck_require__(57147).Stats)
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var toString = Object.prototype.toString
+
+/**
+ * Generate an entity tag.
+ *
+ * @param {Buffer|string} entity
+ * @return {string}
+ * @private
+ */
+
+function entitytag (entity) {
+  if (entity.length === 0) {
+    // fast-path empty
+    return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"'
+  }
+
+  // compute hash of entity
+  var hash = crypto
+    .createHash('sha1')
+    .update(entity, 'utf8')
+    .digest('base64')
+    .substring(0, 27)
+
+  // compute length of entity
+  var len = typeof entity === 'string'
+    ? Buffer.byteLength(entity, 'utf8')
+    : entity.length
+
+  return '"' + len.toString(16) + '-' + hash + '"'
+}
+
+/**
+ * Create a simple ETag.
+ *
+ * @param {string|Buffer|Stats} entity
+ * @param {object} [options]
+ * @param {boolean} [options.weak]
+ * @return {String}
+ * @public
+ */
+
+function etag (entity, options) {
+  if (entity == null) {
+    throw new TypeError('argument entity is required')
+  }
+
+  // support fs.Stats object
+  var isStats = isstats(entity)
+  var weak = options && typeof options.weak === 'boolean'
+    ? options.weak
+    : isStats
+
+  // validate argument
+  if (!isStats && typeof entity !== 'string' && !Buffer.isBuffer(entity)) {
+    throw new TypeError('argument entity must be string, Buffer, or fs.Stats')
+  }
+
+  // generate entity tag
+  var tag = isStats
+    ? stattag(entity)
+    : entitytag(entity)
+
+  return weak
+    ? 'W/' + tag
+    : tag
+}
+
+/**
+ * Determine if object is a Stats object.
+ *
+ * @param {object} obj
+ * @return {boolean}
+ * @api private
+ */
+
+function isstats (obj) {
+  // genuine fs.Stats
+  if (typeof Stats === 'function' && obj instanceof Stats) {
+    return true
+  }
+
+  // quack quack
+  return obj && typeof obj === 'object' &&
+    'ctime' in obj && toString.call(obj.ctime) === '[object Date]' &&
+    'mtime' in obj && toString.call(obj.mtime) === '[object Date]' &&
+    'ino' in obj && typeof obj.ino === 'number' &&
+    'size' in obj && typeof obj.size === 'number'
+}
+
+/**
+ * Generate a tag for a stat.
+ *
+ * @param {object} stat
+ * @return {string}
+ * @private
+ */
+
+function stattag (stat) {
+  var mtime = stat.mtime.getTime().toString(16)
+  var size = stat.size.toString(16)
+
+  return '"' + size + '-' + mtime + '"'
+}
+
+
+/***/ }),
+
+/***/ 95449:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+/*
+ * Copyright (c) 2015, Yahoo Inc. All rights reserved.
+ * Copyrights licensed under the New BSD License.
+ * See the accompanying LICENSE file for terms.
+ */
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __generator = (this && this.__generator) || function (thisArg, body) {
+    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+    function verb(n) { return function (v) { return step([n, v]); }; }
+    function step(op) {
+        if (f) throw new TypeError("Generator is already executing.");
+        while (g && (g = 0, op[0] && (_ = 0)), _) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+                case 0: case 1: t = op; break;
+                case 4: _.label++; return { value: op[1], done: false };
+                case 5: _.label++; y = op[1]; op = [0]; continue;
+                case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                default:
+                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                    if (t[2]) _.ops.pop();
+                    _.trys.pop(); continue;
+            }
+            op = body.call(thisArg, _);
+        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+    }
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+var Handlebars = __nccwpck_require__(97492);
+var fs = __nccwpck_require__(77758);
+var path = __nccwpck_require__(71017);
+var util_1 = __nccwpck_require__(73837);
+var globSync = __nccwpck_require__(91957);
+var glob = (0, util_1.promisify)(globSync);
+var readFile = (0, util_1.promisify)(fs.readFile);
+// -----------------------------------------------------------------------------
+var defaultConfig = {
+    handlebars: Handlebars,
+    extname: ".handlebars",
+    encoding: "utf8",
+    layoutsDir: undefined,
+    partialsDir: undefined,
+    defaultLayout: "main",
+    helpers: undefined,
+    compilerOptions: undefined,
+    runtimeOptions: undefined,
+};
+var ExpressHandlebars = /** @class */ (function () {
+    function ExpressHandlebars(config) {
+        if (config === void 0) { config = {}; }
+        // Config properties with defaults.
+        Object.assign(this, defaultConfig, config);
+        // save given config to override other settings.
+        this.config = config;
+        // Express view engine integration point.
+        this.engine = this.renderView.bind(this);
+        // Normalize `extname`.
+        if (this.extname.charAt(0) !== ".") {
+            this.extname = "." + this.extname;
+        }
+        // Internal caches of compiled and precompiled templates.
+        this.compiled = {};
+        this.precompiled = {};
+        // Private internal file system cache.
+        this._fsCache = {};
+    }
+    ExpressHandlebars.prototype.getPartials = function (options) {
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var partialsDirs, dirs, partials, _i, dirs_1, dir, templates, namespace, rename, filePaths, getTemplateNameFn, _a, filePaths_1, filePath, partialName;
+            var _this = this;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        if (typeof this.partialsDir === "undefined") {
+                            return [2 /*return*/, {}];
+                        }
+                        partialsDirs = Array.isArray(this.partialsDir) ? this.partialsDir : [this.partialsDir];
+                        return [4 /*yield*/, Promise.all(partialsDirs.map(function (dir) { return __awaiter(_this, void 0, void 0, function () {
+                                var dirPath, dirTemplates, dirNamespace, dirRename, templates, _a;
+                                return __generator(this, function (_b) {
+                                    switch (_b.label) {
+                                        case 0:
+                                            // Support `partialsDir` collection with object entries that contain a
+                                            // templates promise and a namespace.
+                                            if (typeof dir === "string") {
+                                                dirPath = dir;
+                                            }
+                                            else if (typeof dir === "object") {
+                                                dirTemplates = dir.templates;
+                                                dirNamespace = dir.namespace;
+                                                dirRename = dir.rename;
+                                                dirPath = dir.dir;
+                                            }
+                                            // We must have some path to templates, or templates themselves.
+                                            if (!dirPath && !dirTemplates) {
+                                                throw new Error("A partials dir must be a string or config object");
+                                            }
+                                            _a = dirTemplates;
+                                            if (_a) return [3 /*break*/, 2];
+                                            return [4 /*yield*/, this.getTemplates(dirPath, options)];
+                                        case 1:
+                                            _a = (_b.sent());
+                                            _b.label = 2;
+                                        case 2:
+                                            templates = _a;
+                                            return [2 /*return*/, {
+                                                    templates: templates,
+                                                    namespace: dirNamespace,
+                                                    rename: dirRename,
+                                                }];
+                                    }
+                                });
+                            }); }))];
+                    case 1:
+                        dirs = _b.sent();
+                        partials = {};
+                        for (_i = 0, dirs_1 = dirs; _i < dirs_1.length; _i++) {
+                            dir = dirs_1[_i];
+                            templates = dir.templates, namespace = dir.namespace, rename = dir.rename;
+                            filePaths = Object.keys(templates);
+                            getTemplateNameFn = typeof rename === "function"
+                                ? rename
+                                : this._getTemplateName.bind(this);
+                            for (_a = 0, filePaths_1 = filePaths; _a < filePaths_1.length; _a++) {
+                                filePath = filePaths_1[_a];
+                                partialName = getTemplateNameFn(filePath, namespace);
+                                partials[partialName] = templates[filePath];
+                            }
+                        }
+                        return [2 /*return*/, partials];
+                }
+            });
+        });
+    };
+    ExpressHandlebars.prototype.getTemplate = function (filePath, options) {
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var encoding, cache, template, err_1;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        filePath = path.resolve(filePath);
+                        encoding = options.encoding || this.encoding;
+                        cache = options.precompiled ? this.precompiled : this.compiled;
+                        template = options.cache && cache[filePath];
+                        if (template) {
+                            return [2 /*return*/, template];
+                        }
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 3, , 4]);
+                        cache[filePath] = this._getFile(filePath, { cache: options.cache, encoding: encoding })
+                            .then(function (file) {
+                            var compileTemplate = (options.precompiled ? _this._precompileTemplate : _this._compileTemplate).bind(_this);
+                            return compileTemplate(file, _this.compilerOptions);
+                        });
+                        return [4 /*yield*/, cache[filePath]];
+                    case 2: return [2 /*return*/, _a.sent()];
+                    case 3:
+                        err_1 = _a.sent();
+                        delete cache[filePath];
+                        throw err_1;
+                    case 4: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    ExpressHandlebars.prototype.getTemplates = function (dirPath, options) {
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var cache, filePaths, templates, hash, i;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        cache = options.cache;
+                        return [4 /*yield*/, this._getDir(dirPath, { cache: cache })];
+                    case 1:
+                        filePaths = _a.sent();
+                        return [4 /*yield*/, Promise.all(filePaths.map(function (filePath) {
+                                return _this.getTemplate(path.join(dirPath, filePath), options);
+                            }))];
+                    case 2:
+                        templates = _a.sent();
+                        hash = {};
+                        for (i = 0; i < filePaths.length; i++) {
+                            hash[filePaths[i]] = templates[i];
+                        }
+                        return [2 /*return*/, hash];
+                }
+            });
+        });
+    };
+    ExpressHandlebars.prototype.render = function (filePath, context, options) {
+        if (context === void 0) { context = {}; }
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var encoding, _a, template, partials, helpers, runtimeOptions, data, html;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        encoding = options.encoding || this.encoding;
+                        return [4 /*yield*/, Promise.all([
+                                this.getTemplate(filePath, { cache: options.cache, encoding: encoding }),
+                                (options.partials || this.getPartials({ cache: options.cache, encoding: encoding })),
+                            ])];
+                    case 1:
+                        _a = _b.sent(), template = _a[0], partials = _a[1];
+                        helpers = __assign(__assign({}, this.helpers), options.helpers);
+                        runtimeOptions = __assign(__assign({}, this.runtimeOptions), options.runtimeOptions);
+                        data = __assign(__assign({}, options.data), { exphbs: __assign(__assign({}, options), { filePath: filePath, helpers: helpers, partials: partials, runtimeOptions: runtimeOptions }) });
+                        html = this._renderTemplate(template, context, __assign(__assign({}, runtimeOptions), { data: data, helpers: helpers, partials: partials }));
+                        return [2 /*return*/, html];
+                }
+            });
+        });
+    };
+    ExpressHandlebars.prototype.renderView = function (viewPath, options, callback) {
+        if (options === void 0) { options = {}; }
+        if (callback === void 0) { callback = null; }
+        return __awaiter(this, void 0, void 0, function () {
+            var context, promise, view, views, viewsPath, encoding, helpers, partials, _a, renderOptions, html, layoutPath, err_2;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        if (typeof options === "function") {
+                            callback = options;
+                            options = {};
+                        }
+                        context = options;
+                        promise = null;
+                        if (!callback) {
+                            promise = new Promise(function (resolve, reject) {
+                                callback = function (err, value) { err !== null ? reject(err) : resolve(value); };
+                            });
+                        }
+                        views = options.settings && options.settings.views;
+                        viewsPath = this._resolveViewsPath(views, viewPath);
+                        if (viewsPath) {
+                            view = this._getTemplateName(path.relative(viewsPath, viewPath));
+                            this.partialsDir = this.config.partialsDir || path.join(viewsPath, "partials/");
+                            this.layoutsDir = this.config.layoutsDir || path.join(viewsPath, "layouts/");
+                        }
+                        encoding = options.encoding || this.encoding;
+                        helpers = __assign(__assign({}, this.helpers), options.helpers);
+                        _a = [{}];
+                        return [4 /*yield*/, this.getPartials({ cache: options.cache, encoding: encoding })];
+                    case 1:
+                        partials = __assign.apply(void 0, [__assign.apply(void 0, _a.concat([_b.sent()])), (options.partials || {})]);
+                        renderOptions = {
+                            cache: options.cache,
+                            encoding: encoding,
+                            view: view,
+                            layout: "layout" in options ? options.layout : this.defaultLayout,
+                            data: options.data,
+                            helpers: helpers,
+                            partials: partials,
+                            runtimeOptions: options.runtimeOptions,
+                        };
+                        _b.label = 2;
+                    case 2:
+                        _b.trys.push([2, 6, , 7]);
+                        return [4 /*yield*/, this.render(viewPath, context, renderOptions)];
+                    case 3:
+                        html = _b.sent();
+                        layoutPath = this._resolveLayoutPath(renderOptions.layout);
+                        if (!layoutPath) return [3 /*break*/, 5];
+                        return [4 /*yield*/, this.render(layoutPath, __assign(__assign({}, context), { body: html }), __assign(__assign({}, renderOptions), { layout: undefined }))];
+                    case 4:
+                        html = _b.sent();
+                        _b.label = 5;
+                    case 5:
+                        callback(null, html);
+                        return [3 /*break*/, 7];
+                    case 6:
+                        err_2 = _b.sent();
+                        callback(err_2);
+                        return [3 /*break*/, 7];
+                    case 7: return [2 /*return*/, promise];
+                }
+            });
+        });
+    };
+    // -- Protected Hooks ----------------------------------------------------------
+    ExpressHandlebars.prototype._compileTemplate = function (template, options) {
+        if (options === void 0) { options = {}; }
+        return this.handlebars.compile(template.trim(), options);
+    };
+    ExpressHandlebars.prototype._precompileTemplate = function (template, options) {
+        if (options === void 0) { options = {}; }
+        return this.handlebars.precompile(template.trim(), options);
+    };
+    ExpressHandlebars.prototype._renderTemplate = function (template, context, options) {
+        if (context === void 0) { context = {}; }
+        if (options === void 0) { options = {}; }
+        return template(context, options).trim();
+    };
+    // -- Private ------------------------------------------------------------------
+    ExpressHandlebars.prototype._getDir = function (dirPath, options) {
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var cache, dir, pattern, err_3;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        dirPath = path.resolve(dirPath);
+                        cache = this._fsCache;
+                        dir = options.cache && cache[dirPath];
+                        if (!dir) return [3 /*break*/, 2];
+                        return [4 /*yield*/, dir];
+                    case 1: return [2 /*return*/, (_a.sent()).concat()];
+                    case 2:
+                        pattern = "**/*" + this.extname;
+                        _a.label = 3;
+                    case 3:
+                        _a.trys.push([3, 5, , 6]);
+                        dir = cache[dirPath] = glob(pattern, {
+                            cwd: dirPath,
+                            follow: true,
+                        });
+                        // @ts-ignore FIXME: not sure how to throw error in glob for test coverage
+                        if (options._throwTestError) {
+                            throw new Error("test");
+                        }
+                        return [4 /*yield*/, dir];
+                    case 4: return [2 /*return*/, (_a.sent()).concat()];
+                    case 5:
+                        err_3 = _a.sent();
+                        delete cache[dirPath];
+                        throw err_3;
+                    case 6: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    ExpressHandlebars.prototype._getFile = function (filePath, options) {
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var cache, encoding, file, err_4;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        filePath = path.resolve(filePath);
+                        cache = this._fsCache;
+                        encoding = options.encoding || this.encoding;
+                        file = options.cache && cache[filePath];
+                        if (file) {
+                            return [2 /*return*/, file];
+                        }
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 3, , 4]);
+                        cache[filePath] = readFile(filePath, { encoding: encoding || "utf8" });
+                        return [4 /*yield*/, cache[filePath]];
+                    case 2: return [2 /*return*/, _a.sent()];
+                    case 3:
+                        err_4 = _a.sent();
+                        delete cache[filePath];
+                        throw err_4;
+                    case 4: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    ExpressHandlebars.prototype._getTemplateName = function (filePath, namespace) {
+        if (namespace === void 0) { namespace = null; }
+        var name = filePath;
+        if (name.endsWith(this.extname)) {
+            name = name.substring(0, name.length - this.extname.length);
+        }
+        if (namespace) {
+            name = namespace + "/" + name;
+        }
+        return name;
+    };
+    ExpressHandlebars.prototype._resolveViewsPath = function (views, file) {
+        if (!Array.isArray(views)) {
+            return views;
+        }
+        var lastDir = path.resolve(file);
+        var dir = path.dirname(lastDir);
+        var absoluteViews = views.map(function (v) { return path.resolve(v); });
+        // find the closest parent
+        while (dir !== lastDir) {
+            var index = absoluteViews.indexOf(dir);
+            if (index >= 0) {
+                return views[index];
+            }
+            lastDir = dir;
+            dir = path.dirname(lastDir);
+        }
+        // cannot resolve view
+        return null;
+    };
+    ExpressHandlebars.prototype._resolveLayoutPath = function (layoutPath) {
+        if (!layoutPath) {
+            return null;
+        }
+        if (!path.extname(layoutPath)) {
+            layoutPath += this.extname;
+        }
+        return path.resolve(this.layoutsDir || "", layoutPath);
+    };
+    return ExpressHandlebars;
+}());
+exports["default"] = ExpressHandlebars;
+//# sourceMappingURL=express-handlebars.js.map
+
+/***/ }),
+
+/***/ 21670:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+/*
+ * Copyright (c) 2014, Yahoo Inc. All rights reserved.
+ * Copyrights licensed under the New BSD License.
+ * See the accompanying LICENSE file for terms.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.engine = exports.create = exports.ExpressHandlebars = void 0;
+var express_handlebars_1 = __nccwpck_require__(95449);
+exports.ExpressHandlebars = express_handlebars_1.default;
+function create(config) {
+    if (config === void 0) { config = {}; }
+    return new express_handlebars_1.default(config);
+}
+exports.create = create;
+function engine(config) {
+    if (config === void 0) { config = {}; }
+    return create(config).engine;
+}
+exports.engine = engine;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 71204:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+module.exports = __nccwpck_require__(22587);
+
+
+/***/ }),
+
+/***/ 313:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var finalhandler = __nccwpck_require__(30810);
+var Router = __nccwpck_require__(24963);
+var methods = __nccwpck_require__(58752);
+var middleware = __nccwpck_require__(92636);
+var query = __nccwpck_require__(79768);
+var debug = __nccwpck_require__(52529)('express:application');
+var View = __nccwpck_require__(99209);
+var http = __nccwpck_require__(13685);
+var compileETag = (__nccwpck_require__(53561).compileETag);
+var compileQueryParser = (__nccwpck_require__(53561).compileQueryParser);
+var compileTrust = (__nccwpck_require__(53561).compileTrust);
+var deprecate = __nccwpck_require__(18883)('express');
+var flatten = __nccwpck_require__(62003);
+var merge = __nccwpck_require__(20169);
+var resolve = (__nccwpck_require__(71017).resolve);
+var setPrototypeOf = __nccwpck_require__(40414)
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var hasOwnProperty = Object.prototype.hasOwnProperty
+var slice = Array.prototype.slice;
+
+/**
+ * Application prototype.
+ */
+
+var app = exports = module.exports = {};
+
+/**
+ * Variable for trust proxy inheritance back-compat
+ * @private
+ */
+
+var trustProxyDefaultSymbol = '@@symbol:trust_proxy_default';
+
+/**
+ * Initialize the server.
+ *
+ *   - setup default configuration
+ *   - setup default middleware
+ *   - setup route reflection methods
+ *
+ * @private
+ */
+
+app.init = function init() {
+  this.cache = {};
+  this.engines = {};
+  this.settings = {};
+
+  this.defaultConfiguration();
+};
+
+/**
+ * Initialize application configuration.
+ * @private
+ */
+
+app.defaultConfiguration = function defaultConfiguration() {
+  var env = process.env.NODE_ENV || 'development';
+
+  // default settings
+  this.enable('x-powered-by');
+  this.set('etag', 'weak');
+  this.set('env', env);
+  this.set('query parser', 'extended');
+  this.set('subdomain offset', 2);
+  this.set('trust proxy', false);
+
+  // trust proxy inherit back-compat
+  Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
+    configurable: true,
+    value: true
+  });
+
+  debug('booting in %s mode', env);
+
+  this.on('mount', function onmount(parent) {
+    // inherit trust proxy
+    if (this.settings[trustProxyDefaultSymbol] === true
+      && typeof parent.settings['trust proxy fn'] === 'function') {
+      delete this.settings['trust proxy'];
+      delete this.settings['trust proxy fn'];
+    }
+
+    // inherit protos
+    setPrototypeOf(this.request, parent.request)
+    setPrototypeOf(this.response, parent.response)
+    setPrototypeOf(this.engines, parent.engines)
+    setPrototypeOf(this.settings, parent.settings)
+  });
+
+  // setup locals
+  this.locals = Object.create(null);
+
+  // top-most app is mounted at /
+  this.mountpath = '/';
+
+  // default locals
+  this.locals.settings = this.settings;
+
+  // default configuration
+  this.set('view', View);
+  this.set('views', resolve('views'));
+  this.set('jsonp callback name', 'callback');
+
+  if (env === 'production') {
+    this.enable('view cache');
+  }
+
+  Object.defineProperty(this, 'router', {
+    get: function() {
+      throw new Error('\'app.router\' is deprecated!\nPlease see the 3.x to 4.x migration guide for details on how to update your app.');
+    }
+  });
+};
+
+/**
+ * lazily adds the base router if it has not yet been added.
+ *
+ * We cannot add the base router in the defaultConfiguration because
+ * it reads app settings which might be set after that has run.
+ *
+ * @private
+ */
+app.lazyrouter = function lazyrouter() {
+  if (!this._router) {
+    this._router = new Router({
+      caseSensitive: this.enabled('case sensitive routing'),
+      strict: this.enabled('strict routing')
+    });
+
+    this._router.use(query(this.get('query parser fn')));
+    this._router.use(middleware.init(this));
+  }
+};
+
+/**
+ * Dispatch a req, res pair into the application. Starts pipeline processing.
+ *
+ * If no callback is provided, then default error handlers will respond
+ * in the event of an error bubbling through the stack.
+ *
+ * @private
+ */
+
+app.handle = function handle(req, res, callback) {
+  var router = this._router;
+
+  // final handler
+  var done = callback || finalhandler(req, res, {
+    env: this.get('env'),
+    onerror: logerror.bind(this)
+  });
+
+  // no routes
+  if (!router) {
+    debug('no routes defined on app');
+    done();
+    return;
+  }
+
+  router.handle(req, res, done);
+};
+
+/**
+ * Proxy `Router#use()` to add middleware to the app router.
+ * See Router#use() documentation for details.
+ *
+ * If the _fn_ parameter is an express app, then it will be
+ * mounted at the _route_ specified.
+ *
+ * @public
+ */
+
+app.use = function use(fn) {
+  var offset = 0;
+  var path = '/';
+
+  // default path to '/'
+  // disambiguate app.use([fn])
+  if (typeof fn !== 'function') {
+    var arg = fn;
+
+    while (Array.isArray(arg) && arg.length !== 0) {
+      arg = arg[0];
+    }
+
+    // first arg is the path
+    if (typeof arg !== 'function') {
+      offset = 1;
+      path = fn;
+    }
+  }
+
+  var fns = flatten(slice.call(arguments, offset));
+
+  if (fns.length === 0) {
+    throw new TypeError('app.use() requires a middleware function')
+  }
+
+  // setup router
+  this.lazyrouter();
+  var router = this._router;
+
+  fns.forEach(function (fn) {
+    // non-express app
+    if (!fn || !fn.handle || !fn.set) {
+      return router.use(path, fn);
+    }
+
+    debug('.use app under %s', path);
+    fn.mountpath = path;
+    fn.parent = this;
+
+    // restore .app property on req and res
+    router.use(path, function mounted_app(req, res, next) {
+      var orig = req.app;
+      fn.handle(req, res, function (err) {
+        setPrototypeOf(req, orig.request)
+        setPrototypeOf(res, orig.response)
+        next(err);
+      });
+    });
+
+    // mounted an app
+    fn.emit('mount', this);
+  }, this);
+
+  return this;
+};
+
+/**
+ * Proxy to the app `Router#route()`
+ * Returns a new `Route` instance for the _path_.
+ *
+ * Routes are isolated middleware stacks for specific paths.
+ * See the Route api docs for details.
+ *
+ * @public
+ */
+
+app.route = function route(path) {
+  this.lazyrouter();
+  return this._router.route(path);
+};
+
+/**
+ * Register the given template engine callback `fn`
+ * as `ext`.
+ *
+ * By default will `require()` the engine based on the
+ * file extension. For example if you try to render
+ * a "foo.ejs" file Express will invoke the following internally:
+ *
+ *     app.engine('ejs', require('ejs').__express);
+ *
+ * For engines that do not provide `.__express` out of the box,
+ * or if you wish to "map" a different extension to the template engine
+ * you may use this method. For example mapping the EJS template engine to
+ * ".html" files:
+ *
+ *     app.engine('html', require('ejs').renderFile);
+ *
+ * In this case EJS provides a `.renderFile()` method with
+ * the same signature that Express expects: `(path, options, callback)`,
+ * though note that it aliases this method as `ejs.__express` internally
+ * so if you're using ".ejs" extensions you don't need to do anything.
+ *
+ * Some template engines do not follow this convention, the
+ * [Consolidate.js](https://github.com/tj/consolidate.js)
+ * library was created to map all of node's popular template
+ * engines to follow this convention, thus allowing them to
+ * work seamlessly within Express.
+ *
+ * @param {String} ext
+ * @param {Function} fn
+ * @return {app} for chaining
+ * @public
+ */
+
+app.engine = function engine(ext, fn) {
+  if (typeof fn !== 'function') {
+    throw new Error('callback function required');
+  }
+
+  // get file extension
+  var extension = ext[0] !== '.'
+    ? '.' + ext
+    : ext;
+
+  // store engine
+  this.engines[extension] = fn;
+
+  return this;
+};
+
+/**
+ * Proxy to `Router#param()` with one added api feature. The _name_ parameter
+ * can be an array of names.
+ *
+ * See the Router#param() docs for more details.
+ *
+ * @param {String|Array} name
+ * @param {Function} fn
+ * @return {app} for chaining
+ * @public
+ */
+
+app.param = function param(name, fn) {
+  this.lazyrouter();
+
+  if (Array.isArray(name)) {
+    for (var i = 0; i < name.length; i++) {
+      this.param(name[i], fn);
+    }
+
+    return this;
+  }
+
+  this._router.param(name, fn);
+
+  return this;
+};
+
+/**
+ * Assign `setting` to `val`, or return `setting`'s value.
+ *
+ *    app.set('foo', 'bar');
+ *    app.set('foo');
+ *    // => "bar"
+ *
+ * Mounted servers inherit their parent server's settings.
+ *
+ * @param {String} setting
+ * @param {*} [val]
+ * @return {Server} for chaining
+ * @public
+ */
+
+app.set = function set(setting, val) {
+  if (arguments.length === 1) {
+    // app.get(setting)
+    var settings = this.settings
+
+    while (settings && settings !== Object.prototype) {
+      if (hasOwnProperty.call(settings, setting)) {
+        return settings[setting]
+      }
+
+      settings = Object.getPrototypeOf(settings)
+    }
+
+    return undefined
+  }
+
+  debug('set "%s" to %o', setting, val);
+
+  // set value
+  this.settings[setting] = val;
+
+  // trigger matched settings
+  switch (setting) {
+    case 'etag':
+      this.set('etag fn', compileETag(val));
+      break;
+    case 'query parser':
+      this.set('query parser fn', compileQueryParser(val));
+      break;
+    case 'trust proxy':
+      this.set('trust proxy fn', compileTrust(val));
+
+      // trust proxy inherit back-compat
+      Object.defineProperty(this.settings, trustProxyDefaultSymbol, {
+        configurable: true,
+        value: false
+      });
+
+      break;
+  }
+
+  return this;
+};
+
+/**
+ * Return the app's absolute pathname
+ * based on the parent(s) that have
+ * mounted it.
+ *
+ * For example if the application was
+ * mounted as "/admin", which itself
+ * was mounted as "/blog" then the
+ * return value would be "/blog/admin".
+ *
+ * @return {String}
+ * @private
+ */
+
+app.path = function path() {
+  return this.parent
+    ? this.parent.path() + this.mountpath
+    : '';
+};
+
+/**
+ * Check if `setting` is enabled (truthy).
+ *
+ *    app.enabled('foo')
+ *    // => false
+ *
+ *    app.enable('foo')
+ *    app.enabled('foo')
+ *    // => true
+ *
+ * @param {String} setting
+ * @return {Boolean}
+ * @public
+ */
+
+app.enabled = function enabled(setting) {
+  return Boolean(this.set(setting));
+};
+
+/**
+ * Check if `setting` is disabled.
+ *
+ *    app.disabled('foo')
+ *    // => true
+ *
+ *    app.enable('foo')
+ *    app.disabled('foo')
+ *    // => false
+ *
+ * @param {String} setting
+ * @return {Boolean}
+ * @public
+ */
+
+app.disabled = function disabled(setting) {
+  return !this.set(setting);
+};
+
+/**
+ * Enable `setting`.
+ *
+ * @param {String} setting
+ * @return {app} for chaining
+ * @public
+ */
+
+app.enable = function enable(setting) {
+  return this.set(setting, true);
+};
+
+/**
+ * Disable `setting`.
+ *
+ * @param {String} setting
+ * @return {app} for chaining
+ * @public
+ */
+
+app.disable = function disable(setting) {
+  return this.set(setting, false);
+};
+
+/**
+ * Delegate `.VERB(...)` calls to `router.VERB(...)`.
+ */
+
+methods.forEach(function(method){
+  app[method] = function(path){
+    if (method === 'get' && arguments.length === 1) {
+      // app.get(setting)
+      return this.set(path);
+    }
+
+    this.lazyrouter();
+
+    var route = this._router.route(path);
+    route[method].apply(route, slice.call(arguments, 1));
+    return this;
+  };
+});
+
+/**
+ * Special-cased "all" method, applying the given route `path`,
+ * middleware, and callback to _every_ HTTP method.
+ *
+ * @param {String} path
+ * @param {Function} ...
+ * @return {app} for chaining
+ * @public
+ */
+
+app.all = function all(path) {
+  this.lazyrouter();
+
+  var route = this._router.route(path);
+  var args = slice.call(arguments, 1);
+
+  for (var i = 0; i < methods.length; i++) {
+    route[methods[i]].apply(route, args);
+  }
+
+  return this;
+};
+
+// del -> delete alias
+
+app.del = deprecate.function(app.delete, 'app.del: Use app.delete instead');
+
+/**
+ * Render the given view `name` name with `options`
+ * and a callback accepting an error and the
+ * rendered template string.
+ *
+ * Example:
+ *
+ *    app.render('email', { name: 'Tobi' }, function(err, html){
+ *      // ...
+ *    })
+ *
+ * @param {String} name
+ * @param {Object|Function} options or fn
+ * @param {Function} callback
+ * @public
+ */
+
+app.render = function render(name, options, callback) {
+  var cache = this.cache;
+  var done = callback;
+  var engines = this.engines;
+  var opts = options;
+  var renderOptions = {};
+  var view;
+
+  // support callback function as second arg
+  if (typeof options === 'function') {
+    done = options;
+    opts = {};
+  }
+
+  // merge app.locals
+  merge(renderOptions, this.locals);
+
+  // merge options._locals
+  if (opts._locals) {
+    merge(renderOptions, opts._locals);
+  }
+
+  // merge options
+  merge(renderOptions, opts);
+
+  // set .cache unless explicitly provided
+  if (renderOptions.cache == null) {
+    renderOptions.cache = this.enabled('view cache');
+  }
+
+  // primed cache
+  if (renderOptions.cache) {
+    view = cache[name];
+  }
+
+  // view
+  if (!view) {
+    var View = this.get('view');
+
+    view = new View(name, {
+      defaultEngine: this.get('view engine'),
+      root: this.get('views'),
+      engines: engines
+    });
+
+    if (!view.path) {
+      var dirs = Array.isArray(view.root) && view.root.length > 1
+        ? 'directories "' + view.root.slice(0, -1).join('", "') + '" or "' + view.root[view.root.length - 1] + '"'
+        : 'directory "' + view.root + '"'
+      var err = new Error('Failed to lookup view "' + name + '" in views ' + dirs);
+      err.view = view;
+      return done(err);
+    }
+
+    // prime the cache
+    if (renderOptions.cache) {
+      cache[name] = view;
+    }
+  }
+
+  // render
+  tryRender(view, renderOptions, done);
+};
+
+/**
+ * Listen for connections.
+ *
+ * A node `http.Server` is returned, with this
+ * application (which is a `Function`) as its
+ * callback. If you wish to create both an HTTP
+ * and HTTPS server you may do so with the "http"
+ * and "https" modules as shown here:
+ *
+ *    var http = require('http')
