@@ -59974,3 +59974,2240 @@ function createHtmlDocument (message) {
 }
 
 /**
+ * Module exports.
+ * @public
+ */
+
+module.exports = finalhandler
+
+/**
+ * Create a function to handle the final response.
+ *
+ * @param {Request} req
+ * @param {Response} res
+ * @param {Object} [options]
+ * @return {Function}
+ * @public
+ */
+
+function finalhandler (req, res, options) {
+  var opts = options || {}
+
+  // get environment
+  var env = opts.env || process.env.NODE_ENV || 'development'
+
+  // get error callback
+  var onerror = opts.onerror
+
+  return function (err) {
+    var headers
+    var msg
+    var status
+
+    // ignore 404 on in-flight response
+    if (!err && headersSent(res)) {
+      debug('cannot 404 after headers sent')
+      return
+    }
+
+    // unhandled error
+    if (err) {
+      // respect status code from error
+      status = getErrorStatusCode(err)
+
+      if (status === undefined) {
+        // fallback to status code on response
+        status = getResponseStatusCode(res)
+      } else {
+        // respect headers from error
+        headers = getErrorHeaders(err)
+      }
+
+      // get error message
+      msg = getErrorMessage(err, status, env)
+    } else {
+      // not found
+      status = 404
+      msg = 'Cannot ' + req.method + ' ' + encodeUrl(getResourceName(req))
+    }
+
+    debug('default %s', status)
+
+    // schedule onerror callback
+    if (err && onerror) {
+      defer(onerror, err, req, res)
+    }
+
+    // cannot actually respond
+    if (headersSent(res)) {
+      debug('cannot %d after headers sent', status)
+      req.socket.destroy()
+      return
+    }
+
+    // send response
+    send(req, res, status, headers, msg)
+  }
+}
+
+/**
+ * Get headers from Error object.
+ *
+ * @param {Error} err
+ * @return {object}
+ * @private
+ */
+
+function getErrorHeaders (err) {
+  if (!err.headers || typeof err.headers !== 'object') {
+    return undefined
+  }
+
+  var headers = Object.create(null)
+  var keys = Object.keys(err.headers)
+
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i]
+    headers[key] = err.headers[key]
+  }
+
+  return headers
+}
+
+/**
+ * Get message from Error object, fallback to status message.
+ *
+ * @param {Error} err
+ * @param {number} status
+ * @param {string} env
+ * @return {string}
+ * @private
+ */
+
+function getErrorMessage (err, status, env) {
+  var msg
+
+  if (env !== 'production') {
+    // use err.stack, which typically includes err.message
+    msg = err.stack
+
+    // fallback to err.toString() when possible
+    if (!msg && typeof err.toString === 'function') {
+      msg = err.toString()
+    }
+  }
+
+  return msg || statuses.message[status]
+}
+
+/**
+ * Get status code from Error object.
+ *
+ * @param {Error} err
+ * @return {number}
+ * @private
+ */
+
+function getErrorStatusCode (err) {
+  // check err.status
+  if (typeof err.status === 'number' && err.status >= 400 && err.status < 600) {
+    return err.status
+  }
+
+  // check err.statusCode
+  if (typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600) {
+    return err.statusCode
+  }
+
+  return undefined
+}
+
+/**
+ * Get resource name for the request.
+ *
+ * This is typically just the original pathname of the request
+ * but will fallback to "resource" is that cannot be determined.
+ *
+ * @param {IncomingMessage} req
+ * @return {string}
+ * @private
+ */
+
+function getResourceName (req) {
+  try {
+    return parseUrl.original(req).pathname
+  } catch (e) {
+    return 'resource'
+  }
+}
+
+/**
+ * Get status code from response.
+ *
+ * @param {OutgoingMessage} res
+ * @return {number}
+ * @private
+ */
+
+function getResponseStatusCode (res) {
+  var status = res.statusCode
+
+  // default status code to 500 if outside valid range
+  if (typeof status !== 'number' || status < 400 || status > 599) {
+    status = 500
+  }
+
+  return status
+}
+
+/**
+ * Determine if the response headers have been sent.
+ *
+ * @param {object} res
+ * @returns {boolean}
+ * @private
+ */
+
+function headersSent (res) {
+  return typeof res.headersSent !== 'boolean'
+    ? Boolean(res._header)
+    : res.headersSent
+}
+
+/**
+ * Send response.
+ *
+ * @param {IncomingMessage} req
+ * @param {OutgoingMessage} res
+ * @param {number} status
+ * @param {object} headers
+ * @param {string} message
+ * @private
+ */
+
+function send (req, res, status, headers, message) {
+  function write () {
+    // response body
+    var body = createHtmlDocument(message)
+
+    // response status
+    res.statusCode = status
+    res.statusMessage = statuses.message[status]
+
+    // remove any content headers
+    res.removeHeader('Content-Encoding')
+    res.removeHeader('Content-Language')
+    res.removeHeader('Content-Range')
+
+    // response headers
+    setHeaders(res, headers)
+
+    // security headers
+    res.setHeader('Content-Security-Policy', "default-src 'none'")
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+
+    // standard headers
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.setHeader('Content-Length', Buffer.byteLength(body, 'utf8'))
+
+    if (req.method === 'HEAD') {
+      res.end()
+      return
+    }
+
+    res.end(body, 'utf8')
+  }
+
+  if (isFinished(req)) {
+    write()
+    return
+  }
+
+  // unpipe everything from the request
+  unpipe(req)
+
+  // flush the request
+  onFinished(req, write)
+  req.resume()
+}
+
+/**
+ * Set response headers from an object.
+ *
+ * @param {OutgoingMessage} res
+ * @param {object} headers
+ * @private
+ */
+
+function setHeaders (res, headers) {
+  if (!headers) {
+    return
+  }
+
+  var keys = Object.keys(headers)
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i]
+    res.setHeader(key, headers[key])
+  }
+}
+
+
+/***/ }),
+
+/***/ 56401:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * This is the web browser implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = __nccwpck_require__(60545);
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+exports.storage = 'undefined' != typeof chrome
+               && 'undefined' != typeof chrome.storage
+                  ? chrome.storage.local
+                  : localstorage();
+
+/**
+ * Colors.
+ */
+
+exports.colors = [
+  'lightseagreen',
+  'forestgreen',
+  'goldenrod',
+  'dodgerblue',
+  'darkorchid',
+  'crimson'
+];
+
+/**
+ * Currently only WebKit-based Web Inspectors, Firefox >= v31,
+ * and the Firebug extension (any Firefox version) are known
+ * to support "%c" CSS customizations.
+ *
+ * TODO: add a `localStorage` variable to explicitly enable/disable colors
+ */
+
+function useColors() {
+  // NB: In an Electron preload script, document will be defined but not fully
+  // initialized. Since we know we're in Chrome, we'll just detect this case
+  // explicitly
+  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+    return true;
+  }
+
+  // is webkit? http://stackoverflow.com/a/16459606/376773
+  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
+    // is firebug? http://stackoverflow.com/a/398120/376773
+    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
+    // is firefox >= v31?
+    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
+    // double check webkit in userAgent just in case we are in a worker
+    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
+}
+
+/**
+ * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
+ */
+
+exports.formatters.j = function(v) {
+  try {
+    return JSON.stringify(v);
+  } catch (err) {
+    return '[UnexpectedJSONParseError]: ' + err.message;
+  }
+};
+
+
+/**
+ * Colorize log arguments if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+  var useColors = this.useColors;
+
+  args[0] = (useColors ? '%c' : '')
+    + this.namespace
+    + (useColors ? ' %c' : ' ')
+    + args[0]
+    + (useColors ? '%c ' : ' ')
+    + '+' + exports.humanize(this.diff);
+
+  if (!useColors) return;
+
+  var c = 'color: ' + this.color;
+  args.splice(1, 0, c, 'color: inherit')
+
+  // the final "%c" is somewhat tricky, because there could be other
+  // arguments passed either before or after the %c, so we need to
+  // figure out the correct index to insert the CSS into
+  var index = 0;
+  var lastC = 0;
+  args[0].replace(/%[a-zA-Z%]/g, function(match) {
+    if ('%%' === match) return;
+    index++;
+    if ('%c' === match) {
+      // we only are interested in the *last* %c
+      // (the user may have provided their own)
+      lastC = index;
+    }
+  });
+
+  args.splice(lastC, 0, c);
+}
+
+/**
+ * Invokes `console.log()` when available.
+ * No-op when `console.log` is not a "function".
+ *
+ * @api public
+ */
+
+function log() {
+  // this hackery is required for IE8/9, where
+  // the `console.log` function doesn't have 'apply'
+  return 'object' === typeof console
+    && console.log
+    && Function.prototype.apply.call(console.log, console, arguments);
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+
+function save(namespaces) {
+  try {
+    if (null == namespaces) {
+      exports.storage.removeItem('debug');
+    } else {
+      exports.storage.debug = namespaces;
+    }
+  } catch(e) {}
+}
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+
+function load() {
+  var r;
+  try {
+    r = exports.storage.debug;
+  } catch(e) {}
+
+  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
+  if (!r && typeof process !== 'undefined' && 'env' in process) {
+    r = process.env.DEBUG;
+  }
+
+  return r;
+}
+
+/**
+ * Enable namespaces listed in `localStorage.debug` initially.
+ */
+
+exports.enable(load());
+
+/**
+ * Localstorage attempts to return the localstorage.
+ *
+ * This is necessary because safari throws
+ * when a user disables cookies/localstorage
+ * and you attempt to access it.
+ *
+ * @return {LocalStorage}
+ * @api private
+ */
+
+function localstorage() {
+  try {
+    return window.localStorage;
+  } catch (e) {}
+}
+
+
+/***/ }),
+
+/***/ 60545:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+
+/**
+ * This is the common logic for both the Node.js and web browser
+ * implementations of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+exports.coerce = coerce;
+exports.disable = disable;
+exports.enable = enable;
+exports.enabled = enabled;
+exports.humanize = __nccwpck_require__(80761);
+
+/**
+ * The currently active debug mode names, and names to skip.
+ */
+
+exports.names = [];
+exports.skips = [];
+
+/**
+ * Map of special "%n" handling functions, for the debug "format" argument.
+ *
+ * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
+ */
+
+exports.formatters = {};
+
+/**
+ * Previous log timestamp.
+ */
+
+var prevTime;
+
+/**
+ * Select a color.
+ * @param {String} namespace
+ * @return {Number}
+ * @api private
+ */
+
+function selectColor(namespace) {
+  var hash = 0, i;
+
+  for (i in namespace) {
+    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+
+  return exports.colors[Math.abs(hash) % exports.colors.length];
+}
+
+/**
+ * Create a debugger with the given `namespace`.
+ *
+ * @param {String} namespace
+ * @return {Function}
+ * @api public
+ */
+
+function createDebug(namespace) {
+
+  function debug() {
+    // disabled?
+    if (!debug.enabled) return;
+
+    var self = debug;
+
+    // set `diff` timestamp
+    var curr = +new Date();
+    var ms = curr - (prevTime || curr);
+    self.diff = ms;
+    self.prev = prevTime;
+    self.curr = curr;
+    prevTime = curr;
+
+    // turn the `arguments` into a proper Array
+    var args = new Array(arguments.length);
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i];
+    }
+
+    args[0] = exports.coerce(args[0]);
+
+    if ('string' !== typeof args[0]) {
+      // anything else let's inspect with %O
+      args.unshift('%O');
+    }
+
+    // apply any `formatters` transformations
+    var index = 0;
+    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+      // if we encounter an escaped % then don't increase the array index
+      if (match === '%%') return match;
+      index++;
+      var formatter = exports.formatters[format];
+      if ('function' === typeof formatter) {
+        var val = args[index];
+        match = formatter.call(self, val);
+
+        // now we need to remove `args[index]` since it's inlined in the `format`
+        args.splice(index, 1);
+        index--;
+      }
+      return match;
+    });
+
+    // apply env-specific formatting (colors, etc.)
+    exports.formatArgs.call(self, args);
+
+    var logFn = debug.log || exports.log || console.log.bind(console);
+    logFn.apply(self, args);
+  }
+
+  debug.namespace = namespace;
+  debug.enabled = exports.enabled(namespace);
+  debug.useColors = exports.useColors();
+  debug.color = selectColor(namespace);
+
+  // env-specific initialization logic for debug instances
+  if ('function' === typeof exports.init) {
+    exports.init(debug);
+  }
+
+  return debug;
+}
+
+/**
+ * Enables a debug mode by namespaces. This can include modes
+ * separated by a colon and wildcards.
+ *
+ * @param {String} namespaces
+ * @api public
+ */
+
+function enable(namespaces) {
+  exports.save(namespaces);
+
+  exports.names = [];
+  exports.skips = [];
+
+  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
+  var len = split.length;
+
+  for (var i = 0; i < len; i++) {
+    if (!split[i]) continue; // ignore empty strings
+    namespaces = split[i].replace(/\*/g, '.*?');
+    if (namespaces[0] === '-') {
+      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+    } else {
+      exports.names.push(new RegExp('^' + namespaces + '$'));
+    }
+  }
+}
+
+/**
+ * Disable debug output.
+ *
+ * @api public
+ */
+
+function disable() {
+  exports.enable('');
+}
+
+/**
+ * Returns true if the given mode name is enabled, false otherwise.
+ *
+ * @param {String} name
+ * @return {Boolean}
+ * @api public
+ */
+
+function enabled(name) {
+  var i, len;
+  for (i = 0, len = exports.skips.length; i < len; i++) {
+    if (exports.skips[i].test(name)) {
+      return false;
+    }
+  }
+  for (i = 0, len = exports.names.length; i < len; i++) {
+    if (exports.names[i].test(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Coerce `val`.
+ *
+ * @param {Mixed} val
+ * @return {Mixed}
+ * @api private
+ */
+
+function coerce(val) {
+  if (val instanceof Error) return val.stack || val.message;
+  return val;
+}
+
+
+/***/ }),
+
+/***/ 65612:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/**
+ * Detect Electron renderer process, which is node, but we should
+ * treat as a browser.
+ */
+
+if (typeof process !== 'undefined' && process.type === 'renderer') {
+  module.exports = __nccwpck_require__(56401);
+} else {
+  module.exports = __nccwpck_require__(4706);
+}
+
+
+/***/ }),
+
+/***/ 4706:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * Module dependencies.
+ */
+
+var tty = __nccwpck_require__(76224);
+var util = __nccwpck_require__(73837);
+
+/**
+ * This is the Node.js implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = __nccwpck_require__(60545);
+exports.init = init;
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+
+/**
+ * Colors.
+ */
+
+exports.colors = [6, 2, 3, 4, 5, 1];
+
+/**
+ * Build up the default `inspectOpts` object from the environment variables.
+ *
+ *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+ */
+
+exports.inspectOpts = Object.keys(process.env).filter(function (key) {
+  return /^debug_/i.test(key);
+}).reduce(function (obj, key) {
+  // camel-case
+  var prop = key
+    .substring(6)
+    .toLowerCase()
+    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
+
+  // coerce string value into JS value
+  var val = process.env[key];
+  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+  else if (val === 'null') val = null;
+  else val = Number(val);
+
+  obj[prop] = val;
+  return obj;
+}, {});
+
+/**
+ * The file descriptor to write the `debug()` calls to.
+ * Set the `DEBUG_FD` env variable to override with another value. i.e.:
+ *
+ *   $ DEBUG_FD=3 node script.js 3>debug.log
+ */
+
+var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+
+if (1 !== fd && 2 !== fd) {
+  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')()
+}
+
+var stream = 1 === fd ? process.stdout :
+             2 === fd ? process.stderr :
+             createWritableStdioStream(fd);
+
+/**
+ * Is stdout a TTY? Colored output is enabled when `true`.
+ */
+
+function useColors() {
+  return 'colors' in exports.inspectOpts
+    ? Boolean(exports.inspectOpts.colors)
+    : tty.isatty(fd);
+}
+
+/**
+ * Map %o to `util.inspect()`, all on a single line.
+ */
+
+exports.formatters.o = function(v) {
+  this.inspectOpts.colors = this.useColors;
+  return util.inspect(v, this.inspectOpts)
+    .split('\n').map(function(str) {
+      return str.trim()
+    }).join(' ');
+};
+
+/**
+ * Map %o to `util.inspect()`, allowing multiple lines if needed.
+ */
+
+exports.formatters.O = function(v) {
+  this.inspectOpts.colors = this.useColors;
+  return util.inspect(v, this.inspectOpts);
+};
+
+/**
+ * Adds ANSI color escape codes if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+  var name = this.namespace;
+  var useColors = this.useColors;
+
+  if (useColors) {
+    var c = this.color;
+    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
+
+    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
+  } else {
+    args[0] = new Date().toUTCString()
+      + ' ' + name + ' ' + args[0];
+  }
+}
+
+/**
+ * Invokes `util.format()` with the specified arguments and writes to `stream`.
+ */
+
+function log() {
+  return stream.write(util.format.apply(util, arguments) + '\n');
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+
+function save(namespaces) {
+  if (null == namespaces) {
+    // If you set a process.env field to null or undefined, it gets cast to the
+    // string 'null' or 'undefined'. Just delete instead.
+    delete process.env.DEBUG;
+  } else {
+    process.env.DEBUG = namespaces;
+  }
+}
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+
+function load() {
+  return process.env.DEBUG;
+}
+
+/**
+ * Copied from `node/src/node.js`.
+ *
+ * XXX: It's lame that node doesn't expose this API out-of-the-box. It also
+ * relies on the undocumented `tty_wrap.guessHandleType()` which is also lame.
+ */
+
+function createWritableStdioStream (fd) {
+  var stream;
+  var tty_wrap = process.binding('tty_wrap');
+
+  // Note stream._type is used for test-module-load-list.js
+
+  switch (tty_wrap.guessHandleType(fd)) {
+    case 'TTY':
+      stream = new tty.WriteStream(fd);
+      stream._type = 'tty';
+
+      // Hack to have stream not keep the event loop alive.
+      // See https://github.com/joyent/node/issues/1726
+      if (stream._handle && stream._handle.unref) {
+        stream._handle.unref();
+      }
+      break;
+
+    case 'FILE':
+      var fs = __nccwpck_require__(57147);
+      stream = new fs.SyncWriteStream(fd, { autoClose: false });
+      stream._type = 'fs';
+      break;
+
+    case 'PIPE':
+    case 'TCP':
+      var net = __nccwpck_require__(41808);
+      stream = new net.Socket({
+        fd: fd,
+        readable: false,
+        writable: true
+      });
+
+      // FIXME Should probably have an option in net.Socket to create a
+      // stream from an existing fd which is writable only. But for now
+      // we'll just add this hack and set the `readable` member to false.
+      // Test: ./node test/fixtures/echo.js < /etc/passwd
+      stream.readable = false;
+      stream.read = null;
+      stream._type = 'pipe';
+
+      // FIXME Hack to have stream not keep the event loop alive.
+      // See https://github.com/joyent/node/issues/1726
+      if (stream._handle && stream._handle.unref) {
+        stream._handle.unref();
+      }
+      break;
+
+    default:
+      // Probably an error on in uv_guess_handle()
+      throw new Error('Implement me. Unknown stream file type!');
+  }
+
+  // For supporting legacy API we put the FD here.
+  stream.fd = fd;
+
+  stream._isStdio = true;
+
+  return stream;
+}
+
+/**
+ * Init logic for `debug` instances.
+ *
+ * Create a new `inspectOpts` object in case `useColors` is set
+ * differently for a particular `debug` instance.
+ */
+
+function init (debug) {
+  debug.inspectOpts = {};
+
+  var keys = Object.keys(exports.inspectOpts);
+  for (var i = 0; i < keys.length; i++) {
+    debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+  }
+}
+
+/**
+ * Enable namespaces listed in `process.env.DEBUG` initially.
+ */
+
+exports.enable(load());
+
+
+/***/ }),
+
+/***/ 80761:
+/***/ ((module) => {
+
+/**
+ * Helpers.
+ */
+
+var s = 1000;
+var m = s * 60;
+var h = m * 60;
+var d = h * 24;
+var y = d * 365.25;
+
+/**
+ * Parse or format the given `val`.
+ *
+ * Options:
+ *
+ *  - `long` verbose formatting [false]
+ *
+ * @param {String|Number} val
+ * @param {Object} [options]
+ * @throws {Error} throw an error if val is not a non-empty string or a number
+ * @return {String|Number}
+ * @api public
+ */
+
+module.exports = function(val, options) {
+  options = options || {};
+  var type = typeof val;
+  if (type === 'string' && val.length > 0) {
+    return parse(val);
+  } else if (type === 'number' && isNaN(val) === false) {
+    return options.long ? fmtLong(val) : fmtShort(val);
+  }
+  throw new Error(
+    'val is not a non-empty string or a valid number. val=' +
+      JSON.stringify(val)
+  );
+};
+
+/**
+ * Parse the given `str` and return milliseconds.
+ *
+ * @param {String} str
+ * @return {Number}
+ * @api private
+ */
+
+function parse(str) {
+  str = String(str);
+  if (str.length > 100) {
+    return;
+  }
+  var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
+    str
+  );
+  if (!match) {
+    return;
+  }
+  var n = parseFloat(match[1]);
+  var type = (match[2] || 'ms').toLowerCase();
+  switch (type) {
+    case 'years':
+    case 'year':
+    case 'yrs':
+    case 'yr':
+    case 'y':
+      return n * y;
+    case 'days':
+    case 'day':
+    case 'd':
+      return n * d;
+    case 'hours':
+    case 'hour':
+    case 'hrs':
+    case 'hr':
+    case 'h':
+      return n * h;
+    case 'minutes':
+    case 'minute':
+    case 'mins':
+    case 'min':
+    case 'm':
+      return n * m;
+    case 'seconds':
+    case 'second':
+    case 'secs':
+    case 'sec':
+    case 's':
+      return n * s;
+    case 'milliseconds':
+    case 'millisecond':
+    case 'msecs':
+    case 'msec':
+    case 'ms':
+      return n;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Short format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtShort(ms) {
+  if (ms >= d) {
+    return Math.round(ms / d) + 'd';
+  }
+  if (ms >= h) {
+    return Math.round(ms / h) + 'h';
+  }
+  if (ms >= m) {
+    return Math.round(ms / m) + 'm';
+  }
+  if (ms >= s) {
+    return Math.round(ms / s) + 's';
+  }
+  return ms + 'ms';
+}
+
+/**
+ * Long format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtLong(ms) {
+  return plural(ms, d, 'day') ||
+    plural(ms, h, 'hour') ||
+    plural(ms, m, 'minute') ||
+    plural(ms, s, 'second') ||
+    ms + ' ms';
+}
+
+/**
+ * Pluralization helper.
+ */
+
+function plural(ms, n, name) {
+  if (ms < n) {
+    return;
+  }
+  if (ms < n * 1.5) {
+    return Math.floor(ms / n) + ' ' + name;
+  }
+  return Math.ceil(ms / n) + ' ' + name + 's';
+}
+
+
+/***/ }),
+
+/***/ 35298:
+/***/ ((module) => {
+
+"use strict";
+
+
+// You may be tempted to copy and paste this, 
+// but take a look at the commit history first,
+// this is a moving target so relying on the module
+// is the best way to make sure the optimization
+// method is kept up to date and compatible with
+// every Node version.
+
+function flatstr (s) {
+  s | 0
+  return s
+}
+
+module.exports = flatstr
+
+/***/ }),
+
+/***/ 64334:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var CombinedStream = __nccwpck_require__(85443);
+var util = __nccwpck_require__(73837);
+var path = __nccwpck_require__(71017);
+var http = __nccwpck_require__(13685);
+var https = __nccwpck_require__(95687);
+var parseUrl = (__nccwpck_require__(57310).parse);
+var fs = __nccwpck_require__(57147);
+var Stream = (__nccwpck_require__(12781).Stream);
+var mime = __nccwpck_require__(43583);
+var asynckit = __nccwpck_require__(14812);
+var populate = __nccwpck_require__(17142);
+
+// Public API
+module.exports = FormData;
+
+// make it a Stream
+util.inherits(FormData, CombinedStream);
+
+/**
+ * Create readable "multipart/form-data" streams.
+ * Can be used to submit forms
+ * and file uploads to other web applications.
+ *
+ * @constructor
+ * @param {Object} options - Properties to be added/overriden for FormData and CombinedStream
+ */
+function FormData(options) {
+  if (!(this instanceof FormData)) {
+    return new FormData(options);
+  }
+
+  this._overheadLength = 0;
+  this._valueLength = 0;
+  this._valuesToMeasure = [];
+
+  CombinedStream.call(this);
+
+  options = options || {};
+  for (var option in options) {
+    this[option] = options[option];
+  }
+}
+
+FormData.LINE_BREAK = '\r\n';
+FormData.DEFAULT_CONTENT_TYPE = 'application/octet-stream';
+
+FormData.prototype.append = function(field, value, options) {
+
+  options = options || {};
+
+  // allow filename as single option
+  if (typeof options == 'string') {
+    options = {filename: options};
+  }
+
+  var append = CombinedStream.prototype.append.bind(this);
+
+  // all that streamy business can't handle numbers
+  if (typeof value == 'number') {
+    value = '' + value;
+  }
+
+  // https://github.com/felixge/node-form-data/issues/38
+  if (util.isArray(value)) {
+    // Please convert your array into string
+    // the way web server expects it
+    this._error(new Error('Arrays are not supported.'));
+    return;
+  }
+
+  var header = this._multiPartHeader(field, value, options);
+  var footer = this._multiPartFooter();
+
+  append(header);
+  append(value);
+  append(footer);
+
+  // pass along options.knownLength
+  this._trackLength(header, value, options);
+};
+
+FormData.prototype._trackLength = function(header, value, options) {
+  var valueLength = 0;
+
+  // used w/ getLengthSync(), when length is known.
+  // e.g. for streaming directly from a remote server,
+  // w/ a known file a size, and not wanting to wait for
+  // incoming file to finish to get its size.
+  if (options.knownLength != null) {
+    valueLength += +options.knownLength;
+  } else if (Buffer.isBuffer(value)) {
+    valueLength = value.length;
+  } else if (typeof value === 'string') {
+    valueLength = Buffer.byteLength(value);
+  }
+
+  this._valueLength += valueLength;
+
+  // @check why add CRLF? does this account for custom/multiple CRLFs?
+  this._overheadLength +=
+    Buffer.byteLength(header) +
+    FormData.LINE_BREAK.length;
+
+  // empty or either doesn't have path or not an http response or not a stream
+  if (!value || ( !value.path && !(value.readable && value.hasOwnProperty('httpVersion')) && !(value instanceof Stream))) {
+    return;
+  }
+
+  // no need to bother with the length
+  if (!options.knownLength) {
+    this._valuesToMeasure.push(value);
+  }
+};
+
+FormData.prototype._lengthRetriever = function(value, callback) {
+
+  if (value.hasOwnProperty('fd')) {
+
+    // take read range into a account
+    // `end` = Infinity –> read file till the end
+    //
+    // TODO: Looks like there is bug in Node fs.createReadStream
+    // it doesn't respect `end` options without `start` options
+    // Fix it when node fixes it.
+    // https://github.com/joyent/node/issues/7819
+    if (value.end != undefined && value.end != Infinity && value.start != undefined) {
+
+      // when end specified
+      // no need to calculate range
+      // inclusive, starts with 0
+      callback(null, value.end + 1 - (value.start ? value.start : 0));
+
+    // not that fast snoopy
+    } else {
+      // still need to fetch file size from fs
+      fs.stat(value.path, function(err, stat) {
+
+        var fileSize;
+
+        if (err) {
+          callback(err);
+          return;
+        }
+
+        // update final size based on the range options
+        fileSize = stat.size - (value.start ? value.start : 0);
+        callback(null, fileSize);
+      });
+    }
+
+  // or http response
+  } else if (value.hasOwnProperty('httpVersion')) {
+    callback(null, +value.headers['content-length']);
+
+  // or request stream http://github.com/mikeal/request
+  } else if (value.hasOwnProperty('httpModule')) {
+    // wait till response come back
+    value.on('response', function(response) {
+      value.pause();
+      callback(null, +response.headers['content-length']);
+    });
+    value.resume();
+
+  // something else
+  } else {
+    callback('Unknown stream');
+  }
+};
+
+FormData.prototype._multiPartHeader = function(field, value, options) {
+  // custom header specified (as string)?
+  // it becomes responsible for boundary
+  // (e.g. to handle extra CRLFs on .NET servers)
+  if (typeof options.header == 'string') {
+    return options.header;
+  }
+
+  var contentDisposition = this._getContentDisposition(value, options);
+  var contentType = this._getContentType(value, options);
+
+  var contents = '';
+  var headers  = {
+    // add custom disposition as third element or keep it two elements if not
+    'Content-Disposition': ['form-data', 'name="' + field + '"'].concat(contentDisposition || []),
+    // if no content type. allow it to be empty array
+    'Content-Type': [].concat(contentType || [])
+  };
+
+  // allow custom headers.
+  if (typeof options.header == 'object') {
+    populate(headers, options.header);
+  }
+
+  var header;
+  for (var prop in headers) {
+    if (!headers.hasOwnProperty(prop)) continue;
+    header = headers[prop];
+
+    // skip nullish headers.
+    if (header == null) {
+      continue;
+    }
+
+    // convert all headers to arrays.
+    if (!Array.isArray(header)) {
+      header = [header];
+    }
+
+    // add non-empty headers.
+    if (header.length) {
+      contents += prop + ': ' + header.join('; ') + FormData.LINE_BREAK;
+    }
+  }
+
+  return '--' + this.getBoundary() + FormData.LINE_BREAK + contents + FormData.LINE_BREAK;
+};
+
+FormData.prototype._getContentDisposition = function(value, options) {
+
+  var filename
+    , contentDisposition
+    ;
+
+  if (typeof options.filepath === 'string') {
+    // custom filepath for relative paths
+    filename = path.normalize(options.filepath).replace(/\\/g, '/');
+  } else if (options.filename || value.name || value.path) {
+    // custom filename take precedence
+    // formidable and the browser add a name property
+    // fs- and request- streams have path property
+    filename = path.basename(options.filename || value.name || value.path);
+  } else if (value.readable && value.hasOwnProperty('httpVersion')) {
+    // or try http response
+    filename = path.basename(value.client._httpMessage.path || '');
+  }
+
+  if (filename) {
+    contentDisposition = 'filename="' + filename + '"';
+  }
+
+  return contentDisposition;
+};
+
+FormData.prototype._getContentType = function(value, options) {
+
+  // use custom content-type above all
+  var contentType = options.contentType;
+
+  // or try `name` from formidable, browser
+  if (!contentType && value.name) {
+    contentType = mime.lookup(value.name);
+  }
+
+  // or try `path` from fs-, request- streams
+  if (!contentType && value.path) {
+    contentType = mime.lookup(value.path);
+  }
+
+  // or if it's http-reponse
+  if (!contentType && value.readable && value.hasOwnProperty('httpVersion')) {
+    contentType = value.headers['content-type'];
+  }
+
+  // or guess it from the filepath or filename
+  if (!contentType && (options.filepath || options.filename)) {
+    contentType = mime.lookup(options.filepath || options.filename);
+  }
+
+  // fallback to the default content type if `value` is not simple value
+  if (!contentType && typeof value == 'object') {
+    contentType = FormData.DEFAULT_CONTENT_TYPE;
+  }
+
+  return contentType;
+};
+
+FormData.prototype._multiPartFooter = function() {
+  return function(next) {
+    var footer = FormData.LINE_BREAK;
+
+    var lastPart = (this._streams.length === 0);
+    if (lastPart) {
+      footer += this._lastBoundary();
+    }
+
+    next(footer);
+  }.bind(this);
+};
+
+FormData.prototype._lastBoundary = function() {
+  return '--' + this.getBoundary() + '--' + FormData.LINE_BREAK;
+};
+
+FormData.prototype.getHeaders = function(userHeaders) {
+  var header;
+  var formHeaders = {
+    'content-type': 'multipart/form-data; boundary=' + this.getBoundary()
+  };
+
+  for (header in userHeaders) {
+    if (userHeaders.hasOwnProperty(header)) {
+      formHeaders[header.toLowerCase()] = userHeaders[header];
+    }
+  }
+
+  return formHeaders;
+};
+
+FormData.prototype.setBoundary = function(boundary) {
+  this._boundary = boundary;
+};
+
+FormData.prototype.getBoundary = function() {
+  if (!this._boundary) {
+    this._generateBoundary();
+  }
+
+  return this._boundary;
+};
+
+FormData.prototype.getBuffer = function() {
+  var dataBuffer = new Buffer.alloc( 0 );
+  var boundary = this.getBoundary();
+
+  // Create the form content. Add Line breaks to the end of data.
+  for (var i = 0, len = this._streams.length; i < len; i++) {
+    if (typeof this._streams[i] !== 'function') {
+
+      // Add content to the buffer.
+      if(Buffer.isBuffer(this._streams[i])) {
+        dataBuffer = Buffer.concat( [dataBuffer, this._streams[i]]);
+      }else {
+        dataBuffer = Buffer.concat( [dataBuffer, Buffer.from(this._streams[i])]);
+      }
+
+      // Add break after content.
+      if (typeof this._streams[i] !== 'string' || this._streams[i].substring( 2, boundary.length + 2 ) !== boundary) {
+        dataBuffer = Buffer.concat( [dataBuffer, Buffer.from(FormData.LINE_BREAK)] );
+      }
+    }
+  }
+
+  // Add the footer and return the Buffer object.
+  return Buffer.concat( [dataBuffer, Buffer.from(this._lastBoundary())] );
+};
+
+FormData.prototype._generateBoundary = function() {
+  // This generates a 50 character boundary similar to those used by Firefox.
+  // They are optimized for boyer-moore parsing.
+  var boundary = '--------------------------';
+  for (var i = 0; i < 24; i++) {
+    boundary += Math.floor(Math.random() * 10).toString(16);
+  }
+
+  this._boundary = boundary;
+};
+
+// Note: getLengthSync DOESN'T calculate streams length
+// As workaround one can calculate file size manually
+// and add it as knownLength option
+FormData.prototype.getLengthSync = function() {
+  var knownLength = this._overheadLength + this._valueLength;
+
+  // Don't get confused, there are 3 "internal" streams for each keyval pair
+  // so it basically checks if there is any value added to the form
+  if (this._streams.length) {
+    knownLength += this._lastBoundary().length;
+  }
+
+  // https://github.com/form-data/form-data/issues/40
+  if (!this.hasKnownLength()) {
+    // Some async length retrievers are present
+    // therefore synchronous length calculation is false.
+    // Please use getLength(callback) to get proper length
+    this._error(new Error('Cannot calculate proper length in synchronous way.'));
+  }
+
+  return knownLength;
+};
+
+// Public API to check if length of added values is known
+// https://github.com/form-data/form-data/issues/196
+// https://github.com/form-data/form-data/issues/262
+FormData.prototype.hasKnownLength = function() {
+  var hasKnownLength = true;
+
+  if (this._valuesToMeasure.length) {
+    hasKnownLength = false;
+  }
+
+  return hasKnownLength;
+};
+
+FormData.prototype.getLength = function(cb) {
+  var knownLength = this._overheadLength + this._valueLength;
+
+  if (this._streams.length) {
+    knownLength += this._lastBoundary().length;
+  }
+
+  if (!this._valuesToMeasure.length) {
+    process.nextTick(cb.bind(this, null, knownLength));
+    return;
+  }
+
+  asynckit.parallel(this._valuesToMeasure, this._lengthRetriever, function(err, values) {
+    if (err) {
+      cb(err);
+      return;
+    }
+
+    values.forEach(function(length) {
+      knownLength += length;
+    });
+
+    cb(null, knownLength);
+  });
+};
+
+FormData.prototype.submit = function(params, cb) {
+  var request
+    , options
+    , defaults = {method: 'post'}
+    ;
+
+  // parse provided url if it's string
+  // or treat it as options object
+  if (typeof params == 'string') {
+
+    params = parseUrl(params);
+    options = populate({
+      port: params.port,
+      path: params.pathname,
+      host: params.hostname,
+      protocol: params.protocol
+    }, defaults);
+
+  // use custom params
+  } else {
+
+    options = populate(params, defaults);
+    // if no port provided use default one
+    if (!options.port) {
+      options.port = options.protocol == 'https:' ? 443 : 80;
+    }
+  }
+
+  // put that good code in getHeaders to some use
+  options.headers = this.getHeaders(params.headers);
+
+  // https if specified, fallback to http in any other case
+  if (options.protocol == 'https:') {
+    request = https.request(options);
+  } else {
+    request = http.request(options);
+  }
+
+  // get content length and fire away
+  this.getLength(function(err, length) {
+    if (err && err !== 'Unknown stream') {
+      this._error(err);
+      return;
+    }
+
+    // add content length
+    if (length) {
+      request.setHeader('Content-Length', length);
+    }
+
+    this.pipe(request);
+    if (cb) {
+      var onResponse;
+
+      var callback = function (error, responce) {
+        request.removeListener('error', callback);
+        request.removeListener('response', onResponse);
+
+        return cb.call(this, error, responce);
+      };
+
+      onResponse = callback.bind(this, null);
+
+      request.on('error', callback);
+      request.on('response', onResponse);
+    }
+  }.bind(this));
+
+  return request;
+};
+
+FormData.prototype._error = function(err) {
+  if (!this.error) {
+    this.error = err;
+    this.pause();
+    this.emit('error', err);
+  }
+};
+
+FormData.prototype.toString = function () {
+  return '[object FormData]';
+};
+
+
+/***/ }),
+
+/***/ 17142:
+/***/ ((module) => {
+
+// populates missing values
+module.exports = function(dst, src) {
+
+  Object.keys(src).forEach(function(prop)
+  {
+    dst[prop] = dst[prop] || src[prop];
+  });
+
+  return dst;
+};
+
+
+/***/ }),
+
+/***/ 96952:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/* eslint-disable class-methods-use-this */
+/* eslint-disable no-underscore-dangle */
+
+function __ncc_wildcard$0 (arg) {
+  if (arg === "index") return __nccwpck_require__(23300);
+  else if (arg === "json") return __nccwpck_require__(26942);
+  else if (arg === "multipart") return __nccwpck_require__(87964);
+  else if (arg === "octetstream") return __nccwpck_require__(26197);
+  else if (arg === "querystring") return __nccwpck_require__(2210);
+}
+'use strict';
+
+const os = __nccwpck_require__(22037);
+const path = __nccwpck_require__(71017);
+const hexoid = __nccwpck_require__(87108);
+const once = __nccwpck_require__(1223);
+const dezalgo = __nccwpck_require__(74308);
+const { EventEmitter } = __nccwpck_require__(82361);
+const { StringDecoder } = __nccwpck_require__(71576);
+const qs = __nccwpck_require__(22760);
+
+const toHexoId = hexoid(25);
+const DEFAULT_OPTIONS = {
+  maxFields: 1000,
+  maxFieldsSize: 20 * 1024 * 1024,
+  maxFileSize: 200 * 1024 * 1024,
+  minFileSize: 1,
+  allowEmptyFiles: true,
+  keepExtensions: false,
+  encoding: 'utf-8',
+  hashAlgorithm: false,
+  uploadDir: os.tmpdir(),
+  multiples: false,
+  enabledPlugins: ['octetstream', 'querystring', 'multipart', 'json'],
+  fileWriteStreamHandler: null,
+  defaultInvalidName: 'invalid-name',
+  filter: function () {
+    return true;
+  },
+};
+
+const PersistentFile = __nccwpck_require__(16580);
+const VolatileFile = __nccwpck_require__(12908);
+const DummyParser = __nccwpck_require__(64335);
+const MultipartParser = __nccwpck_require__(45139);
+const errors = __nccwpck_require__(73808);
+
+const { FormidableError } = errors;
+
+function hasOwnProp(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+class IncomingForm extends EventEmitter {
+  constructor(options = {}) {
+    super();
+
+    this.options = { ...DEFAULT_OPTIONS, ...options };
+
+    const dir = path.resolve(
+      this.options.uploadDir || this.options.uploaddir || os.tmpdir(),
+    );
+
+    this.uploaddir = dir;
+    this.uploadDir = dir;
+
+    // initialize with null
+    [
+      'error',
+      'headers',
+      'type',
+      'bytesExpected',
+      'bytesReceived',
+      '_parser',
+    ].forEach((key) => {
+      this[key] = null;
+    });
+
+    this._setUpRename();
+
+    this._flushing = 0;
+    this._fieldsSize = 0;
+    this._fileSize = 0;
+    this._plugins = [];
+    this.openedFiles = [];
+
+    this.options.enabledPlugins = []
+      .concat(this.options.enabledPlugins)
+      .filter(Boolean);
+
+    if (this.options.enabledPlugins.length === 0) {
+      throw new FormidableError(
+        'expect at least 1 enabled builtin plugin, see options.enabledPlugins',
+        errors.missingPlugin,
+      );
+    }
+
+    this.options.enabledPlugins.forEach((pluginName) => {
+      const plgName = pluginName.toLowerCase();
+      // eslint-disable-next-line import/no-dynamic-require, global-require
+      this.use(__ncc_wildcard$0(plgName));
+    });
+
+    this._setUpMaxFields();
+  }
+
+  use(plugin) {
+    if (typeof plugin !== 'function') {
+      throw new FormidableError(
+        '.use: expect `plugin` to be a function',
+        errors.pluginFunction,
+      );
+    }
+    this._plugins.push(plugin.bind(this));
+    return this;
+  }
+
+  parse(req, cb) {
+    this.pause = () => {
+      try {
+        req.pause();
+      } catch (err) {
+        // the stream was destroyed
+        if (!this.ended) {
+          // before it was completed, crash & burn
+          this._error(err);
+        }
+        return false;
+      }
+      return true;
+    };
+
+    this.resume = () => {
+      try {
+        req.resume();
+      } catch (err) {
+        // the stream was destroyed
+        if (!this.ended) {
+          // before it was completed, crash & burn
+          this._error(err);
+        }
+        return false;
+      }
+
+      return true;
+    };
+
+    // Setup callback first, so we don't miss anything from data events emitted immediately.
+    if (cb) {
+      const callback = once(dezalgo(cb));
+      const fields = {};
+      let mockFields = '';
+      const files = {};
+
+      this.on('field', (name, value) => {
+        if (
+          this.options.multiples &&
+          (this.type === 'multipart' || this.type === 'urlencoded')
+        ) {
+          const mObj = { [name]: value };
+          mockFields = mockFields
+            ? `${mockFields}&${qs.stringify(mObj)}`
+            : `${qs.stringify(mObj)}`;
+        } else {
+          fields[name] = value;
+        }
+      });
+      this.on('file', (name, file) => {
+        // TODO: too much nesting
+        if (this.options.multiples) {
+          if (hasOwnProp(files, name)) {
+            if (!Array.isArray(files[name])) {
+              files[name] = [files[name]];
+            }
+            files[name].push(file);
+          } else {
+            files[name] = file;
+          }
+        } else {
+          files[name] = file;
+        }
+      });
+      this.on('error', (err) => {
+        callback(err, fields, files);
+      });
+      this.on('end', () => {
+        if (this.options.multiples) {
+          Object.assign(fields, qs.parse(mockFields));
+        }
+        callback(null, fields, files);
+      });
+    }
+
+    // Parse headers and setup the parser, ready to start listening for data.
+    this.writeHeaders(req.headers);
+
+    // Start listening for data.
+    req
+      .on('error', (err) => {
+        this._error(err);
+      })
+      .on('aborted', () => {
+        this.emit('aborted');
+        this._error(new FormidableError('Request aborted', errors.aborted));
+      })
+      .on('data', (buffer) => {
+        try {
+          this.write(buffer);
+        } catch (err) {
+          this._error(err);
+        }
+      })
+      .on('end', () => {
+        if (this.error) {
+          return;
+        }
+        if (this._parser) {
+          this._parser.end();
+        }
+        this._maybeEnd();
+      });
+
+    return this;
+  }
+
+  writeHeaders(headers) {
+    this.headers = headers;
+    this._parseContentLength();
+    this._parseContentType();
+
+    if (!this._parser) {
+      this._error(
+        new FormidableError(
+          'no parser found',
+          errors.noParser,
+          415, // Unsupported Media Type
+        ),
+      );
+      return;
+    }
+
+    this._parser.once('error', (error) => {
+      this._error(error);
+    });
+  }
+
+  write(buffer) {
+    if (this.error) {
+      return null;
+    }
+    if (!this._parser) {
+      this._error(
+        new FormidableError('uninitialized parser', errors.uninitializedParser),
+      );
+      return null;
+    }
+
+    this.bytesReceived += buffer.length;
+    this.emit('progress', this.bytesReceived, this.bytesExpected);
+
+    this._parser.write(buffer);
+
+    return this.bytesReceived;
+  }
+
+  pause() {
+    // this does nothing, unless overwritten in IncomingForm.parse
+    return false;
+  }
+
+  resume() {
+    // this does nothing, unless overwritten in IncomingForm.parse
+    return false;
+  }
+
+  onPart(part) {
+    // this method can be overwritten by the user
+    this._handlePart(part);
+  }
+
+  _handlePart(part) {
+    if (part.originalFilename && typeof part.originalFilename !== 'string') {
+      this._error(
+        new FormidableError(
+          `the part.originalFilename should be string when it exists`,
+          errors.filenameNotString,
+        ),
+      );
+      return;
+    }
+
+    // This MUST check exactly for undefined. You can not change it to !part.originalFilename.
+
+    // todo: uncomment when switch tests to Jest
+    // console.log(part);
+
+    // ? NOTE(@tunnckocore): no it can be any falsey value, it most probably depends on what's returned
+    // from somewhere else. Where recently I changed the return statements
+    // and such thing because code style
+    // ? NOTE(@tunnckocore): or even better, if there is no mimetype, then it's for sure a field
+    // ? NOTE(@tunnckocore): originalFilename is an empty string when a field?
+    if (!part.mimetype) {
+      let value = '';
+      const decoder = new StringDecoder(
+        part.transferEncoding || this.options.encoding,
+      );
+
+      part.on('data', (buffer) => {
+        this._fieldsSize += buffer.length;
+        if (this._fieldsSize > this.options.maxFieldsSize) {
+          this._error(
+            new FormidableError(
+              `options.maxFieldsSize (${this.options.maxFieldsSize} bytes) exceeded, received ${this._fieldsSize} bytes of field data`,
+              errors.maxFieldsSizeExceeded,
+              413, // Payload Too Large
+            ),
+          );
+          return;
+        }
+        value += decoder.write(buffer);
+      });
+
+      part.on('end', () => {
+        this.emit('field', part.name, value);
+      });
+      return;
+    }
+
+    if (!this.options.filter(part)) {
+      return;
+    }
+
+    this._flushing += 1;
+
+    const newFilename = this._getNewName(part);
+    const filepath = this._joinDirectoryName(newFilename);
+    const file = this._newFile({
+      newFilename,
+      filepath,
+      originalFilename: part.originalFilename,
+      mimetype: part.mimetype,
+    });
+    file.on('error', (err) => {
+      this._error(err);
+    });
+    this.emit('fileBegin', part.name, file);
+
+    file.open();
+    this.openedFiles.push(file);
+
+    part.on('data', (buffer) => {
+      this._fileSize += buffer.length;
+      if (this._fileSize < this.options.minFileSize) {
+        this._error(
+          new FormidableError(
+            `options.minFileSize (${this.options.minFileSize} bytes) inferior, received ${this._fileSize} bytes of file data`,
+            errors.smallerThanMinFileSize,
+            400,
+          ),
+        );
+        return;
+      }
+      if (this._fileSize > this.options.maxFileSize) {
+        this._error(
+          new FormidableError(
+            `options.maxFileSize (${this.options.maxFileSize} bytes) exceeded, received ${this._fileSize} bytes of file data`,
+            errors.biggerThanMaxFileSize,
+            413,
+          ),
+        );
+        return;
+      }
+      if (buffer.length === 0) {
+        return;
+      }
+      this.pause();
+      file.write(buffer, () => {
+        this.resume();
+      });
+    });
+
+    part.on('end', () => {
+      if (!this.options.allowEmptyFiles && this._fileSize === 0) {
+        this._error(
+          new FormidableError(
+            `options.allowEmptyFiles is false, file size should be greather than 0`,
+            errors.noEmptyFiles,
+            400,
+          ),
+        );
+        return;
+      }
+
+      file.end(() => {
+        this._flushing -= 1;
+        this.emit('file', part.name, file);
+        this._maybeEnd();
+      });
+    });
+  }
+
+  // eslint-disable-next-line max-statements
+  _parseContentType() {
+    if (this.bytesExpected === 0) {
+      this._parser = new DummyParser(this, this.options);
+      return;
+    }
+
+    if (!this.headers['content-type']) {
+      this._error(
+        new FormidableError(
+          'bad content-type header, no content-type',
+          errors.missingContentType,
+          400,
+        ),
+      );
+      return;
+    }
+
+    const results = [];
+    const _dummyParser = new DummyParser(this, this.options);
+
+    // eslint-disable-next-line no-plusplus
+    for (let idx = 0; idx < this._plugins.length; idx++) {
+      const plugin = this._plugins[idx];
+
+      let pluginReturn = null;
+
+      try {
+        pluginReturn = plugin(this, this.options) || this;
+      } catch (err) {
+        // directly throw from the `form.parse` method;
+        // there is no other better way, except a handle through options
+        const error = new FormidableError(
+          `plugin on index ${idx} failed with: ${err.message}`,
+          errors.pluginFailed,
+          500,
+        );
+        error.idx = idx;
+        throw error;
+      }
+
+      Object.assign(this, pluginReturn);
+
+      // todo: use Set/Map and pass plugin name instead of the `idx` index
+      this.emit('plugin', idx, pluginReturn);
+      results.push(pluginReturn);
+    }
+
+    this.emit('pluginsResults', results);
+
+    // NOTE: probably not needed, because we check options.enabledPlugins in the constructor
+    // if (results.length === 0 /* && results.length !== this._plugins.length */) {
+    //   this._error(
+    //     new Error(
+    //       `bad content-type header, unknown content-type: ${this.headers['content-type']}`,
+    //     ),
+    //   );
+    // }
+  }
+
+  _error(err, eventName = 'error') {
+    // if (!err && this.error) {
+    //   this.emit('error', this.error);
+    //   return;
+    // }
+    if (this.error || this.ended) {
+      return;
+    }
+
+    this.error = err;
+    this.emit(eventName, err);
+
+    if (Array.isArray(this.openedFiles)) {
+      this.openedFiles.forEach((file) => {
+        file.destroy();
+      });
+    }
+  }
+
+  _parseContentLength() {
+    this.bytesReceived = 0;
+    if (this.headers['content-length']) {
+      this.bytesExpected = parseInt(this.headers['content-length'], 10);
+    } else if (this.headers['transfer-encoding'] === undefined) {
+      this.bytesExpected = 0;
+    }
+
+    if (this.bytesExpected !== null) {
+      this.emit('progress', this.bytesReceived, this.bytesExpected);
+    }
+  }
+
+  _newParser() {
+    return new MultipartParser(this.options);
+  }
+
+  _newFile({ filepath, originalFilename, mimetype, newFilename }) {
+    return this.options.fileWriteStreamHandler
+      ? new VolatileFile({
+          newFilename,
+          filepath,
+          originalFilename,
+          mimetype,
+          createFileWriteStream: this.options.fileWriteStreamHandler,
+          hashAlgorithm: this.options.hashAlgorithm,
+        })
+      : new PersistentFile({
+          newFilename,
+          filepath,
+          originalFilename,
+          mimetype,
+          hashAlgorithm: this.options.hashAlgorithm,
+        });
+  }
+
+  _getFileName(headerValue) {
+    // matches either a quoted-string or a token (RFC 2616 section 19.5.1)
+    const m = headerValue.match(
+      /\bfilename=("(.*?)"|([^()<>{}[\]@,;:"?=\s/\t]+))($|;\s)/i,
+    );
+    if (!m) return null;
+
+    const match = m[2] || m[3] || '';
+    let originalFilename = match.substr(match.lastIndexOf('\\') + 1);
+    originalFilename = originalFilename.replace(/%22/g, '"');
+    originalFilename = originalFilename.replace(/&#([\d]{4});/g, (_, code) =>
+      String.fromCharCode(code),
+    );
+
+    return originalFilename;
+  }
+
+  _getExtension(str) {
+    if (!str) {
+      return '';
+    }
+
+    const basename = path.basename(str);
+    const firstDot = basename.indexOf('.');
+    const lastDot = basename.lastIndexOf('.');
+    const extname = path.extname(basename).replace(/(\.[a-z0-9]+).*/i, '$1');
+
+    if (firstDot === lastDot) {
+      return extname;
+    }
+
+    return basename.slice(firstDot, lastDot) + extname;
+  }
+
+
+
+  _joinDirectoryName(name) {
+    const newPath = path.join(this.uploadDir, name);
+
+    // prevent directory traversal attacks
+    if (!newPath.startsWith(this.uploadDir)) {
+      return path.join(this.uploadDir, this.options.defaultInvalidName);
+    }
+
+    return newPath;
+  }
+
+  _setUpRename() {
+    const hasRename = typeof this.options.filename === 'function';
+    if (hasRename) {
+      this._getNewName = (part) => {
+        let ext = '';
+        let name = this.options.defaultInvalidName;
+        if (part.originalFilename) {
+          // can be null
+          ({ ext, name } = path.parse(part.originalFilename));
+          if (this.options.keepExtensions !== true) {
+            ext = '';
+          }
