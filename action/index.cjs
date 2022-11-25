@@ -55524,3 +55524,2227 @@ proto.handle = function handle(req, res, out) {
     var layer;
     var match;
     var route;
+
+    while (match !== true && idx < stack.length) {
+      layer = stack[idx++];
+      match = matchLayer(layer, path);
+      route = layer.route;
+
+      if (typeof match !== 'boolean') {
+        // hold on to layerError
+        layerError = layerError || match;
+      }
+
+      if (match !== true) {
+        continue;
+      }
+
+      if (!route) {
+        // process non-route handlers normally
+        continue;
+      }
+
+      if (layerError) {
+        // routes do not match with a pending error
+        match = false;
+        continue;
+      }
+
+      var method = req.method;
+      var has_method = route._handles_method(method);
+
+      // build up automatic options response
+      if (!has_method && method === 'OPTIONS') {
+        appendMethods(options, route._options());
+      }
+
+      // don't even bother matching route
+      if (!has_method && method !== 'HEAD') {
+        match = false;
+      }
+    }
+
+    // no match
+    if (match !== true) {
+      return done(layerError);
+    }
+
+    // store route for dispatch on change
+    if (route) {
+      req.route = route;
+    }
+
+    // Capture one-time layer values
+    req.params = self.mergeParams
+      ? mergeParams(layer.params, parentParams)
+      : layer.params;
+    var layerPath = layer.path;
+
+    // this should be done for the layer
+    self.process_params(layer, paramcalled, req, res, function (err) {
+      if (err) {
+        next(layerError || err)
+      } else if (route) {
+        layer.handle_request(req, res, next)
+      } else {
+        trim_prefix(layer, layerError, layerPath, path)
+      }
+
+      sync = 0
+    });
+  }
+
+  function trim_prefix(layer, layerError, layerPath, path) {
+    if (layerPath.length !== 0) {
+      // Validate path is a prefix match
+      if (layerPath !== path.slice(0, layerPath.length)) {
+        next(layerError)
+        return
+      }
+
+      // Validate path breaks on a path separator
+      var c = path[layerPath.length]
+      if (c && c !== '/' && c !== '.') return next(layerError)
+
+      // Trim off the part of the url that matches the route
+      // middleware (.use stuff) needs to have the path stripped
+      debug('trim prefix (%s) from url %s', layerPath, req.url);
+      removed = layerPath;
+      req.url = protohost + req.url.slice(protohost.length + removed.length)
+
+      // Ensure leading slash
+      if (!protohost && req.url[0] !== '/') {
+        req.url = '/' + req.url;
+        slashAdded = true;
+      }
+
+      // Setup base URL (no trailing slash)
+      req.baseUrl = parentUrl + (removed[removed.length - 1] === '/'
+        ? removed.substring(0, removed.length - 1)
+        : removed);
+    }
+
+    debug('%s %s : %s', layer.name, layerPath, req.originalUrl);
+
+    if (layerError) {
+      layer.handle_error(layerError, req, res, next);
+    } else {
+      layer.handle_request(req, res, next);
+    }
+  }
+};
+
+/**
+ * Process any parameters for the layer.
+ * @private
+ */
+
+proto.process_params = function process_params(layer, called, req, res, done) {
+  var params = this.params;
+
+  // captured parameters from the layer, keys and values
+  var keys = layer.keys;
+
+  // fast track
+  if (!keys || keys.length === 0) {
+    return done();
+  }
+
+  var i = 0;
+  var name;
+  var paramIndex = 0;
+  var key;
+  var paramVal;
+  var paramCallbacks;
+  var paramCalled;
+
+  // process params in order
+  // param callbacks can be async
+  function param(err) {
+    if (err) {
+      return done(err);
+    }
+
+    if (i >= keys.length ) {
+      return done();
+    }
+
+    paramIndex = 0;
+    key = keys[i++];
+    name = key.name;
+    paramVal = req.params[name];
+    paramCallbacks = params[name];
+    paramCalled = called[name];
+
+    if (paramVal === undefined || !paramCallbacks) {
+      return param();
+    }
+
+    // param previously called with same value or error occurred
+    if (paramCalled && (paramCalled.match === paramVal
+      || (paramCalled.error && paramCalled.error !== 'route'))) {
+      // restore value
+      req.params[name] = paramCalled.value;
+
+      // next param
+      return param(paramCalled.error);
+    }
+
+    called[name] = paramCalled = {
+      error: null,
+      match: paramVal,
+      value: paramVal
+    };
+
+    paramCallback();
+  }
+
+  // single param callbacks
+  function paramCallback(err) {
+    var fn = paramCallbacks[paramIndex++];
+
+    // store updated value
+    paramCalled.value = req.params[key.name];
+
+    if (err) {
+      // store error
+      paramCalled.error = err;
+      param(err);
+      return;
+    }
+
+    if (!fn) return param();
+
+    try {
+      fn(req, res, paramCallback, paramVal, key.name);
+    } catch (e) {
+      paramCallback(e);
+    }
+  }
+
+  param();
+};
+
+/**
+ * Use the given middleware function, with optional path, defaulting to "/".
+ *
+ * Use (like `.all`) will run for any http METHOD, but it will not add
+ * handlers for those methods so OPTIONS requests will not consider `.use`
+ * functions even if they could respond.
+ *
+ * The other difference is that _route_ path is stripped and not visible
+ * to the handler function. The main effect of this feature is that mounted
+ * handlers can operate without any code changes regardless of the "prefix"
+ * pathname.
+ *
+ * @public
+ */
+
+proto.use = function use(fn) {
+  var offset = 0;
+  var path = '/';
+
+  // default path to '/'
+  // disambiguate router.use([fn])
+  if (typeof fn !== 'function') {
+    var arg = fn;
+
+    while (Array.isArray(arg) && arg.length !== 0) {
+      arg = arg[0];
+    }
+
+    // first arg is the path
+    if (typeof arg !== 'function') {
+      offset = 1;
+      path = fn;
+    }
+  }
+
+  var callbacks = flatten(slice.call(arguments, offset));
+
+  if (callbacks.length === 0) {
+    throw new TypeError('Router.use() requires a middleware function')
+  }
+
+  for (var i = 0; i < callbacks.length; i++) {
+    var fn = callbacks[i];
+
+    if (typeof fn !== 'function') {
+      throw new TypeError('Router.use() requires a middleware function but got a ' + gettype(fn))
+    }
+
+    // add the middleware
+    debug('use %o %s', path, fn.name || '<anonymous>')
+
+    var layer = new Layer(path, {
+      sensitive: this.caseSensitive,
+      strict: false,
+      end: false
+    }, fn);
+
+    layer.route = undefined;
+
+    this.stack.push(layer);
+  }
+
+  return this;
+};
+
+/**
+ * Create a new Route for the given path.
+ *
+ * Each route contains a separate middleware stack and VERB handlers.
+ *
+ * See the Route api documentation for details on adding handlers
+ * and middleware to routes.
+ *
+ * @param {String} path
+ * @return {Route}
+ * @public
+ */
+
+proto.route = function route(path) {
+  var route = new Route(path);
+
+  var layer = new Layer(path, {
+    sensitive: this.caseSensitive,
+    strict: this.strict,
+    end: true
+  }, route.dispatch.bind(route));
+
+  layer.route = route;
+
+  this.stack.push(layer);
+  return route;
+};
+
+// create Router#VERB functions
+methods.concat('all').forEach(function(method){
+  proto[method] = function(path){
+    var route = this.route(path)
+    route[method].apply(route, slice.call(arguments, 1));
+    return this;
+  };
+});
+
+// append methods to a list of methods
+function appendMethods(list, addition) {
+  for (var i = 0; i < addition.length; i++) {
+    var method = addition[i];
+    if (list.indexOf(method) === -1) {
+      list.push(method);
+    }
+  }
+}
+
+// get pathname of request
+function getPathname(req) {
+  try {
+    return parseUrl(req).pathname;
+  } catch (err) {
+    return undefined;
+  }
+}
+
+// Get get protocol + host for a URL
+function getProtohost(url) {
+  if (typeof url !== 'string' || url.length === 0 || url[0] === '/') {
+    return undefined
+  }
+
+  var searchIndex = url.indexOf('?')
+  var pathLength = searchIndex !== -1
+    ? searchIndex
+    : url.length
+  var fqdnIndex = url.slice(0, pathLength).indexOf('://')
+
+  return fqdnIndex !== -1
+    ? url.substring(0, url.indexOf('/', 3 + fqdnIndex))
+    : undefined
+}
+
+// get type for error message
+function gettype(obj) {
+  var type = typeof obj;
+
+  if (type !== 'object') {
+    return type;
+  }
+
+  // inspect [[Class]] for objects
+  return toString.call(obj)
+    .replace(objectRegExp, '$1');
+}
+
+/**
+ * Match path to a layer.
+ *
+ * @param {Layer} layer
+ * @param {string} path
+ * @private
+ */
+
+function matchLayer(layer, path) {
+  try {
+    return layer.match(path);
+  } catch (err) {
+    return err;
+  }
+}
+
+// merge params with parent params
+function mergeParams(params, parent) {
+  if (typeof parent !== 'object' || !parent) {
+    return params;
+  }
+
+  // make copy of parent for base
+  var obj = mixin({}, parent);
+
+  // simple non-numeric merging
+  if (!(0 in params) || !(0 in parent)) {
+    return mixin(obj, params);
+  }
+
+  var i = 0;
+  var o = 0;
+
+  // determine numeric gaps
+  while (i in params) {
+    i++;
+  }
+
+  while (o in parent) {
+    o++;
+  }
+
+  // offset numeric indices in params before merge
+  for (i--; i >= 0; i--) {
+    params[i + o] = params[i];
+
+    // create holes for the merge when necessary
+    if (i < o) {
+      delete params[i];
+    }
+  }
+
+  return mixin(obj, params);
+}
+
+// restore obj props after function
+function restore(fn, obj) {
+  var props = new Array(arguments.length - 2);
+  var vals = new Array(arguments.length - 2);
+
+  for (var i = 0; i < props.length; i++) {
+    props[i] = arguments[i + 2];
+    vals[i] = obj[props[i]];
+  }
+
+  return function () {
+    // restore vals
+    for (var i = 0; i < props.length; i++) {
+      obj[props[i]] = vals[i];
+    }
+
+    return fn.apply(this, arguments);
+  };
+}
+
+// send an OPTIONS response
+function sendOptionsResponse(res, options, next) {
+  try {
+    var body = options.join(',');
+    res.set('Allow', body);
+    res.send(body);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// wrap a function
+function wrap(old, fn) {
+  return function proxy() {
+    var args = new Array(arguments.length + 1);
+
+    args[0] = old;
+    for (var i = 0, len = arguments.length; i < len; i++) {
+      args[i + 1] = arguments[i];
+    }
+
+    fn.apply(this, args);
+  };
+}
+
+
+/***/ }),
+
+/***/ 25624:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var pathRegexp = __nccwpck_require__(37819);
+var debug = __nccwpck_require__(52529)('express:router:layer');
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = Layer;
+
+function Layer(path, options, fn) {
+  if (!(this instanceof Layer)) {
+    return new Layer(path, options, fn);
+  }
+
+  debug('new %o', path)
+  var opts = options || {};
+
+  this.handle = fn;
+  this.name = fn.name || '<anonymous>';
+  this.params = undefined;
+  this.path = undefined;
+  this.regexp = pathRegexp(path, this.keys = [], opts);
+
+  // set fast path flags
+  this.regexp.fast_star = path === '*'
+  this.regexp.fast_slash = path === '/' && opts.end === false
+}
+
+/**
+ * Handle the error for the layer.
+ *
+ * @param {Error} error
+ * @param {Request} req
+ * @param {Response} res
+ * @param {function} next
+ * @api private
+ */
+
+Layer.prototype.handle_error = function handle_error(error, req, res, next) {
+  var fn = this.handle;
+
+  if (fn.length !== 4) {
+    // not a standard error handler
+    return next(error);
+  }
+
+  try {
+    fn(error, req, res, next);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Handle the request for the layer.
+ *
+ * @param {Request} req
+ * @param {Response} res
+ * @param {function} next
+ * @api private
+ */
+
+Layer.prototype.handle_request = function handle(req, res, next) {
+  var fn = this.handle;
+
+  if (fn.length > 3) {
+    // not a standard request handler
+    return next();
+  }
+
+  try {
+    fn(req, res, next);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Check if this route matches `path`, if so
+ * populate `.params`.
+ *
+ * @param {String} path
+ * @return {Boolean}
+ * @api private
+ */
+
+Layer.prototype.match = function match(path) {
+  var match
+
+  if (path != null) {
+    // fast path non-ending match for / (any path matches)
+    if (this.regexp.fast_slash) {
+      this.params = {}
+      this.path = ''
+      return true
+    }
+
+    // fast path for * (everything matched in a param)
+    if (this.regexp.fast_star) {
+      this.params = {'0': decode_param(path)}
+      this.path = path
+      return true
+    }
+
+    // match the path
+    match = this.regexp.exec(path)
+  }
+
+  if (!match) {
+    this.params = undefined;
+    this.path = undefined;
+    return false;
+  }
+
+  // store values
+  this.params = {};
+  this.path = match[0]
+
+  var keys = this.keys;
+  var params = this.params;
+
+  for (var i = 1; i < match.length; i++) {
+    var key = keys[i - 1];
+    var prop = key.name;
+    var val = decode_param(match[i])
+
+    if (val !== undefined || !(hasOwnProperty.call(params, prop))) {
+      params[prop] = val;
+    }
+  }
+
+  return true;
+};
+
+/**
+ * Decode param value.
+ *
+ * @param {string} val
+ * @return {string}
+ * @private
+ */
+
+function decode_param(val) {
+  if (typeof val !== 'string' || val.length === 0) {
+    return val;
+  }
+
+  try {
+    return decodeURIComponent(val);
+  } catch (err) {
+    if (err instanceof URIError) {
+      err.message = 'Failed to decode param \'' + val + '\'';
+      err.status = err.statusCode = 400;
+    }
+
+    throw err;
+  }
+}
+
+
+/***/ }),
+
+/***/ 23699:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var debug = __nccwpck_require__(52529)('express:router:route');
+var flatten = __nccwpck_require__(62003);
+var Layer = __nccwpck_require__(25624);
+var methods = __nccwpck_require__(58752);
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var slice = Array.prototype.slice;
+var toString = Object.prototype.toString;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = Route;
+
+/**
+ * Initialize `Route` with the given `path`,
+ *
+ * @param {String} path
+ * @public
+ */
+
+function Route(path) {
+  this.path = path;
+  this.stack = [];
+
+  debug('new %o', path)
+
+  // route handlers for various http methods
+  this.methods = {};
+}
+
+/**
+ * Determine if the route handles a given method.
+ * @private
+ */
+
+Route.prototype._handles_method = function _handles_method(method) {
+  if (this.methods._all) {
+    return true;
+  }
+
+  var name = method.toLowerCase();
+
+  if (name === 'head' && !this.methods['head']) {
+    name = 'get';
+  }
+
+  return Boolean(this.methods[name]);
+};
+
+/**
+ * @return {Array} supported HTTP methods
+ * @private
+ */
+
+Route.prototype._options = function _options() {
+  var methods = Object.keys(this.methods);
+
+  // append automatic head
+  if (this.methods.get && !this.methods.head) {
+    methods.push('head');
+  }
+
+  for (var i = 0; i < methods.length; i++) {
+    // make upper case
+    methods[i] = methods[i].toUpperCase();
+  }
+
+  return methods;
+};
+
+/**
+ * dispatch req, res into this route
+ * @private
+ */
+
+Route.prototype.dispatch = function dispatch(req, res, done) {
+  var idx = 0;
+  var stack = this.stack;
+  var sync = 0
+
+  if (stack.length === 0) {
+    return done();
+  }
+
+  var method = req.method.toLowerCase();
+  if (method === 'head' && !this.methods['head']) {
+    method = 'get';
+  }
+
+  req.route = this;
+
+  next();
+
+  function next(err) {
+    // signal to exit route
+    if (err && err === 'route') {
+      return done();
+    }
+
+    // signal to exit router
+    if (err && err === 'router') {
+      return done(err)
+    }
+
+    // max sync stack
+    if (++sync > 100) {
+      return setImmediate(next, err)
+    }
+
+    var layer = stack[idx++]
+
+    // end of layers
+    if (!layer) {
+      return done(err)
+    }
+
+    if (layer.method && layer.method !== method) {
+      next(err)
+    } else if (err) {
+      layer.handle_error(err, req, res, next);
+    } else {
+      layer.handle_request(req, res, next);
+    }
+
+    sync = 0
+  }
+};
+
+/**
+ * Add a handler for all HTTP verbs to this route.
+ *
+ * Behaves just like middleware and can respond or call `next`
+ * to continue processing.
+ *
+ * You can use multiple `.all` call to add multiple handlers.
+ *
+ *   function check_something(req, res, next){
+ *     next();
+ *   };
+ *
+ *   function validate_user(req, res, next){
+ *     next();
+ *   };
+ *
+ *   route
+ *   .all(validate_user)
+ *   .all(check_something)
+ *   .get(function(req, res, next){
+ *     res.send('hello world');
+ *   });
+ *
+ * @param {function} handler
+ * @return {Route} for chaining
+ * @api public
+ */
+
+Route.prototype.all = function all() {
+  var handles = flatten(slice.call(arguments));
+
+  for (var i = 0; i < handles.length; i++) {
+    var handle = handles[i];
+
+    if (typeof handle !== 'function') {
+      var type = toString.call(handle);
+      var msg = 'Route.all() requires a callback function but got a ' + type
+      throw new TypeError(msg);
+    }
+
+    var layer = Layer('/', {}, handle);
+    layer.method = undefined;
+
+    this.methods._all = true;
+    this.stack.push(layer);
+  }
+
+  return this;
+};
+
+methods.forEach(function(method){
+  Route.prototype[method] = function(){
+    var handles = flatten(slice.call(arguments));
+
+    for (var i = 0; i < handles.length; i++) {
+      var handle = handles[i];
+
+      if (typeof handle !== 'function') {
+        var type = toString.call(handle);
+        var msg = 'Route.' + method + '() requires a callback function but got a ' + type
+        throw new Error(msg);
+      }
+
+      debug('%s %o', method, this.path)
+
+      var layer = Layer('/', {}, handle);
+      layer.method = method;
+
+      this.methods[method] = true;
+      this.stack.push(layer);
+    }
+
+    return this;
+  };
+});
+
+
+/***/ }),
+
+/***/ 53561:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @api private
+ */
+
+var Buffer = (__nccwpck_require__(21867).Buffer)
+var contentDisposition = __nccwpck_require__(53921);
+var contentType = __nccwpck_require__(99915);
+var deprecate = __nccwpck_require__(18883)('express');
+var flatten = __nccwpck_require__(62003);
+var mime = (__nccwpck_require__(95287).mime);
+var etag = __nccwpck_require__(69972);
+var proxyaddr = __nccwpck_require__(80140);
+var qs = __nccwpck_require__(22760);
+var querystring = __nccwpck_require__(63477);
+
+/**
+ * Return strong ETag for `body`.
+ *
+ * @param {String|Buffer} body
+ * @param {String} [encoding]
+ * @return {String}
+ * @api private
+ */
+
+exports.etag = createETagGenerator({ weak: false })
+
+/**
+ * Return weak ETag for `body`.
+ *
+ * @param {String|Buffer} body
+ * @param {String} [encoding]
+ * @return {String}
+ * @api private
+ */
+
+exports.wetag = createETagGenerator({ weak: true })
+
+/**
+ * Check if `path` looks absolute.
+ *
+ * @param {String} path
+ * @return {Boolean}
+ * @api private
+ */
+
+exports.isAbsolute = function(path){
+  if ('/' === path[0]) return true;
+  if (':' === path[1] && ('\\' === path[2] || '/' === path[2])) return true; // Windows device path
+  if ('\\\\' === path.substring(0, 2)) return true; // Microsoft Azure absolute path
+};
+
+/**
+ * Flatten the given `arr`.
+ *
+ * @param {Array} arr
+ * @return {Array}
+ * @api private
+ */
+
+exports.flatten = deprecate.function(flatten,
+  'utils.flatten: use array-flatten npm module instead');
+
+/**
+ * Normalize the given `type`, for example "html" becomes "text/html".
+ *
+ * @param {String} type
+ * @return {Object}
+ * @api private
+ */
+
+exports.normalizeType = function(type){
+  return ~type.indexOf('/')
+    ? acceptParams(type)
+    : { value: mime.lookup(type), params: {} };
+};
+
+/**
+ * Normalize `types`, for example "html" becomes "text/html".
+ *
+ * @param {Array} types
+ * @return {Array}
+ * @api private
+ */
+
+exports.normalizeTypes = function(types){
+  var ret = [];
+
+  for (var i = 0; i < types.length; ++i) {
+    ret.push(exports.normalizeType(types[i]));
+  }
+
+  return ret;
+};
+
+/**
+ * Generate Content-Disposition header appropriate for the filename.
+ * non-ascii filenames are urlencoded and a filename* parameter is added
+ *
+ * @param {String} filename
+ * @return {String}
+ * @api private
+ */
+
+exports.contentDisposition = deprecate.function(contentDisposition,
+  'utils.contentDisposition: use content-disposition npm module instead');
+
+/**
+ * Parse accept params `str` returning an
+ * object with `.value`, `.quality` and `.params`.
+ * also includes `.originalIndex` for stable sorting
+ *
+ * @param {String} str
+ * @param {Number} index
+ * @return {Object}
+ * @api private
+ */
+
+function acceptParams(str, index) {
+  var parts = str.split(/ *; */);
+  var ret = { value: parts[0], quality: 1, params: {}, originalIndex: index };
+
+  for (var i = 1; i < parts.length; ++i) {
+    var pms = parts[i].split(/ *= */);
+    if ('q' === pms[0]) {
+      ret.quality = parseFloat(pms[1]);
+    } else {
+      ret.params[pms[0]] = pms[1];
+    }
+  }
+
+  return ret;
+}
+
+/**
+ * Compile "etag" value to function.
+ *
+ * @param  {Boolean|String|Function} val
+ * @return {Function}
+ * @api private
+ */
+
+exports.compileETag = function(val) {
+  var fn;
+
+  if (typeof val === 'function') {
+    return val;
+  }
+
+  switch (val) {
+    case true:
+    case 'weak':
+      fn = exports.wetag;
+      break;
+    case false:
+      break;
+    case 'strong':
+      fn = exports.etag;
+      break;
+    default:
+      throw new TypeError('unknown value for etag function: ' + val);
+  }
+
+  return fn;
+}
+
+/**
+ * Compile "query parser" value to function.
+ *
+ * @param  {String|Function} val
+ * @return {Function}
+ * @api private
+ */
+
+exports.compileQueryParser = function compileQueryParser(val) {
+  var fn;
+
+  if (typeof val === 'function') {
+    return val;
+  }
+
+  switch (val) {
+    case true:
+    case 'simple':
+      fn = querystring.parse;
+      break;
+    case false:
+      fn = newObject;
+      break;
+    case 'extended':
+      fn = parseExtendedQueryString;
+      break;
+    default:
+      throw new TypeError('unknown value for query parser function: ' + val);
+  }
+
+  return fn;
+}
+
+/**
+ * Compile "proxy trust" value to function.
+ *
+ * @param  {Boolean|String|Number|Array|Function} val
+ * @return {Function}
+ * @api private
+ */
+
+exports.compileTrust = function(val) {
+  if (typeof val === 'function') return val;
+
+  if (val === true) {
+    // Support plain true/false
+    return function(){ return true };
+  }
+
+  if (typeof val === 'number') {
+    // Support trusting hop count
+    return function(a, i){ return i < val };
+  }
+
+  if (typeof val === 'string') {
+    // Support comma-separated values
+    val = val.split(',')
+      .map(function (v) { return v.trim() })
+  }
+
+  return proxyaddr.compile(val || []);
+}
+
+/**
+ * Set the charset in a given Content-Type string.
+ *
+ * @param {String} type
+ * @param {String} charset
+ * @return {String}
+ * @api private
+ */
+
+exports.setCharset = function setCharset(type, charset) {
+  if (!type || !charset) {
+    return type;
+  }
+
+  // parse type
+  var parsed = contentType.parse(type);
+
+  // set charset
+  parsed.parameters.charset = charset;
+
+  // format type
+  return contentType.format(parsed);
+};
+
+/**
+ * Create an ETag generator function, generating ETags with
+ * the given options.
+ *
+ * @param {object} options
+ * @return {function}
+ * @private
+ */
+
+function createETagGenerator (options) {
+  return function generateETag (body, encoding) {
+    var buf = !Buffer.isBuffer(body)
+      ? Buffer.from(body, encoding)
+      : body
+
+    return etag(buf, options)
+  }
+}
+
+/**
+ * Parse an extended query string with qs.
+ *
+ * @return {Object}
+ * @private
+ */
+
+function parseExtendedQueryString(str) {
+  return qs.parse(str, {
+    allowPrototypes: true
+  });
+}
+
+/**
+ * Return new empty object.
+ *
+ * @return {Object}
+ * @api private
+ */
+
+function newObject() {
+  return {};
+}
+
+
+/***/ }),
+
+/***/ 99209:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * express
+ * Copyright(c) 2009-2013 TJ Holowaychuk
+ * Copyright(c) 2013 Roman Shtylman
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module dependencies.
+ * @private
+ */
+
+var debug = __nccwpck_require__(52529)('express:view');
+var path = __nccwpck_require__(71017);
+var fs = __nccwpck_require__(57147);
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var dirname = path.dirname;
+var basename = path.basename;
+var extname = path.extname;
+var join = path.join;
+var resolve = path.resolve;
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = View;
+
+/**
+ * Initialize a new `View` with the given `name`.
+ *
+ * Options:
+ *
+ *   - `defaultEngine` the default template engine name
+ *   - `engines` template engine require() cache
+ *   - `root` root path for view lookup
+ *
+ * @param {string} name
+ * @param {object} options
+ * @public
+ */
+
+function View(name, options) {
+  var opts = options || {};
+
+  this.defaultEngine = opts.defaultEngine;
+  this.ext = extname(name);
+  this.name = name;
+  this.root = opts.root;
+
+  if (!this.ext && !this.defaultEngine) {
+    throw new Error('No default engine was specified and no extension was provided.');
+  }
+
+  var fileName = name;
+
+  if (!this.ext) {
+    // get extension from default engine name
+    this.ext = this.defaultEngine[0] !== '.'
+      ? '.' + this.defaultEngine
+      : this.defaultEngine;
+
+    fileName += this.ext;
+  }
+
+  if (!opts.engines[this.ext]) {
+    // load engine
+    var mod = this.ext.slice(1)
+    debug('require "%s"', mod)
+
+    // default engine export
+    var fn = require(mod).__express
+
+    if (typeof fn !== 'function') {
+      throw new Error('Module "' + mod + '" does not provide a view engine.')
+    }
+
+    opts.engines[this.ext] = fn
+  }
+
+  // store loaded engine
+  this.engine = opts.engines[this.ext];
+
+  // lookup path
+  this.path = this.lookup(fileName);
+}
+
+/**
+ * Lookup view by the given `name`
+ *
+ * @param {string} name
+ * @private
+ */
+
+View.prototype.lookup = function lookup(name) {
+  var path;
+  var roots = [].concat(this.root);
+
+  debug('lookup "%s"', name);
+
+  for (var i = 0; i < roots.length && !path; i++) {
+    var root = roots[i];
+
+    // resolve the path
+    var loc = resolve(root, name);
+    var dir = dirname(loc);
+    var file = basename(loc);
+
+    // resolve the file
+    path = this.resolve(dir, file);
+  }
+
+  return path;
+};
+
+/**
+ * Render with the given options.
+ *
+ * @param {object} options
+ * @param {function} callback
+ * @private
+ */
+
+View.prototype.render = function render(options, callback) {
+  debug('render "%s"', this.path);
+  this.engine(this.path, options, callback);
+};
+
+/**
+ * Resolve the file within the given directory.
+ *
+ * @param {string} dir
+ * @param {string} file
+ * @private
+ */
+
+View.prototype.resolve = function resolve(dir, file) {
+  var ext = this.ext;
+
+  // <path>.<ext>
+  var path = join(dir, file);
+  var stat = tryStat(path);
+
+  if (stat && stat.isFile()) {
+    return path;
+  }
+
+  // <path>/index.<ext>
+  path = join(dir, basename(file, ext), 'index' + ext);
+  stat = tryStat(path);
+
+  if (stat && stat.isFile()) {
+    return path;
+  }
+};
+
+/**
+ * Return a stat, maybe.
+ *
+ * @param {string} path
+ * @return {fs.Stats}
+ * @private
+ */
+
+function tryStat(path) {
+  debug('stat "%s"', path);
+
+  try {
+    return fs.statSync(path);
+  } catch (e) {
+    return undefined;
+  }
+}
+
+
+/***/ }),
+
+/***/ 66515:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+/*!
+ * cookie
+ * Copyright(c) 2012-2014 Roman Shtylman
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+exports.parse = parse;
+exports.serialize = serialize;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var __toString = Object.prototype.toString
+
+/**
+ * RegExp to match field-content in RFC 7230 sec 3.2
+ *
+ * field-content = field-vchar [ 1*( SP / HTAB ) field-vchar ]
+ * field-vchar   = VCHAR / obs-text
+ * obs-text      = %x80-FF
+ */
+
+var fieldContentRegExp = /^[\u0009\u0020-\u007e\u0080-\u00ff]+$/;
+
+/**
+ * Parse a cookie header.
+ *
+ * Parse the given cookie header string into an object
+ * The object has the various cookies as keys(names) => values
+ *
+ * @param {string} str
+ * @param {object} [options]
+ * @return {object}
+ * @public
+ */
+
+function parse(str, options) {
+  if (typeof str !== 'string') {
+    throw new TypeError('argument str must be a string');
+  }
+
+  var obj = {}
+  var opt = options || {};
+  var dec = opt.decode || decode;
+
+  var index = 0
+  while (index < str.length) {
+    var eqIdx = str.indexOf('=', index)
+
+    // no more cookie pairs
+    if (eqIdx === -1) {
+      break
+    }
+
+    var endIdx = str.indexOf(';', index)
+
+    if (endIdx === -1) {
+      endIdx = str.length
+    } else if (endIdx < eqIdx) {
+      // backtrack on prior semicolon
+      index = str.lastIndexOf(';', eqIdx - 1) + 1
+      continue
+    }
+
+    var key = str.slice(index, eqIdx).trim()
+
+    // only assign once
+    if (undefined === obj[key]) {
+      var val = str.slice(eqIdx + 1, endIdx).trim()
+
+      // quoted values
+      if (val.charCodeAt(0) === 0x22) {
+        val = val.slice(1, -1)
+      }
+
+      obj[key] = tryDecode(val, dec);
+    }
+
+    index = endIdx + 1
+  }
+
+  return obj;
+}
+
+/**
+ * Serialize data into a cookie header.
+ *
+ * Serialize the a name value pair into a cookie string suitable for
+ * http headers. An optional options object specified cookie parameters.
+ *
+ * serialize('foo', 'bar', { httpOnly: true })
+ *   => "foo=bar; httpOnly"
+ *
+ * @param {string} name
+ * @param {string} val
+ * @param {object} [options]
+ * @return {string}
+ * @public
+ */
+
+function serialize(name, val, options) {
+  var opt = options || {};
+  var enc = opt.encode || encode;
+
+  if (typeof enc !== 'function') {
+    throw new TypeError('option encode is invalid');
+  }
+
+  if (!fieldContentRegExp.test(name)) {
+    throw new TypeError('argument name is invalid');
+  }
+
+  var value = enc(val);
+
+  if (value && !fieldContentRegExp.test(value)) {
+    throw new TypeError('argument val is invalid');
+  }
+
+  var str = name + '=' + value;
+
+  if (null != opt.maxAge) {
+    var maxAge = opt.maxAge - 0;
+
+    if (isNaN(maxAge) || !isFinite(maxAge)) {
+      throw new TypeError('option maxAge is invalid')
+    }
+
+    str += '; Max-Age=' + Math.floor(maxAge);
+  }
+
+  if (opt.domain) {
+    if (!fieldContentRegExp.test(opt.domain)) {
+      throw new TypeError('option domain is invalid');
+    }
+
+    str += '; Domain=' + opt.domain;
+  }
+
+  if (opt.path) {
+    if (!fieldContentRegExp.test(opt.path)) {
+      throw new TypeError('option path is invalid');
+    }
+
+    str += '; Path=' + opt.path;
+  }
+
+  if (opt.expires) {
+    var expires = opt.expires
+
+    if (!isDate(expires) || isNaN(expires.valueOf())) {
+      throw new TypeError('option expires is invalid');
+    }
+
+    str += '; Expires=' + expires.toUTCString()
+  }
+
+  if (opt.httpOnly) {
+    str += '; HttpOnly';
+  }
+
+  if (opt.secure) {
+    str += '; Secure';
+  }
+
+  if (opt.priority) {
+    var priority = typeof opt.priority === 'string'
+      ? opt.priority.toLowerCase()
+      : opt.priority
+
+    switch (priority) {
+      case 'low':
+        str += '; Priority=Low'
+        break
+      case 'medium':
+        str += '; Priority=Medium'
+        break
+      case 'high':
+        str += '; Priority=High'
+        break
+      default:
+        throw new TypeError('option priority is invalid')
+    }
+  }
+
+  if (opt.sameSite) {
+    var sameSite = typeof opt.sameSite === 'string'
+      ? opt.sameSite.toLowerCase() : opt.sameSite;
+
+    switch (sameSite) {
+      case true:
+        str += '; SameSite=Strict';
+        break;
+      case 'lax':
+        str += '; SameSite=Lax';
+        break;
+      case 'strict':
+        str += '; SameSite=Strict';
+        break;
+      case 'none':
+        str += '; SameSite=None';
+        break;
+      default:
+        throw new TypeError('option sameSite is invalid');
+    }
+  }
+
+  return str;
+}
+
+/**
+ * URL-decode string value. Optimized to skip native call when no %.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+
+function decode (str) {
+  return str.indexOf('%') !== -1
+    ? decodeURIComponent(str)
+    : str
+}
+
+/**
+ * URL-encode value.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+
+function encode (val) {
+  return encodeURIComponent(val)
+}
+
+/**
+ * Determine if value is a Date.
+ *
+ * @param {*} val
+ * @private
+ */
+
+function isDate (val) {
+  return __toString.call(val) === '[object Date]' ||
+    val instanceof Date
+}
+
+/**
+ * Try decoding a string using a decoding function.
+ *
+ * @param {string} str
+ * @param {function} decode
+ * @private
+ */
+
+function tryDecode(str, decode) {
+  try {
+    return decode(str);
+  } catch (e) {
+    return str;
+  }
+}
+
+
+/***/ }),
+
+/***/ 36654:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * This is the web browser implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = __nccwpck_require__(86991);
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+exports.storage = 'undefined' != typeof chrome
+               && 'undefined' != typeof chrome.storage
+                  ? chrome.storage.local
+                  : localstorage();
+
+/**
+ * Colors.
+ */
+
+exports.colors = [
+  'lightseagreen',
+  'forestgreen',
+  'goldenrod',
+  'dodgerblue',
+  'darkorchid',
+  'crimson'
+];
+
+/**
+ * Currently only WebKit-based Web Inspectors, Firefox >= v31,
+ * and the Firebug extension (any Firefox version) are known
+ * to support "%c" CSS customizations.
+ *
+ * TODO: add a `localStorage` variable to explicitly enable/disable colors
+ */
+
+function useColors() {
+  // NB: In an Electron preload script, document will be defined but not fully
+  // initialized. Since we know we're in Chrome, we'll just detect this case
+  // explicitly
+  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
+    return true;
+  }
+
+  // is webkit? http://stackoverflow.com/a/16459606/376773
+  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
+    // is firebug? http://stackoverflow.com/a/398120/376773
+    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
+    // is firefox >= v31?
+    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
+    // double check webkit in userAgent just in case we are in a worker
+    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
+}
+
+/**
+ * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
+ */
+
+exports.formatters.j = function(v) {
+  try {
+    return JSON.stringify(v);
+  } catch (err) {
+    return '[UnexpectedJSONParseError]: ' + err.message;
+  }
+};
+
+
+/**
+ * Colorize log arguments if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+  var useColors = this.useColors;
+
+  args[0] = (useColors ? '%c' : '')
+    + this.namespace
+    + (useColors ? ' %c' : ' ')
+    + args[0]
+    + (useColors ? '%c ' : ' ')
+    + '+' + exports.humanize(this.diff);
+
+  if (!useColors) return;
+
+  var c = 'color: ' + this.color;
+  args.splice(1, 0, c, 'color: inherit')
+
+  // the final "%c" is somewhat tricky, because there could be other
+  // arguments passed either before or after the %c, so we need to
+  // figure out the correct index to insert the CSS into
+  var index = 0;
+  var lastC = 0;
+  args[0].replace(/%[a-zA-Z%]/g, function(match) {
+    if ('%%' === match) return;
+    index++;
+    if ('%c' === match) {
+      // we only are interested in the *last* %c
+      // (the user may have provided their own)
+      lastC = index;
+    }
+  });
+
+  args.splice(lastC, 0, c);
+}
+
+/**
+ * Invokes `console.log()` when available.
+ * No-op when `console.log` is not a "function".
+ *
+ * @api public
+ */
+
+function log() {
+  // this hackery is required for IE8/9, where
+  // the `console.log` function doesn't have 'apply'
+  return 'object' === typeof console
+    && console.log
+    && Function.prototype.apply.call(console.log, console, arguments);
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+
+function save(namespaces) {
+  try {
+    if (null == namespaces) {
+      exports.storage.removeItem('debug');
+    } else {
+      exports.storage.debug = namespaces;
+    }
+  } catch(e) {}
+}
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+
+function load() {
+  var r;
+  try {
+    r = exports.storage.debug;
+  } catch(e) {}
+
+  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
+  if (!r && typeof process !== 'undefined' && 'env' in process) {
+    r = process.env.DEBUG;
+  }
+
+  return r;
+}
+
+/**
+ * Enable namespaces listed in `localStorage.debug` initially.
+ */
+
+exports.enable(load());
+
+/**
+ * Localstorage attempts to return the localstorage.
+ *
+ * This is necessary because safari throws
+ * when a user disables cookies/localstorage
+ * and you attempt to access it.
+ *
+ * @return {LocalStorage}
+ * @api private
+ */
+
+function localstorage() {
+  try {
+    return window.localStorage;
+  } catch (e) {}
+}
+
+
+/***/ }),
+
+/***/ 86991:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+
+/**
+ * This is the common logic for both the Node.js and web browser
+ * implementations of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+exports.coerce = coerce;
+exports.disable = disable;
+exports.enable = enable;
+exports.enabled = enabled;
+exports.humanize = __nccwpck_require__(27025);
+
+/**
+ * The currently active debug mode names, and names to skip.
+ */
+
+exports.names = [];
+exports.skips = [];
+
+/**
+ * Map of special "%n" handling functions, for the debug "format" argument.
+ *
+ * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
+ */
+
+exports.formatters = {};
+
+/**
+ * Previous log timestamp.
+ */
+
+var prevTime;
+
+/**
+ * Select a color.
+ * @param {String} namespace
+ * @return {Number}
+ * @api private
+ */
+
+function selectColor(namespace) {
+  var hash = 0, i;
+
+  for (i in namespace) {
+    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+
+  return exports.colors[Math.abs(hash) % exports.colors.length];
+}
+
+/**
+ * Create a debugger with the given `namespace`.
+ *
+ * @param {String} namespace
+ * @return {Function}
+ * @api public
+ */
+
+function createDebug(namespace) {
+
+  function debug() {
+    // disabled?
+    if (!debug.enabled) return;
+
+    var self = debug;
+
+    // set `diff` timestamp
+    var curr = +new Date();
+    var ms = curr - (prevTime || curr);
+    self.diff = ms;
+    self.prev = prevTime;
+    self.curr = curr;
+    prevTime = curr;
+
+    // turn the `arguments` into a proper Array
+    var args = new Array(arguments.length);
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i];
+    }
+
+    args[0] = exports.coerce(args[0]);
+
+    if ('string' !== typeof args[0]) {
+      // anything else let's inspect with %O
+      args.unshift('%O');
+    }
+
+    // apply any `formatters` transformations
+    var index = 0;
+    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
+      // if we encounter an escaped % then don't increase the array index
+      if (match === '%%') return match;
+      index++;
+      var formatter = exports.formatters[format];
+      if ('function' === typeof formatter) {
+        var val = args[index];
+        match = formatter.call(self, val);
+
+        // now we need to remove `args[index]` since it's inlined in the `format`
+        args.splice(index, 1);
+        index--;
+      }
+      return match;
+    });
+
+    // apply env-specific formatting (colors, etc.)
+    exports.formatArgs.call(self, args);
+
+    var logFn = debug.log || exports.log || console.log.bind(console);
+    logFn.apply(self, args);
+  }
+
+  debug.namespace = namespace;
+  debug.enabled = exports.enabled(namespace);
+  debug.useColors = exports.useColors();
+  debug.color = selectColor(namespace);
+
+  // env-specific initialization logic for debug instances
+  if ('function' === typeof exports.init) {
+    exports.init(debug);
+  }
+
+  return debug;
+}
+
+/**
+ * Enables a debug mode by namespaces. This can include modes
+ * separated by a colon and wildcards.
+ *
+ * @param {String} namespaces
+ * @api public
+ */
+
+function enable(namespaces) {
+  exports.save(namespaces);
+
+  exports.names = [];
+  exports.skips = [];
+
+  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
+  var len = split.length;
+
+  for (var i = 0; i < len; i++) {
+    if (!split[i]) continue; // ignore empty strings
+    namespaces = split[i].replace(/\*/g, '.*?');
+    if (namespaces[0] === '-') {
+      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+    } else {
+      exports.names.push(new RegExp('^' + namespaces + '$'));
+    }
+  }
+}
+
+/**
+ * Disable debug output.
+ *
+ * @api public
+ */
+
+function disable() {
+  exports.enable('');
+}
+
+/**
+ * Returns true if the given mode name is enabled, false otherwise.
+ *
+ * @param {String} name
+ * @return {Boolean}
+ * @api public
+ */
+
+function enabled(name) {
+  var i, len;
+  for (i = 0, len = exports.skips.length; i < len; i++) {
+    if (exports.skips[i].test(name)) {
+      return false;
+    }
+  }
+  for (i = 0, len = exports.names.length; i < len; i++) {
+    if (exports.names[i].test(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Coerce `val`.
+ *
+ * @param {Mixed} val
+ * @return {Mixed}
+ * @api private
+ */
+
+function coerce(val) {
+  if (val instanceof Error) return val.stack || val.message;
+  return val;
+}
+
+
+/***/ }),
+
+/***/ 52529:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/**
+ * Detect Electron renderer process, which is node, but we should
+ * treat as a browser.
+ */
+
+if (typeof process !== 'undefined' && process.type === 'renderer') {
+  module.exports = __nccwpck_require__(36654);
+} else {
+  module.exports = __nccwpck_require__(25696);
+}
+
+
+/***/ }),
+
+/***/ 25696:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * Module dependencies.
+ */
+
+var tty = __nccwpck_require__(76224);
+var util = __nccwpck_require__(73837);
+
+/**
+ * This is the Node.js implementation of `debug()`.
+ *
+ * Expose `debug()` as the module.
+ */
+
+exports = module.exports = __nccwpck_require__(86991);
+exports.init = init;
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+
+/**
+ * Colors.
+ */
+
+exports.colors = [6, 2, 3, 4, 5, 1];
+
+/**
+ * Build up the default `inspectOpts` object from the environment variables.
+ *
+ *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+ */
+
+exports.inspectOpts = Object.keys(process.env).filter(function (key) {
+  return /^debug_/i.test(key);
+}).reduce(function (obj, key) {
+  // camel-case
+  var prop = key
+    .substring(6)
+    .toLowerCase()
+    .replace(/_([a-z])/g, function (_, k) { return k.toUpperCase() });
+
+  // coerce string value into JS value
+  var val = process.env[key];
+  if (/^(yes|on|true|enabled)$/i.test(val)) val = true;
+  else if (/^(no|off|false|disabled)$/i.test(val)) val = false;
+  else if (val === 'null') val = null;
+  else val = Number(val);
+
+  obj[prop] = val;
+  return obj;
+}, {});
+
+/**
+ * The file descriptor to write the `debug()` calls to.
+ * Set the `DEBUG_FD` env variable to override with another value. i.e.:
+ *
+ *   $ DEBUG_FD=3 node script.js 3>debug.log
+ */
+
+var fd = parseInt(process.env.DEBUG_FD, 10) || 2;
+
+if (1 !== fd && 2 !== fd) {
+  util.deprecate(function(){}, 'except for stderr(2) and stdout(1), any other usage of DEBUG_FD is deprecated. Override debug.log if you want to use a different log function (https://git.io/debug_fd)')()
+}
+
+var stream = 1 === fd ? process.stdout :
+             2 === fd ? process.stderr :
+             createWritableStdioStream(fd);
+
+/**
+ * Is stdout a TTY? Colored output is enabled when `true`.
+ */
+
+function useColors() {
+  return 'colors' in exports.inspectOpts
+    ? Boolean(exports.inspectOpts.colors)
+    : tty.isatty(fd);
+}
+
+/**
+ * Map %o to `util.inspect()`, all on a single line.
+ */
+
+exports.formatters.o = function(v) {
+  this.inspectOpts.colors = this.useColors;
+  return util.inspect(v, this.inspectOpts)
+    .split('\n').map(function(str) {
+      return str.trim()
+    }).join(' ');
+};
+
+/**
+ * Map %o to `util.inspect()`, allowing multiple lines if needed.
+ */
+
+exports.formatters.O = function(v) {
+  this.inspectOpts.colors = this.useColors;
+  return util.inspect(v, this.inspectOpts);
+};
+
+/**
+ * Adds ANSI color escape codes if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+  var name = this.namespace;
+  var useColors = this.useColors;
+
+  if (useColors) {
+    var c = this.color;
+    var prefix = '  \u001b[3' + c + ';1m' + name + ' ' + '\u001b[0m';
+
+    args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+    args.push('\u001b[3' + c + 'm+' + exports.humanize(this.diff) + '\u001b[0m');
+  } else {
+    args[0] = new Date().toUTCString()
+      + ' ' + name + ' ' + args[0];
+  }
+}
+
+/**
+ * Invokes `util.format()` with the specified arguments and writes to `stream`.
+ */
+
+function log() {
+  return stream.write(util.format.apply(util, arguments) + '\n');
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+
+function save(namespaces) {
+  if (null == namespaces) {
+    // If you set a process.env field to null or undefined, it gets cast to the
+    // string 'null' or 'undefined'. Just delete instead.
+    delete process.env.DEBUG;
+  } else {
+    process.env.DEBUG = namespaces;
+  }
