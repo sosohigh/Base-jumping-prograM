@@ -62211,3 +62211,2185 @@ class IncomingForm extends EventEmitter {
           if (this.options.keepExtensions !== true) {
             ext = '';
           }
+        }
+        return this.options.filename.call(this, name, ext, part, this);
+      };
+    } else {
+      this._getNewName = (part) => {
+        const name = toHexoId();
+
+        if (part && this.options.keepExtensions) {
+          const originalFilename = typeof part === 'string' ? part : part.originalFilename;
+          return `${name}${this._getExtension(originalFilename)}`;
+        }
+    
+        return name;
+      }
+    }
+  }
+
+  _setUpMaxFields() {
+    if (this.options.maxFields !== 0) {
+      let fieldsCount = 0;
+      this.on('field', () => {
+        fieldsCount += 1;
+        if (fieldsCount > this.options.maxFields) {
+          this._error(
+            new FormidableError(
+              `options.maxFields (${this.options.maxFields}) exceeded`,
+              errors.maxFieldsExceeded,
+              413,
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  _maybeEnd() {
+    // console.log('ended', this.ended);
+    // console.log('_flushing', this._flushing);
+    // console.log('error', this.error);
+    if (!this.ended || this._flushing || this.error) {
+      return;
+    }
+
+    this.emit('end');
+  }
+}
+
+IncomingForm.DEFAULT_OPTIONS = DEFAULT_OPTIONS;
+module.exports = IncomingForm;
+
+
+/***/ }),
+
+/***/ 73808:
+/***/ ((module) => {
+
+/* eslint-disable no-plusplus */
+
+const missingPlugin = 1000;
+const pluginFunction = 1001;
+const aborted = 1002;
+const noParser = 1003;
+const uninitializedParser = 1004;
+const filenameNotString = 1005;
+const maxFieldsSizeExceeded = 1006;
+const maxFieldsExceeded = 1007;
+const smallerThanMinFileSize = 1008;
+const biggerThanMaxFileSize = 1009;
+const noEmptyFiles = 1010;
+const missingContentType = 1011;
+const malformedMultipart = 1012;
+const missingMultipartBoundary = 1013;
+const unknownTransferEncoding = 1014;
+
+const FormidableError = class extends Error {
+  constructor(message, internalCode, httpCode = 500) {
+    super(message);
+    this.code = internalCode;
+    this.httpCode = httpCode;
+  }
+};
+
+module.exports = {
+  missingPlugin,
+  pluginFunction,
+  aborted,
+  noParser,
+  uninitializedParser,
+  filenameNotString,
+  maxFieldsSizeExceeded,
+  maxFieldsExceeded,
+  smallerThanMinFileSize,
+  biggerThanMaxFileSize,
+  noEmptyFiles,
+  missingContentType,
+  malformedMultipart,
+  missingMultipartBoundary,
+  unknownTransferEncoding,
+
+  FormidableError,
+};
+
+
+/***/ }),
+
+/***/ 16580:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const fs = __nccwpck_require__(57147);
+const crypto = __nccwpck_require__(6113);
+const { EventEmitter } = __nccwpck_require__(82361);
+
+class PersistentFile extends EventEmitter {
+  constructor({ filepath, newFilename, originalFilename, mimetype, hashAlgorithm }) {
+    super();
+
+    this.lastModifiedDate = null;
+    Object.assign(this, { filepath, newFilename, originalFilename, mimetype, hashAlgorithm });
+
+    this.size = 0;
+    this._writeStream = null;
+
+    if (typeof this.hashAlgorithm === 'string') {
+      this.hash = crypto.createHash(this.hashAlgorithm);
+    } else {
+      this.hash = null;
+    }
+  }
+
+  open() {
+    this._writeStream = new fs.WriteStream(this.filepath);
+    this._writeStream.on('error', (err) => {
+      this.emit('error', err);
+    });
+  }
+
+  toJSON() {
+    const json = {
+      size: this.size,
+      filepath: this.filepath,
+      newFilename: this.newFilename,
+      mimetype: this.mimetype,
+      mtime: this.lastModifiedDate,
+      length: this.length,
+      originalFilename: this.originalFilename,
+    };
+    if (this.hash && this.hash !== '') {
+      json.hash = this.hash;
+    }
+    return json;
+  }
+
+  toString() {
+    return `PersistentFile: ${this.newFilename}, Original: ${this.originalFilename}, Path: ${this.filepath}`;
+  }
+
+  write(buffer, cb) {
+    if (this.hash) {
+      this.hash.update(buffer);
+    }
+
+    if (this._writeStream.closed) {
+      cb();
+      return;
+    }
+
+    this._writeStream.write(buffer, () => {
+      this.lastModifiedDate = new Date();
+      this.size += buffer.length;
+      this.emit('progress', this.size);
+      cb();
+    });
+  }
+
+  end(cb) {
+    if (this.hash) {
+      this.hash = this.hash.digest('hex');
+    }
+    this._writeStream.end(() => {
+      this.emit('end');
+      cb();
+    });
+  }
+
+  destroy() {
+    this._writeStream.destroy();
+    fs.unlink(this.filepath, () => {});
+  }
+}
+
+module.exports = PersistentFile;
+
+
+/***/ }),
+
+/***/ 12908:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const crypto = __nccwpck_require__(6113);
+const { EventEmitter } = __nccwpck_require__(82361);
+
+class VolatileFile extends EventEmitter {
+  constructor({ filepath, newFilename, originalFilename, mimetype, hashAlgorithm, createFileWriteStream }) {
+    super();
+
+    this.lastModifiedDate = null;
+    Object.assign(this, { filepath, newFilename, originalFilename, mimetype, hashAlgorithm, createFileWriteStream });
+
+    this.size = 0;
+    this._writeStream = null;
+
+    if (typeof this.hashAlgorithm === 'string') {
+      this.hash = crypto.createHash(this.hashAlgorithm);
+    } else {
+      this.hash = null;
+    }
+  }
+
+  open() {
+    this._writeStream = this.createFileWriteStream(this);
+    this._writeStream.on('error', (err) => {
+      this.emit('error', err);
+    });
+  }
+
+  destroy() {
+    this._writeStream.destroy();
+  }
+
+  toJSON() {
+    const json = {
+      size: this.size,
+      newFilename: this.newFilename,
+      length: this.length,
+      originalFilename: this.originalFilename,
+      mimetype: this.mimetype,
+    };
+    if (this.hash && this.hash !== '') {
+      json.hash = this.hash;
+    }
+    return json;
+  }
+
+  toString() {
+    return `VolatileFile: ${this.originalFilename}`;
+  }
+
+  write(buffer, cb) {
+    if (this.hash) {
+      this.hash.update(buffer);
+    }
+
+    if (this._writeStream.closed || this._writeStream.destroyed) {
+      cb();
+      return;
+    }
+
+    this._writeStream.write(buffer, () => {
+      this.size += buffer.length;
+      this.emit('progress', this.size);
+      cb();
+    });
+  }
+
+  end(cb) {
+    if (this.hash) {
+      this.hash = this.hash.digest('hex');
+    }
+    this._writeStream.end(() => {
+      this.emit('end');
+      cb();
+    });
+  }
+}
+
+module.exports = VolatileFile;
+
+
+/***/ }),
+
+/***/ 75706:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const PersistentFile = __nccwpck_require__(16580);
+const VolatileFile = __nccwpck_require__(12908);
+const Formidable = __nccwpck_require__(96952);
+const FormidableError = __nccwpck_require__(73808);
+
+const plugins = __nccwpck_require__(23300);
+const parsers = __nccwpck_require__(8652);
+
+// make it available without requiring the `new` keyword
+// if you want it access `const formidable.IncomingForm` as v1
+const formidable = (...args) => new Formidable(...args);
+
+module.exports = Object.assign(formidable, {
+  errors: FormidableError,
+  File: PersistentFile,
+  PersistentFile,
+  VolatileFile,
+  Formidable,
+  formidable,
+
+  // alias
+  IncomingForm: Formidable,
+
+  // parsers
+  ...parsers,
+  parsers,
+
+  // misc
+  defaultOptions: Formidable.DEFAULT_OPTIONS,
+  enabledPlugins: Formidable.DEFAULT_OPTIONS.enabledPlugins,
+
+  // plugins
+  plugins: {
+    ...plugins,
+  },
+});
+
+
+/***/ }),
+
+/***/ 64335:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const { Transform } = __nccwpck_require__(12781);
+
+class DummyParser extends Transform {
+  constructor(incomingForm, options = {}) {
+    super();
+    this.globalOptions = { ...options };
+    this.incomingForm = incomingForm;
+  }
+
+  _flush(callback) {
+    this.incomingForm.ended = true;
+    this.incomingForm._maybeEnd();
+    callback();
+  }
+}
+
+module.exports = DummyParser;
+
+
+/***/ }),
+
+/***/ 14739:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const { Transform } = __nccwpck_require__(12781);
+
+class JSONParser extends Transform {
+  constructor(options = {}) {
+    super({ readableObjectMode: true });
+    this.chunks = [];
+    this.globalOptions = { ...options };
+  }
+
+  _transform(chunk, encoding, callback) {
+    this.chunks.push(String(chunk)); // todo consider using a string decoder
+    callback();
+  }
+
+  _flush(callback) {
+    try {
+      const fields = JSON.parse(this.chunks.join(''));
+      Object.keys(fields).forEach((key) => {
+        const value = fields[key];
+        this.push({ key, value });
+      });
+    } catch (e) {
+      callback(e);
+      return;
+    }
+    this.chunks = null;
+    callback();
+  }
+}
+
+module.exports = JSONParser;
+
+
+/***/ }),
+
+/***/ 45139:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-fallthrough */
+/* eslint-disable no-bitwise */
+/* eslint-disable no-plusplus */
+/* eslint-disable no-underscore-dangle */
+
+
+
+const { Transform } = __nccwpck_require__(12781);
+const errors = __nccwpck_require__(73808);
+
+const { FormidableError } = errors;
+
+let s = 0;
+const STATE = {
+  PARSER_UNINITIALIZED: s++,
+  START: s++,
+  START_BOUNDARY: s++,
+  HEADER_FIELD_START: s++,
+  HEADER_FIELD: s++,
+  HEADER_VALUE_START: s++,
+  HEADER_VALUE: s++,
+  HEADER_VALUE_ALMOST_DONE: s++,
+  HEADERS_ALMOST_DONE: s++,
+  PART_DATA_START: s++,
+  PART_DATA: s++,
+  PART_END: s++,
+  END: s++,
+};
+
+let f = 1;
+const FBOUNDARY = { PART_BOUNDARY: f, LAST_BOUNDARY: (f *= 2) };
+
+const LF = 10;
+const CR = 13;
+const SPACE = 32;
+const HYPHEN = 45;
+const COLON = 58;
+const A = 97;
+const Z = 122;
+
+function lower(c) {
+  return c | 0x20;
+}
+
+exports.STATES = {};
+
+Object.keys(STATE).forEach((stateName) => {
+  exports.STATES[stateName] = STATE[stateName];
+});
+
+class MultipartParser extends Transform {
+  constructor(options = {}) {
+    super({ readableObjectMode: true });
+    this.boundary = null;
+    this.boundaryChars = null;
+    this.lookbehind = null;
+    this.bufferLength = 0;
+    this.state = STATE.PARSER_UNINITIALIZED;
+
+    this.globalOptions = { ...options };
+    this.index = null;
+    this.flags = 0;
+  }
+
+  _flush(done) {
+    if (
+      (this.state === STATE.HEADER_FIELD_START && this.index === 0) ||
+      (this.state === STATE.PART_DATA && this.index === this.boundary.length)
+    ) {
+      this._handleCallback('partEnd');
+      this._handleCallback('end');
+      done();
+    } else if (this.state !== STATE.END) {
+      done(
+        new FormidableError(
+          `MultipartParser.end(): stream ended unexpectedly: ${this.explain()}`,
+          errors.malformedMultipart,
+          400,
+        ),
+      );
+    }
+  }
+
+  initWithBoundary(str) {
+    this.boundary = Buffer.from(`\r\n--${str}`);
+    this.lookbehind = Buffer.alloc(this.boundary.length + 8);
+    this.state = STATE.START;
+    this.boundaryChars = {};
+
+    for (let i = 0; i < this.boundary.length; i++) {
+      this.boundaryChars[this.boundary[i]] = true;
+    }
+  }
+
+  // eslint-disable-next-line max-params
+  _handleCallback(name, buf, start, end) {
+    if (start !== undefined && start === end) {
+      return;
+    }
+    this.push({ name, buffer: buf, start, end });
+  }
+
+  // eslint-disable-next-line max-statements
+  _transform(buffer, _, done) {
+    let i = 0;
+    let prevIndex = this.index;
+    let { index, state, flags } = this;
+    const { lookbehind, boundary, boundaryChars } = this;
+    const boundaryLength = boundary.length;
+    const boundaryEnd = boundaryLength - 1;
+    this.bufferLength = buffer.length;
+    let c = null;
+    let cl = null;
+
+    const setMark = (name, idx) => {
+      this[`${name}Mark`] = typeof idx === 'number' ? idx : i;
+    };
+
+    const clearMarkSymbol = (name) => {
+      delete this[`${name}Mark`];
+    };
+
+    const dataCallback = (name, shouldClear) => {
+      const markSymbol = `${name}Mark`;
+      if (!(markSymbol in this)) {
+        return;
+      }
+
+      if (!shouldClear) {
+        this._handleCallback(name, buffer, this[markSymbol], buffer.length);
+        setMark(name, 0);
+      } else {
+        this._handleCallback(name, buffer, this[markSymbol], i);
+        clearMarkSymbol(name);
+      }
+    };
+
+    for (i = 0; i < this.bufferLength; i++) {
+      c = buffer[i];
+      switch (state) {
+        case STATE.PARSER_UNINITIALIZED:
+          return i;
+        case STATE.START:
+          index = 0;
+          state = STATE.START_BOUNDARY;
+        case STATE.START_BOUNDARY:
+          if (index === boundary.length - 2) {
+            if (c === HYPHEN) {
+              flags |= FBOUNDARY.LAST_BOUNDARY;
+            } else if (c !== CR) {
+              return i;
+            }
+            index++;
+            break;
+          } else if (index - 1 === boundary.length - 2) {
+            if (flags & FBOUNDARY.LAST_BOUNDARY && c === HYPHEN) {
+              this._handleCallback('end');
+              state = STATE.END;
+              flags = 0;
+            } else if (!(flags & FBOUNDARY.LAST_BOUNDARY) && c === LF) {
+              index = 0;
+              this._handleCallback('partBegin');
+              state = STATE.HEADER_FIELD_START;
+            } else {
+              return i;
+            }
+            break;
+          }
+
+          if (c !== boundary[index + 2]) {
+            index = -2;
+          }
+          if (c === boundary[index + 2]) {
+            index++;
+          }
+          break;
+        case STATE.HEADER_FIELD_START:
+          state = STATE.HEADER_FIELD;
+          setMark('headerField');
+          index = 0;
+        case STATE.HEADER_FIELD:
+          if (c === CR) {
+            clearMarkSymbol('headerField');
+            state = STATE.HEADERS_ALMOST_DONE;
+            break;
+          }
+
+          index++;
+          if (c === HYPHEN) {
+            break;
+          }
+
+          if (c === COLON) {
+            if (index === 1) {
+              // empty header field
+              return i;
+            }
+            dataCallback('headerField', true);
+            state = STATE.HEADER_VALUE_START;
+            break;
+          }
+
+          cl = lower(c);
+          if (cl < A || cl > Z) {
+            return i;
+          }
+          break;
+        case STATE.HEADER_VALUE_START:
+          if (c === SPACE) {
+            break;
+          }
+
+          setMark('headerValue');
+          state = STATE.HEADER_VALUE;
+        case STATE.HEADER_VALUE:
+          if (c === CR) {
+            dataCallback('headerValue', true);
+            this._handleCallback('headerEnd');
+            state = STATE.HEADER_VALUE_ALMOST_DONE;
+          }
+          break;
+        case STATE.HEADER_VALUE_ALMOST_DONE:
+          if (c !== LF) {
+            return i;
+          }
+          state = STATE.HEADER_FIELD_START;
+          break;
+        case STATE.HEADERS_ALMOST_DONE:
+          if (c !== LF) {
+            return i;
+          }
+
+          this._handleCallback('headersEnd');
+          state = STATE.PART_DATA_START;
+          break;
+        case STATE.PART_DATA_START:
+          state = STATE.PART_DATA;
+          setMark('partData');
+        case STATE.PART_DATA:
+          prevIndex = index;
+
+          if (index === 0) {
+            // boyer-moore derrived algorithm to safely skip non-boundary data
+            i += boundaryEnd;
+            while (i < this.bufferLength && !(buffer[i] in boundaryChars)) {
+              i += boundaryLength;
+            }
+            i -= boundaryEnd;
+            c = buffer[i];
+          }
+
+          if (index < boundary.length) {
+            if (boundary[index] === c) {
+              if (index === 0) {
+                dataCallback('partData', true);
+              }
+              index++;
+            } else {
+              index = 0;
+            }
+          } else if (index === boundary.length) {
+            index++;
+            if (c === CR) {
+              // CR = part boundary
+              flags |= FBOUNDARY.PART_BOUNDARY;
+            } else if (c === HYPHEN) {
+              // HYPHEN = end boundary
+              flags |= FBOUNDARY.LAST_BOUNDARY;
+            } else {
+              index = 0;
+            }
+          } else if (index - 1 === boundary.length) {
+            if (flags & FBOUNDARY.PART_BOUNDARY) {
+              index = 0;
+              if (c === LF) {
+                // unset the PART_BOUNDARY flag
+                flags &= ~FBOUNDARY.PART_BOUNDARY;
+                this._handleCallback('partEnd');
+                this._handleCallback('partBegin');
+                state = STATE.HEADER_FIELD_START;
+                break;
+              }
+            } else if (flags & FBOUNDARY.LAST_BOUNDARY) {
+              if (c === HYPHEN) {
+                this._handleCallback('partEnd');
+                this._handleCallback('end');
+                state = STATE.END;
+                flags = 0;
+              } else {
+                index = 0;
+              }
+            } else {
+              index = 0;
+            }
+          }
+
+          if (index > 0) {
+            // when matching a possible boundary, keep a lookbehind reference
+            // in case it turns out to be a false lead
+            lookbehind[index - 1] = c;
+          } else if (prevIndex > 0) {
+            // if our boundary turned out to be rubbish, the captured lookbehind
+            // belongs to partData
+            this._handleCallback('partData', lookbehind, 0, prevIndex);
+            prevIndex = 0;
+            setMark('partData');
+
+            // reconsider the current character even so it interrupted the sequence
+            // it could be the beginning of a new sequence
+            i--;
+          }
+
+          break;
+        case STATE.END:
+          break;
+        default:
+          return i;
+      }
+    }
+
+    dataCallback('headerField');
+    dataCallback('headerValue');
+    dataCallback('partData');
+
+    this.index = index;
+    this.state = state;
+    this.flags = flags;
+
+    done();
+    return this.bufferLength;
+  }
+
+  explain() {
+    return `state = ${MultipartParser.stateToString(this.state)}`;
+  }
+}
+
+// eslint-disable-next-line consistent-return
+MultipartParser.stateToString = (stateNumber) => {
+  // eslint-disable-next-line no-restricted-syntax, guard-for-in
+  for (const stateName in STATE) {
+    const number = STATE[stateName];
+    if (number === stateNumber) return stateName;
+  }
+};
+
+module.exports = Object.assign(MultipartParser, { STATES: exports.STATES });
+
+
+/***/ }),
+
+/***/ 41084:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const { PassThrough } = __nccwpck_require__(12781);
+
+class OctetStreamParser extends PassThrough {
+  constructor(options = {}) {
+    super();
+    this.globalOptions = { ...options };
+  }
+}
+
+module.exports = OctetStreamParser;
+
+
+/***/ }),
+
+/***/ 84279:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const { Transform } = __nccwpck_require__(12781);
+const querystring = __nccwpck_require__(63477);
+
+// This is a buffering parser, not quite as nice as the multipart one.
+// If I find time I'll rewrite this to be fully streaming as well
+class QuerystringParser extends Transform {
+  constructor(options = {}) {
+    super({ readableObjectMode: true });
+    this.globalOptions = { ...options };
+    this.buffer = '';
+    this.bufferLength = 0;
+  }
+
+  _transform(buffer, encoding, callback) {
+    this.buffer += buffer.toString('ascii');
+    this.bufferLength = this.buffer.length;
+    callback();
+  }
+
+  _flush(callback) {
+    const fields = querystring.parse(this.buffer, '&', '=');
+    // eslint-disable-next-line no-restricted-syntax, guard-for-in
+    for (const key in fields) {
+      this.push({
+        key,
+        value: fields[key],
+      });
+    }
+    this.buffer = '';
+    callback();
+  }
+}
+
+module.exports = QuerystringParser;
+
+
+/***/ }),
+
+/***/ 8652:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const JSONParser = __nccwpck_require__(14739);
+const DummyParser = __nccwpck_require__(64335);
+const MultipartParser = __nccwpck_require__(45139);
+const OctetStreamParser = __nccwpck_require__(41084);
+const QueryStringParser = __nccwpck_require__(84279);
+
+Object.assign(exports, {
+  JSONParser,
+  DummyParser,
+  MultipartParser,
+  OctetStreamParser,
+  OctetstreamParser: OctetStreamParser,
+  QueryStringParser,
+  QuerystringParser: QueryStringParser,
+});
+
+
+/***/ }),
+
+/***/ 23300:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const octetstream = __nccwpck_require__(26197);
+const querystring = __nccwpck_require__(2210);
+const multipart = __nccwpck_require__(87964);
+const json = __nccwpck_require__(26942);
+
+Object.assign(exports, {
+  octetstream,
+  querystring,
+  multipart,
+  json,
+});
+
+
+/***/ }),
+
+/***/ 26942:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const JSONParser = __nccwpck_require__(14739);
+
+// the `options` is also available through the `this.options` / `formidable.options`
+module.exports = function plugin(formidable, options) {
+  // the `this` context is always formidable, as the first argument of a plugin
+  // but this allows us to customize/test each plugin
+
+  /* istanbul ignore next */
+  const self = this || formidable;
+
+  if (/json/i.test(self.headers['content-type'])) {
+    init.call(self, self, options);
+  }
+};
+
+// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+// of the passed `options` (second) param, because when you decide
+// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+function init(_self, _opts) {
+  this.type = 'json';
+
+  const parser = new JSONParser(this.options);
+
+  parser.on('data', ({ key, value }) => {
+    this.emit('field', key, value);
+  });
+
+  parser.once('end', () => {
+    this.ended = true;
+    this._maybeEnd();
+  });
+
+  this._parser = parser;
+}
+
+
+/***/ }),
+
+/***/ 87964:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const { Stream } = __nccwpck_require__(12781);
+const MultipartParser = __nccwpck_require__(45139);
+const errors = __nccwpck_require__(73808);
+
+const { FormidableError } = errors;
+
+// the `options` is also available through the `options` / `formidable.options`
+module.exports = function plugin(formidable, options) {
+  // the `this` context is always formidable, as the first argument of a plugin
+  // but this allows us to customize/test each plugin
+
+  /* istanbul ignore next */
+  const self = this || formidable;
+
+  // NOTE: we (currently) support both multipart/form-data and multipart/related
+  const multipart = /multipart/i.test(self.headers['content-type']);
+
+  if (multipart) {
+    const m = self.headers['content-type'].match(
+      /boundary=(?:"([^"]+)"|([^;]+))/i,
+    );
+    if (m) {
+      const initMultipart = createInitMultipart(m[1] || m[2]);
+      initMultipart.call(self, self, options); // lgtm [js/superfluous-trailing-arguments]
+    } else {
+      const err = new FormidableError(
+        'bad content-type header, no multipart boundary',
+        errors.missingMultipartBoundary,
+        400,
+      );
+      self._error(err);
+    }
+  }
+};
+
+// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+// of the passed `options` (second) param, because when you decide
+// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+function createInitMultipart(boundary) {
+  return function initMultipart() {
+    this.type = 'multipart';
+
+    const parser = new MultipartParser(this.options);
+    let headerField;
+    let headerValue;
+    let part;
+
+    parser.initWithBoundary(boundary);
+
+    // eslint-disable-next-line max-statements, consistent-return
+    parser.on('data', ({ name, buffer, start, end }) => {
+      if (name === 'partBegin') {
+        part = new Stream();
+        part.readable = true;
+        part.headers = {};
+        part.name = null;
+        part.originalFilename = null;
+        part.mimetype = null;
+
+        part.transferEncoding = this.options.encoding;
+        part.transferBuffer = '';
+
+        headerField = '';
+        headerValue = '';
+      } else if (name === 'headerField') {
+        headerField += buffer.toString(this.options.encoding, start, end);
+      } else if (name === 'headerValue') {
+        headerValue += buffer.toString(this.options.encoding, start, end);
+      } else if (name === 'headerEnd') {
+        headerField = headerField.toLowerCase();
+        part.headers[headerField] = headerValue;
+
+        // matches either a quoted-string or a token (RFC 2616 section 19.5.1)
+        const m = headerValue.match(
+          // eslint-disable-next-line no-useless-escape
+          /\bname=("([^"]*)"|([^\(\)<>@,;:\\"\/\[\]\?=\{\}\s\t/]+))/i,
+        );
+        if (headerField === 'content-disposition') {
+          if (m) {
+            part.name = m[2] || m[3] || '';
+          }
+
+          part.originalFilename = this._getFileName(headerValue);
+        } else if (headerField === 'content-type') {
+          part.mimetype = headerValue;
+        } else if (headerField === 'content-transfer-encoding') {
+          part.transferEncoding = headerValue.toLowerCase();
+        }
+
+        headerField = '';
+        headerValue = '';
+      } else if (name === 'headersEnd') {
+        switch (part.transferEncoding) {
+          case 'binary':
+          case '7bit':
+          case '8bit':
+          case 'utf-8': {
+            const dataPropagation = (ctx) => {
+              if (ctx.name === 'partData') {
+                part.emit('data', ctx.buffer.slice(ctx.start, ctx.end));
+              }
+            };
+            const dataStopPropagation = (ctx) => {
+              if (ctx.name === 'partEnd') {
+                part.emit('end');
+                parser.off('data', dataPropagation);
+                parser.off('data', dataStopPropagation);
+              }
+            };
+            parser.on('data', dataPropagation);
+            parser.on('data', dataStopPropagation);
+            break;
+          }
+          case 'base64': {
+            const dataPropagation = (ctx) => {
+              if (ctx.name === 'partData') {
+                part.transferBuffer += ctx.buffer
+                  .slice(ctx.start, ctx.end)
+                  .toString('ascii');
+
+                /*
+                  four bytes (chars) in base64 converts to three bytes in binary
+                  encoding. So we should always work with a number of bytes that
+                  can be divided by 4, it will result in a number of buytes that
+                  can be divided vy 3.
+                  */
+                const offset = parseInt(part.transferBuffer.length / 4, 10) * 4;
+                part.emit(
+                  'data',
+                  Buffer.from(
+                    part.transferBuffer.substring(0, offset),
+                    'base64',
+                  ),
+                );
+                part.transferBuffer = part.transferBuffer.substring(offset);
+              }
+            };
+            const dataStopPropagation = (ctx) => {
+              if (ctx.name === 'partEnd') {
+                part.emit('data', Buffer.from(part.transferBuffer, 'base64'));
+                part.emit('end');
+                parser.off('data', dataPropagation);
+                parser.off('data', dataStopPropagation);
+              }
+            };
+            parser.on('data', dataPropagation);
+            parser.on('data', dataStopPropagation);
+            break;
+          }
+          default:
+            return this._error(
+              new FormidableError(
+                'unknown transfer-encoding',
+                errors.unknownTransferEncoding,
+                501,
+              ),
+            );
+        }
+
+        this.onPart(part);
+      } else if (name === 'end') {
+        this.ended = true;
+        this._maybeEnd();
+      }
+    });
+
+    this._parser = parser;
+  };
+}
+
+
+/***/ }),
+
+/***/ 26197:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const OctetStreamParser = __nccwpck_require__(41084);
+
+// the `options` is also available through the `options` / `formidable.options`
+module.exports = function plugin(formidable, options) {
+  // the `this` context is always formidable, as the first argument of a plugin
+  // but this allows us to customize/test each plugin
+
+  /* istanbul ignore next */
+  const self = this || formidable;
+
+  if (/octet-stream/i.test(self.headers['content-type'])) {
+    init.call(self, self, options);
+  }
+
+  return self;
+};
+
+// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+// of the passed `options` (second) param, because when you decide
+// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+function init(_self, _opts) {
+  this.type = 'octet-stream';
+  const originalFilename = this.headers['x-file-name'];
+  const mimetype = this.headers['content-type'];
+
+  const thisPart = {
+    originalFilename,
+    mimetype,
+  };
+  const newFilename = this._getNewName(thisPart);
+  const filepath = this._joinDirectoryName(newFilename);
+  const file = this._newFile({
+    newFilename,
+    filepath,
+    originalFilename,
+    mimetype,
+  });
+
+  this.emit('fileBegin', originalFilename, file);
+  file.open();
+  this.openedFiles.push(file);
+  this._flushing += 1;
+
+  this._parser = new OctetStreamParser(this.options);
+
+  // Keep track of writes that haven't finished so we don't emit the file before it's done being written
+  let outstandingWrites = 0;
+
+  this._parser.on('data', (buffer) => {
+    this.pause();
+    outstandingWrites += 1;
+
+    file.write(buffer, () => {
+      outstandingWrites -= 1;
+      this.resume();
+
+      if (this.ended) {
+        this._parser.emit('doneWritingFile');
+      }
+    });
+  });
+
+  this._parser.on('end', () => {
+    this._flushing -= 1;
+    this.ended = true;
+
+    const done = () => {
+      file.end(() => {
+        this.emit('file', 'file', file);
+        this._maybeEnd();
+      });
+    };
+
+    if (outstandingWrites === 0) {
+      done();
+    } else {
+      this._parser.once('doneWritingFile', done);
+    }
+  });
+
+  return this;
+}
+
+
+/***/ }),
+
+/***/ 2210:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/* eslint-disable no-underscore-dangle */
+
+
+
+const QuerystringParser = __nccwpck_require__(84279);
+
+// the `options` is also available through the `this.options` / `formidable.options`
+module.exports = function plugin(formidable, options) {
+  // the `this` context is always formidable, as the first argument of a plugin
+  // but this allows us to customize/test each plugin
+
+  /* istanbul ignore next */
+  const self = this || formidable;
+
+  if (/urlencoded/i.test(self.headers['content-type'])) {
+    init.call(self, self, options);
+  }
+
+  return self;
+};
+
+// Note that it's a good practice (but it's up to you) to use the `this.options` instead
+// of the passed `options` (second) param, because when you decide
+// to test the plugin you can pass custom `this` context to it (and so `this.options`)
+function init(_self, _opts) {
+  this.type = 'urlencoded';
+
+  const parser = new QuerystringParser(this.options);
+
+  parser.on('data', ({ key, value }) => {
+    this.emit('field', key, value);
+  });
+
+  parser.once('end', () => {
+    this.ended = true;
+    this._maybeEnd();
+  });
+
+  this._parser = parser;
+
+  return this;
+}
+
+
+/***/ }),
+
+/***/ 46868:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * forwarded
+ * Copyright(c) 2014-2017 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = forwarded
+
+/**
+ * Get all addresses in the request, using the `X-Forwarded-For` header.
+ *
+ * @param {object} req
+ * @return {array}
+ * @public
+ */
+
+function forwarded (req) {
+  if (!req) {
+    throw new TypeError('argument req is required')
+  }
+
+  // simple header parsing
+  var proxyAddrs = parse(req.headers['x-forwarded-for'] || '')
+  var socketAddr = getSocketAddr(req)
+  var addrs = [socketAddr].concat(proxyAddrs)
+
+  // return all addresses
+  return addrs
+}
+
+/**
+ * Get the socket address for a request.
+ *
+ * @param {object} req
+ * @return {string}
+ * @private
+ */
+
+function getSocketAddr (req) {
+  return req.socket
+    ? req.socket.remoteAddress
+    : req.connection.remoteAddress
+}
+
+/**
+ * Parse the X-Forwarded-For header.
+ *
+ * @param {string} header
+ * @private
+ */
+
+function parse (header) {
+  var end = header.length
+  var list = []
+  var start = header.length
+
+  // gather addresses, backwards
+  for (var i = header.length - 1; i >= 0; i--) {
+    switch (header.charCodeAt(i)) {
+      case 0x20: /*   */
+        if (start === end) {
+          start = end = i
+        }
+        break
+      case 0x2c: /* , */
+        if (start !== end) {
+          list.push(header.substring(start, end))
+        }
+        start = end = i
+        break
+      default:
+        start = i
+        break
+    }
+  }
+
+  // final address
+  if (start !== end) {
+    list.push(header.substring(start, end))
+  }
+
+  return list
+}
+
+
+/***/ }),
+
+/***/ 83136:
+/***/ ((module) => {
+
+"use strict";
+/*!
+ * fresh
+ * Copyright(c) 2012 TJ Holowaychuk
+ * Copyright(c) 2016-2017 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * RegExp to check for no-cache token in Cache-Control.
+ * @private
+ */
+
+var CACHE_CONTROL_NO_CACHE_REGEXP = /(?:^|,)\s*?no-cache\s*?(?:,|$)/
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = fresh
+
+/**
+ * Check freshness of the response using request and response headers.
+ *
+ * @param {Object} reqHeaders
+ * @param {Object} resHeaders
+ * @return {Boolean}
+ * @public
+ */
+
+function fresh (reqHeaders, resHeaders) {
+  // fields
+  var modifiedSince = reqHeaders['if-modified-since']
+  var noneMatch = reqHeaders['if-none-match']
+
+  // unconditional request
+  if (!modifiedSince && !noneMatch) {
+    return false
+  }
+
+  // Always return stale when Cache-Control: no-cache
+  // to support end-to-end reload requests
+  // https://tools.ietf.org/html/rfc2616#section-14.9.4
+  var cacheControl = reqHeaders['cache-control']
+  if (cacheControl && CACHE_CONTROL_NO_CACHE_REGEXP.test(cacheControl)) {
+    return false
+  }
+
+  // if-none-match
+  if (noneMatch && noneMatch !== '*') {
+    var etag = resHeaders['etag']
+
+    if (!etag) {
+      return false
+    }
+
+    var etagStale = true
+    var matches = parseTokenList(noneMatch)
+    for (var i = 0; i < matches.length; i++) {
+      var match = matches[i]
+      if (match === etag || match === 'W/' + etag || 'W/' + match === etag) {
+        etagStale = false
+        break
+      }
+    }
+
+    if (etagStale) {
+      return false
+    }
+  }
+
+  // if-modified-since
+  if (modifiedSince) {
+    var lastModified = resHeaders['last-modified']
+    var modifiedStale = !lastModified || !(parseHttpDate(lastModified) <= parseHttpDate(modifiedSince))
+
+    if (modifiedStale) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Parse an HTTP Date into a number.
+ *
+ * @param {string} date
+ * @private
+ */
+
+function parseHttpDate (date) {
+  var timestamp = date && Date.parse(date)
+
+  // istanbul ignore next: guard against date.js Date.parse patching
+  return typeof timestamp === 'number'
+    ? timestamp
+    : NaN
+}
+
+/**
+ * Parse a HTTP token list.
+ *
+ * @param {string} str
+ * @private
+ */
+
+function parseTokenList (str) {
+  var end = 0
+  var list = []
+  var start = 0
+
+  // gather tokens
+  for (var i = 0, len = str.length; i < len; i++) {
+    switch (str.charCodeAt(i)) {
+      case 0x20: /*   */
+        if (start === end) {
+          start = end = i + 1
+        }
+        break
+      case 0x2c: /* , */
+        list.push(str.substring(start, end))
+        start = end = i + 1
+        break
+      default:
+        end = i + 1
+        break
+    }
+  }
+
+  // final token
+  list.push(str.substring(start, end))
+
+  return list
+}
+
+
+/***/ }),
+
+/***/ 46863:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+module.exports = realpath
+realpath.realpath = realpath
+realpath.sync = realpathSync
+realpath.realpathSync = realpathSync
+realpath.monkeypatch = monkeypatch
+realpath.unmonkeypatch = unmonkeypatch
+
+var fs = __nccwpck_require__(57147)
+var origRealpath = fs.realpath
+var origRealpathSync = fs.realpathSync
+
+var version = process.version
+var ok = /^v[0-5]\./.test(version)
+var old = __nccwpck_require__(71734)
+
+function newError (er) {
+  return er && er.syscall === 'realpath' && (
+    er.code === 'ELOOP' ||
+    er.code === 'ENOMEM' ||
+    er.code === 'ENAMETOOLONG'
+  )
+}
+
+function realpath (p, cache, cb) {
+  if (ok) {
+    return origRealpath(p, cache, cb)
+  }
+
+  if (typeof cache === 'function') {
+    cb = cache
+    cache = null
+  }
+  origRealpath(p, cache, function (er, result) {
+    if (newError(er)) {
+      old.realpath(p, cache, cb)
+    } else {
+      cb(er, result)
+    }
+  })
+}
+
+function realpathSync (p, cache) {
+  if (ok) {
+    return origRealpathSync(p, cache)
+  }
+
+  try {
+    return origRealpathSync(p, cache)
+  } catch (er) {
+    if (newError(er)) {
+      return old.realpathSync(p, cache)
+    } else {
+      throw er
+    }
+  }
+}
+
+function monkeypatch () {
+  fs.realpath = realpath
+  fs.realpathSync = realpathSync
+}
+
+function unmonkeypatch () {
+  fs.realpath = origRealpath
+  fs.realpathSync = origRealpathSync
+}
+
+
+/***/ }),
+
+/***/ 71734:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var pathModule = __nccwpck_require__(71017);
+var isWindows = process.platform === 'win32';
+var fs = __nccwpck_require__(57147);
+
+// JavaScript implementation of realpath, ported from node pre-v6
+
+var DEBUG = process.env.NODE_DEBUG && /fs/.test(process.env.NODE_DEBUG);
+
+function rethrow() {
+  // Only enable in debug mode. A backtrace uses ~1000 bytes of heap space and
+  // is fairly slow to generate.
+  var callback;
+  if (DEBUG) {
+    var backtrace = new Error;
+    callback = debugCallback;
+  } else
+    callback = missingCallback;
+
+  return callback;
+
+  function debugCallback(err) {
+    if (err) {
+      backtrace.message = err.message;
+      err = backtrace;
+      missingCallback(err);
+    }
+  }
+
+  function missingCallback(err) {
+    if (err) {
+      if (process.throwDeprecation)
+        throw err;  // Forgot a callback but don't know where? Use NODE_DEBUG=fs
+      else if (!process.noDeprecation) {
+        var msg = 'fs: missing callback ' + (err.stack || err.message);
+        if (process.traceDeprecation)
+          console.trace(msg);
+        else
+          console.error(msg);
+      }
+    }
+  }
+}
+
+function maybeCallback(cb) {
+  return typeof cb === 'function' ? cb : rethrow();
+}
+
+var normalize = pathModule.normalize;
+
+// Regexp that finds the next partion of a (partial) path
+// result is [base_with_slash, base], e.g. ['somedir/', 'somedir']
+if (isWindows) {
+  var nextPartRe = /(.*?)(?:[\/\\]+|$)/g;
+} else {
+  var nextPartRe = /(.*?)(?:[\/]+|$)/g;
+}
+
+// Regex to find the device root, including trailing slash. E.g. 'c:\\'.
+if (isWindows) {
+  var splitRootRe = /^(?:[a-zA-Z]:|[\\\/]{2}[^\\\/]+[\\\/][^\\\/]+)?[\\\/]*/;
+} else {
+  var splitRootRe = /^[\/]*/;
+}
+
+exports.realpathSync = function realpathSync(p, cache) {
+  // make p is absolute
+  p = pathModule.resolve(p);
+
+  if (cache && Object.prototype.hasOwnProperty.call(cache, p)) {
+    return cache[p];
+  }
+
+  var original = p,
+      seenLinks = {},
+      knownHard = {};
+
+  // current character position in p
+  var pos;
+  // the partial path so far, including a trailing slash if any
+  var current;
+  // the partial path without a trailing slash (except when pointing at a root)
+  var base;
+  // the partial path scanned in the previous round, with slash
+  var previous;
+
+  start();
+
+  function start() {
+    // Skip over roots
+    var m = splitRootRe.exec(p);
+    pos = m[0].length;
+    current = m[0];
+    base = m[0];
+    previous = '';
+
+    // On windows, check that the root exists. On unix there is no need.
+    if (isWindows && !knownHard[base]) {
+      fs.lstatSync(base);
+      knownHard[base] = true;
+    }
+  }
+
+  // walk down the path, swapping out linked pathparts for their real
+  // values
+  // NB: p.length changes.
+  while (pos < p.length) {
+    // find the next part
+    nextPartRe.lastIndex = pos;
+    var result = nextPartRe.exec(p);
+    previous = current;
+    current += result[0];
+    base = previous + result[1];
+    pos = nextPartRe.lastIndex;
+
+    // continue if not a symlink
+    if (knownHard[base] || (cache && cache[base] === base)) {
+      continue;
+    }
+
+    var resolvedLink;
+    if (cache && Object.prototype.hasOwnProperty.call(cache, base)) {
+      // some known symbolic link.  no need to stat again.
+      resolvedLink = cache[base];
+    } else {
+      var stat = fs.lstatSync(base);
+      if (!stat.isSymbolicLink()) {
+        knownHard[base] = true;
+        if (cache) cache[base] = base;
+        continue;
+      }
+
+      // read the link if it wasn't read before
+      // dev/ino always return 0 on windows, so skip the check.
+      var linkTarget = null;
+      if (!isWindows) {
+        var id = stat.dev.toString(32) + ':' + stat.ino.toString(32);
+        if (seenLinks.hasOwnProperty(id)) {
+          linkTarget = seenLinks[id];
+        }
+      }
+      if (linkTarget === null) {
+        fs.statSync(base);
+        linkTarget = fs.readlinkSync(base);
+      }
+      resolvedLink = pathModule.resolve(previous, linkTarget);
+      // track this, if given a cache.
+      if (cache) cache[base] = resolvedLink;
+      if (!isWindows) seenLinks[id] = linkTarget;
+    }
+
+    // resolve the link, then start over
+    p = pathModule.resolve(resolvedLink, p.slice(pos));
+    start();
+  }
+
+  if (cache) cache[original] = p;
+
+  return p;
+};
+
+
+exports.realpath = function realpath(p, cache, cb) {
+  if (typeof cb !== 'function') {
+    cb = maybeCallback(cache);
+    cache = null;
+  }
+
+  // make p is absolute
+  p = pathModule.resolve(p);
+
+  if (cache && Object.prototype.hasOwnProperty.call(cache, p)) {
+    return process.nextTick(cb.bind(null, null, cache[p]));
+  }
+
+  var original = p,
+      seenLinks = {},
+      knownHard = {};
+
+  // current character position in p
+  var pos;
+  // the partial path so far, including a trailing slash if any
+  var current;
+  // the partial path without a trailing slash (except when pointing at a root)
+  var base;
+  // the partial path scanned in the previous round, with slash
+  var previous;
+
+  start();
+
+  function start() {
+    // Skip over roots
+    var m = splitRootRe.exec(p);
+    pos = m[0].length;
+    current = m[0];
+    base = m[0];
+    previous = '';
+
+    // On windows, check that the root exists. On unix there is no need.
+    if (isWindows && !knownHard[base]) {
+      fs.lstat(base, function(err) {
+        if (err) return cb(err);
+        knownHard[base] = true;
+        LOOP();
+      });
+    } else {
+      process.nextTick(LOOP);
+    }
+  }
+
+  // walk down the path, swapping out linked pathparts for their real
+  // values
+  function LOOP() {
+    // stop if scanned past end of path
+    if (pos >= p.length) {
+      if (cache) cache[original] = p;
+      return cb(null, p);
+    }
+
+    // find the next part
+    nextPartRe.lastIndex = pos;
+    var result = nextPartRe.exec(p);
+    previous = current;
+    current += result[0];
+    base = previous + result[1];
+    pos = nextPartRe.lastIndex;
+
+    // continue if not a symlink
+    if (knownHard[base] || (cache && cache[base] === base)) {
+      return process.nextTick(LOOP);
+    }
+
+    if (cache && Object.prototype.hasOwnProperty.call(cache, base)) {
+      // known symbolic link.  no need to stat again.
+      return gotResolvedLink(cache[base]);
+    }
+
+    return fs.lstat(base, gotStat);
+  }
+
+  function gotStat(err, stat) {
+    if (err) return cb(err);
+
+    // if not a symlink, skip to the next path part
+    if (!stat.isSymbolicLink()) {
+      knownHard[base] = true;
+      if (cache) cache[base] = base;
+      return process.nextTick(LOOP);
+    }
+
+    // stat & read the link if not read before
+    // call gotTarget as soon as the link target is known
+    // dev/ino always return 0 on windows, so skip the check.
+    if (!isWindows) {
+      var id = stat.dev.toString(32) + ':' + stat.ino.toString(32);
+      if (seenLinks.hasOwnProperty(id)) {
+        return gotTarget(null, seenLinks[id], base);
+      }
+    }
+    fs.stat(base, function(err) {
+      if (err) return cb(err);
+
+      fs.readlink(base, function(err, target) {
+        if (!isWindows) seenLinks[id] = target;
+        gotTarget(err, target);
+      });
+    });
+  }
+
+  function gotTarget(err, target, base) {
+    if (err) return cb(err);
+
+    var resolvedLink = pathModule.resolve(previous, target);
+    if (cache) cache[base] = resolvedLink;
+    gotResolvedLink(resolvedLink);
+  }
+
+  function gotResolvedLink(resolvedLink) {
+    // resolve the link, then start over
+    p = pathModule.resolve(resolvedLink, p.slice(pos));
+    start();
+  }
+};
+
+
+/***/ }),
+
+/***/ 19320:
+/***/ ((module) => {
+
+"use strict";
+
+
+/* eslint no-invalid-this: 1 */
+
+var ERROR_MESSAGE = 'Function.prototype.bind called on incompatible ';
+var slice = Array.prototype.slice;
+var toStr = Object.prototype.toString;
+var funcType = '[object Function]';
+
+module.exports = function bind(that) {
+    var target = this;
+    if (typeof target !== 'function' || toStr.call(target) !== funcType) {
+        throw new TypeError(ERROR_MESSAGE + target);
+    }
+    var args = slice.call(arguments, 1);
+
+    var bound;
+    var binder = function () {
+        if (this instanceof bound) {
+            var result = target.apply(
+                this,
+                args.concat(slice.call(arguments))
+            );
+            if (Object(result) === result) {
+                return result;
+            }
+            return this;
+        } else {
+            return target.apply(
+                that,
+                args.concat(slice.call(arguments))
+            );
+        }
+    };
+
+    var boundLength = Math.max(0, target.length - args.length);
+    var boundArgs = [];
+    for (var i = 0; i < boundLength; i++) {
+        boundArgs.push('$' + i);
+    }
+
+    bound = Function('binder', 'return function (' + boundArgs.join(',') + '){ return binder.apply(this,arguments); }')(binder);
+
+    if (target.prototype) {
+        var Empty = function Empty() {};
+        Empty.prototype = target.prototype;
+        bound.prototype = new Empty();
+        Empty.prototype = null;
+    }
+
+    return bound;
+};
+
+
+/***/ }),
+
+/***/ 88334:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var implementation = __nccwpck_require__(19320);
+
+module.exports = Function.prototype.bind || implementation;
+
+
+/***/ }),
+
+/***/ 74538:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var undefined;
+
+var $SyntaxError = SyntaxError;
+var $Function = Function;
+var $TypeError = TypeError;
+
+// eslint-disable-next-line consistent-return
+var getEvalledConstructor = function (expressionSyntax) {
+	try {
+		return $Function('"use strict"; return (' + expressionSyntax + ').constructor;')();
+	} catch (e) {}
+};
+
+var $gOPD = Object.getOwnPropertyDescriptor;
+if ($gOPD) {
+	try {
+		$gOPD({}, '');
+	} catch (e) {
+		$gOPD = null; // this is IE 8, which has a broken gOPD
+	}
+}
+
+var throwTypeError = function () {
+	throw new $TypeError();
+};
+var ThrowTypeError = $gOPD
+	? (function () {
+		try {
+			// eslint-disable-next-line no-unused-expressions, no-caller, no-restricted-properties
+			arguments.callee; // IE 8 does not throw here
+			return throwTypeError;
+		} catch (calleeThrows) {
+			try {
+				// IE 8 throws on Object.getOwnPropertyDescriptor(arguments, '')
+				return $gOPD(arguments, 'callee').get;
+			} catch (gOPDthrows) {
+				return throwTypeError;
+			}
+		}
+	}())
+	: throwTypeError;
+
+var hasSymbols = __nccwpck_require__(40587)();
+
+var getProto = Object.getPrototypeOf || function (x) { return x.__proto__; }; // eslint-disable-line no-proto
+
+var needsEval = {};
+
+var TypedArray = typeof Uint8Array === 'undefined' ? undefined : getProto(Uint8Array);
+
+var INTRINSICS = {
+	'%AggregateError%': typeof AggregateError === 'undefined' ? undefined : AggregateError,
+	'%Array%': Array,
+	'%ArrayBuffer%': typeof ArrayBuffer === 'undefined' ? undefined : ArrayBuffer,
+	'%ArrayIteratorPrototype%': hasSymbols ? getProto([][Symbol.iterator]()) : undefined,
+	'%AsyncFromSyncIteratorPrototype%': undefined,
+	'%AsyncFunction%': needsEval,
+	'%AsyncGenerator%': needsEval,
+	'%AsyncGeneratorFunction%': needsEval,
+	'%AsyncIteratorPrototype%': needsEval,
+	'%Atomics%': typeof Atomics === 'undefined' ? undefined : Atomics,
+	'%BigInt%': typeof BigInt === 'undefined' ? undefined : BigInt,
+	'%BigInt64Array%': typeof BigInt64Array === 'undefined' ? undefined : BigInt64Array,
+	'%BigUint64Array%': typeof BigUint64Array === 'undefined' ? undefined : BigUint64Array,
+	'%Boolean%': Boolean,
+	'%DataView%': typeof DataView === 'undefined' ? undefined : DataView,
+	'%Date%': Date,
+	'%decodeURI%': decodeURI,
+	'%decodeURIComponent%': decodeURIComponent,
+	'%encodeURI%': encodeURI,
+	'%encodeURIComponent%': encodeURIComponent,
+	'%Error%': Error,
+	'%eval%': eval, // eslint-disable-line no-eval
+	'%EvalError%': EvalError,
+	'%Float32Array%': typeof Float32Array === 'undefined' ? undefined : Float32Array,
+	'%Float64Array%': typeof Float64Array === 'undefined' ? undefined : Float64Array,
+	'%FinalizationRegistry%': typeof FinalizationRegistry === 'undefined' ? undefined : FinalizationRegistry,
+	'%Function%': $Function,
+	'%GeneratorFunction%': needsEval,
+	'%Int8Array%': typeof Int8Array === 'undefined' ? undefined : Int8Array,
+	'%Int16Array%': typeof Int16Array === 'undefined' ? undefined : Int16Array,
+	'%Int32Array%': typeof Int32Array === 'undefined' ? undefined : Int32Array,
+	'%isFinite%': isFinite,
+	'%isNaN%': isNaN,
+	'%IteratorPrototype%': hasSymbols ? getProto(getProto([][Symbol.iterator]())) : undefined,
+	'%JSON%': typeof JSON === 'object' ? JSON : undefined,
+	'%Map%': typeof Map === 'undefined' ? undefined : Map,
+	'%MapIteratorPrototype%': typeof Map === 'undefined' || !hasSymbols ? undefined : getProto(new Map()[Symbol.iterator]()),
+	'%Math%': Math,
+	'%Number%': Number,
+	'%Object%': Object,
+	'%parseFloat%': parseFloat,
+	'%parseInt%': parseInt,
+	'%Promise%': typeof Promise === 'undefined' ? undefined : Promise,
+	'%Proxy%': typeof Proxy === 'undefined' ? undefined : Proxy,
+	'%RangeError%': RangeError,
+	'%ReferenceError%': ReferenceError,
+	'%Reflect%': typeof Reflect === 'undefined' ? undefined : Reflect,
+	'%RegExp%': RegExp,
+	'%Set%': typeof Set === 'undefined' ? undefined : Set,
+	'%SetIteratorPrototype%': typeof Set === 'undefined' || !hasSymbols ? undefined : getProto(new Set()[Symbol.iterator]()),
+	'%SharedArrayBuffer%': typeof SharedArrayBuffer === 'undefined' ? undefined : SharedArrayBuffer,
+	'%String%': String,
+	'%StringIteratorPrototype%': hasSymbols ? getProto(''[Symbol.iterator]()) : undefined,
+	'%Symbol%': hasSymbols ? Symbol : undefined,
+	'%SyntaxError%': $SyntaxError,
+	'%ThrowTypeError%': ThrowTypeError,
+	'%TypedArray%': TypedArray,
+	'%TypeError%': $TypeError,
+	'%Uint8Array%': typeof Uint8Array === 'undefined' ? undefined : Uint8Array,
+	'%Uint8ClampedArray%': typeof Uint8ClampedArray === 'undefined' ? undefined : Uint8ClampedArray,
+	'%Uint16Array%': typeof Uint16Array === 'undefined' ? undefined : Uint16Array,
+	'%Uint32Array%': typeof Uint32Array === 'undefined' ? undefined : Uint32Array,
+	'%URIError%': URIError,
+	'%WeakMap%': typeof WeakMap === 'undefined' ? undefined : WeakMap,
+	'%WeakRef%': typeof WeakRef === 'undefined' ? undefined : WeakRef,
+	'%WeakSet%': typeof WeakSet === 'undefined' ? undefined : WeakSet
+};
+
+try {
+	null.error; // eslint-disable-line no-unused-expressions
+} catch (e) {
+	// https://github.com/tc39/proposal-shadowrealm/pull/384#issuecomment-1364264229
+	var errorProto = getProto(getProto(e));
+	INTRINSICS['%Error.prototype%'] = errorProto;
+}
+
+var doEval = function doEval(name) {
+	var value;
+	if (name === '%AsyncFunction%') {
+		value = getEvalledConstructor('async function () {}');
+	} else if (name === '%GeneratorFunction%') {
+		value = getEvalledConstructor('function* () {}');
+	} else if (name === '%AsyncGeneratorFunction%') {
+		value = getEvalledConstructor('async function* () {}');
+	} else if (name === '%AsyncGenerator%') {
+		var fn = doEval('%AsyncGeneratorFunction%');
+		if (fn) {
+			value = fn.prototype;
+		}
+	} else if (name === '%AsyncIteratorPrototype%') {
+		var gen = doEval('%AsyncGenerator%');
+		if (gen) {
+			value = getProto(gen.prototype);
+		}
+	}
+
+	INTRINSICS[name] = value;
+
+	return value;
+};
+
+var LEGACY_ALIASES = {
+	'%ArrayBufferPrototype%': ['ArrayBuffer', 'prototype'],
+	'%ArrayPrototype%': ['Array', 'prototype'],
+	'%ArrayProto_entries%': ['Array', 'prototype', 'entries'],
+	'%ArrayProto_forEach%': ['Array', 'prototype', 'forEach'],
+	'%ArrayProto_keys%': ['Array', 'prototype', 'keys'],
+	'%ArrayProto_values%': ['Array', 'prototype', 'values'],
+	'%AsyncFunctionPrototype%': ['AsyncFunction', 'prototype'],
+	'%AsyncGenerator%': ['AsyncGeneratorFunction', 'prototype'],
+	'%AsyncGeneratorPrototype%': ['AsyncGeneratorFunction', 'prototype', 'prototype'],
+	'%BooleanPrototype%': ['Boolean', 'prototype'],
+	'%DataViewPrototype%': ['DataView', 'prototype'],
+	'%DatePrototype%': ['Date', 'prototype'],
+	'%ErrorPrototype%': ['Error', 'prototype'],
+	'%EvalErrorPrototype%': ['EvalError', 'prototype'],
+	'%Float32ArrayPrototype%': ['Float32Array', 'prototype'],
+	'%Float64ArrayPrototype%': ['Float64Array', 'prototype'],
+	'%FunctionPrototype%': ['Function', 'prototype'],
+	'%Generator%': ['GeneratorFunction', 'prototype'],
+	'%GeneratorPrototype%': ['GeneratorFunction', 'prototype', 'prototype'],
+	'%Int8ArrayPrototype%': ['Int8Array', 'prototype'],
+	'%Int16ArrayPrototype%': ['Int16Array', 'prototype'],
+	'%Int32ArrayPrototype%': ['Int32Array', 'prototype'],
+	'%JSONParse%': ['JSON', 'parse'],
+	'%JSONStringify%': ['JSON', 'stringify'],
+	'%MapPrototype%': ['Map', 'prototype'],
+	'%NumberPrototype%': ['Number', 'prototype'],
+	'%ObjectPrototype%': ['Object', 'prototype'],
+	'%ObjProto_toString%': ['Object', 'prototype', 'toString'],
+	'%ObjProto_valueOf%': ['Object', 'prototype', 'valueOf'],
+	'%PromisePrototype%': ['Promise', 'prototype'],
+	'%PromiseProto_then%': ['Promise', 'prototype', 'then'],
+	'%Promise_all%': ['Promise', 'all'],
+	'%Promise_reject%': ['Promise', 'reject'],
+	'%Promise_resolve%': ['Promise', 'resolve'],
+	'%RangeErrorPrototype%': ['RangeError', 'prototype'],
+	'%ReferenceErrorPrototype%': ['ReferenceError', 'prototype'],
+	'%RegExpPrototype%': ['RegExp', 'prototype'],
+	'%SetPrototype%': ['Set', 'prototype'],
+	'%SharedArrayBufferPrototype%': ['SharedArrayBuffer', 'prototype'],
+	'%StringPrototype%': ['String', 'prototype'],
+	'%SymbolPrototype%': ['Symbol', 'prototype'],
+	'%SyntaxErrorPrototype%': ['SyntaxError', 'prototype'],
+	'%TypedArrayPrototype%': ['TypedArray', 'prototype'],
+	'%TypeErrorPrototype%': ['TypeError', 'prototype'],
+	'%Uint8ArrayPrototype%': ['Uint8Array', 'prototype'],
+	'%Uint8ClampedArrayPrototype%': ['Uint8ClampedArray', 'prototype'],
+	'%Uint16ArrayPrototype%': ['Uint16Array', 'prototype'],
+	'%Uint32ArrayPrototype%': ['Uint32Array', 'prototype'],
+	'%URIErrorPrototype%': ['URIError', 'prototype'],
+	'%WeakMapPrototype%': ['WeakMap', 'prototype'],
+	'%WeakSetPrototype%': ['WeakSet', 'prototype']
+};
+
+var bind = __nccwpck_require__(88334);
+var hasOwn = __nccwpck_require__(76339);
+var $concat = bind.call(Function.call, Array.prototype.concat);
+var $spliceApply = bind.call(Function.apply, Array.prototype.splice);
+var $replace = bind.call(Function.call, String.prototype.replace);
+var $strSlice = bind.call(Function.call, String.prototype.slice);
+var $exec = bind.call(Function.call, RegExp.prototype.exec);
+
+/* adapted from https://github.com/lodash/lodash/blob/4.17.15/dist/lodash.js#L6735-L6744 */
+var rePropName = /[^%.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|%$))/g;
+var reEscapeChar = /\\(\\)?/g; /** Used to match backslashes in property paths. */
+var stringToPath = function stringToPath(string) {
+	var first = $strSlice(string, 0, 1);
+	var last = $strSlice(string, -1);
+	if (first === '%' && last !== '%') {
+		throw new $SyntaxError('invalid intrinsic syntax, expected closing `%`');
+	} else if (last === '%' && first !== '%') {
+		throw new $SyntaxError('invalid intrinsic syntax, expected opening `%`');
+	}
+	var result = [];
+	$replace(string, rePropName, function (match, number, quote, subString) {
+		result[result.length] = quote ? $replace(subString, reEscapeChar, '$1') : number || match;
+	});
+	return result;
+};
