@@ -75331,3 +75331,2259 @@ StripBOMWrapper.prototype.write = function(buf) {
 StripBOMWrapper.prototype.end = function() {
     return this.decoder.end();
 }
+
+
+
+/***/ }),
+
+/***/ 30393:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+var Buffer = (__nccwpck_require__(14300).Buffer);
+// Note: not polyfilled with safer-buffer on a purpose, as overrides Buffer
+
+// == Extend Node primitives to use iconv-lite =================================
+
+module.exports = function (iconv) {
+    var original = undefined; // Place to keep original methods.
+
+    // Node authors rewrote Buffer internals to make it compatible with
+    // Uint8Array and we cannot patch key functions since then.
+    // Note: this does use older Buffer API on a purpose
+    iconv.supportsNodeEncodingsExtension = !(Buffer.from || new Buffer(0) instanceof Uint8Array);
+
+    iconv.extendNodeEncodings = function extendNodeEncodings() {
+        if (original) return;
+        original = {};
+
+        if (!iconv.supportsNodeEncodingsExtension) {
+            console.error("ACTION NEEDED: require('iconv-lite').extendNodeEncodings() is not supported in your version of Node");
+            console.error("See more info at https://github.com/ashtuchkin/iconv-lite/wiki/Node-v4-compatibility");
+            return;
+        }
+
+        var nodeNativeEncodings = {
+            'hex': true, 'utf8': true, 'utf-8': true, 'ascii': true, 'binary': true, 
+            'base64': true, 'ucs2': true, 'ucs-2': true, 'utf16le': true, 'utf-16le': true,
+        };
+
+        Buffer.isNativeEncoding = function(enc) {
+            return enc && nodeNativeEncodings[enc.toLowerCase()];
+        }
+
+        // -- SlowBuffer -----------------------------------------------------------
+        var SlowBuffer = (__nccwpck_require__(14300).SlowBuffer);
+
+        original.SlowBufferToString = SlowBuffer.prototype.toString;
+        SlowBuffer.prototype.toString = function(encoding, start, end) {
+            encoding = String(encoding || 'utf8').toLowerCase();
+
+            // Use native conversion when possible
+            if (Buffer.isNativeEncoding(encoding))
+                return original.SlowBufferToString.call(this, encoding, start, end);
+
+            // Otherwise, use our decoding method.
+            if (typeof start == 'undefined') start = 0;
+            if (typeof end == 'undefined') end = this.length;
+            return iconv.decode(this.slice(start, end), encoding);
+        }
+
+        original.SlowBufferWrite = SlowBuffer.prototype.write;
+        SlowBuffer.prototype.write = function(string, offset, length, encoding) {
+            // Support both (string, offset, length, encoding)
+            // and the legacy (string, encoding, offset, length)
+            if (isFinite(offset)) {
+                if (!isFinite(length)) {
+                    encoding = length;
+                    length = undefined;
+                }
+            } else {  // legacy
+                var swap = encoding;
+                encoding = offset;
+                offset = length;
+                length = swap;
+            }
+
+            offset = +offset || 0;
+            var remaining = this.length - offset;
+            if (!length) {
+                length = remaining;
+            } else {
+                length = +length;
+                if (length > remaining) {
+                    length = remaining;
+                }
+            }
+            encoding = String(encoding || 'utf8').toLowerCase();
+
+            // Use native conversion when possible
+            if (Buffer.isNativeEncoding(encoding))
+                return original.SlowBufferWrite.call(this, string, offset, length, encoding);
+
+            if (string.length > 0 && (length < 0 || offset < 0))
+                throw new RangeError('attempt to write beyond buffer bounds');
+
+            // Otherwise, use our encoding method.
+            var buf = iconv.encode(string, encoding);
+            if (buf.length < length) length = buf.length;
+            buf.copy(this, offset, 0, length);
+            return length;
+        }
+
+        // -- Buffer ---------------------------------------------------------------
+
+        original.BufferIsEncoding = Buffer.isEncoding;
+        Buffer.isEncoding = function(encoding) {
+            return Buffer.isNativeEncoding(encoding) || iconv.encodingExists(encoding);
+        }
+
+        original.BufferByteLength = Buffer.byteLength;
+        Buffer.byteLength = SlowBuffer.byteLength = function(str, encoding) {
+            encoding = String(encoding || 'utf8').toLowerCase();
+
+            // Use native conversion when possible
+            if (Buffer.isNativeEncoding(encoding))
+                return original.BufferByteLength.call(this, str, encoding);
+
+            // Slow, I know, but we don't have a better way yet.
+            return iconv.encode(str, encoding).length;
+        }
+
+        original.BufferToString = Buffer.prototype.toString;
+        Buffer.prototype.toString = function(encoding, start, end) {
+            encoding = String(encoding || 'utf8').toLowerCase();
+
+            // Use native conversion when possible
+            if (Buffer.isNativeEncoding(encoding))
+                return original.BufferToString.call(this, encoding, start, end);
+
+            // Otherwise, use our decoding method.
+            if (typeof start == 'undefined') start = 0;
+            if (typeof end == 'undefined') end = this.length;
+            return iconv.decode(this.slice(start, end), encoding);
+        }
+
+        original.BufferWrite = Buffer.prototype.write;
+        Buffer.prototype.write = function(string, offset, length, encoding) {
+            var _offset = offset, _length = length, _encoding = encoding;
+            // Support both (string, offset, length, encoding)
+            // and the legacy (string, encoding, offset, length)
+            if (isFinite(offset)) {
+                if (!isFinite(length)) {
+                    encoding = length;
+                    length = undefined;
+                }
+            } else {  // legacy
+                var swap = encoding;
+                encoding = offset;
+                offset = length;
+                length = swap;
+            }
+
+            encoding = String(encoding || 'utf8').toLowerCase();
+
+            // Use native conversion when possible
+            if (Buffer.isNativeEncoding(encoding))
+                return original.BufferWrite.call(this, string, _offset, _length, _encoding);
+
+            offset = +offset || 0;
+            var remaining = this.length - offset;
+            if (!length) {
+                length = remaining;
+            } else {
+                length = +length;
+                if (length > remaining) {
+                    length = remaining;
+                }
+            }
+
+            if (string.length > 0 && (length < 0 || offset < 0))
+                throw new RangeError('attempt to write beyond buffer bounds');
+
+            // Otherwise, use our encoding method.
+            var buf = iconv.encode(string, encoding);
+            if (buf.length < length) length = buf.length;
+            buf.copy(this, offset, 0, length);
+            return length;
+
+            // TODO: Set _charsWritten.
+        }
+
+
+        // -- Readable -------------------------------------------------------------
+        if (iconv.supportsStreams) {
+            var Readable = (__nccwpck_require__(12781).Readable);
+
+            original.ReadableSetEncoding = Readable.prototype.setEncoding;
+            Readable.prototype.setEncoding = function setEncoding(enc, options) {
+                // Use our own decoder, it has the same interface.
+                // We cannot use original function as it doesn't handle BOM-s.
+                this._readableState.decoder = iconv.getDecoder(enc, options);
+                this._readableState.encoding = enc;
+            }
+
+            Readable.prototype.collect = iconv._collect;
+        }
+    }
+
+    // Remove iconv-lite Node primitive extensions.
+    iconv.undoExtendNodeEncodings = function undoExtendNodeEncodings() {
+        if (!iconv.supportsNodeEncodingsExtension)
+            return;
+        if (!original)
+            throw new Error("require('iconv-lite').undoExtendNodeEncodings(): Nothing to undo; extendNodeEncodings() is not called.")
+
+        delete Buffer.isNativeEncoding;
+
+        var SlowBuffer = (__nccwpck_require__(14300).SlowBuffer);
+
+        SlowBuffer.prototype.toString = original.SlowBufferToString;
+        SlowBuffer.prototype.write = original.SlowBufferWrite;
+
+        Buffer.isEncoding = original.BufferIsEncoding;
+        Buffer.byteLength = original.BufferByteLength;
+        Buffer.prototype.toString = original.BufferToString;
+        Buffer.prototype.write = original.BufferWrite;
+
+        if (iconv.supportsStreams) {
+            var Readable = (__nccwpck_require__(12781).Readable);
+
+            Readable.prototype.setEncoding = original.ReadableSetEncoding;
+            delete Readable.prototype.collect;
+        }
+
+        original = undefined;
+    }
+}
+
+
+/***/ }),
+
+/***/ 19032:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+// Some environments don't have global Buffer (e.g. React Native).
+// Solution would be installing npm modules "buffer" and "stream" explicitly.
+var Buffer = (__nccwpck_require__(15118).Buffer);
+
+var bomHandling = __nccwpck_require__(67961),
+    iconv = module.exports;
+
+// All codecs and aliases are kept here, keyed by encoding name/alias.
+// They are lazy loaded in `iconv.getCodec` from `encodings/index.js`.
+iconv.encodings = null;
+
+// Characters emitted in case of error.
+iconv.defaultCharUnicode = '�';
+iconv.defaultCharSingleByte = '?';
+
+// Public API.
+iconv.encode = function encode(str, encoding, options) {
+    str = "" + (str || ""); // Ensure string.
+
+    var encoder = iconv.getEncoder(encoding, options);
+
+    var res = encoder.write(str);
+    var trail = encoder.end();
+    
+    return (trail && trail.length > 0) ? Buffer.concat([res, trail]) : res;
+}
+
+iconv.decode = function decode(buf, encoding, options) {
+    if (typeof buf === 'string') {
+        if (!iconv.skipDecodeWarning) {
+            console.error('Iconv-lite warning: decode()-ing strings is deprecated. Refer to https://github.com/ashtuchkin/iconv-lite/wiki/Use-Buffers-when-decoding');
+            iconv.skipDecodeWarning = true;
+        }
+
+        buf = Buffer.from("" + (buf || ""), "binary"); // Ensure buffer.
+    }
+
+    var decoder = iconv.getDecoder(encoding, options);
+
+    var res = decoder.write(buf);
+    var trail = decoder.end();
+
+    return trail ? (res + trail) : res;
+}
+
+iconv.encodingExists = function encodingExists(enc) {
+    try {
+        iconv.getCodec(enc);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Legacy aliases to convert functions
+iconv.toEncoding = iconv.encode;
+iconv.fromEncoding = iconv.decode;
+
+// Search for a codec in iconv.encodings. Cache codec data in iconv._codecDataCache.
+iconv._codecDataCache = {};
+iconv.getCodec = function getCodec(encoding) {
+    if (!iconv.encodings)
+        iconv.encodings = __nccwpck_require__(82733); // Lazy load all encoding definitions.
+    
+    // Canonicalize encoding name: strip all non-alphanumeric chars and appended year.
+    var enc = iconv._canonicalizeEncoding(encoding);
+
+    // Traverse iconv.encodings to find actual codec.
+    var codecOptions = {};
+    while (true) {
+        var codec = iconv._codecDataCache[enc];
+        if (codec)
+            return codec;
+
+        var codecDef = iconv.encodings[enc];
+
+        switch (typeof codecDef) {
+            case "string": // Direct alias to other encoding.
+                enc = codecDef;
+                break;
+
+            case "object": // Alias with options. Can be layered.
+                for (var key in codecDef)
+                    codecOptions[key] = codecDef[key];
+
+                if (!codecOptions.encodingName)
+                    codecOptions.encodingName = enc;
+                
+                enc = codecDef.type;
+                break;
+
+            case "function": // Codec itself.
+                if (!codecOptions.encodingName)
+                    codecOptions.encodingName = enc;
+
+                // The codec function must load all tables and return object with .encoder and .decoder methods.
+                // It'll be called only once (for each different options object).
+                codec = new codecDef(codecOptions, iconv);
+
+                iconv._codecDataCache[codecOptions.encodingName] = codec; // Save it to be reused later.
+                return codec;
+
+            default:
+                throw new Error("Encoding not recognized: '" + encoding + "' (searched as: '"+enc+"')");
+        }
+    }
+}
+
+iconv._canonicalizeEncoding = function(encoding) {
+    // Canonicalize encoding name: strip all non-alphanumeric chars and appended year.
+    return (''+encoding).toLowerCase().replace(/:\d{4}$|[^0-9a-z]/g, "");
+}
+
+iconv.getEncoder = function getEncoder(encoding, options) {
+    var codec = iconv.getCodec(encoding),
+        encoder = new codec.encoder(options, codec);
+
+    if (codec.bomAware && options && options.addBOM)
+        encoder = new bomHandling.PrependBOM(encoder, options);
+
+    return encoder;
+}
+
+iconv.getDecoder = function getDecoder(encoding, options) {
+    var codec = iconv.getCodec(encoding),
+        decoder = new codec.decoder(options, codec);
+
+    if (codec.bomAware && !(options && options.stripBOM === false))
+        decoder = new bomHandling.StripBOM(decoder, options);
+
+    return decoder;
+}
+
+
+// Load extensions in Node. All of them are omitted in Browserify build via 'browser' field in package.json.
+var nodeVer = typeof process !== 'undefined' && process.versions && process.versions.node;
+if (nodeVer) {
+
+    // Load streaming support in Node v0.10+
+    var nodeVerArr = nodeVer.split(".").map(Number);
+    if (nodeVerArr[0] > 0 || nodeVerArr[1] >= 10) {
+        __nccwpck_require__(76409)(iconv);
+    }
+
+    // Load Node primitive extensions.
+    __nccwpck_require__(30393)(iconv);
+}
+
+if (false) {}
+
+
+/***/ }),
+
+/***/ 76409:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var Buffer = (__nccwpck_require__(14300).Buffer),
+    Transform = (__nccwpck_require__(12781).Transform);
+
+
+// == Exports ==================================================================
+module.exports = function(iconv) {
+    
+    // Additional Public API.
+    iconv.encodeStream = function encodeStream(encoding, options) {
+        return new IconvLiteEncoderStream(iconv.getEncoder(encoding, options), options);
+    }
+
+    iconv.decodeStream = function decodeStream(encoding, options) {
+        return new IconvLiteDecoderStream(iconv.getDecoder(encoding, options), options);
+    }
+
+    iconv.supportsStreams = true;
+
+
+    // Not published yet.
+    iconv.IconvLiteEncoderStream = IconvLiteEncoderStream;
+    iconv.IconvLiteDecoderStream = IconvLiteDecoderStream;
+    iconv._collect = IconvLiteDecoderStream.prototype.collect;
+};
+
+
+// == Encoder stream =======================================================
+function IconvLiteEncoderStream(conv, options) {
+    this.conv = conv;
+    options = options || {};
+    options.decodeStrings = false; // We accept only strings, so we don't need to decode them.
+    Transform.call(this, options);
+}
+
+IconvLiteEncoderStream.prototype = Object.create(Transform.prototype, {
+    constructor: { value: IconvLiteEncoderStream }
+});
+
+IconvLiteEncoderStream.prototype._transform = function(chunk, encoding, done) {
+    if (typeof chunk != 'string')
+        return done(new Error("Iconv encoding stream needs strings as its input."));
+    try {
+        var res = this.conv.write(chunk);
+        if (res && res.length) this.push(res);
+        done();
+    }
+    catch (e) {
+        done(e);
+    }
+}
+
+IconvLiteEncoderStream.prototype._flush = function(done) {
+    try {
+        var res = this.conv.end();
+        if (res && res.length) this.push(res);
+        done();
+    }
+    catch (e) {
+        done(e);
+    }
+}
+
+IconvLiteEncoderStream.prototype.collect = function(cb) {
+    var chunks = [];
+    this.on('error', cb);
+    this.on('data', function(chunk) { chunks.push(chunk); });
+    this.on('end', function() {
+        cb(null, Buffer.concat(chunks));
+    });
+    return this;
+}
+
+
+// == Decoder stream =======================================================
+function IconvLiteDecoderStream(conv, options) {
+    this.conv = conv;
+    options = options || {};
+    options.encoding = this.encoding = 'utf8'; // We output strings.
+    Transform.call(this, options);
+}
+
+IconvLiteDecoderStream.prototype = Object.create(Transform.prototype, {
+    constructor: { value: IconvLiteDecoderStream }
+});
+
+IconvLiteDecoderStream.prototype._transform = function(chunk, encoding, done) {
+    if (!Buffer.isBuffer(chunk))
+        return done(new Error("Iconv decoding stream needs buffers as its input."));
+    try {
+        var res = this.conv.write(chunk);
+        if (res && res.length) this.push(res, this.encoding);
+        done();
+    }
+    catch (e) {
+        done(e);
+    }
+}
+
+IconvLiteDecoderStream.prototype._flush = function(done) {
+    try {
+        var res = this.conv.end();
+        if (res && res.length) this.push(res, this.encoding);                
+        done();
+    }
+    catch (e) {
+        done(e);
+    }
+}
+
+IconvLiteDecoderStream.prototype.collect = function(cb) {
+    var res = '';
+    this.on('error', cb);
+    this.on('data', function(chunk) { res += chunk; });
+    this.on('end', function() {
+        cb(null, res);
+    });
+    return this;
+}
+
+
+
+/***/ }),
+
+/***/ 98043:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = (string, count = 1, options) => {
+	options = {
+		indent: ' ',
+		includeEmptyLines: false,
+		...options
+	};
+
+	if (typeof string !== 'string') {
+		throw new TypeError(
+			`Expected \`input\` to be a \`string\`, got \`${typeof string}\``
+		);
+	}
+
+	if (typeof count !== 'number') {
+		throw new TypeError(
+			`Expected \`count\` to be a \`number\`, got \`${typeof count}\``
+		);
+	}
+
+	if (typeof options.indent !== 'string') {
+		throw new TypeError(
+			`Expected \`options.indent\` to be a \`string\`, got \`${typeof options.indent}\``
+		);
+	}
+
+	if (count === 0) {
+		return string;
+	}
+
+	const regex = options.includeEmptyLines ? /^/gm : /^(?!\s*$)/gm;
+
+	return string.replace(regex, options.indent.repeat(count));
+};
+
+
+/***/ }),
+
+/***/ 52492:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var wrappy = __nccwpck_require__(62940)
+var reqs = Object.create(null)
+var once = __nccwpck_require__(1223)
+
+module.exports = wrappy(inflight)
+
+function inflight (key, cb) {
+  if (reqs[key]) {
+    reqs[key].push(cb)
+    return null
+  } else {
+    reqs[key] = [cb]
+    return makeres(key)
+  }
+}
+
+function makeres (key) {
+  return once(function RES () {
+    var cbs = reqs[key]
+    var len = cbs.length
+    var args = slice(arguments)
+
+    // XXX It's somewhat ambiguous whether a new callback added in this
+    // pass should be queued for later execution if something in the
+    // list of callbacks throws, or if it should just be discarded.
+    // However, it's such an edge case that it hardly matters, and either
+    // choice is likely as surprising as the other.
+    // As it happens, we do go ahead and schedule it for later execution.
+    try {
+      for (var i = 0; i < len; i++) {
+        cbs[i].apply(null, args)
+      }
+    } finally {
+      if (cbs.length > len) {
+        // added more in the interim.
+        // de-zalgo, just in case, but don't call again.
+        cbs.splice(0, len)
+        process.nextTick(function () {
+          RES.apply(null, args)
+        })
+      } else {
+        delete reqs[key]
+      }
+    }
+  })
+}
+
+function slice (args) {
+  var length = args.length
+  var array = []
+
+  for (var i = 0; i < length; i++) array[i] = args[i]
+  return array
+}
+
+
+/***/ }),
+
+/***/ 44124:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+try {
+  var util = __nccwpck_require__(73837);
+  /* istanbul ignore next */
+  if (typeof util.inherits !== 'function') throw '';
+  module.exports = util.inherits;
+} catch (e) {
+  /* istanbul ignore next */
+  module.exports = __nccwpck_require__(8544);
+}
+
+
+/***/ }),
+
+/***/ 8544:
+/***/ ((module) => {
+
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    if (superCtor) {
+      ctor.super_ = superCtor
+      ctor.prototype = Object.create(superCtor.prototype, {
+        constructor: {
+          value: ctor,
+          enumerable: false,
+          writable: true,
+          configurable: true
+        }
+      })
+    }
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    if (superCtor) {
+      ctor.super_ = superCtor
+      var TempCtor = function () {}
+      TempCtor.prototype = superCtor.prototype
+      ctor.prototype = new TempCtor()
+      ctor.prototype.constructor = ctor
+    }
+  }
+}
+
+
+/***/ }),
+
+/***/ 30545:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const command_1 = __nccwpck_require__(90803);
+const utils_1 = __nccwpck_require__(94832);
+const RedisParser = __nccwpck_require__(53315);
+const SubscriptionSet_1 = __nccwpck_require__(73527);
+const debug = utils_1.Debug("dataHandler");
+class DataHandler {
+    constructor(redis, parserOptions) {
+        this.redis = redis;
+        const parser = new RedisParser({
+            stringNumbers: parserOptions.stringNumbers,
+            returnBuffers: !parserOptions.dropBufferSupport,
+            returnError: (err) => {
+                this.returnError(err);
+            },
+            returnFatalError: (err) => {
+                this.returnFatalError(err);
+            },
+            returnReply: (reply) => {
+                this.returnReply(reply);
+            },
+        });
+        redis.stream.on("data", (data) => {
+            parser.execute(data);
+        });
+    }
+    returnFatalError(err) {
+        err.message += ". Please report this.";
+        this.redis.recoverFromFatalError(err, err, { offlineQueue: false });
+    }
+    returnError(err) {
+        const item = this.shiftCommand(err);
+        if (!item) {
+            return;
+        }
+        err.command = {
+            name: item.command.name,
+            args: item.command.args,
+        };
+        this.redis.handleReconnection(err, item);
+    }
+    returnReply(reply) {
+        if (this.handleMonitorReply(reply)) {
+            return;
+        }
+        if (this.handleSubscriberReply(reply)) {
+            return;
+        }
+        const item = this.shiftCommand(reply);
+        if (!item) {
+            return;
+        }
+        if (command_1.default.checkFlag("ENTER_SUBSCRIBER_MODE", item.command.name)) {
+            this.redis.condition.subscriber = new SubscriptionSet_1.default();
+            this.redis.condition.subscriber.add(item.command.name, reply[1].toString());
+            if (!fillSubCommand(item.command, reply[2])) {
+                this.redis.commandQueue.unshift(item);
+            }
+        }
+        else if (command_1.default.checkFlag("EXIT_SUBSCRIBER_MODE", item.command.name)) {
+            if (!fillUnsubCommand(item.command, reply[2])) {
+                this.redis.commandQueue.unshift(item);
+            }
+        }
+        else {
+            item.command.resolve(reply);
+        }
+    }
+    handleSubscriberReply(reply) {
+        if (!this.redis.condition.subscriber) {
+            return false;
+        }
+        const replyType = Array.isArray(reply) ? reply[0].toString() : null;
+        debug('receive reply "%s" in subscriber mode', replyType);
+        switch (replyType) {
+            case "message":
+                if (this.redis.listeners("message").length > 0) {
+                    // Check if there're listeners to avoid unnecessary `toString()`.
+                    this.redis.emit("message", reply[1].toString(), reply[2] ? reply[2].toString() : '');
+                }
+                this.redis.emit("messageBuffer", reply[1], reply[2]);
+                break;
+            case "pmessage": {
+                const pattern = reply[1].toString();
+                if (this.redis.listeners("pmessage").length > 0) {
+                    this.redis.emit("pmessage", pattern, reply[2].toString(), reply[3].toString());
+                }
+                this.redis.emit("pmessageBuffer", pattern, reply[2], reply[3]);
+                break;
+            }
+            case "subscribe":
+            case "psubscribe": {
+                const channel = reply[1].toString();
+                this.redis.condition.subscriber.add(replyType, channel);
+                const item = this.shiftCommand(reply);
+                if (!item) {
+                    return;
+                }
+                if (!fillSubCommand(item.command, reply[2])) {
+                    this.redis.commandQueue.unshift(item);
+                }
+                break;
+            }
+            case "unsubscribe":
+            case "punsubscribe": {
+                const channel = reply[1] ? reply[1].toString() : null;
+                if (channel) {
+                    this.redis.condition.subscriber.del(replyType, channel);
+                }
+                const count = reply[2];
+                if (count === 0) {
+                    this.redis.condition.subscriber = false;
+                }
+                const item = this.shiftCommand(reply);
+                if (!item) {
+                    return;
+                }
+                if (!fillUnsubCommand(item.command, count)) {
+                    this.redis.commandQueue.unshift(item);
+                }
+                break;
+            }
+            default: {
+                const item = this.shiftCommand(reply);
+                if (!item) {
+                    return;
+                }
+                item.command.resolve(reply);
+            }
+        }
+        return true;
+    }
+    handleMonitorReply(reply) {
+        if (this.redis.status !== "monitoring") {
+            return false;
+        }
+        const replyStr = reply.toString();
+        if (replyStr === "OK") {
+            // Valid commands in the monitoring mode are AUTH and MONITOR,
+            // both of which always reply with 'OK'.
+            // So if we got an 'OK', we can make certain that
+            // the reply is made to AUTH & MONITO.
+            return false;
+        }
+        // Since commands sent in the monitoring mode will trigger an exception,
+        // any replies we received in the monitoring mode should consider to be
+        // realtime monitor data instead of result of commands.
+        const len = replyStr.indexOf(" ");
+        const timestamp = replyStr.slice(0, len);
+        const argindex = replyStr.indexOf('"');
+        const args = replyStr
+            .slice(argindex + 1, -1)
+            .split('" "')
+            .map((elem) => elem.replace(/\\"/g, '"'));
+        const dbAndSource = replyStr.slice(len + 2, argindex - 2).split(" ");
+        this.redis.emit("monitor", timestamp, args, dbAndSource[1], dbAndSource[0]);
+        return true;
+    }
+    shiftCommand(reply) {
+        const item = this.redis.commandQueue.shift();
+        if (!item) {
+            const message = "Command queue state error. If you can reproduce this, please report it.";
+            const error = new Error(message +
+                (reply instanceof Error
+                    ? ` Last error: ${reply.message}`
+                    : ` Last reply: ${reply.toString()}`));
+            this.redis.emit("error", error);
+            return null;
+        }
+        return item;
+    }
+}
+exports["default"] = DataHandler;
+function fillSubCommand(command, count) {
+    // TODO: use WeakMap here
+    if (typeof command.remainReplies === "undefined") {
+        command.remainReplies = command.args.length;
+    }
+    if (--command.remainReplies === 0) {
+        command.resolve(count);
+        return true;
+    }
+    return false;
+}
+function fillUnsubCommand(command, count) {
+    if (typeof command.remainReplies === "undefined") {
+        command.remainReplies = command.args.length;
+    }
+    if (command.remainReplies === 0) {
+        if (count === 0) {
+            command.resolve(count);
+            return true;
+        }
+        return false;
+    }
+    if (--command.remainReplies === 0) {
+        command.resolve(count);
+        return true;
+    }
+    return false;
+}
+
+
+/***/ }),
+
+/***/ 6134:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const stream_1 = __nccwpck_require__(12781);
+/**
+ * Convenient class to convert the process of scaning keys to a readable stream.
+ *
+ * @export
+ * @class ScanStream
+ * @extends {Readable}
+ */
+class ScanStream extends stream_1.Readable {
+    constructor(opt) {
+        super(opt);
+        this.opt = opt;
+        this._redisCursor = "0";
+        this._redisDrained = false;
+    }
+    _read() {
+        if (this._redisDrained) {
+            this.push(null);
+            return;
+        }
+        const args = [this._redisCursor];
+        if (this.opt.key) {
+            args.unshift(this.opt.key);
+        }
+        if (this.opt.match) {
+            args.push("MATCH", this.opt.match);
+        }
+        if (this.opt.type) {
+            args.push("TYPE", this.opt.type);
+        }
+        if (this.opt.count) {
+            args.push("COUNT", String(this.opt.count));
+        }
+        this.opt.redis[this.opt.command](args, (err, res) => {
+            if (err) {
+                this.emit("error", err);
+                return;
+            }
+            this._redisCursor = res[0] instanceof Buffer ? res[0].toString() : res[0];
+            if (this._redisCursor === "0") {
+                this._redisDrained = true;
+            }
+            this.push(res[1]);
+        });
+    }
+    close() {
+        this._redisDrained = true;
+    }
+}
+exports["default"] = ScanStream;
+
+
+/***/ }),
+
+/***/ 73527:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/**
+ * Tiny class to simplify dealing with subscription set
+ *
+ * @export
+ * @class SubscriptionSet
+ */
+class SubscriptionSet {
+    constructor() {
+        this.set = {
+            subscribe: {},
+            psubscribe: {},
+        };
+    }
+    add(set, channel) {
+        this.set[mapSet(set)][channel] = true;
+    }
+    del(set, channel) {
+        delete this.set[mapSet(set)][channel];
+    }
+    channels(set) {
+        return Object.keys(this.set[mapSet(set)]);
+    }
+    isEmpty() {
+        return (this.channels("subscribe").length === 0 &&
+            this.channels("psubscribe").length === 0);
+    }
+}
+exports["default"] = SubscriptionSet;
+function mapSet(set) {
+    if (set === "unsubscribe") {
+        return "subscribe";
+    }
+    if (set === "punsubscribe") {
+        return "psubscribe";
+    }
+    return set;
+}
+
+
+/***/ }),
+
+/***/ 97873:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const PromiseContainer = __nccwpck_require__(71475);
+const lodash_1 = __nccwpck_require__(20961);
+const calculateSlot = __nccwpck_require__(48481);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+exports.kExec = Symbol("exec");
+exports.kCallbacks = Symbol("callbacks");
+exports.notAllowedAutoPipelineCommands = [
+    "auth",
+    "info",
+    "script",
+    "quit",
+    "cluster",
+    "pipeline",
+    "multi",
+    "subscribe",
+    "psubscribe",
+    "unsubscribe",
+    "unpsubscribe",
+];
+function executeAutoPipeline(client, slotKey) {
+    /*
+      If a pipeline is already executing, keep queueing up commands
+      since ioredis won't serve two pipelines at the same time
+    */
+    if (client._runningAutoPipelines.has(slotKey)) {
+        return;
+    }
+    if (!client._autoPipelines.has(slotKey)) {
+        /*
+          Rare edge case. Somehow, something has deleted this running autopipeline in an immediate
+          call to executeAutoPipeline.
+         
+          Maybe the callback in the pipeline.exec is sometimes called in the same tick,
+          e.g. if redis is disconnected?
+        */
+        return;
+    }
+    client._runningAutoPipelines.add(slotKey);
+    // Get the pipeline and immediately delete it so that new commands are queued on a new pipeline
+    const pipeline = client._autoPipelines.get(slotKey);
+    client._autoPipelines.delete(slotKey);
+    const callbacks = pipeline[exports.kCallbacks];
+    // Stop keeping a reference to callbacks immediately after the callbacks stop being used.
+    // This allows the GC to reclaim objects referenced by callbacks, especially with 16384 slots
+    // in Redis.Cluster
+    pipeline[exports.kCallbacks] = null;
+    // Perform the call
+    pipeline.exec(function (err, results) {
+        client._runningAutoPipelines.delete(slotKey);
+        /*
+          Invoke all callback in nextTick so the stack is cleared
+          and callbacks can throw errors without affecting other callbacks.
+        */
+        if (err) {
+            for (let i = 0; i < callbacks.length; i++) {
+                process.nextTick(callbacks[i], err);
+            }
+        }
+        else {
+            for (let i = 0; i < callbacks.length; i++) {
+                process.nextTick(callbacks[i], ...results[i]);
+            }
+        }
+        // If there is another pipeline on the same node, immediately execute it without waiting for nextTick
+        if (client._autoPipelines.has(slotKey)) {
+            executeAutoPipeline(client, slotKey);
+        }
+    });
+}
+function shouldUseAutoPipelining(client, functionName, commandName) {
+    return (functionName &&
+        client.options.enableAutoPipelining &&
+        !client.isPipeline &&
+        !exports.notAllowedAutoPipelineCommands.includes(commandName) &&
+        !client.options.autoPipeliningIgnoredCommands.includes(commandName));
+}
+exports.shouldUseAutoPipelining = shouldUseAutoPipelining;
+/**
+ * @private
+ */
+function getFirstValueInFlattenedArray(args) {
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (typeof arg === "string") {
+            return arg;
+        }
+        else if (Array.isArray(arg) || lodash_1.isArguments(arg)) {
+            if (arg.length === 0) {
+                continue;
+            }
+            return arg[0];
+        }
+        const flattened = lodash_1.flatten([arg]);
+        if (flattened.length > 0) {
+            return flattened[0];
+        }
+    }
+    return undefined;
+}
+exports.getFirstValueInFlattenedArray = getFirstValueInFlattenedArray;
+function executeWithAutoPipelining(client, functionName, commandName, args, callback) {
+    const CustomPromise = PromiseContainer.get();
+    // On cluster mode let's wait for slots to be available
+    if (client.isCluster && !client.slots.length) {
+        if (client.status === "wait")
+            client.connect().catch(lodash_1.noop);
+        return standard_as_callback_1.default(new CustomPromise(function (resolve, reject) {
+            client.delayUntilReady((err) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                executeWithAutoPipelining(client, functionName, commandName, args, null).then(resolve, reject);
+            });
+        }), callback);
+    }
+    // If we have slot information, we can improve routing by grouping slots served by the same subset of nodes
+    // Note that the first value in args may be a (possibly empty) array.
+    // ioredis will only flatten one level of the array, in the Command constructor.
+    const prefix = client.options.keyPrefix || "";
+    const slotKey = client.isCluster
+        ? client.slots[calculateSlot(`${prefix}${getFirstValueInFlattenedArray(args)}`)].join(",")
+        : "main";
+    if (!client._autoPipelines.has(slotKey)) {
+        const pipeline = client.pipeline();
+        pipeline[exports.kExec] = false;
+        pipeline[exports.kCallbacks] = [];
+        client._autoPipelines.set(slotKey, pipeline);
+    }
+    const pipeline = client._autoPipelines.get(slotKey);
+    /*
+      Mark the pipeline as scheduled.
+      The symbol will make sure that the pipeline is only scheduled once per tick.
+      New commands are appended to an already scheduled pipeline.
+    */
+    if (!pipeline[exports.kExec]) {
+        pipeline[exports.kExec] = true;
+        /*
+          Deferring with setImmediate so we have a chance to capture multiple
+          commands that can be scheduled by I/O events already in the event loop queue.
+        */
+        setImmediate(executeAutoPipeline, client, slotKey);
+    }
+    // Create the promise which will execute the command in the pipeline.
+    const autoPipelinePromise = new CustomPromise(function (resolve, reject) {
+        pipeline[exports.kCallbacks].push(function (err, value) {
+            if (err) {
+                reject(err);
+                return;
+            }
+            resolve(value);
+        });
+        pipeline[functionName](...args);
+    });
+    return standard_as_callback_1.default(autoPipelinePromise, callback);
+}
+exports.executeWithAutoPipelining = executeWithAutoPipelining;
+
+
+/***/ }),
+
+/***/ 35835:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const dns_1 = __nccwpck_require__(9523);
+exports.DEFAULT_CLUSTER_OPTIONS = {
+    clusterRetryStrategy: (times) => Math.min(100 + times * 2, 2000),
+    enableOfflineQueue: true,
+    enableReadyCheck: true,
+    scaleReads: "master",
+    maxRedirections: 16,
+    retryDelayOnMoved: 0,
+    retryDelayOnFailover: 100,
+    retryDelayOnClusterDown: 100,
+    retryDelayOnTryAgain: 100,
+    slotsRefreshTimeout: 1000,
+    slotsRefreshInterval: 5000,
+    useSRVRecords: false,
+    resolveSrv: dns_1.resolveSrv,
+    dnsLookup: dns_1.lookup,
+    enableAutoPipelining: false,
+    autoPipeliningIgnoredCommands: [],
+    maxScriptsCachingTime: 60000,
+};
+
+
+/***/ }),
+
+/***/ 18394:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const util_1 = __nccwpck_require__(94582);
+const utils_1 = __nccwpck_require__(94832);
+const redis_1 = __nccwpck_require__(83609);
+const debug = utils_1.Debug("cluster:subscriber");
+class ClusterSubscriber {
+    constructor(connectionPool, emitter) {
+        this.connectionPool = connectionPool;
+        this.emitter = emitter;
+        this.started = false;
+        this.subscriber = null;
+        this.connectionPool.on("-node", (_, key) => {
+            if (!this.started || !this.subscriber) {
+                return;
+            }
+            if (util_1.getNodeKey(this.subscriber.options) === key) {
+                debug("subscriber has left, selecting a new one...");
+                this.selectSubscriber();
+            }
+        });
+        this.connectionPool.on("+node", () => {
+            if (!this.started || this.subscriber) {
+                return;
+            }
+            debug("a new node is discovered and there is no subscriber, selecting a new one...");
+            this.selectSubscriber();
+        });
+    }
+    getInstance() {
+        return this.subscriber;
+    }
+    selectSubscriber() {
+        const lastActiveSubscriber = this.lastActiveSubscriber;
+        // Disconnect the previous subscriber even if there
+        // will not be a new one.
+        if (lastActiveSubscriber) {
+            lastActiveSubscriber.disconnect();
+        }
+        if (this.subscriber) {
+            this.subscriber.disconnect();
+        }
+        const sampleNode = utils_1.sample(this.connectionPool.getNodes());
+        if (!sampleNode) {
+            debug("selecting subscriber failed since there is no node discovered in the cluster yet");
+            this.subscriber = null;
+            return;
+        }
+        const { options } = sampleNode;
+        debug("selected a subscriber %s:%s", options.host, options.port);
+        /*
+         * Create a specialized Redis connection for the subscription.
+         * Note that auto reconnection is enabled here.
+         *
+         * `enableReadyCheck` is also enabled because although subscription is allowed
+         * while redis is loading data from the disk, we can check if the password
+         * provided for the subscriber is correct, and if not, the current subscriber
+         * will be disconnected and a new subscriber will be selected.
+         */
+        this.subscriber = new redis_1.default({
+            port: options.port,
+            host: options.host,
+            username: options.username,
+            password: options.password,
+            enableReadyCheck: true,
+            connectionName: util_1.getConnectionName("subscriber", options.connectionName),
+            lazyConnect: true,
+            tls: options.tls,
+        });
+        // Ignore the errors since they're handled in the connection pool.
+        this.subscriber.on("error", utils_1.noop);
+        // Re-subscribe previous channels
+        const previousChannels = { subscribe: [], psubscribe: [] };
+        if (lastActiveSubscriber) {
+            const condition = lastActiveSubscriber.condition || lastActiveSubscriber.prevCondition;
+            if (condition && condition.subscriber) {
+                previousChannels.subscribe = condition.subscriber.channels("subscribe");
+                previousChannels.psubscribe = condition.subscriber.channels("psubscribe");
+            }
+        }
+        if (previousChannels.subscribe.length ||
+            previousChannels.psubscribe.length) {
+            let pending = 0;
+            for (const type of ["subscribe", "psubscribe"]) {
+                const channels = previousChannels[type];
+                if (channels.length) {
+                    pending += 1;
+                    debug("%s %d channels", type, channels.length);
+                    this.subscriber[type](channels)
+                        .then(() => {
+                        if (!--pending) {
+                            this.lastActiveSubscriber = this.subscriber;
+                        }
+                    })
+                        .catch(() => {
+                        // TODO: should probably disconnect the subscriber and try again.
+                        debug("failed to %s %d channels", type, channels.length);
+                    });
+                }
+            }
+        }
+        else {
+            this.lastActiveSubscriber = this.subscriber;
+        }
+        for (const event of ["message", "messageBuffer"]) {
+            this.subscriber.on(event, (arg1, arg2) => {
+                this.emitter.emit(event, arg1, arg2);
+            });
+        }
+        for (const event of ["pmessage", "pmessageBuffer"]) {
+            this.subscriber.on(event, (arg1, arg2, arg3) => {
+                this.emitter.emit(event, arg1, arg2, arg3);
+            });
+        }
+    }
+    start() {
+        this.started = true;
+        this.selectSubscriber();
+        debug("started");
+    }
+    stop() {
+        this.started = false;
+        if (this.subscriber) {
+            this.subscriber.disconnect();
+            this.subscriber = null;
+        }
+        debug("stopped");
+    }
+}
+exports["default"] = ClusterSubscriber;
+
+
+/***/ }),
+
+/***/ 34589:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const events_1 = __nccwpck_require__(82361);
+const utils_1 = __nccwpck_require__(94832);
+const util_1 = __nccwpck_require__(94582);
+const redis_1 = __nccwpck_require__(83609);
+const debug = utils_1.Debug("cluster:connectionPool");
+class ConnectionPool extends events_1.EventEmitter {
+    constructor(redisOptions) {
+        super();
+        this.redisOptions = redisOptions;
+        // master + slave = all
+        this.nodes = {
+            all: {},
+            master: {},
+            slave: {},
+        };
+        this.specifiedOptions = {};
+    }
+    getNodes(role = "all") {
+        const nodes = this.nodes[role];
+        return Object.keys(nodes).map((key) => nodes[key]);
+    }
+    getInstanceByKey(key) {
+        return this.nodes.all[key];
+    }
+    getSampleInstance(role) {
+        const keys = Object.keys(this.nodes[role]);
+        const sampleKey = utils_1.sample(keys);
+        return this.nodes[role][sampleKey];
+    }
+    /**
+     * Find or create a connection to the node
+     *
+     * @param {IRedisOptions} node
+     * @param {boolean} [readOnly=false]
+     * @returns {*}
+     * @memberof ConnectionPool
+     */
+    findOrCreate(node, readOnly = false) {
+        const key = util_1.getNodeKey(node);
+        readOnly = Boolean(readOnly);
+        if (this.specifiedOptions[key]) {
+            Object.assign(node, this.specifiedOptions[key]);
+        }
+        else {
+            this.specifiedOptions[key] = node;
+        }
+        let redis;
+        if (this.nodes.all[key]) {
+            redis = this.nodes.all[key];
+            if (redis.options.readOnly !== readOnly) {
+                redis.options.readOnly = readOnly;
+                debug("Change role of %s to %s", key, readOnly ? "slave" : "master");
+                redis[readOnly ? "readonly" : "readwrite"]().catch(utils_1.noop);
+                if (readOnly) {
+                    delete this.nodes.master[key];
+                    this.nodes.slave[key] = redis;
+                }
+                else {
+                    delete this.nodes.slave[key];
+                    this.nodes.master[key] = redis;
+                }
+            }
+        }
+        else {
+            debug("Connecting to %s as %s", key, readOnly ? "slave" : "master");
+            redis = new redis_1.default(utils_1.defaults({
+                // Never try to reconnect when a node is lose,
+                // instead, waiting for a `MOVED` error and
+                // fetch the slots again.
+                retryStrategy: null,
+                // Offline queue should be enabled so that
+                // we don't need to wait for the `ready` event
+                // before sending commands to the node.
+                enableOfflineQueue: true,
+                readOnly: readOnly,
+            }, node, this.redisOptions, { lazyConnect: true }));
+            this.nodes.all[key] = redis;
+            this.nodes[readOnly ? "slave" : "master"][key] = redis;
+            redis.once("end", () => {
+                this.removeNode(key);
+                this.emit("-node", redis, key);
+                if (!Object.keys(this.nodes.all).length) {
+                    this.emit("drain");
+                }
+            });
+            this.emit("+node", redis, key);
+            redis.on("error", function (error) {
+                this.emit("nodeError", error, key);
+            });
+        }
+        return redis;
+    }
+    /**
+     * Remove a node from the pool.
+     */
+    removeNode(key) {
+        const { nodes } = this;
+        if (nodes.all[key]) {
+            debug("Remove %s from the pool", key);
+            delete nodes.all[key];
+        }
+        delete nodes.master[key];
+        delete nodes.slave[key];
+    }
+    /**
+     * Reset the pool with a set of nodes.
+     * The old node will be removed.
+     *
+     * @param {(Array<string | number | object>)} nodes
+     * @memberof ConnectionPool
+     */
+    reset(nodes) {
+        debug("Reset with %O", nodes);
+        const newNodes = {};
+        nodes.forEach((node) => {
+            const key = util_1.getNodeKey(node);
+            // Don't override the existing (master) node
+            // when the current one is slave.
+            if (!(node.readOnly && newNodes[key])) {
+                newNodes[key] = node;
+            }
+        });
+        Object.keys(this.nodes.all).forEach((key) => {
+            if (!newNodes[key]) {
+                debug("Disconnect %s because the node does not hold any slot", key);
+                this.nodes.all[key].disconnect();
+                this.removeNode(key);
+            }
+        });
+        Object.keys(newNodes).forEach((key) => {
+            const node = newNodes[key];
+            this.findOrCreate(node, node.readOnly);
+        });
+    }
+}
+exports["default"] = ConnectionPool;
+
+
+/***/ }),
+
+/***/ 12770:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const utils_1 = __nccwpck_require__(94832);
+const Deque = __nccwpck_require__(42342);
+const debug = utils_1.Debug("delayqueue");
+/**
+ * Queue that runs items after specified duration
+ *
+ * @export
+ * @class DelayQueue
+ */
+class DelayQueue {
+    constructor() {
+        this.queues = {};
+        this.timeouts = {};
+    }
+    /**
+     * Add a new item to the queue
+     *
+     * @param {string} bucket bucket name
+     * @param {Function} item function that will run later
+     * @param {IDelayQueueOptions} options
+     * @memberof DelayQueue
+     */
+    push(bucket, item, options) {
+        const callback = options.callback || process.nextTick;
+        if (!this.queues[bucket]) {
+            this.queues[bucket] = new Deque();
+        }
+        const queue = this.queues[bucket];
+        queue.push(item);
+        if (!this.timeouts[bucket]) {
+            this.timeouts[bucket] = setTimeout(() => {
+                callback(() => {
+                    this.timeouts[bucket] = null;
+                    this.execute(bucket);
+                });
+            }, options.timeout);
+        }
+    }
+    execute(bucket) {
+        const queue = this.queues[bucket];
+        if (!queue) {
+            return;
+        }
+        const { length } = queue;
+        if (!length) {
+            return;
+        }
+        debug("send %d commands in %s queue", length, bucket);
+        this.queues[bucket] = null;
+        while (queue.length > 0) {
+            queue.shift()();
+        }
+    }
+}
+exports["default"] = DelayQueue;
+
+
+/***/ }),
+
+/***/ 17208:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const events_1 = __nccwpck_require__(82361);
+const ClusterAllFailedError_1 = __nccwpck_require__(97282);
+const utils_1 = __nccwpck_require__(94832);
+const ConnectionPool_1 = __nccwpck_require__(34589);
+const util_1 = __nccwpck_require__(94582);
+const ClusterSubscriber_1 = __nccwpck_require__(18394);
+const DelayQueue_1 = __nccwpck_require__(12770);
+const ScanStream_1 = __nccwpck_require__(6134);
+const redis_errors_1 = __nccwpck_require__(81879);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+const PromiseContainer = __nccwpck_require__(71475);
+const ClusterOptions_1 = __nccwpck_require__(35835);
+const utils_2 = __nccwpck_require__(94832);
+const commands = __nccwpck_require__(98020);
+const command_1 = __nccwpck_require__(90803);
+const redis_1 = __nccwpck_require__(83609);
+const commander_1 = __nccwpck_require__(33642);
+const Deque = __nccwpck_require__(42342);
+const debug = utils_1.Debug("cluster");
+/**
+ * Client for the official Redis Cluster
+ *
+ * @class Cluster
+ * @extends {EventEmitter}
+ */
+class Cluster extends events_1.EventEmitter {
+    /**
+     * Creates an instance of Cluster.
+     *
+     * @param {((string | number | object)[])} startupNodes
+     * @param {IClusterOptions} [options={}]
+     * @memberof Cluster
+     */
+    constructor(startupNodes, options = {}) {
+        super();
+        this.slots = [];
+        this.retryAttempts = 0;
+        this.delayQueue = new DelayQueue_1.default();
+        this.offlineQueue = new Deque();
+        this.isRefreshing = false;
+        this.isCluster = true;
+        this._autoPipelines = new Map();
+        this._groupsIds = {};
+        this._groupsBySlot = Array(16384);
+        this._runningAutoPipelines = new Set();
+        this._readyDelayedCallbacks = [];
+        this._addedScriptHashes = {};
+        /**
+         * Every time Cluster#connect() is called, this value will be
+         * auto-incrementing. The purpose of this value is used for
+         * discarding previous connect attampts when creating a new
+         * connection.
+         *
+         * @private
+         * @type {number}
+         * @memberof Cluster
+         */
+        this.connectionEpoch = 0;
+        commander_1.default.call(this);
+        this.startupNodes = startupNodes;
+        this.options = utils_1.defaults({}, options, ClusterOptions_1.DEFAULT_CLUSTER_OPTIONS, this.options);
+        // validate options
+        if (typeof this.options.scaleReads !== "function" &&
+            ["all", "master", "slave"].indexOf(this.options.scaleReads) === -1) {
+            throw new Error('Invalid option scaleReads "' +
+                this.options.scaleReads +
+                '". Expected "all", "master", "slave" or a custom function');
+        }
+        this.connectionPool = new ConnectionPool_1.default(this.options.redisOptions);
+        this.connectionPool.on("-node", (redis, key) => {
+            this.emit("-node", redis);
+        });
+        this.connectionPool.on("+node", (redis) => {
+            this.emit("+node", redis);
+        });
+        this.connectionPool.on("drain", () => {
+            this.setStatus("close");
+        });
+        this.connectionPool.on("nodeError", (error, key) => {
+            this.emit("node error", error, key);
+        });
+        this.subscriber = new ClusterSubscriber_1.default(this.connectionPool, this);
+        if (this.options.lazyConnect) {
+            this.setStatus("wait");
+        }
+        else {
+            this.connect().catch((err) => {
+                debug("connecting failed: %s", err);
+            });
+        }
+    }
+    resetOfflineQueue() {
+        this.offlineQueue = new Deque();
+    }
+    clearNodesRefreshInterval() {
+        if (this.slotsTimer) {
+            clearTimeout(this.slotsTimer);
+            this.slotsTimer = null;
+        }
+    }
+    clearAddedScriptHashesCleanInterval() {
+        if (this._addedScriptHashesCleanInterval) {
+            clearInterval(this._addedScriptHashesCleanInterval);
+            this._addedScriptHashesCleanInterval = null;
+        }
+    }
+    resetNodesRefreshInterval() {
+        if (this.slotsTimer) {
+            return;
+        }
+        const nextRound = () => {
+            this.slotsTimer = setTimeout(() => {
+                debug('refreshing slot caches... (triggered by "slotsRefreshInterval" option)');
+                this.refreshSlotsCache(() => {
+                    nextRound();
+                });
+            }, this.options.slotsRefreshInterval);
+        };
+        nextRound();
+    }
+    /**
+     * Connect to a cluster
+     *
+     * @returns {Promise<void>}
+     * @memberof Cluster
+     */
+    connect() {
+        const Promise = PromiseContainer.get();
+        return new Promise((resolve, reject) => {
+            if (this.status === "connecting" ||
+                this.status === "connect" ||
+                this.status === "ready") {
+                reject(new Error("Redis is already connecting/connected"));
+                return;
+            }
+            // Make sure only one timer is active at a time
+            this.clearAddedScriptHashesCleanInterval();
+            // Start the script cache cleaning
+            this._addedScriptHashesCleanInterval = setInterval(() => {
+                this._addedScriptHashes = {};
+            }, this.options.maxScriptsCachingTime);
+            const epoch = ++this.connectionEpoch;
+            this.setStatus("connecting");
+            this.resolveStartupNodeHostnames()
+                .then((nodes) => {
+                if (this.connectionEpoch !== epoch) {
+                    debug("discard connecting after resolving startup nodes because epoch not match: %d != %d", epoch, this.connectionEpoch);
+                    reject(new redis_errors_1.RedisError("Connection is discarded because a new connection is made"));
+                    return;
+                }
+                if (this.status !== "connecting") {
+                    debug("discard connecting after resolving startup nodes because the status changed to %s", this.status);
+                    reject(new redis_errors_1.RedisError("Connection is aborted"));
+                    return;
+                }
+                this.connectionPool.reset(nodes);
+                function readyHandler() {
+                    this.setStatus("ready");
+                    this.retryAttempts = 0;
+                    this.executeOfflineCommands();
+                    this.resetNodesRefreshInterval();
+                    resolve();
+                }
+                let closeListener = undefined;
+                const refreshListener = () => {
+                    this.invokeReadyDelayedCallbacks(undefined);
+                    this.removeListener("close", closeListener);
+                    this.manuallyClosing = false;
+                    this.setStatus("connect");
+                    if (this.options.enableReadyCheck) {
+                        this.readyCheck((err, fail) => {
+                            if (err || fail) {
+                                debug("Ready check failed (%s). Reconnecting...", err || fail);
+                                if (this.status === "connect") {
+                                    this.disconnect(true);
+                                }
+                            }
+                            else {
+                                readyHandler.call(this);
+                            }
+                        });
+                    }
+                    else {
+                        readyHandler.call(this);
+                    }
+                };
+                closeListener = function () {
+                    const error = new Error("None of startup nodes is available");
+                    this.removeListener("refresh", refreshListener);
+                    this.invokeReadyDelayedCallbacks(error);
+                    reject(error);
+                };
+                this.once("refresh", refreshListener);
+                this.once("close", closeListener);
+                this.once("close", this.handleCloseEvent.bind(this));
+                this.refreshSlotsCache(function (err) {
+                    if (err && err.message === "Failed to refresh slots cache.") {
+                        redis_1.default.prototype.silentEmit.call(this, "error", err);
+                        this.connectionPool.reset([]);
+                    }
+                }.bind(this));
+                this.subscriber.start();
+            })
+                .catch((err) => {
+                this.setStatus("close");
+                this.handleCloseEvent(err);
+                this.invokeReadyDelayedCallbacks(err);
+                reject(err);
+            });
+        });
+    }
+    /**
+     * Called when closed to check whether a reconnection should be made
+     *
+     * @private
+     * @memberof Cluster
+     */
+    handleCloseEvent(reason) {
+        if (reason) {
+            debug("closed because %s", reason);
+        }
+        this.clearAddedScriptHashesCleanInterval();
+        let retryDelay;
+        if (!this.manuallyClosing &&
+            typeof this.options.clusterRetryStrategy === "function") {
+            retryDelay = this.options.clusterRetryStrategy.call(this, ++this.retryAttempts, reason);
+        }
+        if (typeof retryDelay === "number") {
+            this.setStatus("reconnecting");
+            this.reconnectTimeout = setTimeout(function () {
+                this.reconnectTimeout = null;
+                debug("Cluster is disconnected. Retrying after %dms", retryDelay);
+                this.connect().catch(function (err) {
+                    debug("Got error %s when reconnecting. Ignoring...", err);
+                });
+            }.bind(this), retryDelay);
+        }
+        else {
+            this.setStatus("end");
+            this.flushQueue(new Error("None of startup nodes is available"));
+        }
+    }
+    /**
+     * Disconnect from every node in the cluster.
+     *
+     * @param {boolean} [reconnect=false]
+     * @memberof Cluster
+     */
+    disconnect(reconnect = false) {
+        const status = this.status;
+        this.setStatus("disconnecting");
+        this.clearAddedScriptHashesCleanInterval();
+        if (!reconnect) {
+            this.manuallyClosing = true;
+        }
+        if (this.reconnectTimeout && !reconnect) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+            debug("Canceled reconnecting attempts");
+        }
+        this.clearNodesRefreshInterval();
+        this.subscriber.stop();
+        if (status === "wait") {
+            this.setStatus("close");
+            this.handleCloseEvent();
+        }
+        else {
+            this.connectionPool.reset([]);
+        }
+    }
+    /**
+     * Quit the cluster gracefully.
+     *
+     * @param {CallbackFunction<'OK'>} [callback]
+     * @returns {Promise<'OK'>}
+     * @memberof Cluster
+     */
+    quit(callback) {
+        const status = this.status;
+        this.setStatus("disconnecting");
+        this.clearAddedScriptHashesCleanInterval();
+        this.manuallyClosing = true;
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+        this.clearNodesRefreshInterval();
+        this.subscriber.stop();
+        const Promise = PromiseContainer.get();
+        if (status === "wait") {
+            const ret = standard_as_callback_1.default(Promise.resolve("OK"), callback);
+            // use setImmediate to make sure "close" event
+            // being emitted after quit() is returned
+            setImmediate(function () {
+                this.setStatus("close");
+                this.handleCloseEvent();
+            }.bind(this));
+            return ret;
+        }
+        return standard_as_callback_1.default(Promise.all(this.nodes().map((node) => node.quit().catch((err) => {
+            // Ignore the error caused by disconnecting since
+            // we're disconnecting...
+            if (err.message === utils_2.CONNECTION_CLOSED_ERROR_MSG) {
+                return "OK";
+            }
+            throw err;
+        }))).then(() => "OK"), callback);
+    }
+    /**
+     * Create a new instance with the same startup nodes and options as the current one.
+     *
+     * @example
+     * ```js
+     * var cluster = new Redis.Cluster([{ host: "127.0.0.1", port: "30001" }]);
+     * var anotherCluster = cluster.duplicate();
+     * ```
+     *
+     * @public
+     * @param {((string | number | object)[])} [overrideStartupNodes=[]]
+     * @param {IClusterOptions} [overrideOptions={}]
+     * @memberof Cluster
+     */
+    duplicate(overrideStartupNodes = [], overrideOptions = {}) {
+        const startupNodes = overrideStartupNodes.length > 0
+            ? overrideStartupNodes
+            : this.startupNodes.slice(0);
+        const options = Object.assign({}, this.options, overrideOptions);
+        return new Cluster(startupNodes, options);
+    }
+    /**
+     * Get nodes with the specified role
+     *
+     * @param {NodeRole} [role='all']
+     * @returns {any[]}
+     * @memberof Cluster
+     */
+    nodes(role = "all") {
+        if (role !== "all" && role !== "master" && role !== "slave") {
+            throw new Error('Invalid role "' + role + '". Expected "all", "master" or "slave"');
+        }
+        return this.connectionPool.getNodes(role);
+    }
+    // This is needed in order not to install a listener for each auto pipeline
+    delayUntilReady(callback) {
+        this._readyDelayedCallbacks.push(callback);
+    }
+    /**
+     * Get the number of commands queued in automatic pipelines.
+     *
+     * This is not available (and returns 0) until the cluster is connected and slots information have been received.
+     */
+    get autoPipelineQueueSize() {
+        let queued = 0;
+        for (const pipeline of this._autoPipelines.values()) {
+            queued += pipeline.length;
+        }
+        return queued;
+    }
+    /**
+     * Change cluster instance's status
+     *
+     * @private
+     * @param {ClusterStatus} status
+     * @memberof Cluster
+     */
+    setStatus(status) {
+        debug("status: %s -> %s", this.status || "[empty]", status);
+        this.status = status;
+        process.nextTick(() => {
+            this.emit(status);
+        });
+    }
+    /**
+     * Refresh the slot cache
+     *
+     * @private
+     * @param {CallbackFunction} [callback]
+     * @memberof Cluster
+     */
+    refreshSlotsCache(callback) {
+        if (this.isRefreshing) {
+            if (typeof callback === "function") {
+                process.nextTick(callback);
+            }
+            return;
+        }
+        this.isRefreshing = true;
+        const _this = this;
+        const wrapper = function (error) {
+            _this.isRefreshing = false;
+            if (typeof callback === "function") {
+                callback(error);
+            }
+        };
+        const nodes = utils_2.shuffle(this.connectionPool.getNodes());
+        let lastNodeError = null;
+        function tryNode(index) {
+            if (index === nodes.length) {
+                const error = new ClusterAllFailedError_1.default("Failed to refresh slots cache.", lastNodeError);
+                return wrapper(error);
+            }
+            const node = nodes[index];
+            const key = `${node.options.host}:${node.options.port}`;
+            debug("getting slot cache from %s", key);
+            _this.getInfoFromNode(node, function (err) {
+                switch (_this.status) {
+                    case "close":
+                    case "end":
+                        return wrapper(new Error("Cluster is disconnected."));
+                    case "disconnecting":
+                        return wrapper(new Error("Cluster is disconnecting."));
+                }
+                if (err) {
+                    _this.emit("node error", err, key);
+                    lastNodeError = err;
+                    tryNode(index + 1);
+                }
+                else {
+                    _this.emit("refresh");
+                    wrapper();
+                }
+            });
+        }
+        tryNode(0);
+    }
+    /**
+     * Flush offline queue with error.
+     *
+     * @param {Error} error
+     * @memberof Cluster
+     */
+    flushQueue(error) {
+        let item;
+        while (this.offlineQueue.length > 0) {
+            item = this.offlineQueue.shift();
+            item.command.reject(error);
+        }
+    }
+    executeOfflineCommands() {
+        if (this.offlineQueue.length) {
+            debug("send %d commands in offline queue", this.offlineQueue.length);
+            const offlineQueue = this.offlineQueue;
+            this.resetOfflineQueue();
+            while (offlineQueue.length > 0) {
+                const item = offlineQueue.shift();
+                this.sendCommand(item.command, item.stream, item.node);
+            }
+        }
+    }
+    natMapper(nodeKey) {
+        if (this.options.natMap && typeof this.options.natMap === "object") {
+            const key = typeof nodeKey === "string"
+                ? nodeKey
+                : `${nodeKey.host}:${nodeKey.port}`;
+            const mapped = this.options.natMap[key];
+            if (mapped) {
+                debug("NAT mapping %s -> %O", key, mapped);
+                return Object.assign({}, mapped);
+            }
+        }
+        return typeof nodeKey === "string"
+            ? util_1.nodeKeyToRedisOptions(nodeKey)
+            : nodeKey;
+    }
+    sendCommand(command, stream, node) {
+        if (this.status === "wait") {
+            this.connect().catch(utils_1.noop);
+        }
+        if (this.status === "end") {
+            command.reject(new Error(utils_2.CONNECTION_CLOSED_ERROR_MSG));
+            return command.promise;
+        }
+        let to = this.options.scaleReads;
+        if (to !== "master") {
+            const isCommandReadOnly = command.isReadOnly ||
+                (commands.exists(command.name) &&
+                    commands.hasFlag(command.name, "readonly"));
+            if (!isCommandReadOnly) {
+                to = "master";
+            }
+        }
+        let targetSlot = node ? node.slot : command.getSlot();
+        const ttl = {};
+        const _this = this;
+        if (!node && !command.__is_reject_overwritten) {
+            // eslint-disable-next-line @typescript-eslint/camelcase
+            command.__is_reject_overwritten = true;
+            const reject = command.reject;
+            command.reject = function (err) {
+                const partialTry = tryConnection.bind(null, true);
+                _this.handleError(err, ttl, {
+                    moved: function (slot, key) {
+                        debug("command %s is moved to %s", command.name, key);
+                        targetSlot = Number(slot);
+                        if (_this.slots[slot]) {
+                            _this.slots[slot][0] = key;
+                        }
+                        else {
+                            _this.slots[slot] = [key];
+                        }
+                        _this._groupsBySlot[slot] =
+                            _this._groupsIds[_this.slots[slot].join(";")];
+                        _this.connectionPool.findOrCreate(_this.natMapper(key));
+                        tryConnection();
+                        debug("refreshing slot caches... (triggered by MOVED error)");
+                        _this.refreshSlotsCache();
+                    },
+                    ask: function (slot, key) {
+                        debug("command %s is required to ask %s:%s", command.name, key);
+                        const mapped = _this.natMapper(key);
+                        _this.connectionPool.findOrCreate(mapped);
+                        tryConnection(false, `${mapped.host}:${mapped.port}`);
+                    },
+                    tryagain: partialTry,
+                    clusterDown: partialTry,
+                    connectionClosed: partialTry,
+                    maxRedirections: function (redirectionError) {
+                        reject.call(command, redirectionError);
+                    },
+                    defaults: function () {
+                        reject.call(command, err);
+                    },
+                });
+            };
+        }
+        tryConnection();
+        function tryConnection(random, asking) {
+            if (_this.status === "end") {
+                command.reject(new redis_errors_1.AbortError("Cluster is ended."));
+                return;
+            }
+            let redis;
+            if (_this.status === "ready" || command.name === "cluster") {
+                if (node && node.redis) {
+                    redis = node.redis;
+                }
+                else if (command_1.default.checkFlag("ENTER_SUBSCRIBER_MODE", command.name) ||
+                    command_1.default.checkFlag("EXIT_SUBSCRIBER_MODE", command.name)) {
+                    redis = _this.subscriber.getInstance();
+                    if (!redis) {
+                        command.reject(new redis_errors_1.AbortError("No subscriber for the cluster"));
+                        return;
+                    }
+                }
+                else {
+                    if (!random) {
+                        if (typeof targetSlot === "number" && _this.slots[targetSlot]) {
+                            const nodeKeys = _this.slots[targetSlot];
+                            if (typeof to === "function") {
+                                const nodes = nodeKeys.map(function (key) {
+                                    return _this.connectionPool.getInstanceByKey(key);
+                                });
+                                redis = to(nodes, command);
+                                if (Array.isArray(redis)) {
+                                    redis = utils_2.sample(redis);
+                                }
+                                if (!redis) {
+                                    redis = nodes[0];
+                                }
+                            }
+                            else {
+                                let key;
+                                if (to === "all") {
+                                    key = utils_2.sample(nodeKeys);
+                                }
+                                else if (to === "slave" && nodeKeys.length > 1) {
+                                    key = utils_2.sample(nodeKeys, 1);
+                                }
+                                else {
+                                    key = nodeKeys[0];
+                                }
+                                redis = _this.connectionPool.getInstanceByKey(key);
+                            }
+                        }
+                        if (asking) {
+                            redis = _this.connectionPool.getInstanceByKey(asking);
+                            redis.asking();
+                        }
+                    }
+                    if (!redis) {
+                        redis =
+                            (typeof to === "function"
+                                ? null
+                                : _this.connectionPool.getSampleInstance(to)) ||
+                                _this.connectionPool.getSampleInstance("all");
+                    }
+                }
+                if (node && !node.redis) {
+                    node.redis = redis;
+                }
+            }
+            if (redis) {
+                redis.sendCommand(command, stream);
+            }
+            else if (_this.options.enableOfflineQueue) {
+                _this.offlineQueue.push({
+                    command: command,
+                    stream: stream,
+                    node: node,
+                });
+            }
+            else {
+                command.reject(new Error("Cluster isn't ready and enableOfflineQueue options is false"));
+            }
+        }
+        return command.promise;
+    }
+    handleError(error, ttl, handlers) {
+        if (typeof ttl.value === "undefined") {
+            ttl.value = this.options.maxRedirections;
+        }
+        else {
+            ttl.value -= 1;
+        }
+        if (ttl.value <= 0) {
+            handlers.maxRedirections(new Error("Too many Cluster redirections. Last error: " + error));
+            return;
+        }
+        const errv = error.message.split(" ");
+        if (errv[0] === "MOVED") {
+            const timeout = this.options.retryDelayOnMoved;
+            if (timeout && typeof timeout === "number") {
+                this.delayQueue.push("moved", handlers.moved.bind(null, errv[1], errv[2]), { timeout });
+            }
+            else {
+                handlers.moved(errv[1], errv[2]);
+            }
+        }
+        else if (errv[0] === "ASK") {
+            handlers.ask(errv[1], errv[2]);
+        }
+        else if (errv[0] === "TRYAGAIN") {
+            this.delayQueue.push("tryagain", handlers.tryagain, {
+                timeout: this.options.retryDelayOnTryAgain,
+            });
+        }
+        else if (errv[0] === "CLUSTERDOWN" &&
+            this.options.retryDelayOnClusterDown > 0) {
+            this.delayQueue.push("clusterdown", handlers.connectionClosed, {
+                timeout: this.options.retryDelayOnClusterDown,
+                callback: this.refreshSlotsCache.bind(this),
+            });
+        }
+        else if (error.message === utils_2.CONNECTION_CLOSED_ERROR_MSG &&
+            this.options.retryDelayOnFailover > 0 &&
+            this.status === "ready") {
+            this.delayQueue.push("failover", handlers.connectionClosed, {
+                timeout: this.options.retryDelayOnFailover,
+                callback: this.refreshSlotsCache.bind(this),
+            });
+        }
+        else {
+            handlers.defaults();
+        }
+    }
+    getInfoFromNode(redis, callback) {
+        if (!redis) {
+            return callback(new Error("Node is disconnected"));
+        }
+        // Use a duplication of the connection to avoid
+        // timeouts when the connection is in the blocking
+        // mode (e.g. waiting for BLPOP).
+        const duplicatedConnection = redis.duplicate({
+            enableOfflineQueue: true,
+            enableReadyCheck: false,
+            retryStrategy: null,
+            connectionName: util_1.getConnectionName("refresher", this.options.redisOptions && this.options.redisOptions.connectionName),
+        });
+        // Ignore error events since we will handle
+        // exceptions for the CLUSTER SLOTS command.
+        duplicatedConnection.on("error", utils_1.noop);
+        duplicatedConnection.cluster("slots", utils_2.timeout((err, result) => {
+            duplicatedConnection.disconnect();
+            if (err) {
+                return callback(err);
+            }
+            if (this.status === "disconnecting" ||
+                this.status === "close" ||
+                this.status === "end") {
+                debug("ignore CLUSTER.SLOTS results (count: %d) since cluster status is %s", result.length, this.status);
+                callback();
+                return;
+            }
+            const nodes = [];
+            debug("cluster slots result count: %d", result.length);
+            for (let i = 0; i < result.length; ++i) {
+                const items = result[i];
+                const slotRangeStart = items[0];
+                const slotRangeEnd = items[1];
+                const keys = [];
+                for (let j = 2; j < items.length; j++) {
+                    if (!items[j][0]) {
+                        continue;
+                    }
+                    items[j] = this.natMapper({ host: items[j][0], port: items[j][1] });
+                    items[j].readOnly = j !== 2;
+                    nodes.push(items[j]);
+                    keys.push(items[j].host + ":" + items[j].port);
+                }
+                debug("cluster slots result [%d]: slots %d~%d served by %s", i, slotRangeStart, slotRangeEnd, keys);
+                for (let slot = slotRangeStart; slot <= slotRangeEnd; slot++) {
+                    this.slots[slot] = keys;
+                }
+            }
+            // Assign to each node keys a numeric value to make autopipeline comparison faster.
+            this._groupsIds = Object.create(null);
+            let j = 0;
+            for (let i = 0; i < 16384; i++) {
+                const target = (this.slots[i] || []).join(";");
+                if (!target.length) {
+                    this._groupsBySlot[i] = undefined;
+                    continue;
+                }
+                if (!this._groupsIds[target]) {
+                    this._groupsIds[target] = ++j;
