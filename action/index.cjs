@@ -77587,3 +77587,2192 @@ class Cluster extends events_1.EventEmitter {
                 }
                 if (!this._groupsIds[target]) {
                     this._groupsIds[target] = ++j;
+                }
+                this._groupsBySlot[i] = this._groupsIds[target];
+            }
+            this.connectionPool.reset(nodes);
+            callback();
+        }, this.options.slotsRefreshTimeout));
+    }
+    invokeReadyDelayedCallbacks(err) {
+        for (const c of this._readyDelayedCallbacks) {
+            process.nextTick(c, err);
+        }
+        this._readyDelayedCallbacks = [];
+    }
+    /**
+     * Check whether Cluster is able to process commands
+     *
+     * @param {Function} callback
+     * @private
+     */
+    readyCheck(callback) {
+        this.cluster("info", function (err, res) {
+            if (err) {
+                return callback(err);
+            }
+            if (typeof res !== "string") {
+                return callback();
+            }
+            let state;
+            const lines = res.split("\r\n");
+            for (let i = 0; i < lines.length; ++i) {
+                const parts = lines[i].split(":");
+                if (parts[0] === "cluster_state") {
+                    state = parts[1];
+                    break;
+                }
+            }
+            if (state === "fail") {
+                debug("cluster state not ok (%s)", state);
+                callback(null, state);
+            }
+            else {
+                callback();
+            }
+        });
+    }
+    resolveSrv(hostname) {
+        return new Promise((resolve, reject) => {
+            this.options.resolveSrv(hostname, (err, records) => {
+                if (err) {
+                    return reject(err);
+                }
+                const self = this, groupedRecords = util_1.groupSrvRecords(records), sortedKeys = Object.keys(groupedRecords).sort((a, b) => parseInt(a) - parseInt(b));
+                function tryFirstOne(err) {
+                    if (!sortedKeys.length) {
+                        return reject(err);
+                    }
+                    const key = sortedKeys[0], group = groupedRecords[key], record = util_1.weightSrvRecords(group);
+                    if (!group.records.length) {
+                        sortedKeys.shift();
+                    }
+                    self.dnsLookup(record.name).then((host) => resolve({
+                        host,
+                        port: record.port,
+                    }), tryFirstOne);
+                }
+                tryFirstOne();
+            });
+        });
+    }
+    dnsLookup(hostname) {
+        return new Promise((resolve, reject) => {
+            this.options.dnsLookup(hostname, (err, address) => {
+                if (err) {
+                    debug("failed to resolve hostname %s to IP: %s", hostname, err.message);
+                    reject(err);
+                }
+                else {
+                    debug("resolved hostname %s to IP %s", hostname, address);
+                    resolve(address);
+                }
+            });
+        });
+    }
+    /**
+     * Normalize startup nodes, and resolving hostnames to IPs.
+     *
+     * This process happens every time when #connect() is called since
+     * #startupNodes and DNS records may chanage.
+     *
+     * @private
+     * @returns {Promise<IRedisOptions[]>}
+     */
+    resolveStartupNodeHostnames() {
+        if (!Array.isArray(this.startupNodes) || this.startupNodes.length === 0) {
+            return Promise.reject(new Error("`startupNodes` should contain at least one node."));
+        }
+        const startupNodes = util_1.normalizeNodeOptions(this.startupNodes);
+        const hostnames = util_1.getUniqueHostnamesFromOptions(startupNodes);
+        if (hostnames.length === 0) {
+            return Promise.resolve(startupNodes);
+        }
+        return Promise.all(hostnames.map((this.options.useSRVRecords ? this.resolveSrv : this.dnsLookup).bind(this))).then((configs) => {
+            const hostnameToConfig = utils_2.zipMap(hostnames, configs);
+            return startupNodes.map((node) => {
+                const config = hostnameToConfig.get(node.host);
+                if (!config) {
+                    return node;
+                }
+                else if (this.options.useSRVRecords) {
+                    return Object.assign({}, node, config);
+                }
+                else {
+                    return Object.assign({}, node, { host: config });
+                }
+            });
+        });
+    }
+}
+Object.getOwnPropertyNames(commander_1.default.prototype).forEach((name) => {
+    if (!Cluster.prototype.hasOwnProperty(name)) {
+        Cluster.prototype[name] = commander_1.default.prototype[name];
+    }
+});
+const scanCommands = [
+    "sscan",
+    "hscan",
+    "zscan",
+    "sscanBuffer",
+    "hscanBuffer",
+    "zscanBuffer",
+];
+scanCommands.forEach((command) => {
+    Cluster.prototype[command + "Stream"] = function (key, options) {
+        return new ScanStream_1.default(utils_1.defaults({
+            objectMode: true,
+            key: key,
+            redis: this,
+            command: command,
+        }, options));
+    };
+});
+(__nccwpck_require__(14645).addTransactionSupport)(Cluster.prototype);
+exports["default"] = Cluster;
+
+
+/***/ }),
+
+/***/ 94582:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const utils_1 = __nccwpck_require__(94832);
+const net_1 = __nccwpck_require__(41808);
+function getNodeKey(node) {
+    node.port = node.port || 6379;
+    node.host = node.host || "127.0.0.1";
+    return node.host + ":" + node.port;
+}
+exports.getNodeKey = getNodeKey;
+function nodeKeyToRedisOptions(nodeKey) {
+    const portIndex = nodeKey.lastIndexOf(":");
+    if (portIndex === -1) {
+        throw new Error(`Invalid node key ${nodeKey}`);
+    }
+    return {
+        host: nodeKey.slice(0, portIndex),
+        port: Number(nodeKey.slice(portIndex + 1)),
+    };
+}
+exports.nodeKeyToRedisOptions = nodeKeyToRedisOptions;
+function normalizeNodeOptions(nodes) {
+    return nodes.map((node) => {
+        const options = {};
+        if (typeof node === "object") {
+            Object.assign(options, node);
+        }
+        else if (typeof node === "string") {
+            Object.assign(options, utils_1.parseURL(node));
+        }
+        else if (typeof node === "number") {
+            options.port = node;
+        }
+        else {
+            throw new Error("Invalid argument " + node);
+        }
+        if (typeof options.port === "string") {
+            options.port = parseInt(options.port, 10);
+        }
+        // Cluster mode only support db 0
+        delete options.db;
+        if (!options.port) {
+            options.port = 6379;
+        }
+        if (!options.host) {
+            options.host = "127.0.0.1";
+        }
+        return utils_1.resolveTLSProfile(options);
+    });
+}
+exports.normalizeNodeOptions = normalizeNodeOptions;
+function getUniqueHostnamesFromOptions(nodes) {
+    const uniqueHostsMap = {};
+    nodes.forEach((node) => {
+        uniqueHostsMap[node.host] = true;
+    });
+    return Object.keys(uniqueHostsMap).filter((host) => !net_1.isIP(host));
+}
+exports.getUniqueHostnamesFromOptions = getUniqueHostnamesFromOptions;
+function groupSrvRecords(records) {
+    const recordsByPriority = {};
+    for (const record of records) {
+        if (!recordsByPriority.hasOwnProperty(record.priority)) {
+            recordsByPriority[record.priority] = {
+                totalWeight: record.weight,
+                records: [record],
+            };
+        }
+        else {
+            recordsByPriority[record.priority].totalWeight += record.weight;
+            recordsByPriority[record.priority].records.push(record);
+        }
+    }
+    return recordsByPriority;
+}
+exports.groupSrvRecords = groupSrvRecords;
+function weightSrvRecords(recordsGroup) {
+    if (recordsGroup.records.length === 1) {
+        recordsGroup.totalWeight = 0;
+        return recordsGroup.records.shift();
+    }
+    // + `recordsGroup.records.length` to support `weight` 0
+    const random = Math.floor(Math.random() * (recordsGroup.totalWeight + recordsGroup.records.length));
+    let total = 0;
+    for (const [i, record] of recordsGroup.records.entries()) {
+        total += 1 + record.weight;
+        if (total > random) {
+            recordsGroup.totalWeight -= record.weight;
+            recordsGroup.records.splice(i, 1);
+            return record;
+        }
+    }
+}
+exports.weightSrvRecords = weightSrvRecords;
+function getConnectionName(component, nodeConnectionName) {
+    const prefix = `ioredis-cluster(${component})`;
+    return nodeConnectionName ? `${prefix}:${nodeConnectionName}` : prefix;
+}
+exports.getConnectionName = getConnectionName;
+
+
+/***/ }),
+
+/***/ 90803:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const commands = __nccwpck_require__(98020);
+const calculateSlot = __nccwpck_require__(48481);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+const utils_1 = __nccwpck_require__(94832);
+const lodash_1 = __nccwpck_require__(20961);
+const promiseContainer_1 = __nccwpck_require__(71475);
+/**
+ * Command instance
+ *
+ * It's rare that you need to create a Command instance yourself.
+ *
+ * @export
+ * @class Command
+ *
+ * @example
+ * ```js
+ * var infoCommand = new Command('info', null, function (err, result) {
+ *   console.log('result', result);
+ * });
+ *
+ * redis.sendCommand(infoCommand);
+ *
+ * // When no callback provided, Command instance will have a `promise` property,
+ * // which will resolve/reject with the result of the command.
+ * var getCommand = new Command('get', ['foo']);
+ * getCommand.promise.then(function (result) {
+ *   console.log('result', result);
+ * });
+ * ```
+ * @see {@link Redis#sendCommand} which can send a Command instance to Redis
+ */
+class Command {
+    /**
+     * Creates an instance of Command.
+     * @param {string} name Command name
+     * @param {(Array<string | Buffer | number>)} [args=[]] An array of command arguments
+     * @param {ICommandOptions} [options={}]
+     * @param {CallbackFunction} [callback] The callback that handles the response.
+     * If omit, the response will be handled via Promise
+     * @memberof Command
+     */
+    constructor(name, args = [], options = {}, callback) {
+        this.name = name;
+        this.transformed = false;
+        this.isCustomCommand = false;
+        this.inTransaction = false;
+        this.isResolved = false;
+        this.replyEncoding = options.replyEncoding;
+        this.errorStack = options.errorStack;
+        this.args = lodash_1.flatten(args);
+        this.callback = callback;
+        this.initPromise();
+        if (options.keyPrefix) {
+            this._iterateKeys((key) => options.keyPrefix + key);
+        }
+        if (options.readOnly) {
+            this.isReadOnly = true;
+        }
+    }
+    static getFlagMap() {
+        if (!this.flagMap) {
+            this.flagMap = Object.keys(Command.FLAGS).reduce((map, flagName) => {
+                map[flagName] = {};
+                Command.FLAGS[flagName].forEach((commandName) => {
+                    map[flagName][commandName] = true;
+                });
+                return map;
+            }, {});
+        }
+        return this.flagMap;
+    }
+    /**
+     * Check whether the command has the flag
+     *
+     * @param {string} flagName
+     * @param {string} commandName
+     * @return {boolean}
+     */
+    static checkFlag(flagName, commandName) {
+        return !!this.getFlagMap()[flagName][commandName];
+    }
+    static setArgumentTransformer(name, func) {
+        this._transformer.argument[name] = func;
+    }
+    static setReplyTransformer(name, func) {
+        this._transformer.reply[name] = func;
+    }
+    initPromise() {
+        const Promise = promiseContainer_1.get();
+        const promise = new Promise((resolve, reject) => {
+            if (!this.transformed) {
+                this.transformed = true;
+                const transformer = Command._transformer.argument[this.name];
+                if (transformer) {
+                    this.args = transformer(this.args);
+                }
+                this.stringifyArguments();
+            }
+            this.resolve = this._convertValue(resolve);
+            if (this.errorStack) {
+                this.reject = (err) => {
+                    reject(utils_1.optimizeErrorStack(err, this.errorStack.stack, __dirname));
+                };
+            }
+            else {
+                this.reject = reject;
+            }
+        });
+        this.promise = standard_as_callback_1.default(promise, this.callback);
+    }
+    getSlot() {
+        if (typeof this.slot === "undefined") {
+            const key = this.getKeys()[0];
+            this.slot = key == null ? null : calculateSlot(key);
+        }
+        return this.slot;
+    }
+    getKeys() {
+        return this._iterateKeys();
+    }
+    /**
+     * Iterate through the command arguments that are considered keys.
+     *
+     * @param {Function} [transform=(key) => key] The transformation that should be applied to
+     * each key. The transformations will persist.
+     * @returns {string[]} The keys of the command.
+     * @memberof Command
+     */
+    _iterateKeys(transform = (key) => key) {
+        if (typeof this.keys === "undefined") {
+            this.keys = [];
+            if (commands.exists(this.name)) {
+                const keyIndexes = commands.getKeyIndexes(this.name, this.args);
+                for (const index of keyIndexes) {
+                    this.args[index] = transform(this.args[index]);
+                    this.keys.push(this.args[index]);
+                }
+            }
+        }
+        return this.keys;
+    }
+    /**
+     * Convert command to writable buffer or string
+     *
+     * @return {string|Buffer}
+     * @see {@link Redis#sendCommand}
+     * @public
+     */
+    toWritable() {
+        let bufferMode = false;
+        for (const arg of this.args) {
+            if (arg instanceof Buffer) {
+                bufferMode = true;
+                break;
+            }
+        }
+        let result;
+        const commandStr = "*" +
+            (this.args.length + 1) +
+            "\r\n$" +
+            Buffer.byteLength(this.name) +
+            "\r\n" +
+            this.name +
+            "\r\n";
+        if (bufferMode) {
+            const buffers = new MixedBuffers();
+            buffers.push(commandStr);
+            for (const arg of this.args) {
+                if (arg instanceof Buffer) {
+                    if (arg.length === 0) {
+                        buffers.push("$0\r\n\r\n");
+                    }
+                    else {
+                        buffers.push("$" + arg.length + "\r\n");
+                        buffers.push(arg);
+                        buffers.push("\r\n");
+                    }
+                }
+                else {
+                    buffers.push("$" +
+                        Buffer.byteLength(arg) +
+                        "\r\n" +
+                        arg +
+                        "\r\n");
+                }
+            }
+            result = buffers.toBuffer();
+        }
+        else {
+            result = commandStr;
+            for (const arg of this.args) {
+                result +=
+                    "$" +
+                        Buffer.byteLength(arg) +
+                        "\r\n" +
+                        arg +
+                        "\r\n";
+            }
+        }
+        return result;
+    }
+    stringifyArguments() {
+        for (let i = 0; i < this.args.length; ++i) {
+            const arg = this.args[i];
+            if (!(arg instanceof Buffer) && typeof arg !== "string") {
+                this.args[i] = utils_1.toArg(arg);
+            }
+        }
+    }
+    /**
+     * Convert the value from buffer to the target encoding.
+     *
+     * @private
+     * @param {Function} resolve The resolve function of the Promise
+     * @returns {Function} A function to transform and resolve a value
+     * @memberof Command
+     */
+    _convertValue(resolve) {
+        return (value) => {
+            try {
+                const existingTimer = this._commandTimeoutTimer;
+                if (existingTimer) {
+                    clearTimeout(existingTimer);
+                    delete this._commandTimeoutTimer;
+                }
+                resolve(this.transformReply(value));
+                this.isResolved = true;
+            }
+            catch (err) {
+                this.reject(err);
+            }
+            return this.promise;
+        };
+    }
+    /**
+     * Convert buffer/buffer[] to string/string[],
+     * and apply reply transformer.
+     *
+     * @memberof Command
+     */
+    transformReply(result) {
+        if (this.replyEncoding) {
+            result = utils_1.convertBufferToString(result, this.replyEncoding);
+        }
+        const transformer = Command._transformer.reply[this.name];
+        if (transformer) {
+            result = transformer(result);
+        }
+        return result;
+    }
+    /**
+     * Set the wait time before terminating the attempt to execute a command
+     * and generating an error.
+     */
+    setTimeout(ms) {
+        if (!this._commandTimeoutTimer) {
+            this._commandTimeoutTimer = setTimeout(() => {
+                if (!this.isResolved) {
+                    this.reject(new Error("Command timed out"));
+                }
+            }, ms);
+        }
+    }
+}
+exports["default"] = Command;
+Command.FLAGS = {
+    VALID_IN_SUBSCRIBER_MODE: [
+        "subscribe",
+        "psubscribe",
+        "unsubscribe",
+        "punsubscribe",
+        "ping",
+        "quit",
+    ],
+    VALID_IN_MONITOR_MODE: ["monitor", "auth"],
+    ENTER_SUBSCRIBER_MODE: ["subscribe", "psubscribe"],
+    EXIT_SUBSCRIBER_MODE: ["unsubscribe", "punsubscribe"],
+    WILL_DISCONNECT: ["quit"],
+};
+Command._transformer = {
+    argument: {},
+    reply: {},
+};
+const msetArgumentTransformer = function (args) {
+    if (args.length === 1) {
+        if (typeof Map !== "undefined" && args[0] instanceof Map) {
+            return utils_1.convertMapToArray(args[0]);
+        }
+        if (typeof args[0] === "object" && args[0] !== null) {
+            return utils_1.convertObjectToArray(args[0]);
+        }
+    }
+    return args;
+};
+const hsetArgumentTransformer = function (args) {
+    if (args.length === 2) {
+        if (typeof Map !== "undefined" && args[1] instanceof Map) {
+            return [args[0]].concat(utils_1.convertMapToArray(args[1]));
+        }
+        if (typeof args[1] === "object" && args[1] !== null) {
+            return [args[0]].concat(utils_1.convertObjectToArray(args[1]));
+        }
+    }
+    return args;
+};
+Command.setArgumentTransformer("mset", msetArgumentTransformer);
+Command.setArgumentTransformer("msetnx", msetArgumentTransformer);
+Command.setArgumentTransformer("hset", hsetArgumentTransformer);
+Command.setArgumentTransformer("hmset", hsetArgumentTransformer);
+Command.setReplyTransformer("hgetall", function (result) {
+    if (Array.isArray(result)) {
+        const obj = {};
+        for (let i = 0; i < result.length; i += 2) {
+            const key = result[i];
+            const value = result[i + 1];
+            if (key in obj) {
+                // can only be truthy if the property is special somehow, like '__proto__' or 'constructor'
+                // https://github.com/luin/ioredis/issues/1267
+                Object.defineProperty(obj, key, {
+                    value,
+                    configurable: true,
+                    enumerable: true,
+                    writable: true,
+                });
+            }
+            else {
+                obj[key] = value;
+            }
+        }
+        return obj;
+    }
+    return result;
+});
+class MixedBuffers {
+    constructor() {
+        this.length = 0;
+        this.items = [];
+    }
+    push(x) {
+        this.length += Buffer.byteLength(x);
+        this.items.push(x);
+    }
+    toBuffer() {
+        const result = Buffer.allocUnsafe(this.length);
+        let offset = 0;
+        for (const item of this.items) {
+            const length = Buffer.byteLength(item);
+            Buffer.isBuffer(item)
+                ? item.copy(result, offset)
+                : result.write(item, offset, length);
+            offset += length;
+        }
+        return result;
+    }
+}
+
+
+/***/ }),
+
+/***/ 33642:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const lodash_1 = __nccwpck_require__(20961);
+const command_1 = __nccwpck_require__(90803);
+const script_1 = __nccwpck_require__(88540);
+const PromiseContainer = __nccwpck_require__(71475);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+const autoPipelining_1 = __nccwpck_require__(97873);
+const DROP_BUFFER_SUPPORT_ERROR = "*Buffer methods are not available " +
+    'because "dropBufferSupport" option is enabled.' +
+    "Refer to https://github.com/luin/ioredis/wiki/Improve-Performance for more details.";
+/**
+ * Commander
+ *
+ * This is the base class of Redis, Redis.Cluster and Pipeline
+ *
+ * @param {boolean} [options.showFriendlyErrorStack=false] - Whether to show a friendly error stack.
+ * Will decrease the performance significantly.
+ * @constructor
+ */
+function Commander() {
+    this.options = lodash_1.defaults({}, this.options || {}, {
+        showFriendlyErrorStack: false,
+    });
+    this.scriptsSet = {};
+    this.addedBuiltinSet = new Set();
+}
+exports["default"] = Commander;
+const commands = (__nccwpck_require__(98020).list.filter)(function (command) {
+    return command !== "monitor";
+});
+commands.push("sentinel");
+/**
+ * Return supported builtin commands
+ *
+ * @return {string[]} command list
+ * @public
+ */
+Commander.prototype.getBuiltinCommands = function () {
+    return commands.slice(0);
+};
+/**
+ * Create a builtin command
+ *
+ * @param {string} commandName - command name
+ * @return {object} functions
+ * @public
+ */
+Commander.prototype.createBuiltinCommand = function (commandName) {
+    return {
+        string: generateFunction(null, commandName, "utf8"),
+        buffer: generateFunction(null, commandName, null),
+    };
+};
+/**
+ * Create add builtin command
+ *
+ * @param {string} commandName - command name
+ * @return {object} functions
+ * @public
+ */
+Commander.prototype.addBuiltinCommand = function (commandName) {
+    this.addedBuiltinSet.add(commandName);
+    this[commandName] = generateFunction(commandName, commandName, "utf8");
+    this[commandName + "Buffer"] = generateFunction(commandName + "Buffer", commandName, null);
+};
+commands.forEach(function (commandName) {
+    Commander.prototype[commandName] = generateFunction(commandName, commandName, "utf8");
+    Commander.prototype[commandName + "Buffer"] = generateFunction(commandName + "Buffer", commandName, null);
+});
+Commander.prototype.call = generateFunction("call", "utf8");
+Commander.prototype.callBuffer = generateFunction("callBuffer", null);
+// eslint-disable-next-line @typescript-eslint/camelcase
+Commander.prototype.send_command = Commander.prototype.call;
+/**
+ * Define a custom command using lua script
+ *
+ * @param {string} name - the command name
+ * @param {object} definition
+ * @param {string} definition.lua - the lua code
+ * @param {number} [definition.numberOfKeys=null] - the number of keys.
+ * @param {boolean} [definition.readOnly=false] - force this script to be readonly so it executes on slaves as well.
+ * If omit, you have to pass the number of keys as the first argument every time you invoke the command
+ */
+Commander.prototype.defineCommand = function (name, definition) {
+    const script = new script_1.default(definition.lua, definition.numberOfKeys, this.options.keyPrefix, definition.readOnly);
+    this.scriptsSet[name] = script;
+    this[name] = generateScriptingFunction(name, name, script, "utf8");
+    this[name + "Buffer"] = generateScriptingFunction(name + "Buffer", name, script, null);
+};
+/**
+ * Send a command
+ *
+ * @abstract
+ * @public
+ */
+Commander.prototype.sendCommand = function () { };
+function generateFunction(functionName, _commandName, _encoding) {
+    if (typeof _encoding === "undefined") {
+        _encoding = _commandName;
+        _commandName = null;
+    }
+    return function (...args) {
+        const commandName = _commandName || args.shift();
+        let callback = args[args.length - 1];
+        if (typeof callback === "function") {
+            args.pop();
+        }
+        else {
+            callback = undefined;
+        }
+        const options = {
+            errorStack: this.options.showFriendlyErrorStack ? new Error() : undefined,
+            keyPrefix: this.options.keyPrefix,
+            replyEncoding: _encoding,
+        };
+        if (this.options.dropBufferSupport && !_encoding) {
+            return standard_as_callback_1.default(PromiseContainer.get().reject(new Error(DROP_BUFFER_SUPPORT_ERROR)), callback);
+        }
+        // No auto pipeline, use regular command sending
+        if (!autoPipelining_1.shouldUseAutoPipelining(this, functionName, commandName)) {
+            return this.sendCommand(new command_1.default(commandName, args, options, callback));
+        }
+        // Create a new pipeline and make sure it's scheduled
+        return autoPipelining_1.executeWithAutoPipelining(this, functionName, commandName, args, callback);
+    };
+}
+function generateScriptingFunction(functionName, commandName, script, encoding) {
+    return function () {
+        let length = arguments.length;
+        const lastArgIndex = length - 1;
+        let callback = arguments[lastArgIndex];
+        if (typeof callback !== "function") {
+            callback = undefined;
+        }
+        else {
+            length = lastArgIndex;
+        }
+        const args = new Array(length);
+        for (let i = 0; i < length; i++) {
+            args[i] = arguments[i];
+        }
+        let options;
+        if (this.options.dropBufferSupport) {
+            if (!encoding) {
+                return standard_as_callback_1.default(PromiseContainer.get().reject(new Error(DROP_BUFFER_SUPPORT_ERROR)), callback);
+            }
+            options = { replyEncoding: null };
+        }
+        else {
+            options = { replyEncoding: encoding };
+        }
+        if (this.options.showFriendlyErrorStack) {
+            options.errorStack = new Error();
+        }
+        // No auto pipeline, use regular command sending
+        if (!autoPipelining_1.shouldUseAutoPipelining(this, functionName, commandName)) {
+            return script.execute(this, args, options, callback);
+        }
+        // Create a new pipeline and make sure it's scheduled
+        return autoPipelining_1.executeWithAutoPipelining(this, functionName, commandName, args, callback);
+    };
+}
+
+
+/***/ }),
+
+/***/ 72712:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const utils_1 = __nccwpck_require__(94832);
+const debug = utils_1.Debug("AbstractConnector");
+class AbstractConnector {
+    constructor(disconnectTimeout) {
+        this.connecting = false;
+        this.disconnectTimeout = disconnectTimeout;
+    }
+    check(info) {
+        return true;
+    }
+    disconnect() {
+        this.connecting = false;
+        if (this.stream) {
+            const stream = this.stream; // Make sure callbacks refer to the same instance
+            const timeout = setTimeout(() => {
+                debug("stream %s:%s still open, destroying it", stream.remoteAddress, stream.remotePort);
+                stream.destroy();
+            }, this.disconnectTimeout);
+            stream.on("close", () => clearTimeout(timeout));
+            stream.end();
+        }
+    }
+}
+exports["default"] = AbstractConnector;
+
+
+/***/ }),
+
+/***/ 22913:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const utils_1 = __nccwpck_require__(94832);
+const debug = utils_1.Debug("FailoverDetector");
+const CHANNEL_NAME = "+switch-master";
+class FailoverDetector {
+    // sentinels can't be used for regular commands after this
+    constructor(connector, sentinels) {
+        this.isDisconnected = false;
+        this.connector = connector;
+        this.sentinels = sentinels;
+    }
+    cleanup() {
+        this.isDisconnected = true;
+        for (const sentinel of this.sentinels) {
+            sentinel.client.disconnect();
+        }
+    }
+    subscribe() {
+        return __awaiter(this, void 0, void 0, function* () {
+            debug("Starting FailoverDetector");
+            const promises = [];
+            for (const sentinel of this.sentinels) {
+                const promise = sentinel.client.subscribe(CHANNEL_NAME).catch((err) => {
+                    debug("Failed to subscribe to failover messages on sentinel %s:%s (%s)", sentinel.address.host || "127.0.0.1", sentinel.address.port || 26739, err.message);
+                });
+                promises.push(promise);
+                sentinel.client.on("message", (channel) => {
+                    if (!this.isDisconnected && channel === CHANNEL_NAME) {
+                        this.disconnect();
+                    }
+                });
+            }
+            yield Promise.all(promises);
+        });
+    }
+    disconnect() {
+        // Avoid disconnecting more than once per failover.
+        // A new FailoverDetector will be created after reconnecting.
+        this.isDisconnected = true;
+        debug("Failover detected, disconnecting");
+        // Will call this.cleanup()
+        this.connector.disconnect();
+    }
+}
+exports.FailoverDetector = FailoverDetector;
+
+
+/***/ }),
+
+/***/ 72225:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+function isSentinelEql(a, b) {
+    return ((a.host || "127.0.0.1") === (b.host || "127.0.0.1") &&
+        (a.port || 26379) === (b.port || 26379));
+}
+class SentinelIterator {
+    constructor(sentinels) {
+        this.cursor = 0;
+        this.sentinels = sentinels.slice(0);
+    }
+    next() {
+        const done = this.cursor >= this.sentinels.length;
+        return { done, value: done ? undefined : this.sentinels[this.cursor++] };
+    }
+    reset(moveCurrentEndpointToFirst) {
+        if (moveCurrentEndpointToFirst &&
+            this.sentinels.length > 1 &&
+            this.cursor !== 1) {
+            this.sentinels.unshift(...this.sentinels.splice(this.cursor - 1));
+        }
+        this.cursor = 0;
+    }
+    add(sentinel) {
+        for (let i = 0; i < this.sentinels.length; i++) {
+            if (isSentinelEql(sentinel, this.sentinels[i])) {
+                return false;
+            }
+        }
+        this.sentinels.push(sentinel);
+        return true;
+    }
+    toString() {
+        return `${JSON.stringify(this.sentinels)} @${this.cursor}`;
+    }
+}
+exports["default"] = SentinelIterator;
+
+
+/***/ }),
+
+/***/ 10379:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const net_1 = __nccwpck_require__(41808);
+const utils_1 = __nccwpck_require__(94832);
+const tls_1 = __nccwpck_require__(24404);
+const StandaloneConnector_1 = __nccwpck_require__(8774);
+const SentinelIterator_1 = __nccwpck_require__(72225);
+exports.SentinelIterator = SentinelIterator_1.default;
+const AbstractConnector_1 = __nccwpck_require__(72712);
+const redis_1 = __nccwpck_require__(83609);
+const FailoverDetector_1 = __nccwpck_require__(22913);
+const debug = utils_1.Debug("SentinelConnector");
+class SentinelConnector extends AbstractConnector_1.default {
+    constructor(options) {
+        super(options.disconnectTimeout);
+        this.options = options;
+        this.failoverDetector = null;
+        this.emitter = null;
+        if (!this.options.sentinels.length) {
+            throw new Error("Requires at least one sentinel to connect to.");
+        }
+        if (!this.options.name) {
+            throw new Error("Requires the name of master.");
+        }
+        this.sentinelIterator = new SentinelIterator_1.default(this.options.sentinels);
+    }
+    check(info) {
+        const roleMatches = !info.role || this.options.role === info.role;
+        if (!roleMatches) {
+            debug("role invalid, expected %s, but got %s", this.options.role, info.role);
+            // Start from the next item.
+            // Note that `reset` will move the cursor to the previous element,
+            // so we advance two steps here.
+            this.sentinelIterator.next();
+            this.sentinelIterator.next();
+            this.sentinelIterator.reset(true);
+        }
+        return roleMatches;
+    }
+    disconnect() {
+        super.disconnect();
+        if (this.failoverDetector) {
+            this.failoverDetector.cleanup();
+        }
+    }
+    connect(eventEmitter) {
+        this.connecting = true;
+        this.retryAttempts = 0;
+        let lastError;
+        const connectToNext = () => __awaiter(this, void 0, void 0, function* () {
+            const endpoint = this.sentinelIterator.next();
+            if (endpoint.done) {
+                this.sentinelIterator.reset(false);
+                const retryDelay = typeof this.options.sentinelRetryStrategy === "function"
+                    ? this.options.sentinelRetryStrategy(++this.retryAttempts)
+                    : null;
+                let errorMsg = typeof retryDelay !== "number"
+                    ? "All sentinels are unreachable and retry is disabled."
+                    : `All sentinels are unreachable. Retrying from scratch after ${retryDelay}ms.`;
+                if (lastError) {
+                    errorMsg += ` Last error: ${lastError.message}`;
+                }
+                debug(errorMsg);
+                const error = new Error(errorMsg);
+                if (typeof retryDelay === "number") {
+                    eventEmitter("error", error);
+                    yield new Promise((resolve) => setTimeout(resolve, retryDelay));
+                    return connectToNext();
+                }
+                else {
+                    throw error;
+                }
+            }
+            let resolved = null;
+            let err = null;
+            try {
+                resolved = yield this.resolve(endpoint.value);
+            }
+            catch (error) {
+                err = error;
+            }
+            if (!this.connecting) {
+                throw new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG);
+            }
+            const endpointAddress = endpoint.value.host + ":" + endpoint.value.port;
+            if (resolved) {
+                debug("resolved: %s:%s from sentinel %s", resolved.host, resolved.port, endpointAddress);
+                if (this.options.enableTLSForSentinelMode && this.options.tls) {
+                    Object.assign(resolved, this.options.tls);
+                    this.stream = tls_1.connect(resolved);
+                }
+                else {
+                    this.stream = net_1.createConnection(resolved);
+                }
+                this.stream.once("connect", () => this.initFailoverDetector());
+                this.stream.once("error", (err) => {
+                    this.firstError = err;
+                });
+                return this.stream;
+            }
+            else {
+                const errorMsg = err
+                    ? "failed to connect to sentinel " +
+                        endpointAddress +
+                        " because " +
+                        err.message
+                    : "connected to sentinel " +
+                        endpointAddress +
+                        " successfully, but got an invalid reply: " +
+                        resolved;
+                debug(errorMsg);
+                eventEmitter("sentinelError", new Error(errorMsg));
+                if (err) {
+                    lastError = err;
+                }
+                return connectToNext();
+            }
+        });
+        return connectToNext();
+    }
+    updateSentinels(client) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.options.updateSentinels) {
+                return;
+            }
+            const result = yield client.sentinel("sentinels", this.options.name);
+            if (!Array.isArray(result)) {
+                return;
+            }
+            result
+                .map(utils_1.packObject)
+                .forEach((sentinel) => {
+                const flags = sentinel.flags ? sentinel.flags.split(",") : [];
+                if (flags.indexOf("disconnected") === -1 &&
+                    sentinel.ip &&
+                    sentinel.port) {
+                    const endpoint = this.sentinelNatResolve(addressResponseToAddress(sentinel));
+                    if (this.sentinelIterator.add(endpoint)) {
+                        debug("adding sentinel %s:%s", endpoint.host, endpoint.port);
+                    }
+                }
+            });
+            debug("Updated internal sentinels: %s", this.sentinelIterator);
+        });
+    }
+    resolveMaster(client) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const result = yield client.sentinel("get-master-addr-by-name", this.options.name);
+            yield this.updateSentinels(client);
+            return this.sentinelNatResolve(Array.isArray(result)
+                ? { host: result[0], port: Number(result[1]) }
+                : null);
+        });
+    }
+    resolveSlave(client) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const result = yield client.sentinel("slaves", this.options.name);
+            if (!Array.isArray(result)) {
+                return null;
+            }
+            const availableSlaves = result
+                .map(utils_1.packObject)
+                .filter((slave) => slave.flags && !slave.flags.match(/(disconnected|s_down|o_down)/));
+            return this.sentinelNatResolve(selectPreferredSentinel(availableSlaves, this.options.preferredSlaves));
+        });
+    }
+    sentinelNatResolve(item) {
+        if (!item || !this.options.natMap)
+            return item;
+        return this.options.natMap[`${item.host}:${item.port}`] || item;
+    }
+    connectToSentinel(endpoint, options) {
+        return new redis_1.default(Object.assign({ port: endpoint.port || 26379, host: endpoint.host, username: this.options.sentinelUsername || null, password: this.options.sentinelPassword || null, family: endpoint.family ||
+                (StandaloneConnector_1.isIIpcConnectionOptions(this.options)
+                    ? undefined
+                    : this.options.family), tls: this.options.sentinelTLS, retryStrategy: null, enableReadyCheck: false, connectTimeout: this.options.connectTimeout, commandTimeout: this.options.sentinelCommandTimeout, dropBufferSupport: true }, options));
+    }
+    resolve(endpoint) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const client = this.connectToSentinel(endpoint);
+            // ignore the errors since resolve* methods will handle them
+            client.on("error", noop);
+            try {
+                if (this.options.role === "slave") {
+                    return yield this.resolveSlave(client);
+                }
+                else {
+                    return yield this.resolveMaster(client);
+                }
+            }
+            finally {
+                client.disconnect();
+            }
+        });
+    }
+    initFailoverDetector() {
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this.options.failoverDetector) {
+                return;
+            }
+            // Move the current sentinel to the first position
+            this.sentinelIterator.reset(true);
+            const sentinels = [];
+            // In case of a large amount of sentinels, limit the number of concurrent connections
+            while (sentinels.length < this.options.sentinelMaxConnections) {
+                const { done, value } = this.sentinelIterator.next();
+                if (done) {
+                    break;
+                }
+                const client = this.connectToSentinel(value, {
+                    lazyConnect: true,
+                    retryStrategy: this.options.sentinelReconnectStrategy,
+                });
+                client.on("reconnecting", () => {
+                    var _a;
+                    // Tests listen to this event
+                    (_a = this.emitter) === null || _a === void 0 ? void 0 : _a.emit("sentinelReconnecting");
+                });
+                sentinels.push({ address: value, client });
+            }
+            this.sentinelIterator.reset(false);
+            if (this.failoverDetector) {
+                // Clean up previous detector
+                this.failoverDetector.cleanup();
+            }
+            this.failoverDetector = new FailoverDetector_1.FailoverDetector(this, sentinels);
+            yield this.failoverDetector.subscribe();
+            // Tests listen to this event
+            (_a = this.emitter) === null || _a === void 0 ? void 0 : _a.emit("failoverSubscribed");
+        });
+    }
+}
+exports["default"] = SentinelConnector;
+function selectPreferredSentinel(availableSlaves, preferredSlaves) {
+    if (availableSlaves.length === 0) {
+        return null;
+    }
+    let selectedSlave;
+    if (typeof preferredSlaves === "function") {
+        selectedSlave = preferredSlaves(availableSlaves);
+    }
+    else if (preferredSlaves !== null && typeof preferredSlaves === "object") {
+        const preferredSlavesArray = Array.isArray(preferredSlaves)
+            ? preferredSlaves
+            : [preferredSlaves];
+        // sort by priority
+        preferredSlavesArray.sort((a, b) => {
+            // default the priority to 1
+            if (!a.prio) {
+                a.prio = 1;
+            }
+            if (!b.prio) {
+                b.prio = 1;
+            }
+            // lowest priority first
+            if (a.prio < b.prio) {
+                return -1;
+            }
+            if (a.prio > b.prio) {
+                return 1;
+            }
+            return 0;
+        });
+        // loop over preferred slaves and return the first match
+        for (let p = 0; p < preferredSlavesArray.length; p++) {
+            for (let a = 0; a < availableSlaves.length; a++) {
+                const slave = availableSlaves[a];
+                if (slave.ip === preferredSlavesArray[p].ip) {
+                    if (slave.port === preferredSlavesArray[p].port) {
+                        selectedSlave = slave;
+                        break;
+                    }
+                }
+            }
+            if (selectedSlave) {
+                break;
+            }
+        }
+    }
+    // if none of the preferred slaves are available, a random available slave is returned
+    if (!selectedSlave) {
+        selectedSlave = utils_1.sample(availableSlaves);
+    }
+    return addressResponseToAddress(selectedSlave);
+}
+function addressResponseToAddress(input) {
+    return { host: input.ip, port: Number(input.port) };
+}
+function noop() { }
+
+
+/***/ }),
+
+/***/ 8774:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const net_1 = __nccwpck_require__(41808);
+const tls_1 = __nccwpck_require__(24404);
+const utils_1 = __nccwpck_require__(94832);
+const AbstractConnector_1 = __nccwpck_require__(72712);
+function isIIpcConnectionOptions(value) {
+    return value.path;
+}
+exports.isIIpcConnectionOptions = isIIpcConnectionOptions;
+class StandaloneConnector extends AbstractConnector_1.default {
+    constructor(options) {
+        super(options.disconnectTimeout);
+        this.options = options;
+    }
+    connect(_) {
+        const { options } = this;
+        this.connecting = true;
+        let connectionOptions;
+        if (isIIpcConnectionOptions(options)) {
+            connectionOptions = {
+                path: options.path,
+            };
+        }
+        else {
+            connectionOptions = {};
+            if (options.port != null) {
+                connectionOptions.port = options.port;
+            }
+            if (options.host != null) {
+                connectionOptions.host = options.host;
+            }
+            if (options.family != null) {
+                connectionOptions.family = options.family;
+            }
+        }
+        if (options.tls) {
+            Object.assign(connectionOptions, options.tls);
+        }
+        // TODO:
+        // We use native Promise here since other Promise
+        // implementation may use different schedulers that
+        // cause issue when the stream is resolved in the
+        // next tick.
+        // Should use the provided promise in the next major
+        // version and do not connect before resolved.
+        return new Promise((resolve, reject) => {
+            process.nextTick(() => {
+                if (!this.connecting) {
+                    reject(new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG));
+                    return;
+                }
+                try {
+                    if (options.tls) {
+                        this.stream = tls_1.connect(connectionOptions);
+                    }
+                    else {
+                        this.stream = net_1.createConnection(connectionOptions);
+                    }
+                }
+                catch (err) {
+                    reject(err);
+                    return;
+                }
+                this.stream.once("error", (err) => {
+                    this.firstError = err;
+                });
+                resolve(this.stream);
+            });
+        });
+    }
+}
+exports["default"] = StandaloneConnector;
+
+
+/***/ }),
+
+/***/ 72340:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const StandaloneConnector_1 = __nccwpck_require__(8774);
+exports.StandaloneConnector = StandaloneConnector_1.default;
+const SentinelConnector_1 = __nccwpck_require__(10379);
+exports.SentinelConnector = SentinelConnector_1.default;
+
+
+/***/ }),
+
+/***/ 61823:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports["default"] = {
+    /**
+     * TLS settings for Redis.com Cloud Fixed plan. Updated on 2021-10-06.
+     */
+    RedisCloudFixed: {
+        ca: "-----BEGIN CERTIFICATE-----\n" +
+            "MIIDTzCCAjegAwIBAgIJAKSVpiDswLcwMA0GCSqGSIb3DQEBBQUAMD4xFjAUBgNV\n" +
+            "BAoMDUdhcmFudGlhIERhdGExJDAiBgNVBAMMG1NTTCBDZXJ0aWZpY2F0aW9uIEF1\n" +
+            "dGhvcml0eTAeFw0xMzEwMDExMjE0NTVaFw0yMzA5MjkxMjE0NTVaMD4xFjAUBgNV\n" +
+            "BAoMDUdhcmFudGlhIERhdGExJDAiBgNVBAMMG1NTTCBDZXJ0aWZpY2F0aW9uIEF1\n" +
+            "dGhvcml0eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALZqkh/DczWP\n" +
+            "JnxnHLQ7QL0T4B4CDKWBKCcisriGbA6ZePWVNo4hfKQC6JrzfR+081NeD6VcWUiz\n" +
+            "rmd+jtPhIY4c+WVQYm5PKaN6DT1imYdxQw7aqO5j2KUCEh/cznpLxeSHoTxlR34E\n" +
+            "QwF28Wl3eg2vc5ct8LjU3eozWVk3gb7alx9mSA2SgmuX5lEQawl++rSjsBStemY2\n" +
+            "BDwOpAMXIrdEyP/cVn8mkvi/BDs5M5G+09j0gfhyCzRWMQ7Hn71u1eolRxwVxgi3\n" +
+            "TMn+/vTaFSqxKjgck6zuAYjBRPaHe7qLxHNr1So/Mc9nPy+3wHebFwbIcnUojwbp\n" +
+            "4nctkWbjb2cCAwEAAaNQME4wHQYDVR0OBBYEFP1whtcrydmW3ZJeuSoKZIKjze3w\n" +
+            "MB8GA1UdIwQYMBaAFP1whtcrydmW3ZJeuSoKZIKjze3wMAwGA1UdEwQFMAMBAf8w\n" +
+            "DQYJKoZIhvcNAQEFBQADggEBAG2erXhwRAa7+ZOBs0B6X57Hwyd1R4kfmXcs0rta\n" +
+            "lbPpvgULSiB+TCbf3EbhJnHGyvdCY1tvlffLjdA7HJ0PCOn+YYLBA0pTU/dyvrN6\n" +
+            "Su8NuS5yubnt9mb13nDGYo1rnt0YRfxN+8DM3fXIVr038A30UlPX2Ou1ExFJT0MZ\n" +
+            "uFKY6ZvLdI6/1cbgmguMlAhM+DhKyV6Sr5699LM3zqeI816pZmlREETYkGr91q7k\n" +
+            "BpXJu/dtHaGxg1ZGu6w/PCsYGUcECWENYD4VQPd8N32JjOfu6vEgoEAwfPP+3oGp\n" +
+            "Z4m3ewACcWOAenqflb+cQYC4PsF7qbXDmRaWrbKntOlZ3n0=\n" +
+            "-----END CERTIFICATE-----\n",
+    },
+    /**
+     * TLS settings for Redis.com Cloud Flexible plan. Updated on 2021-10-06.
+     */
+    RedisCloudFlexible: {
+        ca: "-----BEGIN CERTIFICATE-----\n" +
+            "MIIGMTCCBBmgAwIBAgICEAAwDQYJKoZIhvcNAQELBQAwajELMAkGA1UEBhMCVVMx\n" +
+            "CzAJBgNVBAgMAkNBMQswCQYDVQQHDAJDQTESMBAGA1UECgwJUmVkaXNMYWJzMS0w\n" +
+            "KwYDVQQDDCRSZWRpc0xhYnMgUm9vdCBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHhcN\n" +
+            "MTgwMjI1MTUzNzM3WhcNMjgwMjIzMTUzNzM3WjBfMQswCQYDVQQGEwJVUzELMAkG\n" +
+            "A1UECAwCQ0ExEjAQBgNVBAoMCVJlZGlzTGFiczEvMC0GA1UEAwwmUkNQIEludGVy\n" +
+            "bWVkaWF0ZSBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwggIiMA0GCSqGSIb3DQEBAQUA\n" +
+            "A4ICDwAwggIKAoICAQDf9dqbxc8Bq7Ctq9rWcxrGNKKHivqLAFpPq02yLPx6fsOv\n" +
+            "Tq7GsDChAYBBc4v7Y2Ap9RD5Vs3dIhEANcnolf27QwrG9RMnnvzk8pCvp1o6zSU4\n" +
+            "VuOE1W66/O1/7e2rVxyrnTcP7UgK43zNIXu7+tiAqWsO92uSnuMoGPGpeaUm1jym\n" +
+            "hjWKtkAwDFSqvHY+XL5qDVBEjeUe+WHkYUg40cAXjusAqgm2hZt29c2wnVrxW25W\n" +
+            "P0meNlzHGFdA2AC5z54iRiqj57dTfBTkHoBczQxcyw6hhzxZQ4e5I5zOKjXXEhZN\n" +
+            "r0tA3YC14CTabKRus/JmZieyZzRgEy2oti64tmLYTqSlAD78pRL40VNoaSYetXLw\n" +
+            "hhNsXCHgWaY6d5bLOc/aIQMAV5oLvZQKvuXAF1IDmhPA+bZbpWipp0zagf1P1H3s\n" +
+            "UzsMdn2KM0ejzgotbtNlj5TcrVwpmvE3ktvUAuA+hi3FkVx1US+2Gsp5x4YOzJ7u\n" +
+            "P1WPk6ShF0JgnJH2ILdj6kttTWwFzH17keSFICWDfH/+kM+k7Y1v3EXMQXE7y0T9\n" +
+            "MjvJskz6d/nv+sQhY04xt64xFMGTnZjlJMzfQNi7zWFLTZnDD0lPowq7l3YiPoTT\n" +
+            "t5Xky83lu0KZsZBo0WlWaDG00gLVdtRgVbcuSWxpi5BdLb1kRab66JptWjxwXQID\n" +
+            "AQABo4HrMIHoMDoGA1UdHwQzMDEwL6AtoCuGKWh0dHBzOi8vcmwtY2Etc2VydmVy\n" +
+            "LnJlZGlzbGFicy5jb20vdjEvY3JsMEYGCCsGAQUFBwEBBDowODA2BggrBgEFBQcw\n" +
+            "AYYqaHR0cHM6Ly9ybC1jYS1zZXJ2ZXIucmVkaXNsYWJzLmNvbS92MS9vY3NwMB0G\n" +
+            "A1UdDgQWBBQHar5OKvQUpP2qWt6mckzToeCOHDAfBgNVHSMEGDAWgBQi42wH6hM4\n" +
+            "L2sujEvLM0/u8lRXTzASBgNVHRMBAf8ECDAGAQH/AgEAMA4GA1UdDwEB/wQEAwIB\n" +
+            "hjANBgkqhkiG9w0BAQsFAAOCAgEAirEn/iTsAKyhd+pu2W3Z5NjCko4NPU0EYUbr\n" +
+            "AP7+POK2rzjIrJO3nFYQ/LLuC7KCXG+2qwan2SAOGmqWst13Y+WHp44Kae0kaChW\n" +
+            "vcYLXXSoGQGC8QuFSNUdaeg3RbMDYFT04dOkqufeWVccoHVxyTSg9eD8LZuHn5jw\n" +
+            "7QDLiEECBmIJHk5Eeo2TAZrx4Yx6ufSUX5HeVjlAzqwtAqdt99uCJ/EL8bgpWbe+\n" +
+            "XoSpvUv0SEC1I1dCAhCKAvRlIOA6VBcmzg5Am12KzkqTul12/VEFIgzqu0Zy2Jbc\n" +
+            "AUPrYVu/+tOGXQaijy7YgwH8P8n3s7ZeUa1VABJHcxrxYduDDJBLZi+MjheUDaZ1\n" +
+            "jQRHYevI2tlqeSBqdPKG4zBY5lS0GiAlmuze5oENt0P3XboHoZPHiqcK3VECgTVh\n" +
+            "/BkJcuudETSJcZDmQ8YfoKfBzRQNg2sv/hwvUv73Ss51Sco8GEt2lD8uEdib1Q6z\n" +
+            "zDT5lXJowSzOD5ZA9OGDjnSRL+2riNtKWKEqvtEG3VBJoBzu9GoxbAc7wIZLxmli\n" +
+            "iF5a/Zf5X+UXD3s4TMmy6C4QZJpAA2egsSQCnraWO2ULhh7iXMysSkF/nzVfZn43\n" +
+            "iqpaB8++9a37hWq14ZmOv0TJIDz//b2+KC4VFXWQ5W5QC6whsjT+OlG4p5ZYG0jo\n" +
+            "616pxqo=\n" +
+            "-----END CERTIFICATE-----\n" +
+            "-----BEGIN CERTIFICATE-----\n" +
+            "MIIFujCCA6KgAwIBAgIJAJ1aTT1lu2ScMA0GCSqGSIb3DQEBCwUAMGoxCzAJBgNV\n" +
+            "BAYTAlVTMQswCQYDVQQIDAJDQTELMAkGA1UEBwwCQ0ExEjAQBgNVBAoMCVJlZGlz\n" +
+            "TGFiczEtMCsGA1UEAwwkUmVkaXNMYWJzIFJvb3QgQ2VydGlmaWNhdGUgQXV0aG9y\n" +
+            "aXR5MB4XDTE4MDIyNTE1MjA0MloXDTM4MDIyMDE1MjA0MlowajELMAkGA1UEBhMC\n" +
+            "VVMxCzAJBgNVBAgMAkNBMQswCQYDVQQHDAJDQTESMBAGA1UECgwJUmVkaXNMYWJz\n" +
+            "MS0wKwYDVQQDDCRSZWRpc0xhYnMgUm9vdCBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkw\n" +
+            "ggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQDLEjXy7YrbN5Waau5cd6g1\n" +
+            "G5C2tMmeTpZ0duFAPxNU4oE3RHS5gGiok346fUXuUxbZ6QkuzeN2/2Z+RmRcJhQY\n" +
+            "Dm0ZgdG4x59An1TJfnzKKoWj8ISmoHS/TGNBdFzXV7FYNLBuqZouqePI6ReC6Qhl\n" +
+            "pp45huV32Q3a6IDrrvx7Wo5ZczEQeFNbCeCOQYNDdTmCyEkHqc2AGo8eoIlSTutT\n" +
+            "ULOC7R5gzJVTS0e1hesQ7jmqHjbO+VQS1NAL4/5K6cuTEqUl+XhVhPdLWBXJQ5ag\n" +
+            "54qhX4v+ojLzeU1R/Vc6NjMvVtptWY6JihpgplprN0Yh2556ewcXMeturcKgXfGJ\n" +
+            "xeYzsjzXerEjrVocX5V8BNrg64NlifzTMKNOOv4fVZszq1SIHR8F9ROrqiOdh8iC\n" +
+            "JpUbLpXH9hWCSEO6VRMB2xJoKu3cgl63kF30s77x7wLFMEHiwsQRKxooE1UhgS9K\n" +
+            "2sO4TlQ1eWUvFvHSTVDQDlGQ6zu4qjbOpb3Q8bQwoK+ai2alkXVR4Ltxe9QlgYK3\n" +
+            "StsnPhruzZGA0wbXdpw0bnM+YdlEm5ffSTpNIfgHeaa7Dtb801FtA71ZlH7A6TaI\n" +
+            "SIQuUST9EKmv7xrJyx0W1pGoPOLw5T029aTjnICSLdtV9bLwysrLhIYG5bnPq78B\n" +
+            "cS+jZHFGzD7PUVGQD01nOQIDAQABo2MwYTAdBgNVHQ4EFgQUIuNsB+oTOC9rLoxL\n" +
+            "yzNP7vJUV08wHwYDVR0jBBgwFoAUIuNsB+oTOC9rLoxLyzNP7vJUV08wDwYDVR0T\n" +
+            "AQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAYYwDQYJKoZIhvcNAQELBQADggIBAHfg\n" +
+            "z5pMNUAKdMzK1aS1EDdK9yKz4qicILz5czSLj1mC7HKDRy8cVADUxEICis++CsCu\n" +
+            "rYOvyCVergHQLREcxPq4rc5Nq1uj6J6649NEeh4WazOOjL4ZfQ1jVznMbGy+fJm3\n" +
+            "3Hoelv6jWRG9iqeJZja7/1s6YC6bWymI/OY1e4wUKeNHAo+Vger7MlHV+RuabaX+\n" +
+            "hSJ8bJAM59NCM7AgMTQpJCncrcdLeceYniGy5Q/qt2b5mJkQVkIdy4TPGGB+AXDJ\n" +
+            "D0q3I/JDRkDUFNFdeW0js7fHdsvCR7O3tJy5zIgEV/o/BCkmJVtuwPYOrw/yOlKj\n" +
+            "TY/U7ATAx9VFF6/vYEOMYSmrZlFX+98L6nJtwDqfLB5VTltqZ4H/KBxGE3IRSt9l\n" +
+            "FXy40U+LnXzhhW+7VBAvyYX8GEXhHkKU8Gqk1xitrqfBXY74xKgyUSTolFSfFVgj\n" +
+            "mcM/X4K45bka+qpkj7Kfv/8D4j6aZekwhN2ly6hhC1SmQ8qjMjpG/mrWOSSHZFmf\n" +
+            "ybu9iD2AYHeIOkshIl6xYIa++Q/00/vs46IzAbQyriOi0XxlSMMVtPx0Q3isp+ji\n" +
+            "n8Mq9eOuxYOEQ4of8twUkUDd528iwGtEdwf0Q01UyT84S62N8AySl1ZBKXJz6W4F\n" +
+            "UhWfa/HQYOAPDdEjNgnVwLI23b8t0TozyCWw7q8h\n" +
+            "-----END CERTIFICATE-----\n",
+    },
+};
+
+
+/***/ }),
+
+/***/ 97282:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const redis_errors_1 = __nccwpck_require__(81879);
+class ClusterAllFailedError extends redis_errors_1.RedisError {
+    constructor(message, lastNodeError) {
+        super(message);
+        this.lastNodeError = lastNodeError;
+        Error.captureStackTrace(this, this.constructor);
+    }
+    get name() {
+        return this.constructor.name;
+    }
+}
+exports["default"] = ClusterAllFailedError;
+
+
+/***/ }),
+
+/***/ 90735:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const redis_errors_1 = __nccwpck_require__(81879);
+class MaxRetriesPerRequestError extends redis_errors_1.AbortError {
+    constructor(maxRetriesPerRequest) {
+        const message = `Reached the max retries per request limit (which is ${maxRetriesPerRequest}). Refer to "maxRetriesPerRequest" option for details.`;
+        super(message);
+        Error.captureStackTrace(this, this.constructor);
+    }
+    get name() {
+        return this.constructor.name;
+    }
+}
+exports["default"] = MaxRetriesPerRequestError;
+
+
+/***/ }),
+
+/***/ 23961:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const MaxRetriesPerRequestError_1 = __nccwpck_require__(90735);
+exports.MaxRetriesPerRequestError = MaxRetriesPerRequestError_1.default;
+
+
+/***/ }),
+
+/***/ 45069:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports = module.exports = __nccwpck_require__(83609)["default"];
+var redis_1 = __nccwpck_require__(83609);
+exports["default"] = redis_1.default;
+var cluster_1 = __nccwpck_require__(17208);
+exports.Cluster = cluster_1.default;
+var command_1 = __nccwpck_require__(90803);
+exports.Command = command_1.default;
+var ScanStream_1 = __nccwpck_require__(6134);
+exports.ScanStream = ScanStream_1.default;
+var pipeline_1 = __nccwpck_require__(42803);
+exports.Pipeline = pipeline_1.default;
+var AbstractConnector_1 = __nccwpck_require__(72712);
+exports.AbstractConnector = AbstractConnector_1.default;
+var SentinelConnector_1 = __nccwpck_require__(10379);
+exports.SentinelConnector = SentinelConnector_1.default;
+exports.SentinelIterator = SentinelConnector_1.SentinelIterator;
+// No TS typings
+exports.ReplyError = __nccwpck_require__(81879).ReplyError;
+const PromiseContainer = __nccwpck_require__(71475);
+Object.defineProperty(exports, "Promise", ({
+    get() {
+        return PromiseContainer.get();
+    },
+    set(lib) {
+        PromiseContainer.set(lib);
+    },
+}));
+function print(err, reply) {
+    if (err) {
+        console.log("Error: " + err);
+    }
+    else {
+        console.log("Reply: " + reply);
+    }
+}
+exports.print = print;
+
+
+/***/ }),
+
+/***/ 42803:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const command_1 = __nccwpck_require__(90803);
+const util_1 = __nccwpck_require__(73837);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+const redis_commands_1 = __nccwpck_require__(98020);
+const calculateSlot = __nccwpck_require__(48481);
+const pMap = __nccwpck_require__(91855);
+const PromiseContainer = __nccwpck_require__(71475);
+const commander_1 = __nccwpck_require__(33642);
+const utils_1 = __nccwpck_require__(94832);
+/*
+  This function derives from the cluster-key-slot implementation.
+  Instead of checking that all keys have the same slot, it checks that all slots are served by the same set of nodes.
+  If this is satisfied, it returns the first key's slot.
+*/
+function generateMultiWithNodes(redis, keys) {
+    const slot = calculateSlot(keys[0]);
+    const target = redis._groupsBySlot[slot];
+    for (let i = 1; i < keys.length; i++) {
+        if (redis._groupsBySlot[calculateSlot(keys[i])] !== target) {
+            return -1;
+        }
+    }
+    return slot;
+}
+function Pipeline(redis) {
+    commander_1.default.call(this);
+    this.redis = redis;
+    this.isCluster =
+        this.redis.constructor.name === "Cluster" || this.redis.isCluster;
+    this.isPipeline = true;
+    this.options = redis.options;
+    this._queue = [];
+    this._result = [];
+    this._transactions = 0;
+    this._shaToScript = {};
+    Object.keys(redis.scriptsSet).forEach((name) => {
+        const script = redis.scriptsSet[name];
+        this._shaToScript[script.sha] = script;
+        this[name] = redis[name];
+        this[name + "Buffer"] = redis[name + "Buffer"];
+    });
+    redis.addedBuiltinSet.forEach((name) => {
+        this[name] = redis[name];
+        this[name + "Buffer"] = redis[name + "Buffer"];
+    });
+    const Promise = PromiseContainer.get();
+    this.promise = new Promise((resolve, reject) => {
+        this.resolve = resolve;
+        this.reject = reject;
+    });
+    const _this = this;
+    Object.defineProperty(this, "length", {
+        get: function () {
+            return _this._queue.length;
+        },
+    });
+}
+exports["default"] = Pipeline;
+Object.assign(Pipeline.prototype, commander_1.default.prototype);
+Pipeline.prototype.fillResult = function (value, position) {
+    if (this._queue[position].name === "exec" && Array.isArray(value[1])) {
+        const execLength = value[1].length;
+        for (let i = 0; i < execLength; i++) {
+            if (value[1][i] instanceof Error) {
+                continue;
+            }
+            const cmd = this._queue[position - (execLength - i)];
+            try {
+                value[1][i] = cmd.transformReply(value[1][i]);
+            }
+            catch (err) {
+                value[1][i] = err;
+            }
+        }
+    }
+    this._result[position] = value;
+    if (--this.replyPending) {
+        return;
+    }
+    if (this.isCluster) {
+        let retriable = true;
+        let commonError;
+        for (let i = 0; i < this._result.length; ++i) {
+            const error = this._result[i][0];
+            const command = this._queue[i];
+            if (error) {
+                if (command.name === "exec" &&
+                    error.message ===
+                        "EXECABORT Transaction discarded because of previous errors.") {
+                    continue;
+                }
+                if (!commonError) {
+                    commonError = {
+                        name: error.name,
+                        message: error.message,
+                    };
+                }
+                else if (commonError.name !== error.name ||
+                    commonError.message !== error.message) {
+                    retriable = false;
+                    break;
+                }
+            }
+            else if (!command.inTransaction) {
+                const isReadOnly = redis_commands_1.exists(command.name) && redis_commands_1.hasFlag(command.name, "readonly");
+                if (!isReadOnly) {
+                    retriable = false;
+                    break;
+                }
+            }
+        }
+        if (commonError && retriable) {
+            const _this = this;
+            const errv = commonError.message.split(" ");
+            const queue = this._queue;
+            let inTransaction = false;
+            this._queue = [];
+            for (let i = 0; i < queue.length; ++i) {
+                if (errv[0] === "ASK" &&
+                    !inTransaction &&
+                    queue[i].name !== "asking" &&
+                    (!queue[i - 1] || queue[i - 1].name !== "asking")) {
+                    const asking = new command_1.default("asking");
+                    asking.ignore = true;
+                    this.sendCommand(asking);
+                }
+                queue[i].initPromise();
+                this.sendCommand(queue[i]);
+                inTransaction = queue[i].inTransaction;
+            }
+            let matched = true;
+            if (typeof this.leftRedirections === "undefined") {
+                this.leftRedirections = {};
+            }
+            const exec = function () {
+                _this.exec();
+            };
+            this.redis.handleError(commonError, this.leftRedirections, {
+                moved: function (slot, key) {
+                    _this.preferKey = key;
+                    _this.redis.slots[errv[1]] = [key];
+                    _this.redis._groupsBySlot[errv[1]] =
+                        _this.redis._groupsIds[_this.redis.slots[errv[1]].join(";")];
+                    _this.redis.refreshSlotsCache();
+                    _this.exec();
+                },
+                ask: function (slot, key) {
+                    _this.preferKey = key;
+                    _this.exec();
+                },
+                tryagain: exec,
+                clusterDown: exec,
+                connectionClosed: exec,
+                maxRedirections: () => {
+                    matched = false;
+                },
+                defaults: () => {
+                    matched = false;
+                },
+            });
+            if (matched) {
+                return;
+            }
+        }
+    }
+    let ignoredCount = 0;
+    for (let i = 0; i < this._queue.length - ignoredCount; ++i) {
+        if (this._queue[i + ignoredCount].ignore) {
+            ignoredCount += 1;
+        }
+        this._result[i] = this._result[i + ignoredCount];
+    }
+    this.resolve(this._result.slice(0, this._result.length - ignoredCount));
+};
+Pipeline.prototype.sendCommand = function (command) {
+    if (this._transactions > 0) {
+        command.inTransaction = true;
+    }
+    const position = this._queue.length;
+    command.pipelineIndex = position;
+    command.promise
+        .then((result) => {
+        this.fillResult([null, result], position);
+    })
+        .catch((error) => {
+        this.fillResult([error], position);
+    });
+    this._queue.push(command);
+    return this;
+};
+Pipeline.prototype.addBatch = function (commands) {
+    let command, commandName, args;
+    for (let i = 0; i < commands.length; ++i) {
+        command = commands[i];
+        commandName = command[0];
+        args = command.slice(1);
+        this[commandName].apply(this, args);
+    }
+    return this;
+};
+const multi = Pipeline.prototype.multi;
+Pipeline.prototype.multi = function () {
+    this._transactions += 1;
+    return multi.apply(this, arguments);
+};
+const execBuffer = Pipeline.prototype.execBuffer;
+const exec = Pipeline.prototype.exec;
+Pipeline.prototype.execBuffer = util_1.deprecate(function () {
+    if (this._transactions > 0) {
+        this._transactions -= 1;
+    }
+    return execBuffer.apply(this, arguments);
+}, "Pipeline#execBuffer: Use Pipeline#exec instead");
+// NOTE: To avoid an unhandled promise rejection, this will unconditionally always return this.promise,
+// which always has the rejection handled by standard-as-callback
+// adding the provided rejection callback.
+//
+// If a different promise instance were returned, that promise would cause its own unhandled promise rejection
+// errors, even if that promise unconditionally resolved to **the resolved value of** this.promise.
+Pipeline.prototype.exec = function (callback) {
+    // Wait for the cluster to be connected, since we need nodes information before continuing
+    if (this.isCluster && !this.redis.slots.length) {
+        if (this.redis.status === "wait")
+            this.redis.connect().catch(utils_1.noop);
+        this.redis.delayUntilReady((err) => {
+            if (err) {
+                callback(err);
+                return;
+            }
+            this.exec(callback);
+        });
+        return this.promise;
+    }
+    if (this._transactions > 0) {
+        this._transactions -= 1;
+        return (this.options.dropBufferSupport ? exec : execBuffer).apply(this, arguments);
+    }
+    if (!this.nodeifiedPromise) {
+        this.nodeifiedPromise = true;
+        standard_as_callback_1.default(this.promise, callback);
+    }
+    if (!this._queue.length) {
+        this.resolve([]);
+    }
+    let pipelineSlot;
+    if (this.isCluster) {
+        // List of the first key for each command
+        const sampleKeys = [];
+        for (let i = 0; i < this._queue.length; i++) {
+            const keys = this._queue[i].getKeys();
+            if (keys.length) {
+                sampleKeys.push(keys[0]);
+            }
+            // For each command, check that the keys belong to the same slot
+            if (keys.length && calculateSlot.generateMulti(keys) < 0) {
+                this.reject(new Error("All the keys in a pipeline command should belong to the same slot"));
+                return this.promise;
+            }
+        }
+        if (sampleKeys.length) {
+            pipelineSlot = generateMultiWithNodes(this.redis, sampleKeys);
+            if (pipelineSlot < 0) {
+                this.reject(new Error("All keys in the pipeline should belong to the same slots allocation group"));
+                return this.promise;
+            }
+        }
+        else {
+            // Send the pipeline to a random node
+            pipelineSlot = (Math.random() * 16384) | 0;
+        }
+    }
+    // Check whether scripts exists
+    const scripts = [];
+    for (let i = 0; i < this._queue.length; ++i) {
+        const item = this._queue[i];
+        if (item.name !== "evalsha") {
+            continue;
+        }
+        const script = this._shaToScript[item.args[0]];
+        if (!script ||
+            this.redis._addedScriptHashes[script.sha] ||
+            scripts.includes(script)) {
+            continue;
+        }
+        scripts.push(script);
+    }
+    const _this = this;
+    if (!scripts.length) {
+        return execPipeline();
+    }
+    // In cluster mode, always load scripts before running the pipeline
+    if (this.isCluster) {
+        pMap(scripts, (script) => _this.redis.script("load", script.lua), {
+            concurrency: 10,
+        })
+            .then(function () {
+            for (let i = 0; i < scripts.length; i++) {
+                _this.redis._addedScriptHashes[scripts[i].sha] = true;
+            }
+        })
+            .then(execPipeline, this.reject);
+        return this.promise;
+    }
+    this.redis
+        .script("exists", scripts.map(({ sha }) => sha))
+        .then(function (results) {
+        const pending = [];
+        for (let i = 0; i < results.length; ++i) {
+            if (!results[i]) {
+                pending.push(scripts[i]);
+            }
+        }
+        const Promise = PromiseContainer.get();
+        return Promise.all(pending.map(function (script) {
+            return _this.redis.script("load", script.lua);
+        }));
+    })
+        .then(function () {
+        for (let i = 0; i < scripts.length; i++) {
+            _this.redis._addedScriptHashes[scripts[i].sha] = true;
+        }
+    })
+        .then(execPipeline, this.reject);
+    return this.promise;
+    function execPipeline() {
+        let data = "";
+        let buffers;
+        let writePending = (_this.replyPending = _this._queue.length);
+        let node;
+        if (_this.isCluster) {
+            node = {
+                slot: pipelineSlot,
+                redis: _this.redis.connectionPool.nodes.all[_this.preferKey],
+            };
+        }
+        let bufferMode = false;
+        const stream = {
+            write: function (writable) {
+                if (writable instanceof Buffer) {
+                    bufferMode = true;
+                }
+                if (bufferMode) {
+                    if (!buffers) {
+                        buffers = [];
+                    }
+                    if (typeof data === "string") {
+                        buffers.push(Buffer.from(data, "utf8"));
+                        data = undefined;
+                    }
+                    buffers.push(typeof writable === "string"
+                        ? Buffer.from(writable, "utf8")
+                        : writable);
+                }
+                else {
+                    data += writable;
+                }
+                if (!--writePending) {
+                    let sendData;
+                    if (buffers) {
+                        sendData = Buffer.concat(buffers);
+                    }
+                    else {
+                        sendData = data;
+                    }
+                    if (_this.isCluster) {
+                        node.redis.stream.write(sendData);
+                    }
+                    else {
+                        _this.redis.stream.write(sendData);
+                    }
+                    // Reset writePending for resending
+                    writePending = _this._queue.length;
+                    data = "";
+                    buffers = undefined;
+                    bufferMode = false;
+                }
+            },
+        };
+        for (let i = 0; i < _this._queue.length; ++i) {
+            _this.redis.sendCommand(_this._queue[i], stream, node);
+        }
+        return _this.promise;
+    }
+};
+
+
+/***/ }),
+
+/***/ 71475:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+function isPromise(obj) {
+    return (!!obj &&
+        (typeof obj === "object" || typeof obj === "function") &&
+        typeof obj.then === "function");
+}
+exports.isPromise = isPromise;
+let promise = Promise;
+function get() {
+    return promise;
+}
+exports.get = get;
+function set(lib) {
+    if (typeof lib !== "function") {
+        throw new Error(`Provided Promise must be a function, got ${lib}`);
+    }
+    promise = lib;
+}
+exports.set = set;
+
+
+/***/ }),
+
+/***/ 1422:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DEFAULT_REDIS_OPTIONS = {
+    // Connection
+    port: 6379,
+    host: "localhost",
+    family: 4,
+    connectTimeout: 10000,
+    disconnectTimeout: 2000,
+    retryStrategy: function (times) {
+        return Math.min(times * 50, 2000);
+    },
+    keepAlive: 0,
+    noDelay: true,
+    connectionName: null,
+    // Sentinel
+    sentinels: null,
+    name: null,
+    role: "master",
+    sentinelRetryStrategy: function (times) {
+        return Math.min(times * 10, 1000);
+    },
+    sentinelReconnectStrategy: function () {
+        // This strategy only applies when sentinels are used for detecting
+        // a failover, not during initial master resolution.
+        // The deployment can still function when some of the sentinels are down
+        // for a long period of time, so we may not want to attempt reconnection
+        // very often. Therefore the default interval is fairly long (1 minute).
+        return 60000;
+    },
+    natMap: null,
+    enableTLSForSentinelMode: false,
+    updateSentinels: true,
+    failoverDetector: false,
+    // Status
+    username: null,
+    password: null,
+    db: 0,
+    // Others
+    dropBufferSupport: false,
+    enableOfflineQueue: true,
+    enableReadyCheck: true,
+    autoResubscribe: true,
+    autoResendUnfulfilledCommands: true,
+    lazyConnect: false,
+    keyPrefix: "",
+    reconnectOnError: null,
+    readOnly: false,
+    stringNumbers: false,
+    maxRetriesPerRequest: 20,
+    maxLoadingRetryTime: 10000,
+    enableAutoPipelining: false,
+    autoPipeliningIgnoredCommands: [],
+    maxScriptsCachingTime: 60000,
+    sentinelMaxConnections: 10,
+};
+
+
+/***/ }),
+
+/***/ 74276:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const redis_errors_1 = __nccwpck_require__(81879);
+const command_1 = __nccwpck_require__(90803);
+const errors_1 = __nccwpck_require__(23961);
+const utils_1 = __nccwpck_require__(94832);
+const DataHandler_1 = __nccwpck_require__(30545);
+const debug = utils_1.Debug("connection");
+function connectHandler(self) {
+    return function () {
+        self.setStatus("connect");
+        self.resetCommandQueue();
+        // AUTH command should be processed before any other commands
+        let flushed = false;
+        const { connectionEpoch } = self;
+        if (self.condition.auth) {
+            self.auth(self.condition.auth, function (err) {
+                if (connectionEpoch !== self.connectionEpoch) {
+                    return;
+                }
+                if (err) {
+                    if (err.message.indexOf("no password is set") !== -1) {
+                        console.warn("[WARN] Redis server does not require a password, but a password was supplied.");
+                    }
+                    else if (err.message.indexOf("without any password configured for the default user") !== -1) {
+                        console.warn("[WARN] This Redis server's `default` user does not require a password, but a password was supplied");
+                    }
+                    else if (err.message.indexOf("wrong number of arguments for 'auth' command") !== -1) {
+                        console.warn(`[ERROR] The server returned "wrong number of arguments for 'auth' command". You are probably passing both username and password to Redis version 5 or below. You should only pass the 'password' option for Redis version 5 and under.`);
+                    }
+                    else {
+                        flushed = true;
+                        self.recoverFromFatalError(err, err);
+                    }
+                }
+            });
+        }
+        if (self.condition.select) {
+            self.select(self.condition.select).catch((err) => {
+                // If the node is in cluster mode, select is disallowed.
+                // In this case, reconnect won't help.
+                self.silentEmit("error", err);
+            });
+        }
+        if (!self.options.enableReadyCheck) {
+            exports.readyHandler(self)();
+        }
+        /*
+          No need to keep the reference of DataHandler here
+          because we don't need to do the cleanup.
+          `Stream#end()` will remove all listeners for us.
+        */
+        new DataHandler_1.default(self, {
+            stringNumbers: self.options.stringNumbers,
+            dropBufferSupport: self.options.dropBufferSupport,
+        });
+        if (self.options.enableReadyCheck) {
+            self._readyCheck(function (err, info) {
+                if (connectionEpoch !== self.connectionEpoch) {
+                    return;
+                }
+                if (err) {
+                    if (!flushed) {
+                        self.recoverFromFatalError(new Error("Ready check failed: " + err.message), err);
+                    }
+                }
+                else {
+                    self.serverInfo = info;
+                    if (self.connector.check(info)) {
+                        exports.readyHandler(self)();
+                    }
+                    else {
+                        self.disconnect(true);
+                    }
+                }
+            });
+        }
+    };
+}
+exports.connectHandler = connectHandler;
+function abortError(command) {
+    const err = new redis_errors_1.AbortError("Command aborted due to connection close");
+    err.command = {
+        name: command.name,
+        args: command.args,
+    };
+    return err;
+}
+// If a contiguous set of pipeline commands starts from index zero then they
+// can be safely reattempted. If however we have a chain of pipelined commands
+// starting at index 1 or more it means we received a partial response before
+// the connection close and those pipelined commands must be aborted. For
+// example, if the queue looks like this: [2, 3, 4, 0, 1, 2] then after
+// aborting and purging we'll have a queue that looks like this: [0, 1, 2]
+function abortIncompletePipelines(commandQueue) {
+    let expectedIndex = 0;
+    for (let i = 0; i < commandQueue.length;) {
+        const command = commandQueue.peekAt(i).command;
+        const pipelineIndex = command.pipelineIndex;
+        if (pipelineIndex === undefined || pipelineIndex === 0) {
+            expectedIndex = 0;
+        }
+        if (pipelineIndex !== undefined && pipelineIndex !== expectedIndex++) {
+            commandQueue.remove(i, 1);
+            command.reject(abortError(command));
+            continue;
+        }
+        i++;
+    }
+}
+// If only a partial transaction result was received before connection close,
+// we have to abort any transaction fragments that may have ended up in the
+// offline queue
+function abortTransactionFragments(commandQueue) {
+    for (let i = 0; i < commandQueue.length;) {
+        const command = commandQueue.peekAt(i).command;
+        if (command.name === "multi") {
+            break;
+        }
+        if (command.name === "exec") {
+            commandQueue.remove(i, 1);
+            command.reject(abortError(command));
+            break;
+        }
+        if (command.inTransaction) {
+            commandQueue.remove(i, 1);
+            command.reject(abortError(command));
+        }
+        else {
+            i++;
+        }
+    }
+}
+function closeHandler(self) {
+    return function () {
+        self.setStatus("close");
+        if (!self.prevCondition) {
+            self.prevCondition = self.condition;
+        }
+        if (self.commandQueue.length) {
+            abortIncompletePipelines(self.commandQueue);
+            self.prevCommandQueue = self.commandQueue;
+        }
+        if (self.offlineQueue.length) {
+            abortTransactionFragments(self.offlineQueue);
+        }
+        self.clearAddedScriptHashesCleanInterval();
+        if (self.manuallyClosing) {
+            self.manuallyClosing = false;
+            debug("skip reconnecting since the connection is manually closed.");
+            return close();
+        }
