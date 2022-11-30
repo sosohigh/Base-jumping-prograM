@@ -73071,3 +73071,2263 @@ function parseProxyResponse(socket) {
             reject(err);
         }
         function ondata(b) {
+            buffers.push(b);
+            buffersLength += b.length;
+            const buffered = Buffer.concat(buffers, buffersLength);
+            const endOfHeaders = buffered.indexOf('\r\n\r\n');
+            if (endOfHeaders === -1) {
+                // keep buffering
+                debug('have not received end of HTTP headers yet...');
+                read();
+                return;
+            }
+            const firstLine = buffered.toString('ascii', 0, buffered.indexOf('\r\n'));
+            const statusCode = +firstLine.split(' ')[1];
+            debug('got proxy server response: %o', firstLine);
+            resolve({
+                statusCode,
+                buffered
+            });
+        }
+        socket.on('error', onerror);
+        socket.on('close', onclose);
+        socket.on('end', onend);
+        read();
+    });
+}
+exports["default"] = parseProxyResponse;
+//# sourceMappingURL=parse-proxy-response.js.map
+
+/***/ }),
+
+/***/ 39695:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+var Buffer = (__nccwpck_require__(15118).Buffer);
+
+// Multibyte codec. In this scheme, a character is represented by 1 or more bytes.
+// Our codec supports UTF-16 surrogates, extensions for GB18030 and unicode sequences.
+// To save memory and loading time, we read table files only when requested.
+
+exports._dbcs = DBCSCodec;
+
+var UNASSIGNED = -1,
+    GB18030_CODE = -2,
+    SEQ_START  = -10,
+    NODE_START = -1000,
+    UNASSIGNED_NODE = new Array(0x100),
+    DEF_CHAR = -1;
+
+for (var i = 0; i < 0x100; i++)
+    UNASSIGNED_NODE[i] = UNASSIGNED;
+
+
+// Class DBCSCodec reads and initializes mapping tables.
+function DBCSCodec(codecOptions, iconv) {
+    this.encodingName = codecOptions.encodingName;
+    if (!codecOptions)
+        throw new Error("DBCS codec is called without the data.")
+    if (!codecOptions.table)
+        throw new Error("Encoding '" + this.encodingName + "' has no data.");
+
+    // Load tables.
+    var mappingTable = codecOptions.table();
+
+
+    // Decode tables: MBCS -> Unicode.
+
+    // decodeTables is a trie, encoded as an array of arrays of integers. Internal arrays are trie nodes and all have len = 256.
+    // Trie root is decodeTables[0].
+    // Values: >=  0 -> unicode character code. can be > 0xFFFF
+    //         == UNASSIGNED -> unknown/unassigned sequence.
+    //         == GB18030_CODE -> this is the end of a GB18030 4-byte sequence.
+    //         <= NODE_START -> index of the next node in our trie to process next byte.
+    //         <= SEQ_START  -> index of the start of a character code sequence, in decodeTableSeq.
+    this.decodeTables = [];
+    this.decodeTables[0] = UNASSIGNED_NODE.slice(0); // Create root node.
+
+    // Sometimes a MBCS char corresponds to a sequence of unicode chars. We store them as arrays of integers here. 
+    this.decodeTableSeq = [];
+
+    // Actual mapping tables consist of chunks. Use them to fill up decode tables.
+    for (var i = 0; i < mappingTable.length; i++)
+        this._addDecodeChunk(mappingTable[i]);
+
+    this.defaultCharUnicode = iconv.defaultCharUnicode;
+
+    
+    // Encode tables: Unicode -> DBCS.
+
+    // `encodeTable` is array mapping from unicode char to encoded char. All its values are integers for performance.
+    // Because it can be sparse, it is represented as array of buckets by 256 chars each. Bucket can be null.
+    // Values: >=  0 -> it is a normal char. Write the value (if <=256 then 1 byte, if <=65536 then 2 bytes, etc.).
+    //         == UNASSIGNED -> no conversion found. Output a default char.
+    //         <= SEQ_START  -> it's an index in encodeTableSeq, see below. The character starts a sequence.
+    this.encodeTable = [];
+    
+    // `encodeTableSeq` is used when a sequence of unicode characters is encoded as a single code. We use a tree of
+    // objects where keys correspond to characters in sequence and leafs are the encoded dbcs values. A special DEF_CHAR key
+    // means end of sequence (needed when one sequence is a strict subsequence of another).
+    // Objects are kept separately from encodeTable to increase performance.
+    this.encodeTableSeq = [];
+
+    // Some chars can be decoded, but need not be encoded.
+    var skipEncodeChars = {};
+    if (codecOptions.encodeSkipVals)
+        for (var i = 0; i < codecOptions.encodeSkipVals.length; i++) {
+            var val = codecOptions.encodeSkipVals[i];
+            if (typeof val === 'number')
+                skipEncodeChars[val] = true;
+            else
+                for (var j = val.from; j <= val.to; j++)
+                    skipEncodeChars[j] = true;
+        }
+        
+    // Use decode trie to recursively fill out encode tables.
+    this._fillEncodeTable(0, 0, skipEncodeChars);
+
+    // Add more encoding pairs when needed.
+    if (codecOptions.encodeAdd) {
+        for (var uChar in codecOptions.encodeAdd)
+            if (Object.prototype.hasOwnProperty.call(codecOptions.encodeAdd, uChar))
+                this._setEncodeChar(uChar.charCodeAt(0), codecOptions.encodeAdd[uChar]);
+    }
+
+    this.defCharSB  = this.encodeTable[0][iconv.defaultCharSingleByte.charCodeAt(0)];
+    if (this.defCharSB === UNASSIGNED) this.defCharSB = this.encodeTable[0]['?'];
+    if (this.defCharSB === UNASSIGNED) this.defCharSB = "?".charCodeAt(0);
+
+
+    // Load & create GB18030 tables when needed.
+    if (typeof codecOptions.gb18030 === 'function') {
+        this.gb18030 = codecOptions.gb18030(); // Load GB18030 ranges.
+
+        // Add GB18030 decode tables.
+        var thirdByteNodeIdx = this.decodeTables.length;
+        var thirdByteNode = this.decodeTables[thirdByteNodeIdx] = UNASSIGNED_NODE.slice(0);
+
+        var fourthByteNodeIdx = this.decodeTables.length;
+        var fourthByteNode = this.decodeTables[fourthByteNodeIdx] = UNASSIGNED_NODE.slice(0);
+
+        for (var i = 0x81; i <= 0xFE; i++) {
+            var secondByteNodeIdx = NODE_START - this.decodeTables[0][i];
+            var secondByteNode = this.decodeTables[secondByteNodeIdx];
+            for (var j = 0x30; j <= 0x39; j++)
+                secondByteNode[j] = NODE_START - thirdByteNodeIdx;
+        }
+        for (var i = 0x81; i <= 0xFE; i++)
+            thirdByteNode[i] = NODE_START - fourthByteNodeIdx;
+        for (var i = 0x30; i <= 0x39; i++)
+            fourthByteNode[i] = GB18030_CODE
+    }        
+}
+
+DBCSCodec.prototype.encoder = DBCSEncoder;
+DBCSCodec.prototype.decoder = DBCSDecoder;
+
+// Decoder helpers
+DBCSCodec.prototype._getDecodeTrieNode = function(addr) {
+    var bytes = [];
+    for (; addr > 0; addr >>= 8)
+        bytes.push(addr & 0xFF);
+    if (bytes.length == 0)
+        bytes.push(0);
+
+    var node = this.decodeTables[0];
+    for (var i = bytes.length-1; i > 0; i--) { // Traverse nodes deeper into the trie.
+        var val = node[bytes[i]];
+
+        if (val == UNASSIGNED) { // Create new node.
+            node[bytes[i]] = NODE_START - this.decodeTables.length;
+            this.decodeTables.push(node = UNASSIGNED_NODE.slice(0));
+        }
+        else if (val <= NODE_START) { // Existing node.
+            node = this.decodeTables[NODE_START - val];
+        }
+        else
+            throw new Error("Overwrite byte in " + this.encodingName + ", addr: " + addr.toString(16));
+    }
+    return node;
+}
+
+
+DBCSCodec.prototype._addDecodeChunk = function(chunk) {
+    // First element of chunk is the hex mbcs code where we start.
+    var curAddr = parseInt(chunk[0], 16);
+
+    // Choose the decoding node where we'll write our chars.
+    var writeTable = this._getDecodeTrieNode(curAddr);
+    curAddr = curAddr & 0xFF;
+
+    // Write all other elements of the chunk to the table.
+    for (var k = 1; k < chunk.length; k++) {
+        var part = chunk[k];
+        if (typeof part === "string") { // String, write as-is.
+            for (var l = 0; l < part.length;) {
+                var code = part.charCodeAt(l++);
+                if (0xD800 <= code && code < 0xDC00) { // Decode surrogate
+                    var codeTrail = part.charCodeAt(l++);
+                    if (0xDC00 <= codeTrail && codeTrail < 0xE000)
+                        writeTable[curAddr++] = 0x10000 + (code - 0xD800) * 0x400 + (codeTrail - 0xDC00);
+                    else
+                        throw new Error("Incorrect surrogate pair in "  + this.encodingName + " at chunk " + chunk[0]);
+                }
+                else if (0x0FF0 < code && code <= 0x0FFF) { // Character sequence (our own encoding used)
+                    var len = 0xFFF - code + 2;
+                    var seq = [];
+                    for (var m = 0; m < len; m++)
+                        seq.push(part.charCodeAt(l++)); // Simple variation: don't support surrogates or subsequences in seq.
+
+                    writeTable[curAddr++] = SEQ_START - this.decodeTableSeq.length;
+                    this.decodeTableSeq.push(seq);
+                }
+                else
+                    writeTable[curAddr++] = code; // Basic char
+            }
+        } 
+        else if (typeof part === "number") { // Integer, meaning increasing sequence starting with prev character.
+            var charCode = writeTable[curAddr - 1] + 1;
+            for (var l = 0; l < part; l++)
+                writeTable[curAddr++] = charCode++;
+        }
+        else
+            throw new Error("Incorrect type '" + typeof part + "' given in "  + this.encodingName + " at chunk " + chunk[0]);
+    }
+    if (curAddr > 0xFF)
+        throw new Error("Incorrect chunk in "  + this.encodingName + " at addr " + chunk[0] + ": too long" + curAddr);
+}
+
+// Encoder helpers
+DBCSCodec.prototype._getEncodeBucket = function(uCode) {
+    var high = uCode >> 8; // This could be > 0xFF because of astral characters.
+    if (this.encodeTable[high] === undefined)
+        this.encodeTable[high] = UNASSIGNED_NODE.slice(0); // Create bucket on demand.
+    return this.encodeTable[high];
+}
+
+DBCSCodec.prototype._setEncodeChar = function(uCode, dbcsCode) {
+    var bucket = this._getEncodeBucket(uCode);
+    var low = uCode & 0xFF;
+    if (bucket[low] <= SEQ_START)
+        this.encodeTableSeq[SEQ_START-bucket[low]][DEF_CHAR] = dbcsCode; // There's already a sequence, set a single-char subsequence of it.
+    else if (bucket[low] == UNASSIGNED)
+        bucket[low] = dbcsCode;
+}
+
+DBCSCodec.prototype._setEncodeSequence = function(seq, dbcsCode) {
+    
+    // Get the root of character tree according to first character of the sequence.
+    var uCode = seq[0];
+    var bucket = this._getEncodeBucket(uCode);
+    var low = uCode & 0xFF;
+
+    var node;
+    if (bucket[low] <= SEQ_START) {
+        // There's already a sequence with  - use it.
+        node = this.encodeTableSeq[SEQ_START-bucket[low]];
+    }
+    else {
+        // There was no sequence object - allocate a new one.
+        node = {};
+        if (bucket[low] !== UNASSIGNED) node[DEF_CHAR] = bucket[low]; // If a char was set before - make it a single-char subsequence.
+        bucket[low] = SEQ_START - this.encodeTableSeq.length;
+        this.encodeTableSeq.push(node);
+    }
+
+    // Traverse the character tree, allocating new nodes as needed.
+    for (var j = 1; j < seq.length-1; j++) {
+        var oldVal = node[uCode];
+        if (typeof oldVal === 'object')
+            node = oldVal;
+        else {
+            node = node[uCode] = {}
+            if (oldVal !== undefined)
+                node[DEF_CHAR] = oldVal
+        }
+    }
+
+    // Set the leaf to given dbcsCode.
+    uCode = seq[seq.length-1];
+    node[uCode] = dbcsCode;
+}
+
+DBCSCodec.prototype._fillEncodeTable = function(nodeIdx, prefix, skipEncodeChars) {
+    var node = this.decodeTables[nodeIdx];
+    for (var i = 0; i < 0x100; i++) {
+        var uCode = node[i];
+        var mbCode = prefix + i;
+        if (skipEncodeChars[mbCode])
+            continue;
+
+        if (uCode >= 0)
+            this._setEncodeChar(uCode, mbCode);
+        else if (uCode <= NODE_START)
+            this._fillEncodeTable(NODE_START - uCode, mbCode << 8, skipEncodeChars);
+        else if (uCode <= SEQ_START)
+            this._setEncodeSequence(this.decodeTableSeq[SEQ_START - uCode], mbCode);
+    }
+}
+
+
+
+// == Encoder ==================================================================
+
+function DBCSEncoder(options, codec) {
+    // Encoder state
+    this.leadSurrogate = -1;
+    this.seqObj = undefined;
+    
+    // Static data
+    this.encodeTable = codec.encodeTable;
+    this.encodeTableSeq = codec.encodeTableSeq;
+    this.defaultCharSingleByte = codec.defCharSB;
+    this.gb18030 = codec.gb18030;
+}
+
+DBCSEncoder.prototype.write = function(str) {
+    var newBuf = Buffer.alloc(str.length * (this.gb18030 ? 4 : 3)),
+        leadSurrogate = this.leadSurrogate,
+        seqObj = this.seqObj, nextChar = -1,
+        i = 0, j = 0;
+
+    while (true) {
+        // 0. Get next character.
+        if (nextChar === -1) {
+            if (i == str.length) break;
+            var uCode = str.charCodeAt(i++);
+        }
+        else {
+            var uCode = nextChar;
+            nextChar = -1;    
+        }
+
+        // 1. Handle surrogates.
+        if (0xD800 <= uCode && uCode < 0xE000) { // Char is one of surrogates.
+            if (uCode < 0xDC00) { // We've got lead surrogate.
+                if (leadSurrogate === -1) {
+                    leadSurrogate = uCode;
+                    continue;
+                } else {
+                    leadSurrogate = uCode;
+                    // Double lead surrogate found.
+                    uCode = UNASSIGNED;
+                }
+            } else { // We've got trail surrogate.
+                if (leadSurrogate !== -1) {
+                    uCode = 0x10000 + (leadSurrogate - 0xD800) * 0x400 + (uCode - 0xDC00);
+                    leadSurrogate = -1;
+                } else {
+                    // Incomplete surrogate pair - only trail surrogate found.
+                    uCode = UNASSIGNED;
+                }
+                
+            }
+        }
+        else if (leadSurrogate !== -1) {
+            // Incomplete surrogate pair - only lead surrogate found.
+            nextChar = uCode; uCode = UNASSIGNED; // Write an error, then current char.
+            leadSurrogate = -1;
+        }
+
+        // 2. Convert uCode character.
+        var dbcsCode = UNASSIGNED;
+        if (seqObj !== undefined && uCode != UNASSIGNED) { // We are in the middle of the sequence
+            var resCode = seqObj[uCode];
+            if (typeof resCode === 'object') { // Sequence continues.
+                seqObj = resCode;
+                continue;
+
+            } else if (typeof resCode == 'number') { // Sequence finished. Write it.
+                dbcsCode = resCode;
+
+            } else if (resCode == undefined) { // Current character is not part of the sequence.
+
+                // Try default character for this sequence
+                resCode = seqObj[DEF_CHAR];
+                if (resCode !== undefined) {
+                    dbcsCode = resCode; // Found. Write it.
+                    nextChar = uCode; // Current character will be written too in the next iteration.
+
+                } else {
+                    // TODO: What if we have no default? (resCode == undefined)
+                    // Then, we should write first char of the sequence as-is and try the rest recursively.
+                    // Didn't do it for now because no encoding has this situation yet.
+                    // Currently, just skip the sequence and write current char.
+                }
+            }
+            seqObj = undefined;
+        }
+        else if (uCode >= 0) {  // Regular character
+            var subtable = this.encodeTable[uCode >> 8];
+            if (subtable !== undefined)
+                dbcsCode = subtable[uCode & 0xFF];
+            
+            if (dbcsCode <= SEQ_START) { // Sequence start
+                seqObj = this.encodeTableSeq[SEQ_START-dbcsCode];
+                continue;
+            }
+
+            if (dbcsCode == UNASSIGNED && this.gb18030) {
+                // Use GB18030 algorithm to find character(s) to write.
+                var idx = findIdx(this.gb18030.uChars, uCode);
+                if (idx != -1) {
+                    var dbcsCode = this.gb18030.gbChars[idx] + (uCode - this.gb18030.uChars[idx]);
+                    newBuf[j++] = 0x81 + Math.floor(dbcsCode / 12600); dbcsCode = dbcsCode % 12600;
+                    newBuf[j++] = 0x30 + Math.floor(dbcsCode / 1260); dbcsCode = dbcsCode % 1260;
+                    newBuf[j++] = 0x81 + Math.floor(dbcsCode / 10); dbcsCode = dbcsCode % 10;
+                    newBuf[j++] = 0x30 + dbcsCode;
+                    continue;
+                }
+            }
+        }
+
+        // 3. Write dbcsCode character.
+        if (dbcsCode === UNASSIGNED)
+            dbcsCode = this.defaultCharSingleByte;
+        
+        if (dbcsCode < 0x100) {
+            newBuf[j++] = dbcsCode;
+        }
+        else if (dbcsCode < 0x10000) {
+            newBuf[j++] = dbcsCode >> 8;   // high byte
+            newBuf[j++] = dbcsCode & 0xFF; // low byte
+        }
+        else {
+            newBuf[j++] = dbcsCode >> 16;
+            newBuf[j++] = (dbcsCode >> 8) & 0xFF;
+            newBuf[j++] = dbcsCode & 0xFF;
+        }
+    }
+
+    this.seqObj = seqObj;
+    this.leadSurrogate = leadSurrogate;
+    return newBuf.slice(0, j);
+}
+
+DBCSEncoder.prototype.end = function() {
+    if (this.leadSurrogate === -1 && this.seqObj === undefined)
+        return; // All clean. Most often case.
+
+    var newBuf = Buffer.alloc(10), j = 0;
+
+    if (this.seqObj) { // We're in the sequence.
+        var dbcsCode = this.seqObj[DEF_CHAR];
+        if (dbcsCode !== undefined) { // Write beginning of the sequence.
+            if (dbcsCode < 0x100) {
+                newBuf[j++] = dbcsCode;
+            }
+            else {
+                newBuf[j++] = dbcsCode >> 8;   // high byte
+                newBuf[j++] = dbcsCode & 0xFF; // low byte
+            }
+        } else {
+            // See todo above.
+        }
+        this.seqObj = undefined;
+    }
+
+    if (this.leadSurrogate !== -1) {
+        // Incomplete surrogate pair - only lead surrogate found.
+        newBuf[j++] = this.defaultCharSingleByte;
+        this.leadSurrogate = -1;
+    }
+    
+    return newBuf.slice(0, j);
+}
+
+// Export for testing
+DBCSEncoder.prototype.findIdx = findIdx;
+
+
+// == Decoder ==================================================================
+
+function DBCSDecoder(options, codec) {
+    // Decoder state
+    this.nodeIdx = 0;
+    this.prevBuf = Buffer.alloc(0);
+
+    // Static data
+    this.decodeTables = codec.decodeTables;
+    this.decodeTableSeq = codec.decodeTableSeq;
+    this.defaultCharUnicode = codec.defaultCharUnicode;
+    this.gb18030 = codec.gb18030;
+}
+
+DBCSDecoder.prototype.write = function(buf) {
+    var newBuf = Buffer.alloc(buf.length*2),
+        nodeIdx = this.nodeIdx, 
+        prevBuf = this.prevBuf, prevBufOffset = this.prevBuf.length,
+        seqStart = -this.prevBuf.length, // idx of the start of current parsed sequence.
+        uCode;
+
+    if (prevBufOffset > 0) // Make prev buf overlap a little to make it easier to slice later.
+        prevBuf = Buffer.concat([prevBuf, buf.slice(0, 10)]);
+    
+    for (var i = 0, j = 0; i < buf.length; i++) {
+        var curByte = (i >= 0) ? buf[i] : prevBuf[i + prevBufOffset];
+
+        // Lookup in current trie node.
+        var uCode = this.decodeTables[nodeIdx][curByte];
+
+        if (uCode >= 0) { 
+            // Normal character, just use it.
+        }
+        else if (uCode === UNASSIGNED) { // Unknown char.
+            // TODO: Callback with seq.
+            //var curSeq = (seqStart >= 0) ? buf.slice(seqStart, i+1) : prevBuf.slice(seqStart + prevBufOffset, i+1 + prevBufOffset);
+            i = seqStart; // Try to parse again, after skipping first byte of the sequence ('i' will be incremented by 'for' cycle).
+            uCode = this.defaultCharUnicode.charCodeAt(0);
+        }
+        else if (uCode === GB18030_CODE) {
+            var curSeq = (seqStart >= 0) ? buf.slice(seqStart, i+1) : prevBuf.slice(seqStart + prevBufOffset, i+1 + prevBufOffset);
+            var ptr = (curSeq[0]-0x81)*12600 + (curSeq[1]-0x30)*1260 + (curSeq[2]-0x81)*10 + (curSeq[3]-0x30);
+            var idx = findIdx(this.gb18030.gbChars, ptr);
+            uCode = this.gb18030.uChars[idx] + ptr - this.gb18030.gbChars[idx];
+        }
+        else if (uCode <= NODE_START) { // Go to next trie node.
+            nodeIdx = NODE_START - uCode;
+            continue;
+        }
+        else if (uCode <= SEQ_START) { // Output a sequence of chars.
+            var seq = this.decodeTableSeq[SEQ_START - uCode];
+            for (var k = 0; k < seq.length - 1; k++) {
+                uCode = seq[k];
+                newBuf[j++] = uCode & 0xFF;
+                newBuf[j++] = uCode >> 8;
+            }
+            uCode = seq[seq.length-1];
+        }
+        else
+            throw new Error("iconv-lite internal error: invalid decoding table value " + uCode + " at " + nodeIdx + "/" + curByte);
+
+        // Write the character to buffer, handling higher planes using surrogate pair.
+        if (uCode > 0xFFFF) { 
+            uCode -= 0x10000;
+            var uCodeLead = 0xD800 + Math.floor(uCode / 0x400);
+            newBuf[j++] = uCodeLead & 0xFF;
+            newBuf[j++] = uCodeLead >> 8;
+
+            uCode = 0xDC00 + uCode % 0x400;
+        }
+        newBuf[j++] = uCode & 0xFF;
+        newBuf[j++] = uCode >> 8;
+
+        // Reset trie node.
+        nodeIdx = 0; seqStart = i+1;
+    }
+
+    this.nodeIdx = nodeIdx;
+    this.prevBuf = (seqStart >= 0) ? buf.slice(seqStart) : prevBuf.slice(seqStart + prevBufOffset);
+    return newBuf.slice(0, j).toString('ucs2');
+}
+
+DBCSDecoder.prototype.end = function() {
+    var ret = '';
+
+    // Try to parse all remaining chars.
+    while (this.prevBuf.length > 0) {
+        // Skip 1 character in the buffer.
+        ret += this.defaultCharUnicode;
+        var buf = this.prevBuf.slice(1);
+
+        // Parse remaining as usual.
+        this.prevBuf = Buffer.alloc(0);
+        this.nodeIdx = 0;
+        if (buf.length > 0)
+            ret += this.write(buf);
+    }
+
+    this.nodeIdx = 0;
+    return ret;
+}
+
+// Binary search for GB18030. Returns largest i such that table[i] <= val.
+function findIdx(table, val) {
+    if (table[0] > val)
+        return -1;
+
+    var l = 0, r = table.length;
+    while (l < r-1) { // always table[l] <= val < table[r]
+        var mid = l + Math.floor((r-l+1)/2);
+        if (table[mid] <= val)
+            l = mid;
+        else
+            r = mid;
+    }
+    return l;
+}
+
+
+
+/***/ }),
+
+/***/ 91386:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+// Description of supported double byte encodings and aliases.
+// Tables are not require()-d until they are needed to speed up library load.
+// require()-s are direct to support Browserify.
+
+module.exports = {
+    
+    // == Japanese/ShiftJIS ====================================================
+    // All japanese encodings are based on JIS X set of standards:
+    // JIS X 0201 - Single-byte encoding of ASCII + ¥ + Kana chars at 0xA1-0xDF.
+    // JIS X 0208 - Main set of 6879 characters, placed in 94x94 plane, to be encoded by 2 bytes. 
+    //              Has several variations in 1978, 1983, 1990 and 1997.
+    // JIS X 0212 - Supplementary plane of 6067 chars in 94x94 plane. 1990. Effectively dead.
+    // JIS X 0213 - Extension and modern replacement of 0208 and 0212. Total chars: 11233.
+    //              2 planes, first is superset of 0208, second - revised 0212.
+    //              Introduced in 2000, revised 2004. Some characters are in Unicode Plane 2 (0x2xxxx)
+
+    // Byte encodings are:
+    //  * Shift_JIS: Compatible with 0201, uses not defined chars in top half as lead bytes for double-byte
+    //               encoding of 0208. Lead byte ranges: 0x81-0x9F, 0xE0-0xEF; Trail byte ranges: 0x40-0x7E, 0x80-0x9E, 0x9F-0xFC.
+    //               Windows CP932 is a superset of Shift_JIS. Some companies added more chars, notably KDDI.
+    //  * EUC-JP:    Up to 3 bytes per character. Used mostly on *nixes.
+    //               0x00-0x7F       - lower part of 0201
+    //               0x8E, 0xA1-0xDF - upper part of 0201
+    //               (0xA1-0xFE)x2   - 0208 plane (94x94).
+    //               0x8F, (0xA1-0xFE)x2 - 0212 plane (94x94).
+    //  * JIS X 208: 7-bit, direct encoding of 0208. Byte ranges: 0x21-0x7E (94 values). Uncommon.
+    //               Used as-is in ISO2022 family.
+    //  * ISO2022-JP: Stateful encoding, with escape sequences to switch between ASCII, 
+    //                0201-1976 Roman, 0208-1978, 0208-1983.
+    //  * ISO2022-JP-1: Adds esc seq for 0212-1990.
+    //  * ISO2022-JP-2: Adds esc seq for GB2313-1980, KSX1001-1992, ISO8859-1, ISO8859-7.
+    //  * ISO2022-JP-3: Adds esc seq for 0201-1976 Kana set, 0213-2000 Planes 1, 2.
+    //  * ISO2022-JP-2004: Adds 0213-2004 Plane 1.
+    //
+    // After JIS X 0213 appeared, Shift_JIS-2004, EUC-JISX0213 and ISO2022-JP-2004 followed, with just changing the planes.
+    //
+    // Overall, it seems that it's a mess :( http://www8.plala.or.jp/tkubota1/unicode-symbols-map2.html
+
+    'shiftjis': {
+        type: '_dbcs',
+        table: function() { return __nccwpck_require__(27014) },
+        encodeAdd: {'\u00a5': 0x5C, '\u203E': 0x7E},
+        encodeSkipVals: [{from: 0xED40, to: 0xF940}],
+    },
+    'csshiftjis': 'shiftjis',
+    'mskanji': 'shiftjis',
+    'sjis': 'shiftjis',
+    'windows31j': 'shiftjis',
+    'ms31j': 'shiftjis',
+    'xsjis': 'shiftjis',
+    'windows932': 'shiftjis',
+    'ms932': 'shiftjis',
+    '932': 'shiftjis',
+    'cp932': 'shiftjis',
+
+    'eucjp': {
+        type: '_dbcs',
+        table: function() { return __nccwpck_require__(31532) },
+        encodeAdd: {'\u00a5': 0x5C, '\u203E': 0x7E},
+    },
+
+    // TODO: KDDI extension to Shift_JIS
+    // TODO: IBM CCSID 942 = CP932, but F0-F9 custom chars and other char changes.
+    // TODO: IBM CCSID 943 = Shift_JIS = CP932 with original Shift_JIS lower 128 chars.
+
+
+    // == Chinese/GBK ==========================================================
+    // http://en.wikipedia.org/wiki/GBK
+    // We mostly implement W3C recommendation: https://www.w3.org/TR/encoding/#gbk-encoder
+
+    // Oldest GB2312 (1981, ~7600 chars) is a subset of CP936
+    'gb2312': 'cp936',
+    'gb231280': 'cp936',
+    'gb23121980': 'cp936',
+    'csgb2312': 'cp936',
+    'csiso58gb231280': 'cp936',
+    'euccn': 'cp936',
+
+    // Microsoft's CP936 is a subset and approximation of GBK.
+    'windows936': 'cp936',
+    'ms936': 'cp936',
+    '936': 'cp936',
+    'cp936': {
+        type: '_dbcs',
+        table: function() { return __nccwpck_require__(13336) },
+    },
+
+    // GBK (~22000 chars) is an extension of CP936 that added user-mapped chars and some other.
+    'gbk': {
+        type: '_dbcs',
+        table: function() { return (__nccwpck_require__(13336).concat)(__nccwpck_require__(44346)) },
+    },
+    'xgbk': 'gbk',
+    'isoir58': 'gbk',
+
+    // GB18030 is an algorithmic extension of GBK.
+    // Main source: https://www.w3.org/TR/encoding/#gbk-encoder
+    // http://icu-project.org/docs/papers/gb18030.html
+    // http://source.icu-project.org/repos/icu/data/trunk/charset/data/xml/gb-18030-2000.xml
+    // http://www.khngai.com/chinese/charmap/tblgbk.php?page=0
+    'gb18030': {
+        type: '_dbcs',
+        table: function() { return (__nccwpck_require__(13336).concat)(__nccwpck_require__(44346)) },
+        gb18030: function() { return __nccwpck_require__(36258) },
+        encodeSkipVals: [0x80],
+        encodeAdd: {'€': 0xA2E3},
+    },
+
+    'chinese': 'gb18030',
+
+
+    // == Korean ===============================================================
+    // EUC-KR, KS_C_5601 and KS X 1001 are exactly the same.
+    'windows949': 'cp949',
+    'ms949': 'cp949',
+    '949': 'cp949',
+    'cp949': {
+        type: '_dbcs',
+        table: function() { return __nccwpck_require__(77348) },
+    },
+
+    'cseuckr': 'cp949',
+    'csksc56011987': 'cp949',
+    'euckr': 'cp949',
+    'isoir149': 'cp949',
+    'korean': 'cp949',
+    'ksc56011987': 'cp949',
+    'ksc56011989': 'cp949',
+    'ksc5601': 'cp949',
+
+
+    // == Big5/Taiwan/Hong Kong ================================================
+    // There are lots of tables for Big5 and cp950. Please see the following links for history:
+    // http://moztw.org/docs/big5/  http://www.haible.de/bruno/charsets/conversion-tables/Big5.html
+    // Variations, in roughly number of defined chars:
+    //  * Windows CP 950: Microsoft variant of Big5. Canonical: http://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WINDOWS/CP950.TXT
+    //  * Windows CP 951: Microsoft variant of Big5-HKSCS-2001. Seems to be never public. http://me.abelcheung.org/articles/research/what-is-cp951/
+    //  * Big5-2003 (Taiwan standard) almost superset of cp950.
+    //  * Unicode-at-on (UAO) / Mozilla 1.8. Falling out of use on the Web. Not supported by other browsers.
+    //  * Big5-HKSCS (-2001, -2004, -2008). Hong Kong standard. 
+    //    many unicode code points moved from PUA to Supplementary plane (U+2XXXX) over the years.
+    //    Plus, it has 4 combining sequences.
+    //    Seems that Mozilla refused to support it for 10 yrs. https://bugzilla.mozilla.org/show_bug.cgi?id=162431 https://bugzilla.mozilla.org/show_bug.cgi?id=310299
+    //    because big5-hkscs is the only encoding to include astral characters in non-algorithmic way.
+    //    Implementations are not consistent within browsers; sometimes labeled as just big5.
+    //    MS Internet Explorer switches from big5 to big5-hkscs when a patch applied.
+    //    Great discussion & recap of what's going on https://bugzilla.mozilla.org/show_bug.cgi?id=912470#c31
+    //    In the encoder, it might make sense to support encoding old PUA mappings to Big5 bytes seq-s.
+    //    Official spec: http://www.ogcio.gov.hk/en/business/tech_promotion/ccli/terms/doc/2003cmp_2008.txt
+    //                   http://www.ogcio.gov.hk/tc/business/tech_promotion/ccli/terms/doc/hkscs-2008-big5-iso.txt
+    // 
+    // Current understanding of how to deal with Big5(-HKSCS) is in the Encoding Standard, http://encoding.spec.whatwg.org/#big5-encoder
+    // Unicode mapping (http://www.unicode.org/Public/MAPPINGS/OBSOLETE/EASTASIA/OTHER/BIG5.TXT) is said to be wrong.
+
+    'windows950': 'cp950',
+    'ms950': 'cp950',
+    '950': 'cp950',
+    'cp950': {
+        type: '_dbcs',
+        table: function() { return __nccwpck_require__(74284) },
+    },
+
+    // Big5 has many variations and is an extension of cp950. We use Encoding Standard's as a consensus.
+    'big5': 'big5hkscs',
+    'big5hkscs': {
+        type: '_dbcs',
+        table: function() { return (__nccwpck_require__(74284).concat)(__nccwpck_require__(63480)) },
+        encodeSkipVals: [0xa2cc],
+    },
+
+    'cnbig5': 'big5hkscs',
+    'csbig5': 'big5hkscs',
+    'xxbig5': 'big5hkscs',
+};
+
+
+/***/ }),
+
+/***/ 82733:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+// Update this array if you add/rename/remove files in this directory.
+// We support Browserify by skipping automatic module discovery and requiring modules directly.
+var modules = [
+    __nccwpck_require__(12376),
+    __nccwpck_require__(11155),
+    __nccwpck_require__(51644),
+    __nccwpck_require__(26657),
+    __nccwpck_require__(41080),
+    __nccwpck_require__(21012),
+    __nccwpck_require__(39695),
+    __nccwpck_require__(91386),
+];
+
+// Put all encoding/alias/codec definitions to single object and export it. 
+for (var i = 0; i < modules.length; i++) {
+    var module = modules[i];
+    for (var enc in module)
+        if (Object.prototype.hasOwnProperty.call(module, enc))
+            exports[enc] = module[enc];
+}
+
+
+/***/ }),
+
+/***/ 12376:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+var Buffer = (__nccwpck_require__(15118).Buffer);
+
+// Export Node.js internal encodings.
+
+module.exports = {
+    // Encodings
+    utf8:   { type: "_internal", bomAware: true},
+    cesu8:  { type: "_internal", bomAware: true},
+    unicode11utf8: "utf8",
+
+    ucs2:   { type: "_internal", bomAware: true},
+    utf16le: "ucs2",
+
+    binary: { type: "_internal" },
+    base64: { type: "_internal" },
+    hex:    { type: "_internal" },
+
+    // Codec.
+    _internal: InternalCodec,
+};
+
+//------------------------------------------------------------------------------
+
+function InternalCodec(codecOptions, iconv) {
+    this.enc = codecOptions.encodingName;
+    this.bomAware = codecOptions.bomAware;
+
+    if (this.enc === "base64")
+        this.encoder = InternalEncoderBase64;
+    else if (this.enc === "cesu8") {
+        this.enc = "utf8"; // Use utf8 for decoding.
+        this.encoder = InternalEncoderCesu8;
+
+        // Add decoder for versions of Node not supporting CESU-8
+        if (Buffer.from('eda0bdedb2a9', 'hex').toString() !== '💩') {
+            this.decoder = InternalDecoderCesu8;
+            this.defaultCharUnicode = iconv.defaultCharUnicode;
+        }
+    }
+}
+
+InternalCodec.prototype.encoder = InternalEncoder;
+InternalCodec.prototype.decoder = InternalDecoder;
+
+//------------------------------------------------------------------------------
+
+// We use node.js internal decoder. Its signature is the same as ours.
+var StringDecoder = (__nccwpck_require__(71576).StringDecoder);
+
+if (!StringDecoder.prototype.end) // Node v0.8 doesn't have this method.
+    StringDecoder.prototype.end = function() {};
+
+
+function InternalDecoder(options, codec) {
+    StringDecoder.call(this, codec.enc);
+}
+
+InternalDecoder.prototype = StringDecoder.prototype;
+
+
+//------------------------------------------------------------------------------
+// Encoder is mostly trivial
+
+function InternalEncoder(options, codec) {
+    this.enc = codec.enc;
+}
+
+InternalEncoder.prototype.write = function(str) {
+    return Buffer.from(str, this.enc);
+}
+
+InternalEncoder.prototype.end = function() {
+}
+
+
+//------------------------------------------------------------------------------
+// Except base64 encoder, which must keep its state.
+
+function InternalEncoderBase64(options, codec) {
+    this.prevStr = '';
+}
+
+InternalEncoderBase64.prototype.write = function(str) {
+    str = this.prevStr + str;
+    var completeQuads = str.length - (str.length % 4);
+    this.prevStr = str.slice(completeQuads);
+    str = str.slice(0, completeQuads);
+
+    return Buffer.from(str, "base64");
+}
+
+InternalEncoderBase64.prototype.end = function() {
+    return Buffer.from(this.prevStr, "base64");
+}
+
+
+//------------------------------------------------------------------------------
+// CESU-8 encoder is also special.
+
+function InternalEncoderCesu8(options, codec) {
+}
+
+InternalEncoderCesu8.prototype.write = function(str) {
+    var buf = Buffer.alloc(str.length * 3), bufIdx = 0;
+    for (var i = 0; i < str.length; i++) {
+        var charCode = str.charCodeAt(i);
+        // Naive implementation, but it works because CESU-8 is especially easy
+        // to convert from UTF-16 (which all JS strings are encoded in).
+        if (charCode < 0x80)
+            buf[bufIdx++] = charCode;
+        else if (charCode < 0x800) {
+            buf[bufIdx++] = 0xC0 + (charCode >>> 6);
+            buf[bufIdx++] = 0x80 + (charCode & 0x3f);
+        }
+        else { // charCode will always be < 0x10000 in javascript.
+            buf[bufIdx++] = 0xE0 + (charCode >>> 12);
+            buf[bufIdx++] = 0x80 + ((charCode >>> 6) & 0x3f);
+            buf[bufIdx++] = 0x80 + (charCode & 0x3f);
+        }
+    }
+    return buf.slice(0, bufIdx);
+}
+
+InternalEncoderCesu8.prototype.end = function() {
+}
+
+//------------------------------------------------------------------------------
+// CESU-8 decoder is not implemented in Node v4.0+
+
+function InternalDecoderCesu8(options, codec) {
+    this.acc = 0;
+    this.contBytes = 0;
+    this.accBytes = 0;
+    this.defaultCharUnicode = codec.defaultCharUnicode;
+}
+
+InternalDecoderCesu8.prototype.write = function(buf) {
+    var acc = this.acc, contBytes = this.contBytes, accBytes = this.accBytes, 
+        res = '';
+    for (var i = 0; i < buf.length; i++) {
+        var curByte = buf[i];
+        if ((curByte & 0xC0) !== 0x80) { // Leading byte
+            if (contBytes > 0) { // Previous code is invalid
+                res += this.defaultCharUnicode;
+                contBytes = 0;
+            }
+
+            if (curByte < 0x80) { // Single-byte code
+                res += String.fromCharCode(curByte);
+            } else if (curByte < 0xE0) { // Two-byte code
+                acc = curByte & 0x1F;
+                contBytes = 1; accBytes = 1;
+            } else if (curByte < 0xF0) { // Three-byte code
+                acc = curByte & 0x0F;
+                contBytes = 2; accBytes = 1;
+            } else { // Four or more are not supported for CESU-8.
+                res += this.defaultCharUnicode;
+            }
+        } else { // Continuation byte
+            if (contBytes > 0) { // We're waiting for it.
+                acc = (acc << 6) | (curByte & 0x3f);
+                contBytes--; accBytes++;
+                if (contBytes === 0) {
+                    // Check for overlong encoding, but support Modified UTF-8 (encoding NULL as C0 80)
+                    if (accBytes === 2 && acc < 0x80 && acc > 0)
+                        res += this.defaultCharUnicode;
+                    else if (accBytes === 3 && acc < 0x800)
+                        res += this.defaultCharUnicode;
+                    else
+                        // Actually add character.
+                        res += String.fromCharCode(acc);
+                }
+            } else { // Unexpected continuation byte
+                res += this.defaultCharUnicode;
+            }
+        }
+    }
+    this.acc = acc; this.contBytes = contBytes; this.accBytes = accBytes;
+    return res;
+}
+
+InternalDecoderCesu8.prototype.end = function() {
+    var res = 0;
+    if (this.contBytes > 0)
+        res += this.defaultCharUnicode;
+    return res;
+}
+
+
+/***/ }),
+
+/***/ 26657:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+var Buffer = (__nccwpck_require__(15118).Buffer);
+
+// Single-byte codec. Needs a 'chars' string parameter that contains 256 or 128 chars that
+// correspond to encoded bytes (if 128 - then lower half is ASCII). 
+
+exports._sbcs = SBCSCodec;
+function SBCSCodec(codecOptions, iconv) {
+    if (!codecOptions)
+        throw new Error("SBCS codec is called without the data.")
+    
+    // Prepare char buffer for decoding.
+    if (!codecOptions.chars || (codecOptions.chars.length !== 128 && codecOptions.chars.length !== 256))
+        throw new Error("Encoding '"+codecOptions.type+"' has incorrect 'chars' (must be of len 128 or 256)");
+    
+    if (codecOptions.chars.length === 128) {
+        var asciiString = "";
+        for (var i = 0; i < 128; i++)
+            asciiString += String.fromCharCode(i);
+        codecOptions.chars = asciiString + codecOptions.chars;
+    }
+
+    this.decodeBuf = Buffer.from(codecOptions.chars, 'ucs2');
+    
+    // Encoding buffer.
+    var encodeBuf = Buffer.alloc(65536, iconv.defaultCharSingleByte.charCodeAt(0));
+
+    for (var i = 0; i < codecOptions.chars.length; i++)
+        encodeBuf[codecOptions.chars.charCodeAt(i)] = i;
+
+    this.encodeBuf = encodeBuf;
+}
+
+SBCSCodec.prototype.encoder = SBCSEncoder;
+SBCSCodec.prototype.decoder = SBCSDecoder;
+
+
+function SBCSEncoder(options, codec) {
+    this.encodeBuf = codec.encodeBuf;
+}
+
+SBCSEncoder.prototype.write = function(str) {
+    var buf = Buffer.alloc(str.length);
+    for (var i = 0; i < str.length; i++)
+        buf[i] = this.encodeBuf[str.charCodeAt(i)];
+    
+    return buf;
+}
+
+SBCSEncoder.prototype.end = function() {
+}
+
+
+function SBCSDecoder(options, codec) {
+    this.decodeBuf = codec.decodeBuf;
+}
+
+SBCSDecoder.prototype.write = function(buf) {
+    // Strings are immutable in JS -> we use ucs2 buffer to speed up computations.
+    var decodeBuf = this.decodeBuf;
+    var newBuf = Buffer.alloc(buf.length*2);
+    var idx1 = 0, idx2 = 0;
+    for (var i = 0; i < buf.length; i++) {
+        idx1 = buf[i]*2; idx2 = i*2;
+        newBuf[idx2] = decodeBuf[idx1];
+        newBuf[idx2+1] = decodeBuf[idx1+1];
+    }
+    return newBuf.toString('ucs2');
+}
+
+SBCSDecoder.prototype.end = function() {
+}
+
+
+/***/ }),
+
+/***/ 21012:
+/***/ ((module) => {
+
+"use strict";
+
+
+// Generated data for sbcs codec. Don't edit manually. Regenerate using generation/gen-sbcs.js script.
+module.exports = {
+  "437": "cp437",
+  "737": "cp737",
+  "775": "cp775",
+  "850": "cp850",
+  "852": "cp852",
+  "855": "cp855",
+  "856": "cp856",
+  "857": "cp857",
+  "858": "cp858",
+  "860": "cp860",
+  "861": "cp861",
+  "862": "cp862",
+  "863": "cp863",
+  "864": "cp864",
+  "865": "cp865",
+  "866": "cp866",
+  "869": "cp869",
+  "874": "windows874",
+  "922": "cp922",
+  "1046": "cp1046",
+  "1124": "cp1124",
+  "1125": "cp1125",
+  "1129": "cp1129",
+  "1133": "cp1133",
+  "1161": "cp1161",
+  "1162": "cp1162",
+  "1163": "cp1163",
+  "1250": "windows1250",
+  "1251": "windows1251",
+  "1252": "windows1252",
+  "1253": "windows1253",
+  "1254": "windows1254",
+  "1255": "windows1255",
+  "1256": "windows1256",
+  "1257": "windows1257",
+  "1258": "windows1258",
+  "28591": "iso88591",
+  "28592": "iso88592",
+  "28593": "iso88593",
+  "28594": "iso88594",
+  "28595": "iso88595",
+  "28596": "iso88596",
+  "28597": "iso88597",
+  "28598": "iso88598",
+  "28599": "iso88599",
+  "28600": "iso885910",
+  "28601": "iso885911",
+  "28603": "iso885913",
+  "28604": "iso885914",
+  "28605": "iso885915",
+  "28606": "iso885916",
+  "windows874": {
+    "type": "_sbcs",
+    "chars": "€����…�����������‘’“”•–—�������� กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+  },
+  "win874": "windows874",
+  "cp874": "windows874",
+  "windows1250": {
+    "type": "_sbcs",
+    "chars": "€�‚�„…†‡�‰Š‹ŚŤŽŹ�‘’“”•–—�™š›śťžź ˇ˘Ł¤Ą¦§¨©Ş«¬­®Ż°±˛ł´µ¶·¸ąş»Ľ˝ľżŔÁÂĂÄĹĆÇČÉĘËĚÍÎĎĐŃŇÓÔŐÖ×ŘŮÚŰÜÝŢßŕáâăäĺćçčéęëěíîďđńňóôőö÷řůúűüýţ˙"
+  },
+  "win1250": "windows1250",
+  "cp1250": "windows1250",
+  "windows1251": {
+    "type": "_sbcs",
+    "chars": "ЂЃ‚ѓ„…†‡€‰Љ‹ЊЌЋЏђ‘’“”•–—�™љ›њќћџ ЎўЈ¤Ґ¦§Ё©Є«¬­®Ї°±Ііґµ¶·ё№є»јЅѕїАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя"
+  },
+  "win1251": "windows1251",
+  "cp1251": "windows1251",
+  "windows1252": {
+    "type": "_sbcs",
+    "chars": "€�‚ƒ„…†‡ˆ‰Š‹Œ�Ž��‘’“”•–—˜™š›œ�žŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+  },
+  "win1252": "windows1252",
+  "cp1252": "windows1252",
+  "windows1253": {
+    "type": "_sbcs",
+    "chars": "€�‚ƒ„…†‡�‰�‹�����‘’“”•–—�™�›���� ΅Ά£¤¥¦§¨©�«¬­®―°±²³΄µ¶·ΈΉΊ»Ό½ΎΏΐΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡ�ΣΤΥΦΧΨΩΪΫάέήίΰαβγδεζηθικλμνξοπρςστυφχψωϊϋόύώ�"
+  },
+  "win1253": "windows1253",
+  "cp1253": "windows1253",
+  "windows1254": {
+    "type": "_sbcs",
+    "chars": "€�‚ƒ„…†‡ˆ‰Š‹Œ����‘’“”•–—˜™š›œ��Ÿ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞßàáâãäåæçèéêëìíîïğñòóôõö÷øùúûüışÿ"
+  },
+  "win1254": "windows1254",
+  "cp1254": "windows1254",
+  "windows1255": {
+    "type": "_sbcs",
+    "chars": "€�‚ƒ„…†‡ˆ‰�‹�����‘’“”•–—˜™�›���� ¡¢£₪¥¦§¨©×«¬­®¯°±²³´µ¶·¸¹÷»¼½¾¿ְֱֲֳִֵֶַָֹֺֻּֽ־ֿ׀ׁׂ׃װױײ׳״�������אבגדהוזחטיךכלםמןנסעףפץצקרשת��‎‏�"
+  },
+  "win1255": "windows1255",
+  "cp1255": "windows1255",
+  "windows1256": {
+    "type": "_sbcs",
+    "chars": "€پ‚ƒ„…†‡ˆ‰ٹ‹Œچژڈگ‘’“”•–—ک™ڑ›œ‌‍ں ،¢£¤¥¦§¨©ھ«¬­®¯°±²³´µ¶·¸¹؛»¼½¾؟ہءآأؤإئابةتثجحخدذرزسشصض×طظعغـفقكàلâمنهوçèéêëىيîïًٌٍَôُِ÷ّùْûü‎‏ے"
+  },
+  "win1256": "windows1256",
+  "cp1256": "windows1256",
+  "windows1257": {
+    "type": "_sbcs",
+    "chars": "€�‚�„…†‡�‰�‹�¨ˇ¸�‘’“”•–—�™�›�¯˛� �¢£¤�¦§Ø©Ŗ«¬­®Æ°±²³´µ¶·ø¹ŗ»¼½¾æĄĮĀĆÄÅĘĒČÉŹĖĢĶĪĻŠŃŅÓŌÕÖ×ŲŁŚŪÜŻŽßąįāćäåęēčéźėģķīļšńņóōõö÷ųłśūüżž˙"
+  },
+  "win1257": "windows1257",
+  "cp1257": "windows1257",
+  "windows1258": {
+    "type": "_sbcs",
+    "chars": "€�‚ƒ„…†‡ˆ‰�‹Œ����‘’“”•–—˜™�›œ��Ÿ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂĂÄÅÆÇÈÉÊË̀ÍÎÏĐÑ̉ÓÔƠÖ×ØÙÚÛÜỮßàáâăäåæçèéêë́íîïđṇ̃óôơö÷øùúûüư₫ÿ"
+  },
+  "win1258": "windows1258",
+  "cp1258": "windows1258",
+  "iso88591": {
+    "type": "_sbcs",
+    "chars": " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+  },
+  "cp28591": "iso88591",
+  "iso88592": {
+    "type": "_sbcs",
+    "chars": " Ą˘Ł¤ĽŚ§¨ŠŞŤŹ­ŽŻ°ą˛ł´ľśˇ¸šşťź˝žżŔÁÂĂÄĹĆÇČÉĘËĚÍÎĎĐŃŇÓÔŐÖ×ŘŮÚŰÜÝŢßŕáâăäĺćçčéęëěíîďđńňóôőö÷řůúűüýţ˙"
+  },
+  "cp28592": "iso88592",
+  "iso88593": {
+    "type": "_sbcs",
+    "chars": " Ħ˘£¤�Ĥ§¨İŞĞĴ­�Ż°ħ²³´µĥ·¸ışğĵ½�żÀÁÂ�ÄĊĈÇÈÉÊËÌÍÎÏ�ÑÒÓÔĠÖ×ĜÙÚÛÜŬŜßàáâ�äċĉçèéêëìíîï�ñòóôġö÷ĝùúûüŭŝ˙"
+  },
+  "cp28593": "iso88593",
+  "iso88594": {
+    "type": "_sbcs",
+    "chars": " ĄĸŖ¤ĨĻ§¨ŠĒĢŦ­Ž¯°ą˛ŗ´ĩļˇ¸šēģŧŊžŋĀÁÂÃÄÅÆĮČÉĘËĖÍÎĪĐŅŌĶÔÕÖ×ØŲÚÛÜŨŪßāáâãäåæįčéęëėíîīđņōķôõö÷øųúûüũū˙"
+  },
+  "cp28594": "iso88594",
+  "iso88595": {
+    "type": "_sbcs",
+    "chars": " ЁЂЃЄЅІЇЈЉЊЋЌ­ЎЏАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя№ёђѓєѕіїјљњћќ§ўџ"
+  },
+  "cp28595": "iso88595",
+  "iso88596": {
+    "type": "_sbcs",
+    "chars": " ���¤�������،­�������������؛���؟�ءآأؤإئابةتثجحخدذرزسشصضطظعغ�����ـفقكلمنهوىيًٌٍَُِّْ�������������"
+  },
+  "cp28596": "iso88596",
+  "iso88597": {
+    "type": "_sbcs",
+    "chars": " ‘’£€₯¦§¨©ͺ«¬­�―°±²³΄΅Ά·ΈΉΊ»Ό½ΎΏΐΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡ�ΣΤΥΦΧΨΩΪΫάέήίΰαβγδεζηθικλμνξοπρςστυφχψωϊϋόύώ�"
+  },
+  "cp28597": "iso88597",
+  "iso88598": {
+    "type": "_sbcs",
+    "chars": " �¢£¤¥¦§¨©×«¬­®¯°±²³´µ¶·¸¹÷»¼½¾��������������������������������‗אבגדהוזחטיךכלםמןנסעףפץצקרשת��‎‏�"
+  },
+  "cp28598": "iso88598",
+  "iso88599": {
+    "type": "_sbcs",
+    "chars": " ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞßàáâãäåæçèéêëìíîïğñòóôõö÷øùúûüışÿ"
+  },
+  "cp28599": "iso88599",
+  "iso885910": {
+    "type": "_sbcs",
+    "chars": " ĄĒĢĪĨĶ§ĻĐŠŦŽ­ŪŊ°ąēģīĩķ·ļđšŧž―ūŋĀÁÂÃÄÅÆĮČÉĘËĖÍÎÏÐŅŌÓÔÕÖŨØŲÚÛÜÝÞßāáâãäåæįčéęëėíîïðņōóôõöũøųúûüýþĸ"
+  },
+  "cp28600": "iso885910",
+  "iso885911": {
+    "type": "_sbcs",
+    "chars": " กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+  },
+  "cp28601": "iso885911",
+  "iso885913": {
+    "type": "_sbcs",
+    "chars": " ”¢£¤„¦§Ø©Ŗ«¬­®Æ°±²³“µ¶·ø¹ŗ»¼½¾æĄĮĀĆÄÅĘĒČÉŹĖĢĶĪĻŠŃŅÓŌÕÖ×ŲŁŚŪÜŻŽßąįāćäåęēčéźėģķīļšńņóōõö÷ųłśūüżž’"
+  },
+  "cp28603": "iso885913",
+  "iso885914": {
+    "type": "_sbcs",
+    "chars": " Ḃḃ£ĊċḊ§Ẁ©ẂḋỲ­®ŸḞḟĠġṀṁ¶ṖẁṗẃṠỳẄẅṡÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏŴÑÒÓÔÕÖṪØÙÚÛÜÝŶßàáâãäåæçèéêëìíîïŵñòóôõöṫøùúûüýŷÿ"
+  },
+  "cp28604": "iso885914",
+  "iso885915": {
+    "type": "_sbcs",
+    "chars": " ¡¢£€¥Š§š©ª«¬­®¯°±²³Žµ¶·ž¹º»ŒœŸ¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+  },
+  "cp28605": "iso885915",
+  "iso885916": {
+    "type": "_sbcs",
+    "chars": " ĄąŁ€„Š§š©Ș«Ź­źŻ°±ČłŽ”¶·žčș»ŒœŸżÀÁÂĂÄĆÆÇÈÉÊËÌÍÎÏĐŃÒÓÔŐÖŚŰÙÚÛÜĘȚßàáâăäćæçèéêëìíîïđńòóôőöśűùúûüęțÿ"
+  },
+  "cp28606": "iso885916",
+  "cp437": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+  },
+  "ibm437": "cp437",
+  "csibm437": "cp437",
+  "cp737": {
+    "type": "_sbcs",
+    "chars": "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩαβγδεζηθικλμνξοπρσςτυφχψ░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀ωάέήϊίόύϋώΆΈΉΊΌΎΏ±≥≤ΪΫ÷≈°∙·√ⁿ²■ "
+  },
+  "ibm737": "cp737",
+  "csibm737": "cp737",
+  "cp775": {
+    "type": "_sbcs",
+    "chars": "ĆüéāäģåćłēŖŗīŹÄÅÉæÆōöĢ¢ŚśÖÜø£Ø×¤ĀĪóŻżź”¦©®¬½¼Ł«»░▒▓│┤ĄČĘĖ╣║╗╝ĮŠ┐└┴┬├─┼ŲŪ╚╔╩╦╠═╬Žąčęėįšųūž┘┌█▄▌▐▀ÓßŌŃõÕµńĶķĻļņĒŅ’­±“¾¶§÷„°∙·¹³²■ "
+  },
+  "ibm775": "cp775",
+  "csibm775": "cp775",
+  "cp850": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ "
+  },
+  "ibm850": "cp850",
+  "csibm850": "cp850",
+  "cp852": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäůćçłëŐőîŹÄĆÉĹĺôöĽľŚśÖÜŤťŁ×čáíóúĄąŽžĘę¬źČş«»░▒▓│┤ÁÂĚŞ╣║╗╝Żż┐└┴┬├─┼Ăă╚╔╩╦╠═╬¤đĐĎËďŇÍÎě┘┌█▄ŢŮ▀ÓßÔŃńňŠšŔÚŕŰýÝţ´­˝˛ˇ˘§÷¸°¨˙űŘř■ "
+  },
+  "ibm852": "cp852",
+  "csibm852": "cp852",
+  "cp855": {
+    "type": "_sbcs",
+    "chars": "ђЂѓЃёЁєЄѕЅіІїЇјЈљЉњЊћЋќЌўЎџЏюЮъЪаАбБцЦдДеЕфФгГ«»░▒▓│┤хХиИ╣║╗╝йЙ┐└┴┬├─┼кК╚╔╩╦╠═╬¤лЛмМнНоОп┘┌█▄Пя▀ЯрРсСтТуУжЖвВьЬ№­ыЫзЗшШэЭщЩчЧ§■ "
+  },
+  "ibm855": "cp855",
+  "csibm855": "cp855",
+  "cp856": {
+    "type": "_sbcs",
+    "chars": "אבגדהוזחטיךכלםמןנסעףפץצקרשת�£�×����������®¬½¼�«»░▒▓│┤���©╣║╗╝¢¥┐└┴┬├─┼��╚╔╩╦╠═╬¤���������┘┌█▄¦�▀������µ�������¯´­±‗¾¶§÷¸°¨·¹³²■ "
+  },
+  "ibm856": "cp856",
+  "csibm856": "cp856",
+  "cp857": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäàåçêëèïîıÄÅÉæÆôöòûùİÖÜø£ØŞşáíóúñÑĞğ¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ºªÊËÈ�ÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµ�×ÚÛÙìÿ¯´­±�¾¶§÷¸°¨·¹³²■ "
+  },
+  "ibm857": "cp857",
+  "csibm857": "cp857",
+  "cp858": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈ€ÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ "
+  },
+  "ibm858": "cp858",
+  "csibm858": "cp858",
+  "cp860": {
+    "type": "_sbcs",
+    "chars": "ÇüéâãàÁçêÊèÍÔìÃÂÉÀÈôõòÚùÌÕÜ¢£Ù₧ÓáíóúñÑªº¿Ò¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+  },
+  "ibm860": "cp860",
+  "csibm860": "cp860",
+  "cp861": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäàåçêëèÐðÞÄÅÉæÆôöþûÝýÖÜø£Ø₧ƒáíóúÁÍÓÚ¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+  },
+  "ibm861": "cp861",
+  "csibm861": "cp861",
+  "cp862": {
+    "type": "_sbcs",
+    "chars": "אבגדהוזחטיךכלםמןנסעףפץצקרשת¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+  },
+  "ibm862": "cp862",
+  "csibm862": "cp862",
+  "cp863": {
+    "type": "_sbcs",
+    "chars": "ÇüéâÂà¶çêëèïî‗À§ÉÈÊôËÏûù¤ÔÜ¢£ÙÛƒ¦´óú¨¸³¯Î⌐¬½¼¾«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+  },
+  "ibm863": "cp863",
+  "csibm863": "cp863",
+  "cp864": {
+    "type": "_sbcs",
+    "chars": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$٪&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~°·∙√▒─│┼┤┬├┴┐┌└┘β∞φ±½¼≈«»ﻷﻸ��ﻻﻼ� ­ﺂ£¤ﺄ��ﺎﺏﺕﺙ،ﺝﺡﺥ٠١٢٣٤٥٦٧٨٩ﻑ؛ﺱﺵﺹ؟¢ﺀﺁﺃﺅﻊﺋﺍﺑﺓﺗﺛﺟﺣﺧﺩﺫﺭﺯﺳﺷﺻﺿﻁﻅﻋﻏ¦¬÷×ﻉـﻓﻗﻛﻟﻣﻧﻫﻭﻯﻳﺽﻌﻎﻍﻡﹽّﻥﻩﻬﻰﻲﻐﻕﻵﻶﻝﻙﻱ■�"
+  },
+  "ibm864": "cp864",
+  "csibm864": "cp864",
+  "cp865": {
+    "type": "_sbcs",
+    "chars": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø₧ƒáíóúñÑªº¿⌐¬½¼¡«¤░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+  },
+  "ibm865": "cp865",
+  "csibm865": "cp865",
+  "cp866": {
+    "type": "_sbcs",
+    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёЄєЇїЎў°∙·√№¤■ "
+  },
+  "ibm866": "cp866",
+  "csibm866": "cp866",
+  "cp869": {
+    "type": "_sbcs",
+    "chars": "������Ά�·¬¦‘’Έ―ΉΊΪΌ��ΎΫ©Ώ²³ά£έήίϊΐόύΑΒΓΔΕΖΗ½ΘΙ«»░▒▓│┤ΚΛΜΝ╣║╗╝ΞΟ┐└┴┬├─┼ΠΡ╚╔╩╦╠═╬ΣΤΥΦΧΨΩαβγ┘┌█▄δε▀ζηθικλμνξοπρσςτ΄­±υφχ§ψ΅°¨ωϋΰώ■ "
+  },
+  "ibm869": "cp869",
+  "csibm869": "cp869",
+  "cp922": {
+    "type": "_sbcs",
+    "chars": " ¡¢£¤¥¦§¨©ª«¬­®‾°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏŠÑÒÓÔÕÖ×ØÙÚÛÜÝŽßàáâãäåæçèéêëìíîïšñòóôõö÷øùúûüýžÿ"
+  },
+  "ibm922": "cp922",
+  "csibm922": "cp922",
+  "cp1046": {
+    "type": "_sbcs",
+    "chars": "ﺈ×÷ﹱ■│─┐┌└┘ﹹﹻﹽﹿﹷﺊﻰﻳﻲﻎﻏﻐﻶﻸﻺﻼ ¤ﺋﺑﺗﺛﺟﺣ،­ﺧﺳ٠١٢٣٤٥٦٧٨٩ﺷ؛ﺻﺿﻊ؟ﻋءآأؤإئابةتثجحخدذرزسشصضطﻇعغﻌﺂﺄﺎﻓـفقكلمنهوىيًٌٍَُِّْﻗﻛﻟﻵﻷﻹﻻﻣﻧﻬﻩ�"
+  },
+  "ibm1046": "cp1046",
+  "csibm1046": "cp1046",
+  "cp1124": {
+    "type": "_sbcs",
+    "chars": " ЁЂҐЄЅІЇЈЉЊЋЌ­ЎЏАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя№ёђґєѕіїјљњћќ§ўџ"
+  },
+  "ibm1124": "cp1124",
+  "csibm1124": "cp1124",
+  "cp1125": {
+    "type": "_sbcs",
+    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёҐґЄєІіЇї·√№¤■ "
+  },
+  "ibm1125": "cp1125",
+  "csibm1125": "cp1125",
+  "cp1129": {
+    "type": "_sbcs",
+    "chars": " ¡¢£¤¥¦§œ©ª«¬­®¯°±²³Ÿµ¶·Œ¹º»¼½¾¿ÀÁÂĂÄÅÆÇÈÉÊË̀ÍÎÏĐÑ̉ÓÔƠÖ×ØÙÚÛÜỮßàáâăäåæçèéêë́íîïđṇ̃óôơö÷øùúûüư₫ÿ"
+  },
+  "ibm1129": "cp1129",
+  "csibm1129": "cp1129",
+  "cp1133": {
+    "type": "_sbcs",
+    "chars": " ກຂຄງຈສຊຍດຕຖທນບປຜຝພຟມຢຣລວຫອຮ���ຯະາຳິີຶືຸູຼັົຽ���ເແໂໃໄ່້໊໋໌ໍໆ�ໜໝ₭����������������໐໑໒໓໔໕໖໗໘໙��¢¬¦�"
+  },
+  "ibm1133": "cp1133",
+  "csibm1133": "cp1133",
+  "cp1161": {
+    "type": "_sbcs",
+    "chars": "��������������������������������่กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู้๊๋€฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛¢¬¦ "
+  },
+  "ibm1161": "cp1161",
+  "csibm1161": "cp1161",
+  "cp1162": {
+    "type": "_sbcs",
+    "chars": "€…‘’“”•–— กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+  },
+  "ibm1162": "cp1162",
+  "csibm1162": "cp1162",
+  "cp1163": {
+    "type": "_sbcs",
+    "chars": " ¡¢£€¥¦§œ©ª«¬­®¯°±²³Ÿµ¶·Œ¹º»¼½¾¿ÀÁÂĂÄÅÆÇÈÉÊË̀ÍÎÏĐÑ̉ÓÔƠÖ×ØÙÚÛÜỮßàáâăäåæçèéêë́íîïđṇ̃óôơö÷øùúûüư₫ÿ"
+  },
+  "ibm1163": "cp1163",
+  "csibm1163": "cp1163",
+  "maccroatian": {
+    "type": "_sbcs",
+    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®Š™´¨≠ŽØ∞±≤≥∆µ∂∑∏š∫ªºΩžø¿¡¬√ƒ≈Ć«Č… ÀÃÕŒœĐ—“”‘’÷◊�©⁄¤‹›Æ»–·‚„‰ÂćÁčÈÍÎÏÌÓÔđÒÚÛÙıˆ˜¯πË˚¸Êæˇ"
+  },
+  "maccyrillic": {
+    "type": "_sbcs",
+    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ†°¢£§•¶І®©™Ђђ≠Ѓѓ∞±≤≥іµ∂ЈЄєЇїЉљЊњјЅ¬√ƒ≈∆«»… ЋћЌќѕ–—“”‘’÷„ЎўЏџ№Ёёяабвгдежзийклмнопрстуфхцчшщъыьэю¤"
+  },
+  "macgreek": {
+    "type": "_sbcs",
+    "chars": "Ä¹²É³ÖÜ΅àâä΄¨çéèêë£™îï•½‰ôö¦­ùûü†ΓΔΘΛΞΠß®©ΣΪ§≠°·Α±≤≥¥ΒΕΖΗΙΚΜΦΫΨΩάΝ¬ΟΡ≈Τ«»… ΥΧΆΈœ–―“”‘’÷ΉΊΌΎέήίόΏύαβψδεφγηιξκλμνοπώρστθωςχυζϊϋΐΰ�"
+  },
+  "maciceland": {
+    "type": "_sbcs",
+    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûüÝ°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤ÐðÞþý·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+  },
+  "macroman": {
+    "type": "_sbcs",
+    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤‹›ﬁﬂ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+  },
+  "macromania": {
+    "type": "_sbcs",
+    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ĂŞ∞±≤≥¥µ∂∑∏π∫ªºΩăş¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤‹›Ţţ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+  },
+  "macthai": {
+    "type": "_sbcs",
+    "chars": "«»…“”�•‘’� กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู﻿​–—฿เแโใไๅๆ็่้๊๋์ํ™๏๐๑๒๓๔๕๖๗๘๙®©����"
+  },
+  "macturkish": {
+    "type": "_sbcs",
+    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸĞğİıŞş‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙ�ˆ˜¯˘˙˚¸˝˛ˇ"
+  },
+  "macukraine": {
+    "type": "_sbcs",
+    "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ†°Ґ£§•¶І®©™Ђђ≠Ѓѓ∞±≤≥іµґЈЄєЇїЉљЊњјЅ¬√ƒ≈∆«»… ЋћЌќѕ–—“”‘’÷„ЎўЏџ№Ёёяабвгдежзийклмнопрстуфхцчшщъыьэю¤"
+  },
+  "koi8r": {
+    "type": "_sbcs",
+    "chars": "─│┌┐└┘├┤┬┴┼▀▄█▌▐░▒▓⌠■∙√≈≤≥ ⌡°²·÷═║╒ё╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡Ё╢╣╤╥╦╧╨╩╪╫╬©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+  },
+  "koi8u": {
+    "type": "_sbcs",
+    "chars": "─│┌┐└┘├┤┬┴┼▀▄█▌▐░▒▓⌠■∙√≈≤≥ ⌡°²·÷═║╒ёє╔ії╗╘╙╚╛ґ╝╞╟╠╡ЁЄ╣ІЇ╦╧╨╩╪Ґ╬©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+  },
+  "koi8ru": {
+    "type": "_sbcs",
+    "chars": "─│┌┐└┘├┤┬┴┼▀▄█▌▐░▒▓⌠■∙√≈≤≥ ⌡°²·÷═║╒ёє╔ії╗╘╙╚╛ґў╞╟╠╡ЁЄ╣ІЇ╦╧╨╩╪ҐЎ©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+  },
+  "koi8t": {
+    "type": "_sbcs",
+    "chars": "қғ‚Ғ„…†‡�‰ҳ‹ҲҷҶ�Қ‘’“”•–—�™�›�����ӯӮё¤ӣ¦§���«¬­®�°±²Ё�Ӣ¶·�№�»���©юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧЪ"
+  },
+  "armscii8": {
+    "type": "_sbcs",
+    "chars": " �և։)(»«—.՝,-֊…՜՛՞ԱաԲբԳգԴդԵեԶզԷէԸըԹթԺժԻիԼլԽխԾծԿկՀհՁձՂղՃճՄմՅյՆնՇշՈոՉչՊպՋջՌռՍսՎվՏտՐրՑցՒւՓփՔքՕօՖֆ՚�"
+  },
+  "rk1048": {
+    "type": "_sbcs",
+    "chars": "ЂЃ‚ѓ„…†‡€‰Љ‹ЊҚҺЏђ‘’“”•–—�™љ›њқһџ ҰұӘ¤Ө¦§Ё©Ғ«¬­®Ү°±Ііөµ¶·ё№ғ»әҢңүАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя"
+  },
+  "tcvn": {
+    "type": "_sbcs",
+    "chars": "\u0000ÚỤ\u0003ỪỬỮ\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010ỨỰỲỶỸÝỴ\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ÀẢÃÁẠẶẬÈẺẼÉẸỆÌỈĨÍỊÒỎÕÓỌỘỜỞỠỚỢÙỦŨ ĂÂÊÔƠƯĐăâêôơưđẶ̀̀̉̃́àảãáạẲằẳẵắẴẮẦẨẪẤỀặầẩẫấậèỂẻẽéẹềểễếệìỉỄẾỒĩíịòỔỏõóọồổỗốộờởỡớợùỖủũúụừửữứựỳỷỹýỵỐ"
+  },
+  "georgianacademy": {
+    "type": "_sbcs",
+    "chars": "‚ƒ„…†‡ˆ‰Š‹Œ‘’“”•–—˜™š›œŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰჱჲჳჴჵჶçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+  },
+  "georgianps": {
+    "type": "_sbcs",
+    "chars": "‚ƒ„…†‡ˆ‰Š‹Œ‘’“”•–—˜™š›œŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿აბგდევზჱთიკლმნჲოპჟრსტჳუფქღყშჩცძწჭხჴჯჰჵæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+  },
+  "pt154": {
+    "type": "_sbcs",
+    "chars": "ҖҒӮғ„…ҶҮҲүҠӢҢҚҺҸҗ‘’“”•–—ҳҷҡӣңқһҹ ЎўЈӨҘҰ§Ё©Ә«¬ӯ®Ҝ°ұІіҙө¶·ё№ә»јҪҫҝАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя"
+  },
+  "viscii": {
+    "type": "_sbcs",
+    "chars": "\u0000\u0001Ẳ\u0003\u0004ẴẪ\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013Ỷ\u0015\u0016\u0017\u0018Ỹ\u001a\u001b\u001c\u001dỴ\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~ẠẮẰẶẤẦẨẬẼẸẾỀỂỄỆỐỒỔỖỘỢỚỜỞỊỎỌỈỦŨỤỲÕắằặấầẩậẽẹếềểễệốồổỗỠƠộờởịỰỨỪỬơớƯÀÁÂÃẢĂẳẵÈÉÊẺÌÍĨỳĐứÒÓÔạỷừửÙÚỹỵÝỡưàáâãảăữẫèéêẻìíĩỉđựòóôõỏọụùúũủýợỮ"
+  },
+  "iso646cn": {
+    "type": "_sbcs",
+    "chars": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#¥%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}‾��������������������������������������������������������������������������������������������������������������������������������"
+  },
+  "iso646jp": {
+    "type": "_sbcs",
+    "chars": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[¥]^_`abcdefghijklmnopqrstuvwxyz{|}‾��������������������������������������������������������������������������������������������������������������������������������"
+  },
+  "hproman8": {
+    "type": "_sbcs",
+    "chars": " ÀÂÈÊËÎÏ´ˋˆ¨˜ÙÛ₤¯Ýý°ÇçÑñ¡¿¤£¥§ƒ¢âêôûáéóúàèòùäëöüÅîØÆåíøæÄìÖÜÉïßÔÁÃãÐðÍÌÓÒÕõŠšÚŸÿÞþ·µ¶¾—¼½ªº«■»±�"
+  },
+  "macintosh": {
+    "type": "_sbcs",
+    "chars": "ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄¤‹›ﬁﬂ‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔ�ÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ"
+  },
+  "ascii": {
+    "type": "_sbcs",
+    "chars": "��������������������������������������������������������������������������������������������������������������������������������"
+  },
+  "tis620": {
+    "type": "_sbcs",
+    "chars": "���������������������������������กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรฤลฦวศษสหฬอฮฯะัาำิีึืฺุู����฿เแโใไๅๆ็่้๊๋์ํ๎๏๐๑๒๓๔๕๖๗๘๙๚๛����"
+  }
+}
+
+/***/ }),
+
+/***/ 41080:
+/***/ ((module) => {
+
+"use strict";
+
+
+// Manually added data to be used by sbcs codec in addition to generated one.
+
+module.exports = {
+    // Not supported by iconv, not sure why.
+    "10029": "maccenteuro",
+    "maccenteuro": {
+        "type": "_sbcs",
+        "chars": "ÄĀāÉĄÖÜáąČäčĆćéŹźĎíďĒēĖóėôöõúĚěü†°Ę£§•¶ß®©™ę¨≠ģĮįĪ≤≥īĶ∂∑łĻļĽľĹĺŅņŃ¬√ńŇ∆«»… ňŐÕőŌ–—“”‘’÷◊ōŔŕŘ‹›řŖŗŠ‚„šŚśÁŤťÍŽžŪÓÔūŮÚůŰűŲųÝýķŻŁżĢˇ"
+    },
+
+    "808": "cp808",
+    "ibm808": "cp808",
+    "cp808": {
+        "type": "_sbcs",
+        "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёЄєЇїЎў°∙·√№€■ "
+    },
+
+    "mik": {
+        "type": "_sbcs",
+        "chars": "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя└┴┬├─┼╣║╚╔╩╦╠═╬┐░▒▓│┤№§╗╝┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "
+    },
+
+    // Aliases of generated encodings.
+    "ascii8bit": "ascii",
+    "usascii": "ascii",
+    "ansix34": "ascii",
+    "ansix341968": "ascii",
+    "ansix341986": "ascii",
+    "csascii": "ascii",
+    "cp367": "ascii",
+    "ibm367": "ascii",
+    "isoir6": "ascii",
+    "iso646us": "ascii",
+    "iso646irv": "ascii",
+    "us": "ascii",
+
+    "latin1": "iso88591",
+    "latin2": "iso88592",
+    "latin3": "iso88593",
+    "latin4": "iso88594",
+    "latin5": "iso88599",
+    "latin6": "iso885910",
+    "latin7": "iso885913",
+    "latin8": "iso885914",
+    "latin9": "iso885915",
+    "latin10": "iso885916",
+
+    "csisolatin1": "iso88591",
+    "csisolatin2": "iso88592",
+    "csisolatin3": "iso88593",
+    "csisolatin4": "iso88594",
+    "csisolatincyrillic": "iso88595",
+    "csisolatinarabic": "iso88596",
+    "csisolatingreek" : "iso88597",
+    "csisolatinhebrew": "iso88598",
+    "csisolatin5": "iso88599",
+    "csisolatin6": "iso885910",
+
+    "l1": "iso88591",
+    "l2": "iso88592",
+    "l3": "iso88593",
+    "l4": "iso88594",
+    "l5": "iso88599",
+    "l6": "iso885910",
+    "l7": "iso885913",
+    "l8": "iso885914",
+    "l9": "iso885915",
+    "l10": "iso885916",
+
+    "isoir14": "iso646jp",
+    "isoir57": "iso646cn",
+    "isoir100": "iso88591",
+    "isoir101": "iso88592",
+    "isoir109": "iso88593",
+    "isoir110": "iso88594",
+    "isoir144": "iso88595",
+    "isoir127": "iso88596",
+    "isoir126": "iso88597",
+    "isoir138": "iso88598",
+    "isoir148": "iso88599",
+    "isoir157": "iso885910",
+    "isoir166": "tis620",
+    "isoir179": "iso885913",
+    "isoir199": "iso885914",
+    "isoir203": "iso885915",
+    "isoir226": "iso885916",
+
+    "cp819": "iso88591",
+    "ibm819": "iso88591",
+
+    "cyrillic": "iso88595",
+
+    "arabic": "iso88596",
+    "arabic8": "iso88596",
+    "ecma114": "iso88596",
+    "asmo708": "iso88596",
+
+    "greek" : "iso88597",
+    "greek8" : "iso88597",
+    "ecma118" : "iso88597",
+    "elot928" : "iso88597",
+
+    "hebrew": "iso88598",
+    "hebrew8": "iso88598",
+
+    "turkish": "iso88599",
+    "turkish8": "iso88599",
+
+    "thai": "iso885911",
+    "thai8": "iso885911",
+
+    "celtic": "iso885914",
+    "celtic8": "iso885914",
+    "isoceltic": "iso885914",
+
+    "tis6200": "tis620",
+    "tis62025291": "tis620",
+    "tis62025330": "tis620",
+
+    "10000": "macroman",
+    "10006": "macgreek",
+    "10007": "maccyrillic",
+    "10079": "maciceland",
+    "10081": "macturkish",
+
+    "cspc8codepage437": "cp437",
+    "cspc775baltic": "cp775",
+    "cspc850multilingual": "cp850",
+    "cspcp852": "cp852",
+    "cspc862latinhebrew": "cp862",
+    "cpgr": "cp869",
+
+    "msee": "cp1250",
+    "mscyrl": "cp1251",
+    "msansi": "cp1252",
+    "msgreek": "cp1253",
+    "msturk": "cp1254",
+    "mshebr": "cp1255",
+    "msarab": "cp1256",
+    "winbaltrim": "cp1257",
+
+    "cp20866": "koi8r",
+    "20866": "koi8r",
+    "ibm878": "koi8r",
+    "cskoi8r": "koi8r",
+
+    "cp21866": "koi8u",
+    "21866": "koi8u",
+    "ibm1168": "koi8u",
+
+    "strk10482002": "rk1048",
+
+    "tcvn5712": "tcvn",
+    "tcvn57121": "tcvn",
+
+    "gb198880": "iso646cn",
+    "cn": "iso646cn",
+
+    "csiso14jisc6220ro": "iso646jp",
+    "jisc62201969ro": "iso646jp",
+    "jp": "iso646jp",
+
+    "cshproman8": "hproman8",
+    "r8": "hproman8",
+    "roman8": "hproman8",
+    "xroman8": "hproman8",
+    "ibm1051": "hproman8",
+
+    "mac": "macintosh",
+    "csmacintosh": "macintosh",
+};
+
+
+
+/***/ }),
+
+/***/ 11155:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+var Buffer = (__nccwpck_require__(15118).Buffer);
+
+// Note: UTF16-LE (or UCS2) codec is Node.js native. See encodings/internal.js
+
+// == UTF16-BE codec. ==========================================================
+
+exports.utf16be = Utf16BECodec;
+function Utf16BECodec() {
+}
+
+Utf16BECodec.prototype.encoder = Utf16BEEncoder;
+Utf16BECodec.prototype.decoder = Utf16BEDecoder;
+Utf16BECodec.prototype.bomAware = true;
+
+
+// -- Encoding
+
+function Utf16BEEncoder() {
+}
+
+Utf16BEEncoder.prototype.write = function(str) {
+    var buf = Buffer.from(str, 'ucs2');
+    for (var i = 0; i < buf.length; i += 2) {
+        var tmp = buf[i]; buf[i] = buf[i+1]; buf[i+1] = tmp;
+    }
+    return buf;
+}
+
+Utf16BEEncoder.prototype.end = function() {
+}
+
+
+// -- Decoding
+
+function Utf16BEDecoder() {
+    this.overflowByte = -1;
+}
+
+Utf16BEDecoder.prototype.write = function(buf) {
+    if (buf.length == 0)
+        return '';
+
+    var buf2 = Buffer.alloc(buf.length + 1),
+        i = 0, j = 0;
+
+    if (this.overflowByte !== -1) {
+        buf2[0] = buf[0];
+        buf2[1] = this.overflowByte;
+        i = 1; j = 2;
+    }
+
+    for (; i < buf.length-1; i += 2, j+= 2) {
+        buf2[j] = buf[i+1];
+        buf2[j+1] = buf[i];
+    }
+
+    this.overflowByte = (i == buf.length-1) ? buf[buf.length-1] : -1;
+
+    return buf2.slice(0, j).toString('ucs2');
+}
+
+Utf16BEDecoder.prototype.end = function() {
+}
+
+
+// == UTF-16 codec =============================================================
+// Decoder chooses automatically from UTF-16LE and UTF-16BE using BOM and space-based heuristic.
+// Defaults to UTF-16LE, as it's prevalent and default in Node.
+// http://en.wikipedia.org/wiki/UTF-16 and http://encoding.spec.whatwg.org/#utf-16le
+// Decoder default can be changed: iconv.decode(buf, 'utf16', {defaultEncoding: 'utf-16be'});
+
+// Encoder uses UTF-16LE and prepends BOM (which can be overridden with addBOM: false).
+
+exports.utf16 = Utf16Codec;
+function Utf16Codec(codecOptions, iconv) {
+    this.iconv = iconv;
+}
+
+Utf16Codec.prototype.encoder = Utf16Encoder;
+Utf16Codec.prototype.decoder = Utf16Decoder;
+
+
+// -- Encoding (pass-through)
+
+function Utf16Encoder(options, codec) {
+    options = options || {};
+    if (options.addBOM === undefined)
+        options.addBOM = true;
+    this.encoder = codec.iconv.getEncoder('utf-16le', options);
+}
+
+Utf16Encoder.prototype.write = function(str) {
+    return this.encoder.write(str);
+}
+
+Utf16Encoder.prototype.end = function() {
+    return this.encoder.end();
+}
+
+
+// -- Decoding
+
+function Utf16Decoder(options, codec) {
+    this.decoder = null;
+    this.initialBytes = [];
+    this.initialBytesLen = 0;
+
+    this.options = options || {};
+    this.iconv = codec.iconv;
+}
+
+Utf16Decoder.prototype.write = function(buf) {
+    if (!this.decoder) {
+        // Codec is not chosen yet. Accumulate initial bytes.
+        this.initialBytes.push(buf);
+        this.initialBytesLen += buf.length;
+        
+        if (this.initialBytesLen < 16) // We need more bytes to use space heuristic (see below)
+            return '';
+
+        // We have enough bytes -> detect endianness.
+        var buf = Buffer.concat(this.initialBytes),
+            encoding = detectEncoding(buf, this.options.defaultEncoding);
+        this.decoder = this.iconv.getDecoder(encoding, this.options);
+        this.initialBytes.length = this.initialBytesLen = 0;
+    }
+
+    return this.decoder.write(buf);
+}
+
+Utf16Decoder.prototype.end = function() {
+    if (!this.decoder) {
+        var buf = Buffer.concat(this.initialBytes),
+            encoding = detectEncoding(buf, this.options.defaultEncoding);
+        this.decoder = this.iconv.getDecoder(encoding, this.options);
+
+        var res = this.decoder.write(buf),
+            trail = this.decoder.end();
+
+        return trail ? (res + trail) : res;
+    }
+    return this.decoder.end();
+}
+
+function detectEncoding(buf, defaultEncoding) {
+    var enc = defaultEncoding || 'utf-16le';
+
+    if (buf.length >= 2) {
+        // Check BOM.
+        if (buf[0] == 0xFE && buf[1] == 0xFF) // UTF-16BE BOM
+            enc = 'utf-16be';
+        else if (buf[0] == 0xFF && buf[1] == 0xFE) // UTF-16LE BOM
+            enc = 'utf-16le';
+        else {
+            // No BOM found. Try to deduce encoding from initial content.
+            // Most of the time, the content has ASCII chars (U+00**), but the opposite (U+**00) is uncommon.
+            // So, we count ASCII as if it was LE or BE, and decide from that.
+            var asciiCharsLE = 0, asciiCharsBE = 0, // Counts of chars in both positions
+                _len = Math.min(buf.length - (buf.length % 2), 64); // Len is always even.
+
+            for (var i = 0; i < _len; i += 2) {
+                if (buf[i] === 0 && buf[i+1] !== 0) asciiCharsBE++;
+                if (buf[i] !== 0 && buf[i+1] === 0) asciiCharsLE++;
+            }
+
+            if (asciiCharsBE > asciiCharsLE)
+                enc = 'utf-16be';
+            else if (asciiCharsBE < asciiCharsLE)
+                enc = 'utf-16le';
+        }
+    }
+
+    return enc;
+}
+
+
+
+
+/***/ }),
+
+/***/ 51644:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+var Buffer = (__nccwpck_require__(15118).Buffer);
+
+// UTF-7 codec, according to https://tools.ietf.org/html/rfc2152
+// See also below a UTF-7-IMAP codec, according to http://tools.ietf.org/html/rfc3501#section-5.1.3
+
+exports.utf7 = Utf7Codec;
+exports.unicode11utf7 = 'utf7'; // Alias UNICODE-1-1-UTF-7
+function Utf7Codec(codecOptions, iconv) {
+    this.iconv = iconv;
+};
+
+Utf7Codec.prototype.encoder = Utf7Encoder;
+Utf7Codec.prototype.decoder = Utf7Decoder;
+Utf7Codec.prototype.bomAware = true;
+
+
+// -- Encoding
+
+var nonDirectChars = /[^A-Za-z0-9'\(\),-\.\/:\? \n\r\t]+/g;
+
+function Utf7Encoder(options, codec) {
+    this.iconv = codec.iconv;
+}
+
+Utf7Encoder.prototype.write = function(str) {
+    // Naive implementation.
+    // Non-direct chars are encoded as "+<base64>-"; single "+" char is encoded as "+-".
+    return Buffer.from(str.replace(nonDirectChars, function(chunk) {
+        return "+" + (chunk === '+' ? '' : 
+            this.iconv.encode(chunk, 'utf16-be').toString('base64').replace(/=+$/, '')) 
+            + "-";
+    }.bind(this)));
+}
+
+Utf7Encoder.prototype.end = function() {
+}
+
+
+// -- Decoding
+
+function Utf7Decoder(options, codec) {
+    this.iconv = codec.iconv;
+    this.inBase64 = false;
+    this.base64Accum = '';
+}
+
+var base64Regex = /[A-Za-z0-9\/+]/;
+var base64Chars = [];
+for (var i = 0; i < 256; i++)
+    base64Chars[i] = base64Regex.test(String.fromCharCode(i));
+
+var plusChar = '+'.charCodeAt(0), 
+    minusChar = '-'.charCodeAt(0),
+    andChar = '&'.charCodeAt(0);
+
+Utf7Decoder.prototype.write = function(buf) {
+    var res = "", lastI = 0,
+        inBase64 = this.inBase64,
+        base64Accum = this.base64Accum;
+
+    // The decoder is more involved as we must handle chunks in stream.
+
+    for (var i = 0; i < buf.length; i++) {
+        if (!inBase64) { // We're in direct mode.
+            // Write direct chars until '+'
+            if (buf[i] == plusChar) {
+                res += this.iconv.decode(buf.slice(lastI, i), "ascii"); // Write direct chars.
+                lastI = i+1;
+                inBase64 = true;
+            }
+        } else { // We decode base64.
+            if (!base64Chars[buf[i]]) { // Base64 ended.
+                if (i == lastI && buf[i] == minusChar) {// "+-" -> "+"
+                    res += "+";
+                } else {
+                    var b64str = base64Accum + buf.slice(lastI, i).toString();
+                    res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+                }
+
+                if (buf[i] != minusChar) // Minus is absorbed after base64.
+                    i--;
+
+                lastI = i+1;
+                inBase64 = false;
+                base64Accum = '';
+            }
+        }
+    }
+
+    if (!inBase64) {
+        res += this.iconv.decode(buf.slice(lastI), "ascii"); // Write direct chars.
+    } else {
+        var b64str = base64Accum + buf.slice(lastI).toString();
+
+        var canBeDecoded = b64str.length - (b64str.length % 8); // Minimal chunk: 2 quads -> 2x3 bytes -> 3 chars.
+        base64Accum = b64str.slice(canBeDecoded); // The rest will be decoded in future.
+        b64str = b64str.slice(0, canBeDecoded);
+
+        res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+    }
+
+    this.inBase64 = inBase64;
+    this.base64Accum = base64Accum;
+
+    return res;
+}
+
+Utf7Decoder.prototype.end = function() {
+    var res = "";
+    if (this.inBase64 && this.base64Accum.length > 0)
+        res = this.iconv.decode(Buffer.from(this.base64Accum, 'base64'), "utf16-be");
+
+    this.inBase64 = false;
+    this.base64Accum = '';
+    return res;
+}
+
+
+// UTF-7-IMAP codec.
+// RFC3501 Sec. 5.1.3 Modified UTF-7 (http://tools.ietf.org/html/rfc3501#section-5.1.3)
+// Differences:
+//  * Base64 part is started by "&" instead of "+"
+//  * Direct characters are 0x20-0x7E, except "&" (0x26)
+//  * In Base64, "," is used instead of "/"
+//  * Base64 must not be used to represent direct characters.
+//  * No implicit shift back from Base64 (should always end with '-')
+//  * String must end in non-shifted position.
+//  * "-&" while in base64 is not allowed.
+
+
+exports.utf7imap = Utf7IMAPCodec;
+function Utf7IMAPCodec(codecOptions, iconv) {
+    this.iconv = iconv;
+};
+
+Utf7IMAPCodec.prototype.encoder = Utf7IMAPEncoder;
+Utf7IMAPCodec.prototype.decoder = Utf7IMAPDecoder;
+Utf7IMAPCodec.prototype.bomAware = true;
+
+
+// -- Encoding
+
+function Utf7IMAPEncoder(options, codec) {
+    this.iconv = codec.iconv;
+    this.inBase64 = false;
+    this.base64Accum = Buffer.alloc(6);
+    this.base64AccumIdx = 0;
+}
+
+Utf7IMAPEncoder.prototype.write = function(str) {
+    var inBase64 = this.inBase64,
+        base64Accum = this.base64Accum,
+        base64AccumIdx = this.base64AccumIdx,
+        buf = Buffer.alloc(str.length*5 + 10), bufIdx = 0;
+
+    for (var i = 0; i < str.length; i++) {
+        var uChar = str.charCodeAt(i);
+        if (0x20 <= uChar && uChar <= 0x7E) { // Direct character or '&'.
+            if (inBase64) {
+                if (base64AccumIdx > 0) {
+                    bufIdx += buf.write(base64Accum.slice(0, base64AccumIdx).toString('base64').replace(/\//g, ',').replace(/=+$/, ''), bufIdx);
+                    base64AccumIdx = 0;
+                }
+
+                buf[bufIdx++] = minusChar; // Write '-', then go to direct mode.
+                inBase64 = false;
+            }
+
+            if (!inBase64) {
+                buf[bufIdx++] = uChar; // Write direct character
+
+                if (uChar === andChar)  // Ampersand -> '&-'
+                    buf[bufIdx++] = minusChar;
+            }
+
+        } else { // Non-direct character
+            if (!inBase64) {
+                buf[bufIdx++] = andChar; // Write '&', then go to base64 mode.
+                inBase64 = true;
+            }
+            if (inBase64) {
+                base64Accum[base64AccumIdx++] = uChar >> 8;
+                base64Accum[base64AccumIdx++] = uChar & 0xFF;
+
+                if (base64AccumIdx == base64Accum.length) {
+                    bufIdx += buf.write(base64Accum.toString('base64').replace(/\//g, ','), bufIdx);
+                    base64AccumIdx = 0;
+                }
+            }
+        }
+    }
+
+    this.inBase64 = inBase64;
+    this.base64AccumIdx = base64AccumIdx;
+
+    return buf.slice(0, bufIdx);
+}
+
+Utf7IMAPEncoder.prototype.end = function() {
+    var buf = Buffer.alloc(10), bufIdx = 0;
+    if (this.inBase64) {
+        if (this.base64AccumIdx > 0) {
+            bufIdx += buf.write(this.base64Accum.slice(0, this.base64AccumIdx).toString('base64').replace(/\//g, ',').replace(/=+$/, ''), bufIdx);
+            this.base64AccumIdx = 0;
+        }
+
+        buf[bufIdx++] = minusChar; // Write '-', then go to direct mode.
+        this.inBase64 = false;
+    }
+
+    return buf.slice(0, bufIdx);
+}
+
+
+// -- Decoding
+
+function Utf7IMAPDecoder(options, codec) {
+    this.iconv = codec.iconv;
+    this.inBase64 = false;
+    this.base64Accum = '';
+}
+
+var base64IMAPChars = base64Chars.slice();
+base64IMAPChars[','.charCodeAt(0)] = true;
+
+Utf7IMAPDecoder.prototype.write = function(buf) {
+    var res = "", lastI = 0,
+        inBase64 = this.inBase64,
+        base64Accum = this.base64Accum;
+
+    // The decoder is more involved as we must handle chunks in stream.
+    // It is forgiving, closer to standard UTF-7 (for example, '-' is optional at the end).
+
+    for (var i = 0; i < buf.length; i++) {
+        if (!inBase64) { // We're in direct mode.
+            // Write direct chars until '&'
+            if (buf[i] == andChar) {
+                res += this.iconv.decode(buf.slice(lastI, i), "ascii"); // Write direct chars.
+                lastI = i+1;
+                inBase64 = true;
+            }
+        } else { // We decode base64.
+            if (!base64IMAPChars[buf[i]]) { // Base64 ended.
+                if (i == lastI && buf[i] == minusChar) { // "&-" -> "&"
+                    res += "&";
+                } else {
+                    var b64str = base64Accum + buf.slice(lastI, i).toString().replace(/,/g, '/');
+                    res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+                }
+
+                if (buf[i] != minusChar) // Minus may be absorbed after base64.
+                    i--;
+
+                lastI = i+1;
+                inBase64 = false;
+                base64Accum = '';
+            }
+        }
+    }
+
+    if (!inBase64) {
+        res += this.iconv.decode(buf.slice(lastI), "ascii"); // Write direct chars.
+    } else {
+        var b64str = base64Accum + buf.slice(lastI).toString().replace(/,/g, '/');
+
+        var canBeDecoded = b64str.length - (b64str.length % 8); // Minimal chunk: 2 quads -> 2x3 bytes -> 3 chars.
+        base64Accum = b64str.slice(canBeDecoded); // The rest will be decoded in future.
+        b64str = b64str.slice(0, canBeDecoded);
+
+        res += this.iconv.decode(Buffer.from(b64str, 'base64'), "utf16-be");
+    }
+
+    this.inBase64 = inBase64;
+    this.base64Accum = base64Accum;
+
+    return res;
+}
+
+Utf7IMAPDecoder.prototype.end = function() {
+    var res = "";
+    if (this.inBase64 && this.base64Accum.length > 0)
+        res = this.iconv.decode(Buffer.from(this.base64Accum, 'base64'), "utf16-be");
+
+    this.inBase64 = false;
+    this.base64Accum = '';
+    return res;
+}
+
+
+
+
+/***/ }),
+
+/***/ 67961:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+var BOMChar = '\uFEFF';
+
+exports.PrependBOM = PrependBOMWrapper
+function PrependBOMWrapper(encoder, options) {
+    this.encoder = encoder;
+    this.addBOM = true;
+}
+
+PrependBOMWrapper.prototype.write = function(str) {
+    if (this.addBOM) {
+        str = BOMChar + str;
+        this.addBOM = false;
+    }
+
+    return this.encoder.write(str);
+}
+
+PrependBOMWrapper.prototype.end = function() {
+    return this.encoder.end();
+}
+
+
+//------------------------------------------------------------------------------
+
+exports.StripBOM = StripBOMWrapper;
+function StripBOMWrapper(decoder, options) {
+    this.decoder = decoder;
+    this.pass = false;
+    this.options = options || {};
+}
+
+StripBOMWrapper.prototype.write = function(buf) {
+    var res = this.decoder.write(buf);
+    if (this.pass || !res)
+        return res;
+
+    if (res[0] === BOMChar) {
+        res = res.slice(1);
+        if (typeof this.options.stripBOM === 'function')
+            this.options.stripBOM();
+    }
+
+    this.pass = true;
+    return res;
+}
+
+StripBOMWrapper.prototype.end = function() {
+    return this.decoder.end();
+}
