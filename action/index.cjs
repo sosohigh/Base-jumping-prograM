@@ -79776,3 +79776,2163 @@ function closeHandler(self) {
             debug("skip reconnecting since the connection is manually closed.");
             return close();
         }
+        if (typeof self.options.retryStrategy !== "function") {
+            debug("skip reconnecting because `retryStrategy` is not a function");
+            return close();
+        }
+        const retryDelay = self.options.retryStrategy(++self.retryAttempts);
+        if (typeof retryDelay !== "number") {
+            debug("skip reconnecting because `retryStrategy` doesn't return a number");
+            return close();
+        }
+        debug("reconnect in %sms", retryDelay);
+        self.setStatus("reconnecting", retryDelay);
+        self.reconnectTimeout = setTimeout(function () {
+            self.reconnectTimeout = null;
+            self.connect().catch(utils_1.noop);
+        }, retryDelay);
+        const { maxRetriesPerRequest } = self.options;
+        if (typeof maxRetriesPerRequest === "number") {
+            if (maxRetriesPerRequest < 0) {
+                debug("maxRetriesPerRequest is negative, ignoring...");
+            }
+            else {
+                const remainder = self.retryAttempts % (maxRetriesPerRequest + 1);
+                if (remainder === 0) {
+                    debug("reach maxRetriesPerRequest limitation, flushing command queue...");
+                    self.flushQueue(new errors_1.MaxRetriesPerRequestError(maxRetriesPerRequest));
+                }
+            }
+        }
+    };
+    function close() {
+        self.setStatus("end");
+        self.flushQueue(new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG));
+    }
+}
+exports.closeHandler = closeHandler;
+function errorHandler(self) {
+    return function (error) {
+        debug("error: %s", error);
+        self.silentEmit("error", error);
+    };
+}
+exports.errorHandler = errorHandler;
+function readyHandler(self) {
+    return function () {
+        self.setStatus("ready");
+        self.retryAttempts = 0;
+        if (self.options.monitor) {
+            self.call("monitor");
+            const { sendCommand } = self;
+            self.sendCommand = function (command) {
+                if (command_1.default.checkFlag("VALID_IN_MONITOR_MODE", command.name)) {
+                    return sendCommand.call(self, command);
+                }
+                command.reject(new Error("Connection is in monitoring mode, can't process commands."));
+                return command.promise;
+            };
+            self.once("close", function () {
+                delete self.sendCommand;
+            });
+            self.setStatus("monitoring");
+            return;
+        }
+        const finalSelect = self.prevCondition
+            ? self.prevCondition.select
+            : self.condition.select;
+        if (self.options.connectionName) {
+            debug("set the connection name [%s]", self.options.connectionName);
+            self.client("setname", self.options.connectionName).catch(utils_1.noop);
+        }
+        if (self.options.readOnly) {
+            debug("set the connection to readonly mode");
+            self.readonly().catch(utils_1.noop);
+        }
+        if (self.prevCondition) {
+            const condition = self.prevCondition;
+            self.prevCondition = null;
+            if (condition.subscriber && self.options.autoResubscribe) {
+                // We re-select the previous db first since
+                // `SELECT` command is not valid in sub mode.
+                if (self.condition.select !== finalSelect) {
+                    debug("connect to db [%d]", finalSelect);
+                    self.select(finalSelect);
+                }
+                const subscribeChannels = condition.subscriber.channels("subscribe");
+                if (subscribeChannels.length) {
+                    debug("subscribe %d channels", subscribeChannels.length);
+                    self.subscribe(subscribeChannels);
+                }
+                const psubscribeChannels = condition.subscriber.channels("psubscribe");
+                if (psubscribeChannels.length) {
+                    debug("psubscribe %d channels", psubscribeChannels.length);
+                    self.psubscribe(psubscribeChannels);
+                }
+            }
+        }
+        if (self.prevCommandQueue) {
+            if (self.options.autoResendUnfulfilledCommands) {
+                debug("resend %d unfulfilled commands", self.prevCommandQueue.length);
+                while (self.prevCommandQueue.length > 0) {
+                    const item = self.prevCommandQueue.shift();
+                    if (item.select !== self.condition.select &&
+                        item.command.name !== "select") {
+                        self.select(item.select);
+                    }
+                    self.sendCommand(item.command, item.stream);
+                }
+            }
+            else {
+                self.prevCommandQueue = null;
+            }
+        }
+        if (self.offlineQueue.length) {
+            debug("send %d commands in offline queue", self.offlineQueue.length);
+            const offlineQueue = self.offlineQueue;
+            self.resetOfflineQueue();
+            while (offlineQueue.length > 0) {
+                const item = offlineQueue.shift();
+                if (item.select !== self.condition.select &&
+                    item.command.name !== "select") {
+                    self.select(item.select);
+                }
+                self.sendCommand(item.command, item.stream);
+            }
+        }
+        if (self.condition.select !== finalSelect) {
+            debug("connect to db [%d]", finalSelect);
+            self.select(finalSelect);
+        }
+    };
+}
+exports.readyHandler = readyHandler;
+
+
+/***/ }),
+
+/***/ 83609:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const lodash_1 = __nccwpck_require__(20961);
+const util_1 = __nccwpck_require__(73837);
+const events_1 = __nccwpck_require__(82361);
+const Deque = __nccwpck_require__(42342);
+const command_1 = __nccwpck_require__(90803);
+const commander_1 = __nccwpck_require__(33642);
+const utils_1 = __nccwpck_require__(94832);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+const eventHandler = __nccwpck_require__(74276);
+const connectors_1 = __nccwpck_require__(72340);
+const ScanStream_1 = __nccwpck_require__(6134);
+const commands = __nccwpck_require__(98020);
+const PromiseContainer = __nccwpck_require__(71475);
+const transaction_1 = __nccwpck_require__(14645);
+const RedisOptions_1 = __nccwpck_require__(1422);
+const debug = utils_1.Debug("redis");
+/**
+ * Creates a Redis instance
+ *
+ * @constructor
+ * @param {(number|string|Object)} [port=6379] - Port of the Redis server,
+ * or a URL string(see the examples below),
+ * or the `options` object(see the third argument).
+ * @param {string|Object} [host=localhost] - Host of the Redis server,
+ * when the first argument is a URL string,
+ * this argument is an object represents the options.
+ * @param {Object} [options] - Other options.
+ * @param {number} [options.port=6379] - Port of the Redis server.
+ * @param {string} [options.host=localhost] - Host of the Redis server.
+ * @param {string} [options.family=4] - Version of IP stack. Defaults to 4.
+ * @param {string} [options.path=null] - Local domain socket path. If set the `port`,
+ * `host` and `family` will be ignored.
+ * @param {number} [options.keepAlive=0] - TCP KeepAlive on the socket with a X ms delay before start.
+ * Set to a non-number value to disable keepAlive.
+ * @param {boolean} [options.noDelay=true] - Whether to disable the Nagle's Algorithm. By default we disable
+ * it to reduce the latency.
+ * @param {string} [options.connectionName=null] - Connection name.
+ * @param {number} [options.db=0] - Database index to use.
+ * @param {string} [options.password=null] - If set, client will send AUTH command
+ * with the value of this option when connected.
+ * @param {string} [options.username=null] - Similar to `password`, Provide this for Redis ACL support.
+ * @param {boolean} [options.dropBufferSupport=false] - Drop the buffer support for better performance.
+ * This option is recommended to be enabled when
+ * handling large array response and you don't need the buffer support.
+ * @param {boolean} [options.enableReadyCheck=true] - When a connection is established to
+ * the Redis server, the server might still be loading the database from disk.
+ * While loading, the server not respond to any commands.
+ * To work around this, when this option is `true`,
+ * ioredis will check the status of the Redis server,
+ * and when the Redis server is able to process commands,
+ * a `ready` event will be emitted.
+ * @param {boolean} [options.enableOfflineQueue=true] - By default,
+ * if there is no active connection to the Redis server,
+ * commands are added to a queue and are executed once the connection is "ready"
+ * (when `enableReadyCheck` is `true`,
+ * "ready" means the Redis server has loaded the database from disk, otherwise means the connection
+ * to the Redis server has been established). If this option is false,
+ * when execute the command when the connection isn't ready, an error will be returned.
+ * @param {number} [options.connectTimeout=10000] - The milliseconds before a timeout occurs during the initial
+ * connection to the Redis server.
+ * @param {boolean} [options.autoResubscribe=true] - After reconnected, if the previous connection was in the
+ * subscriber mode, client will auto re-subscribe these channels.
+ * @param {boolean} [options.autoResendUnfulfilledCommands=true] - If true, client will resend unfulfilled
+ * commands(e.g. block commands) in the previous connection when reconnected.
+ * @param {boolean} [options.lazyConnect=false] - By default,
+ * When a new `Redis` instance is created, it will connect to Redis server automatically.
+ * If you want to keep the instance disconnected until a command is called, you can pass the `lazyConnect` option to
+ * the constructor:
+ *
+ * ```javascript
+ * var redis = new Redis({ lazyConnect: true });
+ * // No attempting to connect to the Redis server here.
+
+ * // Now let's connect to the Redis server
+ * redis.get('foo', function () {
+ * });
+ * ```
+ * @param {Object} [options.tls] - TLS connection support. See https://github.com/luin/ioredis#tls-options
+ * @param {string} [options.keyPrefix=''] - The prefix to prepend to all keys in a command.
+ * @param {function} [options.retryStrategy] - See "Quick Start" section
+ * @param {number} [options.maxRetriesPerRequest] - See "Quick Start" section
+ * @param {number} [options.maxLoadingRetryTime=10000] - when redis server is not ready, we will wait for
+ * `loading_eta_seconds` from `info` command or maxLoadingRetryTime (milliseconds), whichever is smaller.
+ * @param {function} [options.reconnectOnError] - See "Quick Start" section
+ * @param {boolean} [options.readOnly=false] - Enable READONLY mode for the connection.
+ * Only available for cluster mode.
+ * @param {boolean} [options.stringNumbers=false] - Force numbers to be always returned as JavaScript
+ * strings. This option is necessary when dealing with big numbers (exceed the [-2^53, +2^53] range).
+ * @param {boolean} [options.enableTLSForSentinelMode=false] - Whether to support the `tls` option
+ * when connecting to Redis via sentinel mode.
+ * @param {NatMap} [options.natMap=null] NAT map for sentinel connector.
+ * @param {boolean} [options.updateSentinels=true] - Update the given `sentinels` list with new IP
+ * addresses when communicating with existing sentinels.
+ * @param {boolean} [options.failoverDetector=false] - Detect failover actively by subscribing to the
+ * related channels. With this option disabled, ioredis is still able to detect failovers because Redis
+ * Sentinel will disconnect all clients whenever a failover happens, so ioredis will reconnect to the new
+ * master. This option is useful when you want to detect failover quicker, but it will create more TCP
+ * connections to Redis servers in order to subscribe to related channels.
+* @param {boolean} [options.enableAutoPipelining=false] - When enabled, all commands issued during an event loop
+ * iteration are automatically wrapped in a pipeline and sent to the server at the same time.
+ * This can dramatically improve performance.
+ * @param {string[]} [options.autoPipeliningIgnoredCommands=[]] - The list of commands which must not be automatically wrapped in pipelines.
+ * @param {number} [options.maxScriptsCachingTime=60000] Default script definition caching time.
+  * @extends [EventEmitter](http://nodejs.org/api/events.html#events_class_events_eventemitter)
+ * @extends Commander
+ * @example
+ * ```js
+ * var Redis = require('ioredis');
+ *
+ * var redis = new Redis();
+ *
+ * var redisOnPort6380 = new Redis(6380);
+ * var anotherRedis = new Redis(6380, '192.168.100.1');
+ * var unixSocketRedis = new Redis({ path: '/tmp/echo.sock' });
+ * var unixSocketRedis2 = new Redis('/tmp/echo.sock');
+ * var urlRedis = new Redis('redis://user:password@redis-service.com:6379/');
+ * var urlRedis2 = new Redis('//localhost:6379');
+ * var urlRedisTls = new Redis('rediss://user:password@redis-service.com:6379/');
+ * var authedRedis = new Redis(6380, '192.168.100.1', { password: 'password' });
+ * ```
+ */
+exports["default"] = Redis;
+function Redis() {
+    if (!(this instanceof Redis)) {
+        console.error(new Error("Calling `Redis()` like a function is deprecated. Using `new Redis()` instead.").stack.replace("Error", "Warning"));
+        return new Redis(arguments[0], arguments[1], arguments[2]);
+    }
+    this.parseOptions(arguments[0], arguments[1], arguments[2]);
+    events_1.EventEmitter.call(this);
+    commander_1.default.call(this);
+    this.resetCommandQueue();
+    this.resetOfflineQueue();
+    this.connectionEpoch = 0;
+    if (this.options.Connector) {
+        this.connector = new this.options.Connector(this.options);
+    }
+    else if (this.options.sentinels) {
+        const sentinelConnector = new connectors_1.SentinelConnector(this.options);
+        sentinelConnector.emitter = this;
+        this.connector = sentinelConnector;
+    }
+    else {
+        this.connector = new connectors_1.StandaloneConnector(this.options);
+    }
+    this.retryAttempts = 0;
+    // Prepare a cache of scripts and setup a interval which regularly clears it
+    this._addedScriptHashes = {};
+    // Prepare autopipelines structures
+    this._autoPipelines = new Map();
+    this._runningAutoPipelines = new Set();
+    Object.defineProperty(this, "autoPipelineQueueSize", {
+        get() {
+            let queued = 0;
+            for (const pipeline of this._autoPipelines.values()) {
+                queued += pipeline.length;
+            }
+            return queued;
+        },
+    });
+    // end(or wait) -> connecting -> connect -> ready -> end
+    if (this.options.lazyConnect) {
+        this.setStatus("wait");
+    }
+    else {
+        this.connect().catch(lodash_1.noop);
+    }
+}
+util_1.inherits(Redis, events_1.EventEmitter);
+Object.assign(Redis.prototype, commander_1.default.prototype);
+/**
+ * Create a Redis instance
+ *
+ * @deprecated
+ */
+// @ts-ignore
+Redis.createClient = function (...args) {
+    // @ts-ignore
+    return new Redis(...args);
+};
+/**
+ * Default options
+ *
+ * @var defaultOptions
+ * @private
+ */
+Redis.defaultOptions = RedisOptions_1.DEFAULT_REDIS_OPTIONS;
+Redis.prototype.resetCommandQueue = function () {
+    this.commandQueue = new Deque();
+};
+Redis.prototype.resetOfflineQueue = function () {
+    this.offlineQueue = new Deque();
+};
+Redis.prototype.parseOptions = function () {
+    this.options = {};
+    let isTls = false;
+    for (let i = 0; i < arguments.length; ++i) {
+        const arg = arguments[i];
+        if (arg === null || typeof arg === "undefined") {
+            continue;
+        }
+        if (typeof arg === "object") {
+            lodash_1.defaults(this.options, arg);
+        }
+        else if (typeof arg === "string") {
+            lodash_1.defaults(this.options, utils_1.parseURL(arg));
+            if (arg.startsWith("rediss://")) {
+                isTls = true;
+            }
+        }
+        else if (typeof arg === "number") {
+            this.options.port = arg;
+        }
+        else {
+            throw new Error("Invalid argument " + arg);
+        }
+    }
+    if (isTls) {
+        lodash_1.defaults(this.options, { tls: true });
+    }
+    lodash_1.defaults(this.options, Redis.defaultOptions);
+    if (typeof this.options.port === "string") {
+        this.options.port = parseInt(this.options.port, 10);
+    }
+    if (typeof this.options.db === "string") {
+        this.options.db = parseInt(this.options.db, 10);
+    }
+    if (this.options.parser === "hiredis") {
+        console.warn("Hiredis parser is abandoned since ioredis v3.0, and JavaScript parser will be used");
+    }
+    this.options = utils_1.resolveTLSProfile(this.options);
+};
+/**
+ * Change instance's status
+ * @private
+ */
+Redis.prototype.setStatus = function (status, arg) {
+    // @ts-ignore
+    if (debug.enabled) {
+        debug("status[%s]: %s -> %s", this._getDescription(), this.status || "[empty]", status);
+    }
+    this.status = status;
+    process.nextTick(this.emit.bind(this, status, arg));
+};
+Redis.prototype.clearAddedScriptHashesCleanInterval = function () {
+    if (this._addedScriptHashesCleanInterval) {
+        clearInterval(this._addedScriptHashesCleanInterval);
+        this._addedScriptHashesCleanInterval = null;
+    }
+};
+/**
+ * Create a connection to Redis.
+ * This method will be invoked automatically when creating a new Redis instance
+ * unless `lazyConnect: true` is passed.
+ *
+ * When calling this method manually, a Promise is returned, which will
+ * be resolved when the connection status is ready.
+ * @param {function} [callback]
+ * @return {Promise<void>}
+ * @public
+ */
+Redis.prototype.connect = function (callback) {
+    const _Promise = PromiseContainer.get();
+    const promise = new _Promise((resolve, reject) => {
+        if (this.status === "connecting" ||
+            this.status === "connect" ||
+            this.status === "ready") {
+            reject(new Error("Redis is already connecting/connected"));
+            return;
+        }
+        // Make sure only one timer is active at a time
+        this.clearAddedScriptHashesCleanInterval();
+        // Scripts need to get reset on reconnect as redis
+        // might have been restarted or some failover happened
+        this._addedScriptHashes = {};
+        // Start the script cache cleaning
+        this._addedScriptHashesCleanInterval = setInterval(() => {
+            this._addedScriptHashes = {};
+        }, this.options.maxScriptsCachingTime);
+        this.connectionEpoch += 1;
+        this.setStatus("connecting");
+        const { options } = this;
+        this.condition = {
+            select: options.db,
+            auth: options.username
+                ? [options.username, options.password]
+                : options.password,
+            subscriber: false,
+        };
+        const _this = this;
+        standard_as_callback_1.default(this.connector.connect(function (type, err) {
+            _this.silentEmit(type, err);
+        }), function (err, stream) {
+            if (err) {
+                _this.flushQueue(err);
+                _this.silentEmit("error", err);
+                reject(err);
+                _this.setStatus("end");
+                return;
+            }
+            let CONNECT_EVENT = options.tls ? "secureConnect" : "connect";
+            if (options.sentinels && !options.enableTLSForSentinelMode) {
+                CONNECT_EVENT = "connect";
+            }
+            _this.stream = stream;
+            if (typeof options.keepAlive === "number") {
+                stream.setKeepAlive(true, options.keepAlive);
+            }
+            if (stream.connecting) {
+                stream.once(CONNECT_EVENT, eventHandler.connectHandler(_this));
+                if (options.connectTimeout) {
+                    /*
+                     * Typically, Socket#setTimeout(0) will clear the timer
+                     * set before. However, in some platforms (Electron 3.x~4.x),
+                     * the timer will not be cleared. So we introduce a variable here.
+                     *
+                     * See https://github.com/electron/electron/issues/14915
+                     */
+                    let connectTimeoutCleared = false;
+                    stream.setTimeout(options.connectTimeout, function () {
+                        if (connectTimeoutCleared) {
+                            return;
+                        }
+                        stream.setTimeout(0);
+                        stream.destroy();
+                        const err = new Error("connect ETIMEDOUT");
+                        // @ts-ignore
+                        err.errorno = "ETIMEDOUT";
+                        // @ts-ignore
+                        err.code = "ETIMEDOUT";
+                        // @ts-ignore
+                        err.syscall = "connect";
+                        eventHandler.errorHandler(_this)(err);
+                    });
+                    stream.once(CONNECT_EVENT, function () {
+                        connectTimeoutCleared = true;
+                        stream.setTimeout(0);
+                    });
+                }
+            }
+            else if (stream.destroyed) {
+                const firstError = _this.connector.firstError;
+                if (firstError) {
+                    process.nextTick(() => {
+                        eventHandler.errorHandler(_this)(firstError);
+                    });
+                }
+                process.nextTick(eventHandler.closeHandler(_this));
+            }
+            else {
+                process.nextTick(eventHandler.connectHandler(_this));
+            }
+            if (!stream.destroyed) {
+                stream.once("error", eventHandler.errorHandler(_this));
+                stream.once("close", eventHandler.closeHandler(_this));
+            }
+            if (options.noDelay) {
+                stream.setNoDelay(true);
+            }
+            const connectionReadyHandler = function () {
+                _this.removeListener("close", connectionCloseHandler);
+                resolve();
+            };
+            var connectionCloseHandler = function () {
+                _this.removeListener("ready", connectionReadyHandler);
+                reject(new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG));
+            };
+            _this.once("ready", connectionReadyHandler);
+            _this.once("close", connectionCloseHandler);
+        });
+    });
+    return standard_as_callback_1.default(promise, callback);
+};
+/**
+ * Disconnect from Redis.
+ *
+ * This method closes the connection immediately,
+ * and may lose some pending replies that haven't written to client.
+ * If you want to wait for the pending replies, use Redis#quit instead.
+ * @public
+ */
+Redis.prototype.disconnect = function (reconnect) {
+    this.clearAddedScriptHashesCleanInterval();
+    if (!reconnect) {
+        this.manuallyClosing = true;
+    }
+    if (this.reconnectTimeout && !reconnect) {
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+    }
+    if (this.status === "wait") {
+        eventHandler.closeHandler(this)();
+    }
+    else {
+        this.connector.disconnect();
+    }
+};
+/**
+ * Disconnect from Redis.
+ *
+ * @deprecated
+ */
+Redis.prototype.end = function () {
+    this.disconnect();
+};
+/**
+ * Create a new instance with the same options as the current one.
+ *
+ * @example
+ * ```js
+ * var redis = new Redis(6380);
+ * var anotherRedis = redis.duplicate();
+ * ```
+ *
+ * @public
+ */
+Redis.prototype.duplicate = function (override) {
+    return new Redis(Object.assign({}, this.options, override || {}));
+};
+Redis.prototype.recoverFromFatalError = function (commandError, err, options) {
+    this.flushQueue(err, options);
+    this.silentEmit("error", err);
+    this.disconnect(true);
+};
+Redis.prototype.handleReconnection = function handleReconnection(err, item) {
+    let needReconnect = false;
+    if (this.options.reconnectOnError) {
+        needReconnect = this.options.reconnectOnError(err);
+    }
+    switch (needReconnect) {
+        case 1:
+        case true:
+            if (this.status !== "reconnecting") {
+                this.disconnect(true);
+            }
+            item.command.reject(err);
+            break;
+        case 2:
+            if (this.status !== "reconnecting") {
+                this.disconnect(true);
+            }
+            if (this.condition.select !== item.select &&
+                item.command.name !== "select") {
+                this.select(item.select);
+            }
+            this.sendCommand(item.command);
+            break;
+        default:
+            item.command.reject(err);
+    }
+};
+/**
+ * Flush offline queue and command queue with error.
+ *
+ * @param {Error} error - The error object to send to the commands
+ * @param {object} options
+ * @private
+ */
+Redis.prototype.flushQueue = function (error, options) {
+    options = lodash_1.defaults({}, options, {
+        offlineQueue: true,
+        commandQueue: true,
+    });
+    let item;
+    if (options.offlineQueue) {
+        while (this.offlineQueue.length > 0) {
+            item = this.offlineQueue.shift();
+            item.command.reject(error);
+        }
+    }
+    if (options.commandQueue) {
+        if (this.commandQueue.length > 0) {
+            if (this.stream) {
+                this.stream.removeAllListeners("data");
+            }
+            while (this.commandQueue.length > 0) {
+                item = this.commandQueue.shift();
+                item.command.reject(error);
+            }
+        }
+    }
+};
+/**
+ * Check whether Redis has finished loading the persistent data and is able to
+ * process commands.
+ *
+ * @param {Function} callback
+ * @private
+ */
+Redis.prototype._readyCheck = function (callback) {
+    const _this = this;
+    this.info(function (err, res) {
+        if (err) {
+            return callback(err);
+        }
+        if (typeof res !== "string") {
+            return callback(null, res);
+        }
+        const info = {};
+        const lines = res.split("\r\n");
+        for (let i = 0; i < lines.length; ++i) {
+            const [fieldName, ...fieldValueParts] = lines[i].split(":");
+            const fieldValue = fieldValueParts.join(":");
+            if (fieldValue) {
+                info[fieldName] = fieldValue;
+            }
+        }
+        if (!info.loading || info.loading === "0") {
+            callback(null, info);
+        }
+        else {
+            const loadingEtaMs = (info.loading_eta_seconds || 1) * 1000;
+            const retryTime = _this.options.maxLoadingRetryTime &&
+                _this.options.maxLoadingRetryTime < loadingEtaMs
+                ? _this.options.maxLoadingRetryTime
+                : loadingEtaMs;
+            debug("Redis server still loading, trying again in " + retryTime + "ms");
+            setTimeout(function () {
+                _this._readyCheck(callback);
+            }, retryTime);
+        }
+    });
+};
+/**
+ * Emit only when there's at least one listener.
+ *
+ * @param {string} eventName - Event to emit
+ * @param {...*} arguments - Arguments
+ * @return {boolean} Returns true if event had listeners, false otherwise.
+ * @private
+ */
+Redis.prototype.silentEmit = function (eventName) {
+    let error;
+    if (eventName === "error") {
+        error = arguments[1];
+        if (this.status === "end") {
+            return;
+        }
+        if (this.manuallyClosing) {
+            // ignore connection related errors when manually disconnecting
+            if (error instanceof Error &&
+                (error.message === utils_1.CONNECTION_CLOSED_ERROR_MSG ||
+                    // @ts-ignore
+                    error.syscall === "connect" ||
+                    // @ts-ignore
+                    error.syscall === "read")) {
+                return;
+            }
+        }
+    }
+    if (this.listeners(eventName).length > 0) {
+        return this.emit.apply(this, arguments);
+    }
+    if (error && error instanceof Error) {
+        console.error("[ioredis] Unhandled error event:", error.stack);
+    }
+    return false;
+};
+/**
+ * Listen for all requests received by the server in real time.
+ *
+ * This command will create a new connection to Redis and send a
+ * MONITOR command via the new connection in order to avoid disturbing
+ * the current connection.
+ *
+ * @param {function} [callback] The callback function. If omit, a promise will be returned.
+ * @example
+ * ```js
+ * var redis = new Redis();
+ * redis.monitor(function (err, monitor) {
+ *   // Entering monitoring mode.
+ *   monitor.on('monitor', function (time, args, source, database) {
+ *     console.log(time + ": " + util.inspect(args));
+ *   });
+ * });
+ *
+ * // supports promise as well as other commands
+ * redis.monitor().then(function (monitor) {
+ *   monitor.on('monitor', function (time, args, source, database) {
+ *     console.log(time + ": " + util.inspect(args));
+ *   });
+ * });
+ * ```
+ * @public
+ */
+Redis.prototype.monitor = function (callback) {
+    const monitorInstance = this.duplicate({
+        monitor: true,
+        lazyConnect: false,
+    });
+    const Promise = PromiseContainer.get();
+    return standard_as_callback_1.default(new Promise(function (resolve) {
+        monitorInstance.once("monitoring", function () {
+            resolve(monitorInstance);
+        });
+    }), callback);
+};
+transaction_1.addTransactionSupport(Redis.prototype);
+/**
+ * Send a command to Redis
+ *
+ * This method is used internally by the `Redis#set`, `Redis#lpush` etc.
+ * Most of the time you won't invoke this method directly.
+ * However when you want to send a command that is not supported by ioredis yet,
+ * this command will be useful.
+ *
+ * @method sendCommand
+ * @memberOf Redis#
+ * @param {Command} command - The Command instance to send.
+ * @see {@link Command}
+ * @example
+ * ```js
+ * var redis = new Redis();
+ *
+ * // Use callback
+ * var get = new Command('get', ['foo'], 'utf8', function (err, result) {
+ *   console.log(result);
+ * });
+ * redis.sendCommand(get);
+ *
+ * // Use promise
+ * var set = new Command('set', ['foo', 'bar'], 'utf8');
+ * set.promise.then(function (result) {
+ *   console.log(result);
+ * });
+ * redis.sendCommand(set);
+ * ```
+ * @private
+ */
+Redis.prototype.sendCommand = function (command, stream) {
+    if (this.status === "wait") {
+        this.connect().catch(lodash_1.noop);
+    }
+    if (this.status === "end") {
+        command.reject(new Error(utils_1.CONNECTION_CLOSED_ERROR_MSG));
+        return command.promise;
+    }
+    if (this.condition.subscriber &&
+        !command_1.default.checkFlag("VALID_IN_SUBSCRIBER_MODE", command.name)) {
+        command.reject(new Error("Connection in subscriber mode, only subscriber commands may be used"));
+        return command.promise;
+    }
+    if (typeof this.options.commandTimeout === "number") {
+        command.setTimeout(this.options.commandTimeout);
+    }
+    if (command.name === "quit") {
+        this.clearAddedScriptHashesCleanInterval();
+    }
+    let writable = this.status === "ready" ||
+        (!stream &&
+            this.status === "connect" &&
+            commands.exists(command.name) &&
+            commands.hasFlag(command.name, "loading"));
+    if (!this.stream) {
+        writable = false;
+    }
+    else if (!this.stream.writable) {
+        writable = false;
+    }
+    else if (this.stream._writableState && this.stream._writableState.ended) {
+        // https://github.com/iojs/io.js/pull/1217
+        writable = false;
+    }
+    if (!writable && !this.options.enableOfflineQueue) {
+        command.reject(new Error("Stream isn't writeable and enableOfflineQueue options is false"));
+        return command.promise;
+    }
+    if (!writable && command.name === "quit" && this.offlineQueue.length === 0) {
+        this.disconnect();
+        command.resolve(Buffer.from("OK"));
+        return command.promise;
+    }
+    if (writable) {
+        // @ts-ignore
+        if (debug.enabled) {
+            debug("write command[%s]: %d -> %s(%o)", this._getDescription(), this.condition.select, command.name, command.args);
+        }
+        (stream || this.stream).write(command.toWritable());
+        this.commandQueue.push({
+            command: command,
+            stream: stream,
+            select: this.condition.select,
+        });
+        if (command_1.default.checkFlag("WILL_DISCONNECT", command.name)) {
+            this.manuallyClosing = true;
+        }
+    }
+    else if (this.options.enableOfflineQueue) {
+        // @ts-ignore
+        if (debug.enabled) {
+            debug("queue command[%s]: %d -> %s(%o)", this._getDescription(), this.condition.select, command.name, command.args);
+        }
+        this.offlineQueue.push({
+            command: command,
+            stream: stream,
+            select: this.condition.select,
+        });
+    }
+    if (command.name === "select" && utils_1.isInt(command.args[0])) {
+        const db = parseInt(command.args[0], 10);
+        if (this.condition.select !== db) {
+            this.condition.select = db;
+            this.emit("select", db);
+            debug("switch to db [%d]", this.condition.select);
+        }
+    }
+    return command.promise;
+};
+/**
+ * Get description of the connection. Used for debugging.
+ * @private
+ */
+Redis.prototype._getDescription = function () {
+    let description;
+    if (this.options.path) {
+        description = this.options.path;
+    }
+    else if (this.stream &&
+        this.stream.remoteAddress &&
+        this.stream.remotePort) {
+        description = this.stream.remoteAddress + ":" + this.stream.remotePort;
+    }
+    else {
+        description = this.options.host + ":" + this.options.port;
+    }
+    if (this.options.connectionName) {
+        description += ` (${this.options.connectionName})`;
+    }
+    return description;
+};
+[
+    "scan",
+    "sscan",
+    "hscan",
+    "zscan",
+    "scanBuffer",
+    "sscanBuffer",
+    "hscanBuffer",
+    "zscanBuffer",
+].forEach(function (command) {
+    Redis.prototype[command + "Stream"] = function (key, options) {
+        if (command === "scan" || command === "scanBuffer") {
+            options = key;
+            key = null;
+        }
+        return new ScanStream_1.default(lodash_1.defaults({
+            objectMode: true,
+            key: key,
+            redis: this,
+            command: command,
+        }, options));
+    };
+});
+
+
+/***/ }),
+
+/***/ 88540:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __nccwpck_require__(6113);
+const promiseContainer_1 = __nccwpck_require__(71475);
+const command_1 = __nccwpck_require__(90803);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+class Script {
+    constructor(lua, numberOfKeys = null, keyPrefix = "", readOnly = false) {
+        this.lua = lua;
+        this.numberOfKeys = numberOfKeys;
+        this.keyPrefix = keyPrefix;
+        this.readOnly = readOnly;
+        this.sha = crypto_1.createHash("sha1").update(lua).digest("hex");
+    }
+    execute(container, args, options, callback) {
+        if (typeof this.numberOfKeys === "number") {
+            args.unshift(this.numberOfKeys);
+        }
+        if (this.keyPrefix) {
+            options.keyPrefix = this.keyPrefix;
+        }
+        if (this.readOnly) {
+            options.readOnly = true;
+        }
+        const evalsha = new command_1.default("evalsha", [this.sha].concat(args), options);
+        evalsha.isCustomCommand = true;
+        const result = container.sendCommand(evalsha);
+        if (promiseContainer_1.isPromise(result)) {
+            return standard_as_callback_1.default(result.catch((err) => {
+                if (err.toString().indexOf("NOSCRIPT") === -1) {
+                    throw err;
+                }
+                return container.sendCommand(new command_1.default("eval", [this.lua].concat(args), options));
+            }), callback);
+        }
+        // result is not a Promise--probably returned from a pipeline chain; however,
+        // we still need the callback to fire when the script is evaluated
+        standard_as_callback_1.default(evalsha.promise, callback);
+        return result;
+    }
+}
+exports["default"] = Script;
+
+
+/***/ }),
+
+/***/ 14645:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const utils_1 = __nccwpck_require__(94832);
+const standard_as_callback_1 = __nccwpck_require__(91543);
+const pipeline_1 = __nccwpck_require__(42803);
+function addTransactionSupport(redis) {
+    redis.pipeline = function (commands) {
+        const pipeline = new pipeline_1.default(this);
+        if (Array.isArray(commands)) {
+            pipeline.addBatch(commands);
+        }
+        return pipeline;
+    };
+    const { multi } = redis;
+    redis.multi = function (commands, options) {
+        if (typeof options === "undefined" && !Array.isArray(commands)) {
+            options = commands;
+            commands = null;
+        }
+        if (options && options.pipeline === false) {
+            return multi.call(this);
+        }
+        const pipeline = new pipeline_1.default(this);
+        pipeline.multi();
+        if (Array.isArray(commands)) {
+            pipeline.addBatch(commands);
+        }
+        const exec = pipeline.exec;
+        pipeline.exec = function (callback) {
+            // Wait for the cluster to be connected, since we need nodes information before continuing
+            if (this.isCluster && !this.redis.slots.length) {
+                if (this.redis.status === "wait")
+                    this.redis.connect().catch(utils_1.noop);
+                return standard_as_callback_1.default(new Promise((resolve, reject) => {
+                    this.redis.delayUntilReady((err) => {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+                        this.exec(pipeline).then(resolve, reject);
+                    });
+                }), callback);
+            }
+            if (this._transactions > 0) {
+                exec.call(pipeline);
+            }
+            // Returns directly when the pipeline
+            // has been called multiple times (retries).
+            if (this.nodeifiedPromise) {
+                return exec.call(pipeline);
+            }
+            const promise = exec.call(pipeline);
+            return standard_as_callback_1.default(promise.then(function (result) {
+                const execResult = result[result.length - 1];
+                if (typeof execResult === "undefined") {
+                    throw new Error("Pipeline cannot be used to send any commands when the `exec()` has been called on it.");
+                }
+                if (execResult[0]) {
+                    execResult[0].previousErrors = [];
+                    for (let i = 0; i < result.length - 1; ++i) {
+                        if (result[i][0]) {
+                            execResult[0].previousErrors.push(result[i][0]);
+                        }
+                    }
+                    throw execResult[0];
+                }
+                return utils_1.wrapMultiResult(execResult[1]);
+            }), callback);
+        };
+        const { execBuffer } = pipeline;
+        pipeline.execBuffer = function (callback) {
+            if (this._transactions > 0) {
+                execBuffer.call(pipeline);
+            }
+            return pipeline.exec(callback);
+        };
+        return pipeline;
+    };
+    const { exec } = redis;
+    redis.exec = function (callback) {
+        return standard_as_callback_1.default(exec.call(this).then(function (results) {
+            if (Array.isArray(results)) {
+                results = utils_1.wrapMultiResult(results);
+            }
+            return results;
+        }), callback);
+    };
+}
+exports.addTransactionSupport = addTransactionSupport;
+
+
+/***/ }),
+
+/***/ 85356:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const debug_1 = __nccwpck_require__(38237);
+const MAX_ARGUMENT_LENGTH = 200;
+exports.MAX_ARGUMENT_LENGTH = MAX_ARGUMENT_LENGTH;
+const NAMESPACE_PREFIX = "ioredis";
+/**
+ * helper function that tried to get a string value for
+ * arbitrary "debug" arg
+ */
+function getStringValue(v) {
+    if (v === null) {
+        return;
+    }
+    switch (typeof v) {
+        case "boolean":
+            return;
+        case "number":
+            return;
+        case "object":
+            if (Buffer.isBuffer(v)) {
+                return v.toString("hex");
+            }
+            if (Array.isArray(v)) {
+                return v.join(",");
+            }
+            try {
+                return JSON.stringify(v);
+            }
+            catch (e) {
+                return;
+            }
+        case "string":
+            return v;
+    }
+}
+exports.getStringValue = getStringValue;
+/**
+ * helper function that redacts a string representation of a "debug" arg
+ */
+function genRedactedString(str, maxLen) {
+    const { length } = str;
+    return length <= maxLen
+        ? str
+        : str.slice(0, maxLen) + ' ... <REDACTED full-length="' + length + '">';
+}
+exports.genRedactedString = genRedactedString;
+/**
+ * a wrapper for the `debug` module, used to generate
+ * "debug functions" that trim the values in their output
+ */
+function genDebugFunction(namespace) {
+    const fn = debug_1.default(`${NAMESPACE_PREFIX}:${namespace}`);
+    function wrappedDebug(...args) {
+        if (!fn.enabled) {
+            return; // no-op
+        }
+        // we skip the first arg because that is the message
+        for (let i = 1; i < args.length; i++) {
+            const str = getStringValue(args[i]);
+            if (typeof str === "string" && str.length > MAX_ARGUMENT_LENGTH) {
+                args[i] = genRedactedString(str, MAX_ARGUMENT_LENGTH);
+            }
+        }
+        return fn.apply(null, args);
+    }
+    Object.defineProperties(wrappedDebug, {
+        namespace: {
+            get() {
+                return fn.namespace;
+            },
+        },
+        enabled: {
+            get() {
+                return fn.enabled;
+            },
+        },
+        destroy: {
+            get() {
+                return fn.destroy;
+            },
+        },
+        log: {
+            get() {
+                return fn.log;
+            },
+            set(l) {
+                fn.log = l;
+            },
+        },
+    });
+    return wrappedDebug;
+}
+exports["default"] = genDebugFunction;
+
+
+/***/ }),
+
+/***/ 94832:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const url_1 = __nccwpck_require__(57310);
+const lodash_1 = __nccwpck_require__(20961);
+exports.defaults = lodash_1.defaults;
+exports.noop = lodash_1.noop;
+exports.flatten = lodash_1.flatten;
+const debug_1 = __nccwpck_require__(85356);
+exports.Debug = debug_1.default;
+const TLSProfiles_1 = __nccwpck_require__(61823);
+/**
+ * Test if two buffers are equal
+ *
+ * @export
+ * @param {Buffer} a
+ * @param {Buffer} b
+ * @returns {boolean} Whether the two buffers are equal
+ */
+function bufferEqual(a, b) {
+    if (typeof a.equals === "function") {
+        return a.equals(b);
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; ++i) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+exports.bufferEqual = bufferEqual;
+/**
+ * Convert a buffer to string, supports buffer array
+ *
+ * @param {*} value - The input value
+ * @param {string} encoding - string encoding
+ * @return {*} The result
+ * @example
+ * ```js
+ * var input = [Buffer.from('foo'), [Buffer.from('bar')]]
+ * var res = convertBufferToString(input, 'utf8')
+ * expect(res).to.eql(['foo', ['bar']])
+ * ```
+ * @private
+ */
+function convertBufferToString(value, encoding) {
+    if (value instanceof Buffer) {
+        return value.toString(encoding);
+    }
+    if (Array.isArray(value)) {
+        const length = value.length;
+        const res = Array(length);
+        for (let i = 0; i < length; ++i) {
+            res[i] =
+                value[i] instanceof Buffer && encoding === "utf8"
+                    ? value[i].toString()
+                    : convertBufferToString(value[i], encoding);
+        }
+        return res;
+    }
+    return value;
+}
+exports.convertBufferToString = convertBufferToString;
+/**
+ * Convert a list of results to node-style
+ *
+ * @param {Array} arr - The input value
+ * @return {Array} The output value
+ * @example
+ * ```js
+ * var input = ['a', 'b', new Error('c'), 'd']
+ * var output = exports.wrapMultiResult(input)
+ * expect(output).to.eql([[null, 'a'], [null, 'b'], [new Error('c')], [null, 'd'])
+ * ```
+ * @private
+ */
+function wrapMultiResult(arr) {
+    // When using WATCH/EXEC transactions, the EXEC will return
+    // a null instead of an array
+    if (!arr) {
+        return null;
+    }
+    const result = [];
+    const length = arr.length;
+    for (let i = 0; i < length; ++i) {
+        const item = arr[i];
+        if (item instanceof Error) {
+            result.push([item]);
+        }
+        else {
+            result.push([null, item]);
+        }
+    }
+    return result;
+}
+exports.wrapMultiResult = wrapMultiResult;
+/**
+ * Detect if the argument is a int
+ *
+ * @param {string} value
+ * @return {boolean} Whether the value is a int
+ * @example
+ * ```js
+ * > isInt('123')
+ * true
+ * > isInt('123.3')
+ * false
+ * > isInt('1x')
+ * false
+ * > isInt(123)
+ * true
+ * > isInt(true)
+ * false
+ * ```
+ * @private
+ */
+function isInt(value) {
+    const x = parseFloat(value);
+    return !isNaN(value) && (x | 0) === x;
+}
+exports.isInt = isInt;
+/**
+ * Pack an array to an Object
+ *
+ * @param {array} array
+ * @return {object}
+ * @example
+ * ```js
+ * > packObject(['a', 'b', 'c', 'd'])
+ * { a: 'b', c: 'd' }
+ * ```
+ */
+function packObject(array) {
+    const result = {};
+    const length = array.length;
+    for (let i = 1; i < length; i += 2) {
+        result[array[i - 1]] = array[i];
+    }
+    return result;
+}
+exports.packObject = packObject;
+/**
+ * Return a callback with timeout
+ *
+ * @param {function} callback
+ * @param {number} timeout
+ * @return {function}
+ */
+function timeout(callback, timeout) {
+    let timer;
+    const run = function () {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+            callback.apply(this, arguments);
+        }
+    };
+    timer = setTimeout(run, timeout, new Error("timeout"));
+    return run;
+}
+exports.timeout = timeout;
+/**
+ * Convert an object to an array
+ *
+ * @param {object} obj
+ * @return {array}
+ * @example
+ * ```js
+ * > convertObjectToArray({ a: '1' })
+ * ['a', '1']
+ * ```
+ */
+function convertObjectToArray(obj) {
+    const result = [];
+    const keys = Object.keys(obj); // Object.entries requires node 7+
+    for (let i = 0, l = keys.length; i < l; i++) {
+        result.push(keys[i], obj[keys[i]]);
+    }
+    return result;
+}
+exports.convertObjectToArray = convertObjectToArray;
+/**
+ * Convert a map to an array
+ *
+ * @param {Map} map
+ * @return {array}
+ * @example
+ * ```js
+ * > convertMapToArray(new Map([[1, '2']]))
+ * [1, '2']
+ * ```
+ */
+function convertMapToArray(map) {
+    const result = [];
+    let pos = 0;
+    map.forEach(function (value, key) {
+        result[pos] = key;
+        result[pos + 1] = value;
+        pos += 2;
+    });
+    return result;
+}
+exports.convertMapToArray = convertMapToArray;
+/**
+ * Convert a non-string arg to a string
+ *
+ * @param {*} arg
+ * @return {string}
+ */
+function toArg(arg) {
+    if (arg === null || typeof arg === "undefined") {
+        return "";
+    }
+    return String(arg);
+}
+exports.toArg = toArg;
+/**
+ * Optimize error stack
+ *
+ * @param {Error} error - actually error
+ * @param {string} friendlyStack - the stack that more meaningful
+ * @param {string} filterPath - only show stacks with the specified path
+ */
+function optimizeErrorStack(error, friendlyStack, filterPath) {
+    const stacks = friendlyStack.split("\n");
+    let lines = "";
+    let i;
+    for (i = 1; i < stacks.length; ++i) {
+        if (stacks[i].indexOf(filterPath) === -1) {
+            break;
+        }
+    }
+    for (let j = i; j < stacks.length; ++j) {
+        lines += "\n" + stacks[j];
+    }
+    const pos = error.stack.indexOf("\n");
+    error.stack = error.stack.slice(0, pos) + lines;
+    return error;
+}
+exports.optimizeErrorStack = optimizeErrorStack;
+/**
+ * Parse the redis protocol url
+ *
+ * @param {string} url - the redis protocol url
+ * @return {Object}
+ */
+function parseURL(url) {
+    if (isInt(url)) {
+        return { port: url };
+    }
+    let parsed = url_1.parse(url, true, true);
+    if (!parsed.slashes && url[0] !== "/") {
+        url = "//" + url;
+        parsed = url_1.parse(url, true, true);
+    }
+    const options = parsed.query || {};
+    const allowUsernameInURI = options.allowUsernameInURI && options.allowUsernameInURI !== "false";
+    delete options.allowUsernameInURI;
+    const result = {};
+    if (parsed.auth) {
+        const index = parsed.auth.indexOf(":");
+        if (allowUsernameInURI) {
+            result.username =
+                index === -1 ? parsed.auth : parsed.auth.slice(0, index);
+        }
+        result.password = index === -1 ? "" : parsed.auth.slice(index + 1);
+    }
+    if (parsed.pathname) {
+        if (parsed.protocol === "redis:" || parsed.protocol === "rediss:") {
+            if (parsed.pathname.length > 1) {
+                result.db = parsed.pathname.slice(1);
+            }
+        }
+        else {
+            result.path = parsed.pathname;
+        }
+    }
+    if (parsed.host) {
+        result.host = parsed.hostname;
+    }
+    if (parsed.port) {
+        result.port = parsed.port;
+    }
+    lodash_1.defaults(result, options);
+    return result;
+}
+exports.parseURL = parseURL;
+/**
+ * Resolve TLS profile shortcut in connection options
+ *
+ * @param {Object} options - the redis connection options
+ * @return {Object}
+ */
+function resolveTLSProfile(options) {
+    let tls = options === null || options === void 0 ? void 0 : options.tls;
+    if (typeof tls === "string")
+        tls = { profile: tls };
+    const profile = TLSProfiles_1.default[tls === null || tls === void 0 ? void 0 : tls.profile];
+    if (profile) {
+        tls = Object.assign({}, profile, tls);
+        delete tls.profile;
+        options = Object.assign({}, options, { tls });
+    }
+    return options;
+}
+exports.resolveTLSProfile = resolveTLSProfile;
+/**
+ * Get a random element from `array`
+ *
+ * @export
+ * @template T
+ * @param {T[]} array the array
+ * @param {number} [from=0] start index
+ * @returns {T}
+ */
+function sample(array, from = 0) {
+    const length = array.length;
+    if (from >= length) {
+        return;
+    }
+    return array[from + Math.floor(Math.random() * (length - from))];
+}
+exports.sample = sample;
+/**
+ * Shuffle the array using the Fisher-Yates Shuffle.
+ * This method will mutate the original array.
+ *
+ * @export
+ * @template T
+ * @param {T[]} array
+ * @returns {T[]}
+ */
+function shuffle(array) {
+    let counter = array.length;
+    // While there are elements in the array
+    while (counter > 0) {
+        // Pick a random index
+        const index = Math.floor(Math.random() * counter);
+        // Decrease counter by 1
+        counter--;
+        // And swap the last element with it
+        [array[counter], array[index]] = [array[index], array[counter]];
+    }
+    return array;
+}
+exports.shuffle = shuffle;
+/**
+ * Error message for connection being disconnected
+ */
+exports.CONNECTION_CLOSED_ERROR_MSG = "Connection is closed.";
+function zipMap(keys, values) {
+    const map = new Map();
+    keys.forEach((key, index) => {
+        map.set(key, values[index]);
+    });
+    return map;
+}
+exports.zipMap = zipMap;
+
+
+/***/ }),
+
+/***/ 20961:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const defaults = __nccwpck_require__(11289);
+exports.defaults = defaults;
+const flatten = __nccwpck_require__(48919);
+exports.flatten = flatten;
+const isArguments = __nccwpck_require__(44130);
+exports.isArguments = isArguments;
+function noop() { }
+exports.noop = noop;
+
+
+/***/ }),
+
+/***/ 37263:
+/***/ (function(module, __unused_webpack_exports, __nccwpck_require__) {
+
+/* module decorator */ module = __nccwpck_require__.nmd(module);
+(function() {
+  var expandIPv6, ipaddr, ipv4Part, ipv4Regexes, ipv6Part, ipv6Regexes, matchCIDR, root, zoneIndex;
+
+  ipaddr = {};
+
+  root = this;
+
+  if (( true && module !== null) && module.exports) {
+    module.exports = ipaddr;
+  } else {
+    root['ipaddr'] = ipaddr;
+  }
+
+  matchCIDR = function(first, second, partSize, cidrBits) {
+    var part, shift;
+    if (first.length !== second.length) {
+      throw new Error("ipaddr: cannot match CIDR for objects with different lengths");
+    }
+    part = 0;
+    while (cidrBits > 0) {
+      shift = partSize - cidrBits;
+      if (shift < 0) {
+        shift = 0;
+      }
+      if (first[part] >> shift !== second[part] >> shift) {
+        return false;
+      }
+      cidrBits -= partSize;
+      part += 1;
+    }
+    return true;
+  };
+
+  ipaddr.subnetMatch = function(address, rangeList, defaultName) {
+    var k, len, rangeName, rangeSubnets, subnet;
+    if (defaultName == null) {
+      defaultName = 'unicast';
+    }
+    for (rangeName in rangeList) {
+      rangeSubnets = rangeList[rangeName];
+      if (rangeSubnets[0] && !(rangeSubnets[0] instanceof Array)) {
+        rangeSubnets = [rangeSubnets];
+      }
+      for (k = 0, len = rangeSubnets.length; k < len; k++) {
+        subnet = rangeSubnets[k];
+        if (address.kind() === subnet[0].kind()) {
+          if (address.match.apply(address, subnet)) {
+            return rangeName;
+          }
+        }
+      }
+    }
+    return defaultName;
+  };
+
+  ipaddr.IPv4 = (function() {
+    function IPv4(octets) {
+      var k, len, octet;
+      if (octets.length !== 4) {
+        throw new Error("ipaddr: ipv4 octet count should be 4");
+      }
+      for (k = 0, len = octets.length; k < len; k++) {
+        octet = octets[k];
+        if (!((0 <= octet && octet <= 255))) {
+          throw new Error("ipaddr: ipv4 octet should fit in 8 bits");
+        }
+      }
+      this.octets = octets;
+    }
+
+    IPv4.prototype.kind = function() {
+      return 'ipv4';
+    };
+
+    IPv4.prototype.toString = function() {
+      return this.octets.join(".");
+    };
+
+    IPv4.prototype.toNormalizedString = function() {
+      return this.toString();
+    };
+
+    IPv4.prototype.toByteArray = function() {
+      return this.octets.slice(0);
+    };
+
+    IPv4.prototype.match = function(other, cidrRange) {
+      var ref;
+      if (cidrRange === void 0) {
+        ref = other, other = ref[0], cidrRange = ref[1];
+      }
+      if (other.kind() !== 'ipv4') {
+        throw new Error("ipaddr: cannot match ipv4 address with non-ipv4 one");
+      }
+      return matchCIDR(this.octets, other.octets, 8, cidrRange);
+    };
+
+    IPv4.prototype.SpecialRanges = {
+      unspecified: [[new IPv4([0, 0, 0, 0]), 8]],
+      broadcast: [[new IPv4([255, 255, 255, 255]), 32]],
+      multicast: [[new IPv4([224, 0, 0, 0]), 4]],
+      linkLocal: [[new IPv4([169, 254, 0, 0]), 16]],
+      loopback: [[new IPv4([127, 0, 0, 0]), 8]],
+      carrierGradeNat: [[new IPv4([100, 64, 0, 0]), 10]],
+      "private": [[new IPv4([10, 0, 0, 0]), 8], [new IPv4([172, 16, 0, 0]), 12], [new IPv4([192, 168, 0, 0]), 16]],
+      reserved: [[new IPv4([192, 0, 0, 0]), 24], [new IPv4([192, 0, 2, 0]), 24], [new IPv4([192, 88, 99, 0]), 24], [new IPv4([198, 51, 100, 0]), 24], [new IPv4([203, 0, 113, 0]), 24], [new IPv4([240, 0, 0, 0]), 4]]
+    };
+
+    IPv4.prototype.range = function() {
+      return ipaddr.subnetMatch(this, this.SpecialRanges);
+    };
+
+    IPv4.prototype.toIPv4MappedAddress = function() {
+      return ipaddr.IPv6.parse("::ffff:" + (this.toString()));
+    };
+
+    IPv4.prototype.prefixLengthFromSubnetMask = function() {
+      var cidr, i, k, octet, stop, zeros, zerotable;
+      zerotable = {
+        0: 8,
+        128: 7,
+        192: 6,
+        224: 5,
+        240: 4,
+        248: 3,
+        252: 2,
+        254: 1,
+        255: 0
+      };
+      cidr = 0;
+      stop = false;
+      for (i = k = 3; k >= 0; i = k += -1) {
+        octet = this.octets[i];
+        if (octet in zerotable) {
+          zeros = zerotable[octet];
+          if (stop && zeros !== 0) {
+            return null;
+          }
+          if (zeros !== 8) {
+            stop = true;
+          }
+          cidr += zeros;
+        } else {
+          return null;
+        }
+      }
+      return 32 - cidr;
+    };
+
+    return IPv4;
+
+  })();
+
+  ipv4Part = "(0?\\d+|0x[a-f0-9]+)";
+
+  ipv4Regexes = {
+    fourOctet: new RegExp("^" + ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part + "$", 'i'),
+    longValue: new RegExp("^" + ipv4Part + "$", 'i')
+  };
+
+  ipaddr.IPv4.parser = function(string) {
+    var match, parseIntAuto, part, shift, value;
+    parseIntAuto = function(string) {
+      if (string[0] === "0" && string[1] !== "x") {
+        return parseInt(string, 8);
+      } else {
+        return parseInt(string);
+      }
+    };
+    if (match = string.match(ipv4Regexes.fourOctet)) {
+      return (function() {
+        var k, len, ref, results;
+        ref = match.slice(1, 6);
+        results = [];
+        for (k = 0, len = ref.length; k < len; k++) {
+          part = ref[k];
+          results.push(parseIntAuto(part));
+        }
+        return results;
+      })();
+    } else if (match = string.match(ipv4Regexes.longValue)) {
+      value = parseIntAuto(match[1]);
+      if (value > 0xffffffff || value < 0) {
+        throw new Error("ipaddr: address outside defined range");
+      }
+      return ((function() {
+        var k, results;
+        results = [];
+        for (shift = k = 0; k <= 24; shift = k += 8) {
+          results.push((value >> shift) & 0xff);
+        }
+        return results;
+      })()).reverse();
+    } else {
+      return null;
+    }
+  };
+
+  ipaddr.IPv6 = (function() {
+    function IPv6(parts, zoneId) {
+      var i, k, l, len, part, ref;
+      if (parts.length === 16) {
+        this.parts = [];
+        for (i = k = 0; k <= 14; i = k += 2) {
+          this.parts.push((parts[i] << 8) | parts[i + 1]);
+        }
+      } else if (parts.length === 8) {
+        this.parts = parts;
+      } else {
+        throw new Error("ipaddr: ipv6 part count should be 8 or 16");
+      }
+      ref = this.parts;
+      for (l = 0, len = ref.length; l < len; l++) {
+        part = ref[l];
+        if (!((0 <= part && part <= 0xffff))) {
+          throw new Error("ipaddr: ipv6 part should fit in 16 bits");
+        }
+      }
+      if (zoneId) {
+        this.zoneId = zoneId;
+      }
+    }
+
+    IPv6.prototype.kind = function() {
+      return 'ipv6';
+    };
+
+    IPv6.prototype.toString = function() {
+      return this.toNormalizedString().replace(/((^|:)(0(:|$))+)/, '::');
+    };
+
+    IPv6.prototype.toRFC5952String = function() {
+      var bestMatchIndex, bestMatchLength, match, regex, string;
+      regex = /((^|:)(0(:|$)){2,})/g;
+      string = this.toNormalizedString();
+      bestMatchIndex = 0;
+      bestMatchLength = -1;
+      while ((match = regex.exec(string))) {
+        if (match[0].length > bestMatchLength) {
+          bestMatchIndex = match.index;
+          bestMatchLength = match[0].length;
+        }
+      }
+      if (bestMatchLength < 0) {
+        return string;
+      }
+      return string.substring(0, bestMatchIndex) + '::' + string.substring(bestMatchIndex + bestMatchLength);
+    };
+
+    IPv6.prototype.toByteArray = function() {
+      var bytes, k, len, part, ref;
+      bytes = [];
+      ref = this.parts;
+      for (k = 0, len = ref.length; k < len; k++) {
+        part = ref[k];
+        bytes.push(part >> 8);
+        bytes.push(part & 0xff);
+      }
+      return bytes;
+    };
+
+    IPv6.prototype.toNormalizedString = function() {
+      var addr, part, suffix;
+      addr = ((function() {
+        var k, len, ref, results;
+        ref = this.parts;
+        results = [];
+        for (k = 0, len = ref.length; k < len; k++) {
+          part = ref[k];
+          results.push(part.toString(16));
+        }
+        return results;
+      }).call(this)).join(":");
+      suffix = '';
+      if (this.zoneId) {
+        suffix = '%' + this.zoneId;
+      }
+      return addr + suffix;
+    };
+
+    IPv6.prototype.toFixedLengthString = function() {
+      var addr, part, suffix;
+      addr = ((function() {
+        var k, len, ref, results;
+        ref = this.parts;
+        results = [];
+        for (k = 0, len = ref.length; k < len; k++) {
+          part = ref[k];
+          results.push(part.toString(16).padStart(4, '0'));
+        }
+        return results;
+      }).call(this)).join(":");
+      suffix = '';
+      if (this.zoneId) {
+        suffix = '%' + this.zoneId;
+      }
+      return addr + suffix;
+    };
+
+    IPv6.prototype.match = function(other, cidrRange) {
+      var ref;
+      if (cidrRange === void 0) {
+        ref = other, other = ref[0], cidrRange = ref[1];
+      }
+      if (other.kind() !== 'ipv6') {
+        throw new Error("ipaddr: cannot match ipv6 address with non-ipv6 one");
+      }
+      return matchCIDR(this.parts, other.parts, 16, cidrRange);
+    };
+
+    IPv6.prototype.SpecialRanges = {
+      unspecified: [new IPv6([0, 0, 0, 0, 0, 0, 0, 0]), 128],
+      linkLocal: [new IPv6([0xfe80, 0, 0, 0, 0, 0, 0, 0]), 10],
+      multicast: [new IPv6([0xff00, 0, 0, 0, 0, 0, 0, 0]), 8],
+      loopback: [new IPv6([0, 0, 0, 0, 0, 0, 0, 1]), 128],
+      uniqueLocal: [new IPv6([0xfc00, 0, 0, 0, 0, 0, 0, 0]), 7],
+      ipv4Mapped: [new IPv6([0, 0, 0, 0, 0, 0xffff, 0, 0]), 96],
+      rfc6145: [new IPv6([0, 0, 0, 0, 0xffff, 0, 0, 0]), 96],
+      rfc6052: [new IPv6([0x64, 0xff9b, 0, 0, 0, 0, 0, 0]), 96],
+      '6to4': [new IPv6([0x2002, 0, 0, 0, 0, 0, 0, 0]), 16],
+      teredo: [new IPv6([0x2001, 0, 0, 0, 0, 0, 0, 0]), 32],
+      reserved: [[new IPv6([0x2001, 0xdb8, 0, 0, 0, 0, 0, 0]), 32]]
+    };
+
+    IPv6.prototype.range = function() {
+      return ipaddr.subnetMatch(this, this.SpecialRanges);
+    };
+
+    IPv6.prototype.isIPv4MappedAddress = function() {
+      return this.range() === 'ipv4Mapped';
+    };
+
+    IPv6.prototype.toIPv4Address = function() {
+      var high, low, ref;
+      if (!this.isIPv4MappedAddress()) {
+        throw new Error("ipaddr: trying to convert a generic ipv6 address to ipv4");
+      }
+      ref = this.parts.slice(-2), high = ref[0], low = ref[1];
+      return new ipaddr.IPv4([high >> 8, high & 0xff, low >> 8, low & 0xff]);
+    };
+
+    IPv6.prototype.prefixLengthFromSubnetMask = function() {
+      var cidr, i, k, part, stop, zeros, zerotable;
+      zerotable = {
+        0: 16,
+        32768: 15,
+        49152: 14,
+        57344: 13,
+        61440: 12,
+        63488: 11,
+        64512: 10,
+        65024: 9,
+        65280: 8,
+        65408: 7,
+        65472: 6,
+        65504: 5,
+        65520: 4,
+        65528: 3,
+        65532: 2,
+        65534: 1,
+        65535: 0
+      };
+      cidr = 0;
+      stop = false;
+      for (i = k = 7; k >= 0; i = k += -1) {
+        part = this.parts[i];
+        if (part in zerotable) {
+          zeros = zerotable[part];
+          if (stop && zeros !== 0) {
+            return null;
+          }
+          if (zeros !== 16) {
+            stop = true;
+          }
+          cidr += zeros;
+        } else {
+          return null;
+        }
+      }
+      return 128 - cidr;
+    };
+
+    return IPv6;
+
+  })();
+
+  ipv6Part = "(?:[0-9a-f]+::?)+";
+
+  zoneIndex = "%[0-9a-z]{1,}";
+
+  ipv6Regexes = {
+    zoneIndex: new RegExp(zoneIndex, 'i'),
+    "native": new RegExp("^(::)?(" + ipv6Part + ")?([0-9a-f]+)?(::)?(" + zoneIndex + ")?$", 'i'),
+    transitional: new RegExp(("^((?:" + ipv6Part + ")|(?:::)(?:" + ipv6Part + ")?)") + (ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part + "\\." + ipv4Part) + ("(" + zoneIndex + ")?$"), 'i')
+  };
+
+  expandIPv6 = function(string, parts) {
+    var colonCount, lastColon, part, replacement, replacementCount, zoneId;
+    if (string.indexOf('::') !== string.lastIndexOf('::')) {
+      return null;
+    }
+    zoneId = (string.match(ipv6Regexes['zoneIndex']) || [])[0];
+    if (zoneId) {
+      zoneId = zoneId.substring(1);
+      string = string.replace(/%.+$/, '');
+    }
+    colonCount = 0;
+    lastColon = -1;
+    while ((lastColon = string.indexOf(':', lastColon + 1)) >= 0) {
+      colonCount++;
+    }
+    if (string.substr(0, 2) === '::') {
+      colonCount--;
+    }
+    if (string.substr(-2, 2) === '::') {
+      colonCount--;
+    }
+    if (colonCount > parts) {
+      return null;
+    }
+    replacementCount = parts - colonCount;
+    replacement = ':';
+    while (replacementCount--) {
+      replacement += '0:';
+    }
+    string = string.replace('::', replacement);
+    if (string[0] === ':') {
+      string = string.slice(1);
+    }
+    if (string[string.length - 1] === ':') {
+      string = string.slice(0, -1);
+    }
+    parts = (function() {
+      var k, len, ref, results;
+      ref = string.split(":");
+      results = [];
+      for (k = 0, len = ref.length; k < len; k++) {
+        part = ref[k];
+        results.push(parseInt(part, 16));
+      }
+      return results;
+    })();
+    return {
+      parts: parts,
+      zoneId: zoneId
+    };
+  };
+
+  ipaddr.IPv6.parser = function(string) {
+    var addr, k, len, match, octet, octets, zoneId;
+    if (ipv6Regexes['native'].test(string)) {
+      return expandIPv6(string, 8);
+    } else if (match = string.match(ipv6Regexes['transitional'])) {
+      zoneId = match[6] || '';
+      addr = expandIPv6(match[1].slice(0, -1) + zoneId, 6);
+      if (addr.parts) {
+        octets = [parseInt(match[2]), parseInt(match[3]), parseInt(match[4]), parseInt(match[5])];
+        for (k = 0, len = octets.length; k < len; k++) {
+          octet = octets[k];
+          if (!((0 <= octet && octet <= 255))) {
+            return null;
+          }
+        }
+        addr.parts.push(octets[0] << 8 | octets[1]);
+        addr.parts.push(octets[2] << 8 | octets[3]);
+        return {
+          parts: addr.parts,
+          zoneId: addr.zoneId
+        };
+      }
+    }
+    return null;
+  };
+
+  ipaddr.IPv4.isIPv4 = ipaddr.IPv6.isIPv6 = function(string) {
+    return this.parser(string) !== null;
+  };
+
+  ipaddr.IPv4.isValid = function(string) {
+    var e;
+    try {
+      new this(this.parser(string));
+      return true;
+    } catch (error1) {
+      e = error1;
+      return false;
+    }
+  };
+
+  ipaddr.IPv4.isValidFourPartDecimal = function(string) {
+    if (ipaddr.IPv4.isValid(string) && string.match(/^(0|[1-9]\d*)(\.(0|[1-9]\d*)){3}$/)) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  ipaddr.IPv6.isValid = function(string) {
+    var addr, e;
+    if (typeof string === "string" && string.indexOf(":") === -1) {
+      return false;
+    }
+    try {
+      addr = this.parser(string);
+      new this(addr.parts, addr.zoneId);
+      return true;
+    } catch (error1) {
+      e = error1;
+      return false;
+    }
+  };
+
+  ipaddr.IPv4.parse = function(string) {
+    var parts;
+    parts = this.parser(string);
+    if (parts === null) {
+      throw new Error("ipaddr: string is not formatted like ip address");
+    }
+    return new this(parts);
+  };
+
+  ipaddr.IPv6.parse = function(string) {
+    var addr;
+    addr = this.parser(string);
+    if (addr.parts === null) {
+      throw new Error("ipaddr: string is not formatted like ip address");
+    }
+    return new this(addr.parts, addr.zoneId);
+  };
+
+  ipaddr.IPv4.parseCIDR = function(string) {
+    var maskLength, match, parsed;
+    if (match = string.match(/^(.+)\/(\d+)$/)) {
+      maskLength = parseInt(match[2]);
+      if (maskLength >= 0 && maskLength <= 32) {
+        parsed = [this.parse(match[1]), maskLength];
+        Object.defineProperty(parsed, 'toString', {
+          value: function() {
+            return this.join('/');
+          }
+        });
+        return parsed;
+      }
+    }
+    throw new Error("ipaddr: string is not formatted like an IPv4 CIDR range");
+  };
+
+  ipaddr.IPv4.subnetMaskFromPrefixLength = function(prefix) {
+    var filledOctetCount, j, octets;
+    prefix = parseInt(prefix);
+    if (prefix < 0 || prefix > 32) {
+      throw new Error('ipaddr: invalid IPv4 prefix length');
+    }
+    octets = [0, 0, 0, 0];
+    j = 0;
+    filledOctetCount = Math.floor(prefix / 8);
+    while (j < filledOctetCount) {
+      octets[j] = 255;
+      j++;
+    }
+    if (filledOctetCount < 4) {
+      octets[filledOctetCount] = Math.pow(2, prefix % 8) - 1 << 8 - (prefix % 8);
+    }
+    return new this(octets);
+  };
+
+  ipaddr.IPv4.broadcastAddressFromCIDR = function(string) {
+    var cidr, error, i, ipInterfaceOctets, octets, subnetMaskOctets;
+    try {
+      cidr = this.parseCIDR(string);
+      ipInterfaceOctets = cidr[0].toByteArray();
+      subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+      octets = [];
+      i = 0;
+      while (i < 4) {
+        octets.push(parseInt(ipInterfaceOctets[i], 10) | parseInt(subnetMaskOctets[i], 10) ^ 255);
+        i++;
+      }
+      return new this(octets);
+    } catch (error1) {
+      error = error1;
+      throw new Error('ipaddr: the address does not have IPv4 CIDR format');
+    }
+  };
+
+  ipaddr.IPv4.networkAddressFromCIDR = function(string) {
+    var cidr, error, i, ipInterfaceOctets, octets, subnetMaskOctets;
+    try {
+      cidr = this.parseCIDR(string);
+      ipInterfaceOctets = cidr[0].toByteArray();
+      subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+      octets = [];
+      i = 0;
+      while (i < 4) {
+        octets.push(parseInt(ipInterfaceOctets[i], 10) & parseInt(subnetMaskOctets[i], 10));
+        i++;
+      }
+      return new this(octets);
+    } catch (error1) {
+      error = error1;
+      throw new Error('ipaddr: the address does not have IPv4 CIDR format');
+    }
+  };
+
+  ipaddr.IPv6.parseCIDR = function(string) {
+    var maskLength, match, parsed;
+    if (match = string.match(/^(.+)\/(\d+)$/)) {
+      maskLength = parseInt(match[2]);
+      if (maskLength >= 0 && maskLength <= 128) {
+        parsed = [this.parse(match[1]), maskLength];
+        Object.defineProperty(parsed, 'toString', {
+          value: function() {
+            return this.join('/');
+          }
+        });
+        return parsed;
+      }
+    }
+    throw new Error("ipaddr: string is not formatted like an IPv6 CIDR range");
+  };
+
+  ipaddr.isValid = function(string) {
+    return ipaddr.IPv6.isValid(string) || ipaddr.IPv4.isValid(string);
+  };
