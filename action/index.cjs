@@ -112733,3 +112733,2172 @@ class Minimatch {
 
     // make the set of regexps etc.
     this.make()
+  }
+
+  debug () {}
+
+  make () {
+    const pattern = this.pattern
+    const options = this.options
+
+    // empty patterns and comments match nothing.
+    if (!options.nocomment && pattern.charAt(0) === '#') {
+      this.comment = true
+      return
+    }
+    if (!pattern) {
+      this.empty = true
+      return
+    }
+
+    // step 1: figure out negation, etc.
+    this.parseNegate()
+
+    // step 2: expand braces
+    let set = this.globSet = this.braceExpand()
+
+    if (options.debug) this.debug = (...args) => console.error(...args)
+
+    this.debug(this.pattern, set)
+
+    // step 3: now we have a set, so turn each one into a series of path-portion
+    // matching patterns.
+    // These will be regexps, except in the case of "**", which is
+    // set to the GLOBSTAR object for globstar behavior,
+    // and will not contain any / characters
+    set = this.globParts = set.map(s => s.split(slashSplit))
+
+    this.debug(this.pattern, set)
+
+    // glob --> regexps
+    set = set.map((s, si, set) => s.map(this.parse, this))
+
+    this.debug(this.pattern, set)
+
+    // filter out everything that didn't compile properly.
+    set = set.filter(s => s.indexOf(false) === -1)
+
+    this.debug(this.pattern, set)
+
+    this.set = set
+  }
+
+  parseNegate () {
+    if (this.options.nonegate) return
+
+    const pattern = this.pattern
+    let negate = false
+    let negateOffset = 0
+
+    for (let i = 0; i < pattern.length && pattern.charAt(i) === '!'; i++) {
+      negate = !negate
+      negateOffset++
+    }
+
+    if (negateOffset) this.pattern = pattern.slice(negateOffset)
+    this.negate = negate
+  }
+
+  // set partial to true to test if, for example,
+  // "/a/b" matches the start of "/*/b/*/d"
+  // Partial means, if you run out of file before you run
+  // out of pattern, then that's fine, as long as all
+  // the parts match.
+  matchOne (file, pattern, partial) {
+    var options = this.options
+
+    this.debug('matchOne',
+      { 'this': this, file: file, pattern: pattern })
+
+    this.debug('matchOne', file.length, pattern.length)
+
+    for (var fi = 0,
+        pi = 0,
+        fl = file.length,
+        pl = pattern.length
+        ; (fi < fl) && (pi < pl)
+        ; fi++, pi++) {
+      this.debug('matchOne loop')
+      var p = pattern[pi]
+      var f = file[fi]
+
+      this.debug(pattern, p, f)
+
+      // should be impossible.
+      // some invalid regexp stuff in the set.
+      /* istanbul ignore if */
+      if (p === false) return false
+
+      if (p === GLOBSTAR) {
+        this.debug('GLOBSTAR', [pattern, p, f])
+
+        // "**"
+        // a/**/b/**/c would match the following:
+        // a/b/x/y/z/c
+        // a/x/y/z/b/c
+        // a/b/x/b/x/c
+        // a/b/c
+        // To do this, take the rest of the pattern after
+        // the **, and see if it would match the file remainder.
+        // If so, return success.
+        // If not, the ** "swallows" a segment, and try again.
+        // This is recursively awful.
+        //
+        // a/**/b/**/c matching a/b/x/y/z/c
+        // - a matches a
+        // - doublestar
+        //   - matchOne(b/x/y/z/c, b/**/c)
+        //     - b matches b
+        //     - doublestar
+        //       - matchOne(x/y/z/c, c) -> no
+        //       - matchOne(y/z/c, c) -> no
+        //       - matchOne(z/c, c) -> no
+        //       - matchOne(c, c) yes, hit
+        var fr = fi
+        var pr = pi + 1
+        if (pr === pl) {
+          this.debug('** at the end')
+          // a ** at the end will just swallow the rest.
+          // We have found a match.
+          // however, it will not swallow /.x, unless
+          // options.dot is set.
+          // . and .. are *never* matched by **, for explosively
+          // exponential reasons.
+          for (; fi < fl; fi++) {
+            if (file[fi] === '.' || file[fi] === '..' ||
+              (!options.dot && file[fi].charAt(0) === '.')) return false
+          }
+          return true
+        }
+
+        // ok, let's see if we can swallow whatever we can.
+        while (fr < fl) {
+          var swallowee = file[fr]
+
+          this.debug('\nglobstar while', file, fr, pattern, pr, swallowee)
+
+          // XXX remove this slice.  Just pass the start index.
+          if (this.matchOne(file.slice(fr), pattern.slice(pr), partial)) {
+            this.debug('globstar found match!', fr, fl, swallowee)
+            // found a match.
+            return true
+          } else {
+            // can't swallow "." or ".." ever.
+            // can only swallow ".foo" when explicitly asked.
+            if (swallowee === '.' || swallowee === '..' ||
+              (!options.dot && swallowee.charAt(0) === '.')) {
+              this.debug('dot detected!', file, fr, pattern, pr)
+              break
+            }
+
+            // ** swallows a segment, and continue.
+            this.debug('globstar swallow a segment, and continue')
+            fr++
+          }
+        }
+
+        // no match was found.
+        // However, in partial mode, we can't say this is necessarily over.
+        // If there's more *pattern* left, then
+        /* istanbul ignore if */
+        if (partial) {
+          // ran out of file
+          this.debug('\n>>> no match, partial?', file, fr, pattern, pr)
+          if (fr === fl) return true
+        }
+        return false
+      }
+
+      // something other than **
+      // non-magic patterns just have to match exactly
+      // patterns with magic have been turned into regexps.
+      var hit
+      if (typeof p === 'string') {
+        hit = f === p
+        this.debug('string match', p, f, hit)
+      } else {
+        hit = f.match(p)
+        this.debug('pattern match', p, f, hit)
+      }
+
+      if (!hit) return false
+    }
+
+    // Note: ending in / means that we'll get a final ""
+    // at the end of the pattern.  This can only match a
+    // corresponding "" at the end of the file.
+    // If the file ends in /, then it can only match a
+    // a pattern that ends in /, unless the pattern just
+    // doesn't have any more for it. But, a/b/ should *not*
+    // match "a/b/*", even though "" matches against the
+    // [^/]*? pattern, except in partial mode, where it might
+    // simply not be reached yet.
+    // However, a/b/ should still satisfy a/*
+
+    // now either we fell off the end of the pattern, or we're done.
+    if (fi === fl && pi === pl) {
+      // ran out of pattern and filename at the same time.
+      // an exact hit!
+      return true
+    } else if (fi === fl) {
+      // ran out of file, but still had pattern left.
+      // this is ok if we're doing the match as part of
+      // a glob fs traversal.
+      return partial
+    } else /* istanbul ignore else */ if (pi === pl) {
+      // ran out of pattern, still have file left.
+      // this is only acceptable if we're on the very last
+      // empty segment of a file with a trailing slash.
+      // a/* should match a/b/
+      return (fi === fl - 1) && (file[fi] === '')
+    }
+
+    // should be unreachable.
+    /* istanbul ignore next */
+    throw new Error('wtf?')
+  }
+
+  braceExpand () {
+    return braceExpand(this.pattern, this.options)
+  }
+
+  parse (pattern, isSub) {
+    assertValidPattern(pattern)
+
+    const options = this.options
+
+    // shortcuts
+    if (pattern === '**') {
+      if (!options.noglobstar)
+        return GLOBSTAR
+      else
+        pattern = '*'
+    }
+    if (pattern === '') return ''
+
+    let re = ''
+    let hasMagic = false
+    let escaping = false
+    // ? => one single character
+    const patternListStack = []
+    const negativeLists = []
+    let stateChar
+    let inClass = false
+    let reClassStart = -1
+    let classStart = -1
+    let cs
+    let pl
+    let sp
+    // . and .. never match anything that doesn't start with .,
+    // even when options.dot is set.  However, if the pattern
+    // starts with ., then traversal patterns can match.
+    let dotTravAllowed = pattern.charAt(0) === '.'
+    let dotFileAllowed = options.dot || dotTravAllowed
+    const patternStart = () =>
+      dotTravAllowed
+        ? ''
+        : dotFileAllowed
+        ? '(?!(?:^|\\/)\\.{1,2}(?:$|\\/))'
+        : '(?!\\.)'
+    const subPatternStart = (p) =>
+      p.charAt(0) === '.'
+        ? ''
+        : options.dot
+        ? '(?!(?:^|\\/)\\.{1,2}(?:$|\\/))'
+        : '(?!\\.)'
+
+
+    const clearStateChar = () => {
+      if (stateChar) {
+        // we had some state-tracking character
+        // that wasn't consumed by this pass.
+        switch (stateChar) {
+          case '*':
+            re += star
+            hasMagic = true
+          break
+          case '?':
+            re += qmark
+            hasMagic = true
+          break
+          default:
+            re += '\\' + stateChar
+          break
+        }
+        this.debug('clearStateChar %j %j', stateChar, re)
+        stateChar = false
+      }
+    }
+
+    for (let i = 0, c; (i < pattern.length) && (c = pattern.charAt(i)); i++) {
+      this.debug('%s\t%s %s %j', pattern, i, re, c)
+
+      // skip over any that are escaped.
+      if (escaping) {
+        /* istanbul ignore next - completely not allowed, even escaped. */
+        if (c === '/') {
+          return false
+        }
+
+        if (reSpecials[c]) {
+          re += '\\'
+        }
+        re += c
+        escaping = false
+        continue
+      }
+
+      switch (c) {
+        /* istanbul ignore next */
+        case '/': {
+          // Should already be path-split by now.
+          return false
+        }
+
+        case '\\':
+          if (inClass && pattern.charAt(i + 1) === '-') {
+            re += c
+            continue
+          }
+
+          clearStateChar()
+          escaping = true
+        continue
+
+        // the various stateChar values
+        // for the "extglob" stuff.
+        case '?':
+        case '*':
+        case '+':
+        case '@':
+        case '!':
+          this.debug('%s\t%s %s %j <-- stateChar', pattern, i, re, c)
+
+          // all of those are literals inside a class, except that
+          // the glob [!a] means [^a] in regexp
+          if (inClass) {
+            this.debug('  in class')
+            if (c === '!' && i === classStart + 1) c = '^'
+            re += c
+            continue
+          }
+
+          // if we already have a stateChar, then it means
+          // that there was something like ** or +? in there.
+          // Handle the stateChar, then proceed with this one.
+          this.debug('call clearStateChar %j', stateChar)
+          clearStateChar()
+          stateChar = c
+          // if extglob is disabled, then +(asdf|foo) isn't a thing.
+          // just clear the statechar *now*, rather than even diving into
+          // the patternList stuff.
+          if (options.noext) clearStateChar()
+        continue
+
+        case '(': {
+          if (inClass) {
+            re += '('
+            continue
+          }
+
+          if (!stateChar) {
+            re += '\\('
+            continue
+          }
+
+          const plEntry = {
+            type: stateChar,
+            start: i - 1,
+            reStart: re.length,
+            open: plTypes[stateChar].open,
+            close: plTypes[stateChar].close,
+          }
+          this.debug(this.pattern, '\t', plEntry)
+          patternListStack.push(plEntry)
+          // negation is (?:(?!(?:js)(?:<rest>))[^/]*)
+          re += plEntry.open
+          // next entry starts with a dot maybe?
+          if (plEntry.start === 0 && plEntry.type !== '!') {
+            dotTravAllowed = true
+            re += subPatternStart(pattern.slice(i + 1))
+          }
+          this.debug('plType %j %j', stateChar, re)
+          stateChar = false
+          continue
+        }
+
+        case ')': {
+          const plEntry = patternListStack[patternListStack.length - 1]
+          if (inClass || !plEntry) {
+            re += '\\)'
+            continue
+          }
+          patternListStack.pop()
+
+          // closing an extglob
+          clearStateChar()
+          hasMagic = true
+          pl = plEntry
+          // negation is (?:(?!js)[^/]*)
+          // The others are (?:<pattern>)<type>
+          re += pl.close
+          if (pl.type === '!') {
+            negativeLists.push(Object.assign(pl, { reEnd: re.length }))
+          }
+          continue
+        }
+
+        case '|': {
+          const plEntry = patternListStack[patternListStack.length - 1]
+          if (inClass || !plEntry) {
+            re += '\\|'
+            continue
+          }
+
+          clearStateChar()
+          re += '|'
+          // next subpattern can start with a dot?
+          if (plEntry.start === 0 && plEntry.type !== '!') {
+            dotTravAllowed = true
+            re += subPatternStart(pattern.slice(i + 1))
+          }
+          continue
+        }
+
+        // these are mostly the same in regexp and glob
+        case '[':
+          // swallow any state-tracking char before the [
+          clearStateChar()
+
+          if (inClass) {
+            re += '\\' + c
+            continue
+          }
+
+          inClass = true
+          classStart = i
+          reClassStart = re.length
+          re += c
+        continue
+
+        case ']':
+          //  a right bracket shall lose its special
+          //  meaning and represent itself in
+          //  a bracket expression if it occurs
+          //  first in the list.  -- POSIX.2 2.8.3.2
+          if (i === classStart + 1 || !inClass) {
+            re += '\\' + c
+            continue
+          }
+
+          // split where the last [ was, make sure we don't have
+          // an invalid re. if so, re-walk the contents of the
+          // would-be class to re-translate any characters that
+          // were passed through as-is
+          // TODO: It would probably be faster to determine this
+          // without a try/catch and a new RegExp, but it's tricky
+          // to do safely.  For now, this is safe and works.
+          cs = pattern.substring(classStart + 1, i)
+          try {
+            RegExp('[' + braExpEscape(charUnescape(cs)) + ']')
+            // looks good, finish up the class.
+            re += c
+          } catch (er) {
+            // out of order ranges in JS are errors, but in glob syntax,
+            // they're just a range that matches nothing.
+            re = re.substring(0, reClassStart) + '(?:$.)' // match nothing ever
+          }
+          hasMagic = true
+          inClass = false
+        continue
+
+        default:
+          // swallow any state char that wasn't consumed
+          clearStateChar()
+
+          if (reSpecials[c] && !(c === '^' && inClass)) {
+            re += '\\'
+          }
+
+          re += c
+          break
+
+      } // switch
+    } // for
+
+    // handle the case where we left a class open.
+    // "[abc" is valid, equivalent to "\[abc"
+    if (inClass) {
+      // split where the last [ was, and escape it
+      // this is a huge pita.  We now have to re-walk
+      // the contents of the would-be class to re-translate
+      // any characters that were passed through as-is
+      cs = pattern.slice(classStart + 1)
+      sp = this.parse(cs, SUBPARSE)
+      re = re.substring(0, reClassStart) + '\\[' + sp[0]
+      hasMagic = hasMagic || sp[1]
+    }
+
+    // handle the case where we had a +( thing at the *end*
+    // of the pattern.
+    // each pattern list stack adds 3 chars, and we need to go through
+    // and escape any | chars that were passed through as-is for the regexp.
+    // Go through and escape them, taking care not to double-escape any
+    // | chars that were already escaped.
+    for (pl = patternListStack.pop(); pl; pl = patternListStack.pop()) {
+      let tail
+      tail = re.slice(pl.reStart + pl.open.length)
+      this.debug('setting tail', re, pl)
+      // maybe some even number of \, then maybe 1 \, followed by a |
+      tail = tail.replace(/((?:\\{2}){0,64})(\\?)\|/g, (_, $1, $2) => {
+        /* istanbul ignore else - should already be done */
+        if (!$2) {
+          // the | isn't already escaped, so escape it.
+          $2 = '\\'
+        }
+
+        // need to escape all those slashes *again*, without escaping the
+        // one that we need for escaping the | character.  As it works out,
+        // escaping an even number of slashes can be done by simply repeating
+        // it exactly after itself.  That's why this trick works.
+        //
+        // I am sorry that you have to see this.
+        return $1 + $1 + $2 + '|'
+      })
+
+      this.debug('tail=%j\n   %s', tail, tail, pl, re)
+      const t = pl.type === '*' ? star
+        : pl.type === '?' ? qmark
+        : '\\' + pl.type
+
+      hasMagic = true
+      re = re.slice(0, pl.reStart) + t + '\\(' + tail
+    }
+
+    // handle trailing things that only matter at the very end.
+    clearStateChar()
+    if (escaping) {
+      // trailing \\
+      re += '\\\\'
+    }
+
+    // only need to apply the nodot start if the re starts with
+    // something that could conceivably capture a dot
+    const addPatternStart = addPatternStartSet[re.charAt(0)]
+
+    // Hack to work around lack of negative lookbehind in JS
+    // A pattern like: *.!(x).!(y|z) needs to ensure that a name
+    // like 'a.xyz.yz' doesn't match.  So, the first negative
+    // lookahead, has to look ALL the way ahead, to the end of
+    // the pattern.
+    for (let n = negativeLists.length - 1; n > -1; n--) {
+      const nl = negativeLists[n]
+
+      const nlBefore = re.slice(0, nl.reStart)
+      const nlFirst = re.slice(nl.reStart, nl.reEnd - 8)
+      let nlAfter = re.slice(nl.reEnd)
+      const nlLast = re.slice(nl.reEnd - 8, nl.reEnd) + nlAfter
+
+      // Handle nested stuff like *(*.js|!(*.json)), where open parens
+      // mean that we should *not* include the ) in the bit that is considered
+      // "after" the negated section.
+      const closeParensBefore = nlBefore.split(')').length
+      const openParensBefore = nlBefore.split('(').length - closeParensBefore
+      let cleanAfter = nlAfter
+      for (let i = 0; i < openParensBefore; i++) {
+        cleanAfter = cleanAfter.replace(/\)[+*?]?/, '')
+      }
+      nlAfter = cleanAfter
+
+      const dollar = nlAfter === '' && isSub !== SUBPARSE ? '(?:$|\\/)' : ''
+
+      re = nlBefore + nlFirst + nlAfter + dollar + nlLast
+    }
+
+    // if the re is not "" at this point, then we need to make sure
+    // it doesn't match against an empty path part.
+    // Otherwise a/* will match a/, which it should not.
+    if (re !== '' && hasMagic) {
+      re = '(?=.)' + re
+    }
+
+    if (addPatternStart) {
+      re = patternStart() + re
+    }
+
+    // parsing just a piece of a larger pattern.
+    if (isSub === SUBPARSE) {
+      return [re, hasMagic]
+    }
+
+    // if it's nocase, and the lcase/uppercase don't match, it's magic
+    if (options.nocase && !hasMagic) {
+      hasMagic = pattern.toUpperCase() !== pattern.toLowerCase()
+    }
+
+    // skip the regexp for non-magical patterns
+    // unescape anything in it, though, so that it'll be
+    // an exact match against a file etc.
+    if (!hasMagic) {
+      return globUnescape(pattern)
+    }
+
+    const flags = options.nocase ? 'i' : ''
+    try {
+      return Object.assign(new RegExp('^' + re + '$', flags), {
+        _glob: pattern,
+        _src: re,
+      })
+    } catch (er) /* istanbul ignore next - should be impossible */ {
+      // If it was an invalid regular expression, then it can't match
+      // anything.  This trick looks for a character after the end of
+      // the string, which is of course impossible, except in multi-line
+      // mode, but it's not a /m regex.
+      return new RegExp('$.')
+    }
+  }
+
+  makeRe () {
+    if (this.regexp || this.regexp === false) return this.regexp
+
+    // at this point, this.set is a 2d array of partial
+    // pattern strings, or "**".
+    //
+    // It's better to use .match().  This function shouldn't
+    // be used, really, but it's pretty convenient sometimes,
+    // when you just want to work with a regex.
+    const set = this.set
+
+    if (!set.length) {
+      this.regexp = false
+      return this.regexp
+    }
+    const options = this.options
+
+    const twoStar = options.noglobstar ? star
+      : options.dot ? twoStarDot
+      : twoStarNoDot
+    const flags = options.nocase ? 'i' : ''
+
+    // coalesce globstars and regexpify non-globstar patterns
+    // if it's the only item, then we just do one twoStar
+    // if it's the first, and there are more, prepend (\/|twoStar\/)? to next
+    // if it's the last, append (\/twoStar|) to previous
+    // if it's in the middle, append (\/|\/twoStar\/) to previous
+    // then filter out GLOBSTAR symbols
+    let re = set.map(pattern => {
+      pattern = pattern.map(p =>
+        typeof p === 'string' ? regExpEscape(p)
+        : p === GLOBSTAR ? GLOBSTAR
+        : p._src
+      ).reduce((set, p) => {
+        if (!(set[set.length - 1] === GLOBSTAR && p === GLOBSTAR)) {
+          set.push(p)
+        }
+        return set
+      }, [])
+      pattern.forEach((p, i) => {
+        if (p !== GLOBSTAR || pattern[i-1] === GLOBSTAR) {
+          return
+        }
+        if (i === 0) {
+          if (pattern.length > 1) {
+            pattern[i+1] = '(?:\\\/|' + twoStar + '\\\/)?' + pattern[i+1]
+          } else {
+            pattern[i] = twoStar
+          }
+        } else if (i === pattern.length - 1) {
+          pattern[i-1] += '(?:\\\/|' + twoStar + ')?'
+        } else {
+          pattern[i-1] += '(?:\\\/|\\\/' + twoStar + '\\\/)' + pattern[i+1]
+          pattern[i+1] = GLOBSTAR
+        }
+      })
+      return pattern.filter(p => p !== GLOBSTAR).join('/')
+    }).join('|')
+
+    // must match entire pattern
+    // ending in a * or ** will make it less strict.
+    re = '^(?:' + re + ')$'
+
+    // can match anything, as long as it's not this.
+    if (this.negate) re = '^(?!' + re + ').*$'
+
+    try {
+      this.regexp = new RegExp(re, flags)
+    } catch (ex) /* istanbul ignore next - should be impossible */ {
+      this.regexp = false
+    }
+    return this.regexp
+  }
+
+  match (f, partial = this.partial) {
+    this.debug('match', f, this.pattern)
+    // short-circuit in the case of busted things.
+    // comments, etc.
+    if (this.comment) return false
+    if (this.empty) return f === ''
+
+    if (f === '/' && partial) return true
+
+    const options = this.options
+
+    // windows: need to use /, not \
+    if (path.sep !== '/') {
+      f = f.split(path.sep).join('/')
+    }
+
+    // treat the test path as a set of pathparts.
+    f = f.split(slashSplit)
+    this.debug(this.pattern, 'split', f)
+
+    // just ONE of the pattern sets in this.set needs to match
+    // in order for it to be valid.  If negating, then just one
+    // match means that we have failed.
+    // Either way, return on the first hit.
+
+    const set = this.set
+    this.debug(this.pattern, 'set', set)
+
+    // Find the basename of the path by looking for the last non-empty segment
+    let filename
+    for (let i = f.length - 1; i >= 0; i--) {
+      filename = f[i]
+      if (filename) break
+    }
+
+    for (let i = 0; i < set.length; i++) {
+      const pattern = set[i]
+      let file = f
+      if (options.matchBase && pattern.length === 1) {
+        file = [filename]
+      }
+      const hit = this.matchOne(file, pattern, partial)
+      if (hit) {
+        if (options.flipNegate) return true
+        return !this.negate
+      }
+    }
+
+    // didn't get any hits.  this is success if it's a negative
+    // pattern, failure otherwise.
+    if (options.flipNegate) return false
+    return this.negate
+  }
+
+  static defaults (def) {
+    return minimatch.defaults(def).Minimatch
+  }
+}
+
+minimatch.Minimatch = Minimatch
+
+
+/***/ }),
+
+/***/ 80900:
+/***/ ((module) => {
+
+/**
+ * Helpers.
+ */
+
+var s = 1000;
+var m = s * 60;
+var h = m * 60;
+var d = h * 24;
+var w = d * 7;
+var y = d * 365.25;
+
+/**
+ * Parse or format the given `val`.
+ *
+ * Options:
+ *
+ *  - `long` verbose formatting [false]
+ *
+ * @param {String|Number} val
+ * @param {Object} [options]
+ * @throws {Error} throw an error if val is not a non-empty string or a number
+ * @return {String|Number}
+ * @api public
+ */
+
+module.exports = function(val, options) {
+  options = options || {};
+  var type = typeof val;
+  if (type === 'string' && val.length > 0) {
+    return parse(val);
+  } else if (type === 'number' && isFinite(val)) {
+    return options.long ? fmtLong(val) : fmtShort(val);
+  }
+  throw new Error(
+    'val is not a non-empty string or a valid number. val=' +
+      JSON.stringify(val)
+  );
+};
+
+/**
+ * Parse the given `str` and return milliseconds.
+ *
+ * @param {String} str
+ * @return {Number}
+ * @api private
+ */
+
+function parse(str) {
+  str = String(str);
+  if (str.length > 100) {
+    return;
+  }
+  var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
+    str
+  );
+  if (!match) {
+    return;
+  }
+  var n = parseFloat(match[1]);
+  var type = (match[2] || 'ms').toLowerCase();
+  switch (type) {
+    case 'years':
+    case 'year':
+    case 'yrs':
+    case 'yr':
+    case 'y':
+      return n * y;
+    case 'weeks':
+    case 'week':
+    case 'w':
+      return n * w;
+    case 'days':
+    case 'day':
+    case 'd':
+      return n * d;
+    case 'hours':
+    case 'hour':
+    case 'hrs':
+    case 'hr':
+    case 'h':
+      return n * h;
+    case 'minutes':
+    case 'minute':
+    case 'mins':
+    case 'min':
+    case 'm':
+      return n * m;
+    case 'seconds':
+    case 'second':
+    case 'secs':
+    case 'sec':
+    case 's':
+      return n * s;
+    case 'milliseconds':
+    case 'millisecond':
+    case 'msecs':
+    case 'msec':
+    case 'ms':
+      return n;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Short format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtShort(ms) {
+  var msAbs = Math.abs(ms);
+  if (msAbs >= d) {
+    return Math.round(ms / d) + 'd';
+  }
+  if (msAbs >= h) {
+    return Math.round(ms / h) + 'h';
+  }
+  if (msAbs >= m) {
+    return Math.round(ms / m) + 'm';
+  }
+  if (msAbs >= s) {
+    return Math.round(ms / s) + 's';
+  }
+  return ms + 'ms';
+}
+
+/**
+ * Long format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtLong(ms) {
+  var msAbs = Math.abs(ms);
+  if (msAbs >= d) {
+    return plural(ms, msAbs, d, 'day');
+  }
+  if (msAbs >= h) {
+    return plural(ms, msAbs, h, 'hour');
+  }
+  if (msAbs >= m) {
+    return plural(ms, msAbs, m, 'minute');
+  }
+  if (msAbs >= s) {
+    return plural(ms, msAbs, s, 'second');
+  }
+  return ms + ' ms';
+}
+
+/**
+ * Pluralization helper.
+ */
+
+function plural(ms, msAbs, n, name) {
+  var isPlural = msAbs >= n * 1.5;
+  return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
+}
+
+
+/***/ }),
+
+/***/ 95385:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*!
+ * negotiator
+ * Copyright(c) 2012 Federico Romero
+ * Copyright(c) 2012-2014 Isaac Z. Schlueter
+ * Copyright(c) 2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+var preferredCharsets = __nccwpck_require__(99296)
+var preferredEncodings = __nccwpck_require__(25297)
+var preferredLanguages = __nccwpck_require__(19722)
+var preferredMediaTypes = __nccwpck_require__(62563)
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = Negotiator;
+module.exports.Negotiator = Negotiator;
+
+/**
+ * Create a Negotiator instance from a request.
+ * @param {object} request
+ * @public
+ */
+
+function Negotiator(request) {
+  if (!(this instanceof Negotiator)) {
+    return new Negotiator(request);
+  }
+
+  this.request = request;
+}
+
+Negotiator.prototype.charset = function charset(available) {
+  var set = this.charsets(available);
+  return set && set[0];
+};
+
+Negotiator.prototype.charsets = function charsets(available) {
+  return preferredCharsets(this.request.headers['accept-charset'], available);
+};
+
+Negotiator.prototype.encoding = function encoding(available) {
+  var set = this.encodings(available);
+  return set && set[0];
+};
+
+Negotiator.prototype.encodings = function encodings(available) {
+  return preferredEncodings(this.request.headers['accept-encoding'], available);
+};
+
+Negotiator.prototype.language = function language(available) {
+  var set = this.languages(available);
+  return set && set[0];
+};
+
+Negotiator.prototype.languages = function languages(available) {
+  return preferredLanguages(this.request.headers['accept-language'], available);
+};
+
+Negotiator.prototype.mediaType = function mediaType(available) {
+  var set = this.mediaTypes(available);
+  return set && set[0];
+};
+
+Negotiator.prototype.mediaTypes = function mediaTypes(available) {
+  return preferredMediaTypes(this.request.headers.accept, available);
+};
+
+// Backwards compatibility
+Negotiator.prototype.preferredCharset = Negotiator.prototype.charset;
+Negotiator.prototype.preferredCharsets = Negotiator.prototype.charsets;
+Negotiator.prototype.preferredEncoding = Negotiator.prototype.encoding;
+Negotiator.prototype.preferredEncodings = Negotiator.prototype.encodings;
+Negotiator.prototype.preferredLanguage = Negotiator.prototype.language;
+Negotiator.prototype.preferredLanguages = Negotiator.prototype.languages;
+Negotiator.prototype.preferredMediaType = Negotiator.prototype.mediaType;
+Negotiator.prototype.preferredMediaTypes = Negotiator.prototype.mediaTypes;
+
+
+/***/ }),
+
+/***/ 99296:
+/***/ ((module) => {
+
+"use strict";
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = preferredCharsets;
+module.exports.preferredCharsets = preferredCharsets;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleCharsetRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept-Charset header.
+ * @private
+ */
+
+function parseAcceptCharset(accept) {
+  var accepts = accept.split(',');
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var charset = parseCharset(accepts[i].trim(), i);
+
+    if (charset) {
+      accepts[j++] = charset;
+    }
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse a charset from the Accept-Charset header.
+ * @private
+ */
+
+function parseCharset(str, i) {
+  var match = simpleCharsetRegExp.exec(str);
+  if (!match) return null;
+
+  var charset = match[1];
+  var q = 1;
+  if (match[2]) {
+    var params = match[2].split(';')
+    for (var j = 0; j < params.length; j++) {
+      var p = params[j].trim().split('=');
+      if (p[0] === 'q') {
+        q = parseFloat(p[1]);
+        break;
+      }
+    }
+  }
+
+  return {
+    charset: charset,
+    q: q,
+    i: i
+  };
+}
+
+/**
+ * Get the priority of a charset.
+ * @private
+ */
+
+function getCharsetPriority(charset, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify(charset, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the charset.
+ * @private
+ */
+
+function specify(charset, spec, index) {
+  var s = 0;
+  if(spec.charset.toLowerCase() === charset.toLowerCase()){
+    s |= 1;
+  } else if (spec.charset !== '*' ) {
+    return null
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s
+  }
+}
+
+/**
+ * Get the preferred charsets from an Accept-Charset header.
+ * @public
+ */
+
+function preferredCharsets(accept, provided) {
+  // RFC 2616 sec 14.2: no header = *
+  var accepts = parseAcceptCharset(accept === undefined ? '*' : accept || '');
+
+  if (!provided) {
+    // sorted list of all charsets
+    return accepts
+      .filter(isQuality)
+      .sort(compareSpecs)
+      .map(getFullCharset);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getCharsetPriority(type, accepts, index);
+  });
+
+  // sorted list of accepted charsets
+  return priorities.filter(isQuality).sort(compareSpecs).map(function getCharset(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full charset string.
+ * @private
+ */
+
+function getFullCharset(spec) {
+  return spec.charset;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality(spec) {
+  return spec.q > 0;
+}
+
+
+/***/ }),
+
+/***/ 25297:
+/***/ ((module) => {
+
+"use strict";
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = preferredEncodings;
+module.exports.preferredEncodings = preferredEncodings;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleEncodingRegExp = /^\s*([^\s;]+)\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept-Encoding header.
+ * @private
+ */
+
+function parseAcceptEncoding(accept) {
+  var accepts = accept.split(',');
+  var hasIdentity = false;
+  var minQuality = 1;
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var encoding = parseEncoding(accepts[i].trim(), i);
+
+    if (encoding) {
+      accepts[j++] = encoding;
+      hasIdentity = hasIdentity || specify('identity', encoding);
+      minQuality = Math.min(minQuality, encoding.q || 1);
+    }
+  }
+
+  if (!hasIdentity) {
+    /*
+     * If identity doesn't explicitly appear in the accept-encoding header,
+     * it's added to the list of acceptable encoding with the lowest q
+     */
+    accepts[j++] = {
+      encoding: 'identity',
+      q: minQuality,
+      i: i
+    };
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse an encoding from the Accept-Encoding header.
+ * @private
+ */
+
+function parseEncoding(str, i) {
+  var match = simpleEncodingRegExp.exec(str);
+  if (!match) return null;
+
+  var encoding = match[1];
+  var q = 1;
+  if (match[2]) {
+    var params = match[2].split(';');
+    for (var j = 0; j < params.length; j++) {
+      var p = params[j].trim().split('=');
+      if (p[0] === 'q') {
+        q = parseFloat(p[1]);
+        break;
+      }
+    }
+  }
+
+  return {
+    encoding: encoding,
+    q: q,
+    i: i
+  };
+}
+
+/**
+ * Get the priority of an encoding.
+ * @private
+ */
+
+function getEncodingPriority(encoding, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify(encoding, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the encoding.
+ * @private
+ */
+
+function specify(encoding, spec, index) {
+  var s = 0;
+  if(spec.encoding.toLowerCase() === encoding.toLowerCase()){
+    s |= 1;
+  } else if (spec.encoding !== '*' ) {
+    return null
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s
+  }
+};
+
+/**
+ * Get the preferred encodings from an Accept-Encoding header.
+ * @public
+ */
+
+function preferredEncodings(accept, provided) {
+  var accepts = parseAcceptEncoding(accept || '');
+
+  if (!provided) {
+    // sorted list of all encodings
+    return accepts
+      .filter(isQuality)
+      .sort(compareSpecs)
+      .map(getFullEncoding);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getEncodingPriority(type, accepts, index);
+  });
+
+  // sorted list of accepted encodings
+  return priorities.filter(isQuality).sort(compareSpecs).map(function getEncoding(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full encoding string.
+ * @private
+ */
+
+function getFullEncoding(spec) {
+  return spec.encoding;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality(spec) {
+  return spec.q > 0;
+}
+
+
+/***/ }),
+
+/***/ 19722:
+/***/ ((module) => {
+
+"use strict";
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = preferredLanguages;
+module.exports.preferredLanguages = preferredLanguages;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleLanguageRegExp = /^\s*([^\s\-;]+)(?:-([^\s;]+))?\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept-Language header.
+ * @private
+ */
+
+function parseAcceptLanguage(accept) {
+  var accepts = accept.split(',');
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var language = parseLanguage(accepts[i].trim(), i);
+
+    if (language) {
+      accepts[j++] = language;
+    }
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse a language from the Accept-Language header.
+ * @private
+ */
+
+function parseLanguage(str, i) {
+  var match = simpleLanguageRegExp.exec(str);
+  if (!match) return null;
+
+  var prefix = match[1]
+  var suffix = match[2]
+  var full = prefix
+
+  if (suffix) full += "-" + suffix;
+
+  var q = 1;
+  if (match[3]) {
+    var params = match[3].split(';')
+    for (var j = 0; j < params.length; j++) {
+      var p = params[j].split('=');
+      if (p[0] === 'q') q = parseFloat(p[1]);
+    }
+  }
+
+  return {
+    prefix: prefix,
+    suffix: suffix,
+    q: q,
+    i: i,
+    full: full
+  };
+}
+
+/**
+ * Get the priority of a language.
+ * @private
+ */
+
+function getLanguagePriority(language, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify(language, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the language.
+ * @private
+ */
+
+function specify(language, spec, index) {
+  var p = parseLanguage(language)
+  if (!p) return null;
+  var s = 0;
+  if(spec.full.toLowerCase() === p.full.toLowerCase()){
+    s |= 4;
+  } else if (spec.prefix.toLowerCase() === p.full.toLowerCase()) {
+    s |= 2;
+  } else if (spec.full.toLowerCase() === p.prefix.toLowerCase()) {
+    s |= 1;
+  } else if (spec.full !== '*' ) {
+    return null
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s
+  }
+};
+
+/**
+ * Get the preferred languages from an Accept-Language header.
+ * @public
+ */
+
+function preferredLanguages(accept, provided) {
+  // RFC 2616 sec 14.4: no header = *
+  var accepts = parseAcceptLanguage(accept === undefined ? '*' : accept || '');
+
+  if (!provided) {
+    // sorted list of all languages
+    return accepts
+      .filter(isQuality)
+      .sort(compareSpecs)
+      .map(getFullLanguage);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getLanguagePriority(type, accepts, index);
+  });
+
+  // sorted list of accepted languages
+  return priorities.filter(isQuality).sort(compareSpecs).map(function getLanguage(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full language string.
+ * @private
+ */
+
+function getFullLanguage(spec) {
+  return spec.full;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality(spec) {
+  return spec.q > 0;
+}
+
+
+/***/ }),
+
+/***/ 62563:
+/***/ ((module) => {
+
+"use strict";
+/**
+ * negotiator
+ * Copyright(c) 2012 Isaac Z. Schlueter
+ * Copyright(c) 2014 Federico Romero
+ * Copyright(c) 2014-2015 Douglas Christopher Wilson
+ * MIT Licensed
+ */
+
+
+
+/**
+ * Module exports.
+ * @public
+ */
+
+module.exports = preferredMediaTypes;
+module.exports.preferredMediaTypes = preferredMediaTypes;
+
+/**
+ * Module variables.
+ * @private
+ */
+
+var simpleMediaTypeRegExp = /^\s*([^\s\/;]+)\/([^;\s]+)\s*(?:;(.*))?$/;
+
+/**
+ * Parse the Accept header.
+ * @private
+ */
+
+function parseAccept(accept) {
+  var accepts = splitMediaTypes(accept);
+
+  for (var i = 0, j = 0; i < accepts.length; i++) {
+    var mediaType = parseMediaType(accepts[i].trim(), i);
+
+    if (mediaType) {
+      accepts[j++] = mediaType;
+    }
+  }
+
+  // trim accepts
+  accepts.length = j;
+
+  return accepts;
+}
+
+/**
+ * Parse a media type from the Accept header.
+ * @private
+ */
+
+function parseMediaType(str, i) {
+  var match = simpleMediaTypeRegExp.exec(str);
+  if (!match) return null;
+
+  var params = Object.create(null);
+  var q = 1;
+  var subtype = match[2];
+  var type = match[1];
+
+  if (match[3]) {
+    var kvps = splitParameters(match[3]).map(splitKeyValuePair);
+
+    for (var j = 0; j < kvps.length; j++) {
+      var pair = kvps[j];
+      var key = pair[0].toLowerCase();
+      var val = pair[1];
+
+      // get the value, unwrapping quotes
+      var value = val && val[0] === '"' && val[val.length - 1] === '"'
+        ? val.substr(1, val.length - 2)
+        : val;
+
+      if (key === 'q') {
+        q = parseFloat(value);
+        break;
+      }
+
+      // store parameter
+      params[key] = value;
+    }
+  }
+
+  return {
+    type: type,
+    subtype: subtype,
+    params: params,
+    q: q,
+    i: i
+  };
+}
+
+/**
+ * Get the priority of a media type.
+ * @private
+ */
+
+function getMediaTypePriority(type, accepted, index) {
+  var priority = {o: -1, q: 0, s: 0};
+
+  for (var i = 0; i < accepted.length; i++) {
+    var spec = specify(type, accepted[i], index);
+
+    if (spec && (priority.s - spec.s || priority.q - spec.q || priority.o - spec.o) < 0) {
+      priority = spec;
+    }
+  }
+
+  return priority;
+}
+
+/**
+ * Get the specificity of the media type.
+ * @private
+ */
+
+function specify(type, spec, index) {
+  var p = parseMediaType(type);
+  var s = 0;
+
+  if (!p) {
+    return null;
+  }
+
+  if(spec.type.toLowerCase() == p.type.toLowerCase()) {
+    s |= 4
+  } else if(spec.type != '*') {
+    return null;
+  }
+
+  if(spec.subtype.toLowerCase() == p.subtype.toLowerCase()) {
+    s |= 2
+  } else if(spec.subtype != '*') {
+    return null;
+  }
+
+  var keys = Object.keys(spec.params);
+  if (keys.length > 0) {
+    if (keys.every(function (k) {
+      return spec.params[k] == '*' || (spec.params[k] || '').toLowerCase() == (p.params[k] || '').toLowerCase();
+    })) {
+      s |= 1
+    } else {
+      return null
+    }
+  }
+
+  return {
+    i: index,
+    o: spec.i,
+    q: spec.q,
+    s: s,
+  }
+}
+
+/**
+ * Get the preferred media types from an Accept header.
+ * @public
+ */
+
+function preferredMediaTypes(accept, provided) {
+  // RFC 2616 sec 14.2: no header = */*
+  var accepts = parseAccept(accept === undefined ? '*/*' : accept || '');
+
+  if (!provided) {
+    // sorted list of all types
+    return accepts
+      .filter(isQuality)
+      .sort(compareSpecs)
+      .map(getFullType);
+  }
+
+  var priorities = provided.map(function getPriority(type, index) {
+    return getMediaTypePriority(type, accepts, index);
+  });
+
+  // sorted list of accepted types
+  return priorities.filter(isQuality).sort(compareSpecs).map(function getType(priority) {
+    return provided[priorities.indexOf(priority)];
+  });
+}
+
+/**
+ * Compare two specs.
+ * @private
+ */
+
+function compareSpecs(a, b) {
+  return (b.q - a.q) || (b.s - a.s) || (a.o - b.o) || (a.i - b.i) || 0;
+}
+
+/**
+ * Get full type string.
+ * @private
+ */
+
+function getFullType(spec) {
+  return spec.type + '/' + spec.subtype;
+}
+
+/**
+ * Check if a spec has any quality.
+ * @private
+ */
+
+function isQuality(spec) {
+  return spec.q > 0;
+}
+
+/**
+ * Count the number of quotes in a string.
+ * @private
+ */
+
+function quoteCount(string) {
+  var count = 0;
+  var index = 0;
+
+  while ((index = string.indexOf('"', index)) !== -1) {
+    count++;
+    index++;
+  }
+
+  return count;
+}
+
+/**
+ * Split a key value pair.
+ * @private
+ */
+
+function splitKeyValuePair(str) {
+  var index = str.indexOf('=');
+  var key;
+  var val;
+
+  if (index === -1) {
+    key = str;
+  } else {
+    key = str.substr(0, index);
+    val = str.substr(index + 1);
+  }
+
+  return [key, val];
+}
+
+/**
+ * Split an Accept header into media types.
+ * @private
+ */
+
+function splitMediaTypes(accept) {
+  var accepts = accept.split(',');
+
+  for (var i = 1, j = 0; i < accepts.length; i++) {
+    if (quoteCount(accepts[j]) % 2 == 0) {
+      accepts[++j] = accepts[i];
+    } else {
+      accepts[j] += ',' + accepts[i];
+    }
+  }
+
+  // trim accepts
+  accepts.length = j + 1;
+
+  return accepts;
+}
+
+/**
+ * Split a string of parameters.
+ * @private
+ */
+
+function splitParameters(str) {
+  var parameters = str.split(';');
+
+  for (var i = 1, j = 0; i < parameters.length; i++) {
+    if (quoteCount(parameters[j]) % 2 == 0) {
+      parameters[++j] = parameters[i];
+    } else {
+      parameters[j] += ';' + parameters[i];
+    }
+  }
+
+  // trim parameters
+  parameters.length = j + 1;
+
+  for (var i = 0; i < parameters.length; i++) {
+    parameters[i] = parameters[i].trim();
+  }
+
+  return parameters;
+}
+
+
+/***/ }),
+
+/***/ 97760:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/*! node-domexception. MIT License. Jimmy Wärting <https://jimmy.warting.se/opensource> */
+
+if (!globalThis.DOMException) {
+  try {
+    const { MessageChannel } = __nccwpck_require__(71267),
+    port = new MessageChannel().port1,
+    ab = new ArrayBuffer()
+    port.postMessage(ab, [ab, ab])
+  } catch (err) {
+    err.constructor.name === 'DOMException' && (
+      globalThis.DOMException = err.constructor
+    )
+  }
+}
+
+module.exports = globalThis.DOMException
+
+
+/***/ }),
+
+/***/ 20504:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var hasMap = typeof Map === 'function' && Map.prototype;
+var mapSizeDescriptor = Object.getOwnPropertyDescriptor && hasMap ? Object.getOwnPropertyDescriptor(Map.prototype, 'size') : null;
+var mapSize = hasMap && mapSizeDescriptor && typeof mapSizeDescriptor.get === 'function' ? mapSizeDescriptor.get : null;
+var mapForEach = hasMap && Map.prototype.forEach;
+var hasSet = typeof Set === 'function' && Set.prototype;
+var setSizeDescriptor = Object.getOwnPropertyDescriptor && hasSet ? Object.getOwnPropertyDescriptor(Set.prototype, 'size') : null;
+var setSize = hasSet && setSizeDescriptor && typeof setSizeDescriptor.get === 'function' ? setSizeDescriptor.get : null;
+var setForEach = hasSet && Set.prototype.forEach;
+var hasWeakMap = typeof WeakMap === 'function' && WeakMap.prototype;
+var weakMapHas = hasWeakMap ? WeakMap.prototype.has : null;
+var hasWeakSet = typeof WeakSet === 'function' && WeakSet.prototype;
+var weakSetHas = hasWeakSet ? WeakSet.prototype.has : null;
+var hasWeakRef = typeof WeakRef === 'function' && WeakRef.prototype;
+var weakRefDeref = hasWeakRef ? WeakRef.prototype.deref : null;
+var booleanValueOf = Boolean.prototype.valueOf;
+var objectToString = Object.prototype.toString;
+var functionToString = Function.prototype.toString;
+var $match = String.prototype.match;
+var $slice = String.prototype.slice;
+var $replace = String.prototype.replace;
+var $toUpperCase = String.prototype.toUpperCase;
+var $toLowerCase = String.prototype.toLowerCase;
+var $test = RegExp.prototype.test;
+var $concat = Array.prototype.concat;
+var $join = Array.prototype.join;
+var $arrSlice = Array.prototype.slice;
+var $floor = Math.floor;
+var bigIntValueOf = typeof BigInt === 'function' ? BigInt.prototype.valueOf : null;
+var gOPS = Object.getOwnPropertySymbols;
+var symToString = typeof Symbol === 'function' && typeof Symbol.iterator === 'symbol' ? Symbol.prototype.toString : null;
+var hasShammedSymbols = typeof Symbol === 'function' && typeof Symbol.iterator === 'object';
+// ie, `has-tostringtag/shams
+var toStringTag = typeof Symbol === 'function' && Symbol.toStringTag && (typeof Symbol.toStringTag === hasShammedSymbols ? 'object' : 'symbol')
+    ? Symbol.toStringTag
+    : null;
+var isEnumerable = Object.prototype.propertyIsEnumerable;
+
+var gPO = (typeof Reflect === 'function' ? Reflect.getPrototypeOf : Object.getPrototypeOf) || (
+    [].__proto__ === Array.prototype // eslint-disable-line no-proto
+        ? function (O) {
+            return O.__proto__; // eslint-disable-line no-proto
+        }
+        : null
+);
+
+function addNumericSeparator(num, str) {
+    if (
+        num === Infinity
+        || num === -Infinity
+        || num !== num
+        || (num && num > -1000 && num < 1000)
+        || $test.call(/e/, str)
+    ) {
+        return str;
+    }
+    var sepRegex = /[0-9](?=(?:[0-9]{3})+(?![0-9]))/g;
+    if (typeof num === 'number') {
+        var int = num < 0 ? -$floor(-num) : $floor(num); // trunc(num)
+        if (int !== num) {
+            var intStr = String(int);
+            var dec = $slice.call(str, intStr.length + 1);
+            return $replace.call(intStr, sepRegex, '$&_') + '.' + $replace.call($replace.call(dec, /([0-9]{3})/g, '$&_'), /_$/, '');
+        }
+    }
+    return $replace.call(str, sepRegex, '$&_');
+}
+
+var utilInspect = __nccwpck_require__(37265);
+var inspectCustom = utilInspect.custom;
+var inspectSymbol = isSymbol(inspectCustom) ? inspectCustom : null;
+
+module.exports = function inspect_(obj, options, depth, seen) {
+    var opts = options || {};
+
+    if (has(opts, 'quoteStyle') && (opts.quoteStyle !== 'single' && opts.quoteStyle !== 'double')) {
+        throw new TypeError('option "quoteStyle" must be "single" or "double"');
+    }
+    if (
+        has(opts, 'maxStringLength') && (typeof opts.maxStringLength === 'number'
+            ? opts.maxStringLength < 0 && opts.maxStringLength !== Infinity
+            : opts.maxStringLength !== null
+        )
+    ) {
+        throw new TypeError('option "maxStringLength", if provided, must be a positive integer, Infinity, or `null`');
+    }
+    var customInspect = has(opts, 'customInspect') ? opts.customInspect : true;
+    if (typeof customInspect !== 'boolean' && customInspect !== 'symbol') {
+        throw new TypeError('option "customInspect", if provided, must be `true`, `false`, or `\'symbol\'`');
+    }
+
+    if (
+        has(opts, 'indent')
+        && opts.indent !== null
+        && opts.indent !== '\t'
+        && !(parseInt(opts.indent, 10) === opts.indent && opts.indent > 0)
+    ) {
+        throw new TypeError('option "indent" must be "\\t", an integer > 0, or `null`');
+    }
+    if (has(opts, 'numericSeparator') && typeof opts.numericSeparator !== 'boolean') {
+        throw new TypeError('option "numericSeparator", if provided, must be `true` or `false`');
+    }
+    var numericSeparator = opts.numericSeparator;
+
+    if (typeof obj === 'undefined') {
+        return 'undefined';
+    }
+    if (obj === null) {
+        return 'null';
+    }
+    if (typeof obj === 'boolean') {
+        return obj ? 'true' : 'false';
+    }
+
+    if (typeof obj === 'string') {
+        return inspectString(obj, opts);
+    }
+    if (typeof obj === 'number') {
+        if (obj === 0) {
+            return Infinity / obj > 0 ? '0' : '-0';
+        }
+        var str = String(obj);
+        return numericSeparator ? addNumericSeparator(obj, str) : str;
+    }
+    if (typeof obj === 'bigint') {
+        var bigIntStr = String(obj) + 'n';
+        return numericSeparator ? addNumericSeparator(obj, bigIntStr) : bigIntStr;
+    }
+
+    var maxDepth = typeof opts.depth === 'undefined' ? 5 : opts.depth;
+    if (typeof depth === 'undefined') { depth = 0; }
+    if (depth >= maxDepth && maxDepth > 0 && typeof obj === 'object') {
+        return isArray(obj) ? '[Array]' : '[Object]';
+    }
+
+    var indent = getIndent(opts, depth);
+
+    if (typeof seen === 'undefined') {
+        seen = [];
+    } else if (indexOf(seen, obj) >= 0) {
+        return '[Circular]';
+    }
+
+    function inspect(value, from, noIndent) {
+        if (from) {
+            seen = $arrSlice.call(seen);
+            seen.push(from);
+        }
+        if (noIndent) {
+            var newOpts = {
+                depth: opts.depth
+            };
+            if (has(opts, 'quoteStyle')) {
+                newOpts.quoteStyle = opts.quoteStyle;
+            }
+            return inspect_(value, newOpts, depth + 1, seen);
+        }
+        return inspect_(value, opts, depth + 1, seen);
+    }
+
+    if (typeof obj === 'function' && !isRegExp(obj)) { // in older engines, regexes are callable
+        var name = nameOf(obj);
+        var keys = arrObjKeys(obj, inspect);
+        return '[Function' + (name ? ': ' + name : ' (anonymous)') + ']' + (keys.length > 0 ? ' { ' + $join.call(keys, ', ') + ' }' : '');
+    }
+    if (isSymbol(obj)) {
+        var symString = hasShammedSymbols ? $replace.call(String(obj), /^(Symbol\(.*\))_[^)]*$/, '$1') : symToString.call(obj);
+        return typeof obj === 'object' && !hasShammedSymbols ? markBoxed(symString) : symString;
+    }
+    if (isElement(obj)) {
+        var s = '<' + $toLowerCase.call(String(obj.nodeName));
+        var attrs = obj.attributes || [];
+        for (var i = 0; i < attrs.length; i++) {
+            s += ' ' + attrs[i].name + '=' + wrapQuotes(quote(attrs[i].value), 'double', opts);
+        }
+        s += '>';
+        if (obj.childNodes && obj.childNodes.length) { s += '...'; }
+        s += '</' + $toLowerCase.call(String(obj.nodeName)) + '>';
+        return s;
+    }
+    if (isArray(obj)) {
+        if (obj.length === 0) { return '[]'; }
+        var xs = arrObjKeys(obj, inspect);
+        if (indent && !singleLineValues(xs)) {
+            return '[' + indentedJoin(xs, indent) + ']';
+        }
+        return '[ ' + $join.call(xs, ', ') + ' ]';
+    }
+    if (isError(obj)) {
+        var parts = arrObjKeys(obj, inspect);
+        if (!('cause' in Error.prototype) && 'cause' in obj && !isEnumerable.call(obj, 'cause')) {
+            return '{ [' + String(obj) + '] ' + $join.call($concat.call('[cause]: ' + inspect(obj.cause), parts), ', ') + ' }';
+        }
+        if (parts.length === 0) { return '[' + String(obj) + ']'; }
+        return '{ [' + String(obj) + '] ' + $join.call(parts, ', ') + ' }';
+    }
+    if (typeof obj === 'object' && customInspect) {
+        if (inspectSymbol && typeof obj[inspectSymbol] === 'function' && utilInspect) {
+            return utilInspect(obj, { depth: maxDepth - depth });
+        } else if (customInspect !== 'symbol' && typeof obj.inspect === 'function') {
+            return obj.inspect();
+        }
+    }
+    if (isMap(obj)) {
+        var mapParts = [];
+        if (mapForEach) {
+            mapForEach.call(obj, function (value, key) {
+                mapParts.push(inspect(key, obj, true) + ' => ' + inspect(value, obj));
+            });
+        }
+        return collectionOf('Map', mapSize.call(obj), mapParts, indent);
+    }
+    if (isSet(obj)) {
+        var setParts = [];
+        if (setForEach) {
+            setForEach.call(obj, function (value) {
+                setParts.push(inspect(value, obj));
+            });
+        }
+        return collectionOf('Set', setSize.call(obj), setParts, indent);
+    }
+    if (isWeakMap(obj)) {
+        return weakCollectionOf('WeakMap');
+    }
+    if (isWeakSet(obj)) {
+        return weakCollectionOf('WeakSet');
+    }
+    if (isWeakRef(obj)) {
+        return weakCollectionOf('WeakRef');
+    }
+    if (isNumber(obj)) {
+        return markBoxed(inspect(Number(obj)));
+    }
+    if (isBigInt(obj)) {
+        return markBoxed(inspect(bigIntValueOf.call(obj)));
+    }
+    if (isBoolean(obj)) {
+        return markBoxed(booleanValueOf.call(obj));
+    }
+    if (isString(obj)) {
+        return markBoxed(inspect(String(obj)));
+    }
+    if (!isDate(obj) && !isRegExp(obj)) {
+        var ys = arrObjKeys(obj, inspect);
+        var isPlainObject = gPO ? gPO(obj) === Object.prototype : obj instanceof Object || obj.constructor === Object;
+        var protoTag = obj instanceof Object ? '' : 'null prototype';
+        var stringTag = !isPlainObject && toStringTag && Object(obj) === obj && toStringTag in obj ? $slice.call(toStr(obj), 8, -1) : protoTag ? 'Object' : '';
+        var constructorTag = isPlainObject || typeof obj.constructor !== 'function' ? '' : obj.constructor.name ? obj.constructor.name + ' ' : '';
+        var tag = constructorTag + (stringTag || protoTag ? '[' + $join.call($concat.call([], stringTag || [], protoTag || []), ': ') + '] ' : '');
+        if (ys.length === 0) { return tag + '{}'; }
+        if (indent) {
+            return tag + '{' + indentedJoin(ys, indent) + '}';
+        }
+        return tag + '{ ' + $join.call(ys, ', ') + ' }';
+    }
+    return String(obj);
+};
+
+function wrapQuotes(s, defaultStyle, opts) {
+    var quoteChar = (opts.quoteStyle || defaultStyle) === 'double' ? '"' : "'";
+    return quoteChar + s + quoteChar;
+}
+
+function quote(s) {
