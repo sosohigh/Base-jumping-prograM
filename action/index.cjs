@@ -117092,3 +117092,2301 @@ function redaction (opts, serialize) {
 
     // path with at least two segments:
     // if ns is already redacted at the top level, ignore lower level redactions
+    if (o[ns] === null) {
+      return o
+    }
+
+    const { index } = next
+    const nextPath = `${str.substr(index, str.length - 1)}`
+
+    o[ns] = o[ns] || []
+
+    // shape is a mix of paths beginning with literal values and wildcard
+    // paths [ "a.b.c", "*.b.z" ] should reduce to a shape of
+    // { "a": [ "b.c", "b.z" ], *: [ "b.z" ] }
+    // note: "b.z" is in both "a" and * arrays because "a" matches the wildcard.
+    // (* entry has wildcardFirstSym as key)
+    if (ns !== wildcardFirstSym && o[ns].length === 0) {
+      // first time ns's get all '*' redactions so far
+      o[ns].push(...(o[wildcardFirstSym] || []))
+    }
+
+    if (ns === wildcardFirstSym) {
+      // new * path gets added to all previously registered literal ns's.
+      Object.keys(o).forEach(function (k) {
+        if (o[k]) {
+          o[k].push(nextPath)
+        }
+      })
+    }
+
+    o[ns].push(nextPath)
+    return o
+  }, {})
+
+  // the redactor assigned to the format symbol key
+  // provides top level redaction for instances where
+  // an object is interpolated into the msg string
+  const result = {
+    [redactFmtSym]: fastRedact({ paths, censor, serialize, strict })
+  }
+
+  const topCensor = (...args) => {
+    return typeof censor === 'function' ? serialize(censor(...args)) : serialize(censor)
+  }
+
+  return [...Object.keys(shape), ...Object.getOwnPropertySymbols(shape)].reduce((o, k) => {
+    // top level key:
+    if (shape[k] === null) {
+      o[k] = (value) => topCensor(value, [k])
+    } else {
+      const wrappedCensor = typeof censor === 'function'
+        ? (value, path) => {
+            return censor(value, [k, ...path])
+          }
+        : censor
+      o[k] = fastRedact({
+        paths: shape[k],
+        censor: wrappedCensor,
+        serialize,
+        strict
+      })
+    }
+    return o
+  }, result)
+}
+
+function handle (opts) {
+  if (Array.isArray(opts)) {
+    opts = { paths: opts, censor: CENSOR }
+    validate(opts)
+    return opts
+  }
+  let { paths, censor = CENSOR, remove } = opts
+  if (Array.isArray(paths) === false) { throw Error('pino – redact must contain an array of strings') }
+  if (remove === true) censor = undefined
+  validate({ paths, censor })
+
+  return { paths, censor }
+}
+
+module.exports = redaction
+
+
+/***/ }),
+
+/***/ 23957:
+/***/ ((module) => {
+
+"use strict";
+
+
+const setLevelSym = Symbol('pino.setLevel')
+const getLevelSym = Symbol('pino.getLevel')
+const levelValSym = Symbol('pino.levelVal')
+const useLevelLabelsSym = Symbol('pino.useLevelLabels')
+const useOnlyCustomLevelsSym = Symbol('pino.useOnlyCustomLevels')
+const mixinSym = Symbol('pino.mixin')
+
+const lsCacheSym = Symbol('pino.lsCache')
+const chindingsSym = Symbol('pino.chindings')
+const parsedChindingsSym = Symbol('pino.parsedChindings')
+
+const asJsonSym = Symbol('pino.asJson')
+const writeSym = Symbol('pino.write')
+const redactFmtSym = Symbol('pino.redactFmt')
+
+const timeSym = Symbol('pino.time')
+const timeSliceIndexSym = Symbol('pino.timeSliceIndex')
+const streamSym = Symbol('pino.stream')
+const stringifySym = Symbol('pino.stringify')
+const stringifiersSym = Symbol('pino.stringifiers')
+const endSym = Symbol('pino.end')
+const formatOptsSym = Symbol('pino.formatOpts')
+const messageKeySym = Symbol('pino.messageKey')
+const nestedKeySym = Symbol('pino.nestedKey')
+const mixinMergeStrategySym = Symbol('pino.mixinMergeStrategy')
+
+const wildcardFirstSym = Symbol('pino.wildcardFirst')
+
+// public symbols, no need to use the same pino
+// version for these
+const serializersSym = Symbol.for('pino.serializers')
+const formattersSym = Symbol.for('pino.formatters')
+const hooksSym = Symbol.for('pino.hooks')
+const needsMetadataGsym = Symbol.for('pino.metadata')
+
+module.exports = {
+  setLevelSym,
+  getLevelSym,
+  levelValSym,
+  useLevelLabelsSym,
+  mixinSym,
+  lsCacheSym,
+  chindingsSym,
+  parsedChindingsSym,
+  asJsonSym,
+  writeSym,
+  serializersSym,
+  redactFmtSym,
+  timeSym,
+  timeSliceIndexSym,
+  streamSym,
+  stringifySym,
+  stringifiersSym,
+  endSym,
+  formatOptsSym,
+  messageKeySym,
+  nestedKeySym,
+  wildcardFirstSym,
+  needsMetadataGsym,
+  useOnlyCustomLevelsSym,
+  formattersSym,
+  hooksSym,
+  mixinMergeStrategySym
+}
+
+
+/***/ }),
+
+/***/ 61866:
+/***/ ((module) => {
+
+"use strict";
+
+
+const nullTime = () => ''
+
+const epochTime = () => `,"time":${Date.now()}`
+
+const unixTime = () => `,"time":${Math.round(Date.now() / 1000.0)}`
+
+const isoTime = () => `,"time":"${new Date(Date.now()).toISOString()}"` // using Date.now() for testability
+
+module.exports = { nullTime, epochTime, unixTime, isoTime }
+
+
+/***/ }),
+
+/***/ 51521:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+/* eslint no-prototype-builtins: 0 */
+
+const format = __nccwpck_require__(5933)
+const { mapHttpRequest, mapHttpResponse } = __nccwpck_require__(73757)
+const SonicBoom = __nccwpck_require__(16863)
+const stringifySafe = __nccwpck_require__(17676)
+const {
+  lsCacheSym,
+  chindingsSym,
+  parsedChindingsSym,
+  writeSym,
+  serializersSym,
+  formatOptsSym,
+  endSym,
+  stringifiersSym,
+  stringifySym,
+  wildcardFirstSym,
+  needsMetadataGsym,
+  redactFmtSym,
+  streamSym,
+  nestedKeySym,
+  formattersSym,
+  messageKeySym
+} = __nccwpck_require__(23957)
+
+function noop () {}
+
+function genLog (level, hook) {
+  if (!hook) return LOG
+
+  return function hookWrappedLog (...args) {
+    hook.call(this, args, LOG, level)
+  }
+
+  function LOG (o, ...n) {
+    if (typeof o === 'object') {
+      let msg = o
+      if (o !== null) {
+        if (o.method && o.headers && o.socket) {
+          o = mapHttpRequest(o)
+        } else if (typeof o.setHeader === 'function') {
+          o = mapHttpResponse(o)
+        }
+      }
+      if (this[nestedKeySym]) o = { [this[nestedKeySym]]: o }
+      let formatParams
+      if (msg === null && n.length === 0) {
+        formatParams = [null]
+      } else {
+        msg = n.shift()
+        formatParams = n
+      }
+      this[writeSym](o, format(msg, formatParams, this[formatOptsSym]), level)
+    } else {
+      this[writeSym](null, format(o, n, this[formatOptsSym]), level)
+    }
+  }
+}
+
+// magically escape strings for json
+// relying on their charCodeAt
+// everything below 32 needs JSON.stringify()
+// 34 and 92 happens all the time, so we
+// have a fast case for them
+function asString (str) {
+  let result = ''
+  let last = 0
+  let found = false
+  let point = 255
+  const l = str.length
+  if (l > 100) {
+    return JSON.stringify(str)
+  }
+  for (var i = 0; i < l && point >= 32; i++) {
+    point = str.charCodeAt(i)
+    if (point === 34 || point === 92) {
+      result += str.slice(last, i) + '\\'
+      last = i
+      found = true
+    }
+  }
+  if (!found) {
+    result = str
+  } else {
+    result += str.slice(last)
+  }
+  return point < 32 ? JSON.stringify(str) : '"' + result + '"'
+}
+
+function asJson (obj, msg, num, time) {
+  const stringify = this[stringifySym]
+  const stringifiers = this[stringifiersSym]
+  const end = this[endSym]
+  const chindings = this[chindingsSym]
+  const serializers = this[serializersSym]
+  const formatters = this[formattersSym]
+  const messageKey = this[messageKeySym]
+  let data = this[lsCacheSym][num] + time
+
+  // we need the child bindings added to the output first so instance logged
+  // objects can take precedence when JSON.parse-ing the resulting log line
+  data = data + chindings
+
+  let value
+  const notHasOwnProperty = obj.hasOwnProperty === undefined
+  if (formatters.log) {
+    obj = formatters.log(obj)
+  }
+  if (msg !== undefined) {
+    obj[messageKey] = msg
+  }
+  const wildcardStringifier = stringifiers[wildcardFirstSym]
+  for (const key in obj) {
+    value = obj[key]
+    if ((notHasOwnProperty || obj.hasOwnProperty(key)) && value !== undefined) {
+      value = serializers[key] ? serializers[key](value) : value
+
+      const stringifier = stringifiers[key] || wildcardStringifier
+
+      switch (typeof value) {
+        case 'undefined':
+        case 'function':
+          continue
+        case 'number':
+          /* eslint no-fallthrough: "off" */
+          if (Number.isFinite(value) === false) {
+            value = null
+          }
+        // this case explicitly falls through to the next one
+        case 'boolean':
+          if (stringifier) value = stringifier(value)
+          break
+        case 'string':
+          value = (stringifier || asString)(value)
+          break
+        default:
+          value = (stringifier || stringify)(value)
+      }
+      if (value === undefined) continue
+      data += ',"' + key + '":' + value
+    }
+  }
+
+  return data + end
+}
+
+function asChindings (instance, bindings) {
+  let value
+  let data = instance[chindingsSym]
+  const stringify = instance[stringifySym]
+  const stringifiers = instance[stringifiersSym]
+  const wildcardStringifier = stringifiers[wildcardFirstSym]
+  const serializers = instance[serializersSym]
+  const formatter = instance[formattersSym].bindings
+  bindings = formatter(bindings)
+
+  for (const key in bindings) {
+    value = bindings[key]
+    const valid = key !== 'level' &&
+      key !== 'serializers' &&
+      key !== 'formatters' &&
+      key !== 'customLevels' &&
+      bindings.hasOwnProperty(key) &&
+      value !== undefined
+    if (valid === true) {
+      value = serializers[key] ? serializers[key](value) : value
+      value = (stringifiers[key] || wildcardStringifier || stringify)(value)
+      if (value === undefined) continue
+      data += ',"' + key + '":' + value
+    }
+  }
+  return data
+}
+
+function getPrettyStream (opts, prettifier, dest, instance) {
+  if (prettifier && typeof prettifier === 'function') {
+    prettifier = prettifier.bind(instance)
+    return prettifierMetaWrapper(prettifier(opts), dest, opts)
+  }
+  try {
+    const prettyFactory = (__nccwpck_require__(67362).prettyFactory) || __nccwpck_require__(67362)
+    prettyFactory.asMetaWrapper = prettifierMetaWrapper
+    return prettifierMetaWrapper(prettyFactory(opts), dest, opts)
+  } catch (e) {
+    if (e.message.startsWith("Cannot find module 'pino-pretty'")) {
+      throw Error('Missing `pino-pretty` module: `pino-pretty` must be installed separately')
+    };
+    throw e
+  }
+}
+
+function prettifierMetaWrapper (pretty, dest, opts) {
+  opts = Object.assign({ suppressFlushSyncWarning: false }, opts)
+  let warned = false
+  return {
+    [needsMetadataGsym]: true,
+    lastLevel: 0,
+    lastMsg: null,
+    lastObj: null,
+    lastLogger: null,
+    flushSync () {
+      if (opts.suppressFlushSyncWarning || warned) {
+        return
+      }
+      warned = true
+      setMetadataProps(dest, this)
+      dest.write(pretty(Object.assign({
+        level: 40, // warn
+        msg: 'pino.final with prettyPrint does not support flushing',
+        time: Date.now()
+      }, this.chindings())))
+    },
+    chindings () {
+      const lastLogger = this.lastLogger
+      let chindings = null
+
+      // protection against flushSync being called before logging
+      // anything
+      if (!lastLogger) {
+        return null
+      }
+
+      if (lastLogger.hasOwnProperty(parsedChindingsSym)) {
+        chindings = lastLogger[parsedChindingsSym]
+      } else {
+        chindings = JSON.parse('{' + lastLogger[chindingsSym].substr(1) + '}')
+        lastLogger[parsedChindingsSym] = chindings
+      }
+
+      return chindings
+    },
+    write (chunk) {
+      const lastLogger = this.lastLogger
+      const chindings = this.chindings()
+
+      let time = this.lastTime
+
+      if (time.match(/^\d+/)) {
+        time = parseInt(time)
+      } else {
+        time = time.slice(1, -1)
+      }
+
+      const lastObj = this.lastObj
+      const lastMsg = this.lastMsg
+      const errorProps = null
+
+      const formatters = lastLogger[formattersSym]
+      const formattedObj = formatters.log ? formatters.log(lastObj) : lastObj
+
+      const messageKey = lastLogger[messageKeySym]
+      if (lastMsg && formattedObj && !formattedObj.hasOwnProperty(messageKey)) {
+        formattedObj[messageKey] = lastMsg
+      }
+
+      const obj = Object.assign({
+        level: this.lastLevel,
+        time
+      }, formattedObj, errorProps)
+
+      const serializers = lastLogger[serializersSym]
+      const keys = Object.keys(serializers)
+
+      for (var i = 0; i < keys.length; i++) {
+        const key = keys[i]
+        if (obj[key] !== undefined) {
+          obj[key] = serializers[key](obj[key])
+        }
+      }
+
+      for (const key in chindings) {
+        if (!obj.hasOwnProperty(key)) {
+          obj[key] = chindings[key]
+        }
+      }
+
+      const stringifiers = lastLogger[stringifiersSym]
+      const redact = stringifiers[redactFmtSym]
+
+      const formatted = pretty(typeof redact === 'function' ? redact(obj) : obj)
+      if (formatted === undefined) return
+
+      setMetadataProps(dest, this)
+      dest.write(formatted)
+    }
+  }
+}
+
+function hasBeenTampered (stream) {
+  return stream.write !== stream.constructor.prototype.write
+}
+
+function buildSafeSonicBoom (opts) {
+  const stream = new SonicBoom(opts)
+  stream.on('error', filterBrokenPipe)
+  return stream
+
+  function filterBrokenPipe (err) {
+    // TODO verify on Windows
+    if (err.code === 'EPIPE') {
+      // If we get EPIPE, we should stop logging here
+      // however we have no control to the consumer of
+      // SonicBoom, so we just overwrite the write method
+      stream.write = noop
+      stream.end = noop
+      stream.flushSync = noop
+      stream.destroy = noop
+      return
+    }
+    stream.removeListener('error', filterBrokenPipe)
+    stream.emit('error', err)
+  }
+}
+
+function createArgsNormalizer (defaultOptions) {
+  return function normalizeArgs (instance, opts = {}, stream) {
+    // support stream as a string
+    if (typeof opts === 'string') {
+      stream = buildSafeSonicBoom({ dest: opts, sync: true })
+      opts = {}
+    } else if (typeof stream === 'string') {
+      stream = buildSafeSonicBoom({ dest: stream, sync: true })
+    } else if (opts instanceof SonicBoom || opts.writable || opts._writableState) {
+      stream = opts
+      opts = null
+    }
+    opts = Object.assign({}, defaultOptions, opts)
+    if ('extreme' in opts) {
+      throw Error('The extreme option has been removed, use pino.destination({ sync: false }) instead')
+    }
+    if ('onTerminated' in opts) {
+      throw Error('The onTerminated option has been removed, use pino.final instead')
+    }
+    if ('changeLevelName' in opts) {
+      process.emitWarning(
+        'The changeLevelName option is deprecated and will be removed in v7. Use levelKey instead.',
+        { code: 'changeLevelName_deprecation' }
+      )
+      opts.levelKey = opts.changeLevelName
+      delete opts.changeLevelName
+    }
+    const { enabled, prettyPrint, prettifier, messageKey } = opts
+    if (enabled === false) opts.level = 'silent'
+    stream = stream || process.stdout
+    if (stream === process.stdout && stream.fd >= 0 && !hasBeenTampered(stream)) {
+      stream = buildSafeSonicBoom({ fd: stream.fd, sync: true })
+    }
+    if (prettyPrint) {
+      const prettyOpts = Object.assign({ messageKey }, prettyPrint)
+      stream = getPrettyStream(prettyOpts, prettifier, stream, instance)
+    }
+    return { opts, stream }
+  }
+}
+
+function final (logger, handler) {
+  if (typeof logger === 'undefined' || typeof logger.child !== 'function') {
+    throw Error('expected a pino logger instance')
+  }
+  const hasHandler = (typeof handler !== 'undefined')
+  if (hasHandler && typeof handler !== 'function') {
+    throw Error('if supplied, the handler parameter should be a function')
+  }
+  const stream = logger[streamSym]
+  if (typeof stream.flushSync !== 'function') {
+    throw Error('final requires a stream that has a flushSync method, such as pino.destination')
+  }
+
+  const finalLogger = new Proxy(logger, {
+    get: (logger, key) => {
+      if (key in logger.levels.values) {
+        return (...args) => {
+          logger[key](...args)
+          stream.flushSync()
+        }
+      }
+      return logger[key]
+    }
+  })
+
+  if (!hasHandler) {
+    return finalLogger
+  }
+
+  return (err = null, ...args) => {
+    try {
+      stream.flushSync()
+    } catch (e) {
+      // it's too late to wait for the stream to be ready
+      // because this is a final tick scenario.
+      // in practice there shouldn't be a situation where it isn't
+      // however, swallow the error just in case (and for easier testing)
+    }
+    return handler(err, finalLogger, ...args)
+  }
+}
+
+function stringify (obj) {
+  try {
+    return JSON.stringify(obj)
+  } catch (_) {
+    return stringifySafe(obj)
+  }
+}
+
+function buildFormatters (level, bindings, log) {
+  return {
+    level,
+    bindings,
+    log
+  }
+}
+
+function setMetadataProps (dest, that) {
+  if (dest[needsMetadataGsym] === true) {
+    dest.lastLevel = that.lastLevel
+    dest.lastMsg = that.lastMsg
+    dest.lastObj = that.lastObj
+    dest.lastTime = that.lastTime
+    dest.lastLogger = that.lastLogger
+  }
+}
+
+module.exports = {
+  noop,
+  buildSafeSonicBoom,
+  getPrettyStream,
+  asChindings,
+  asJson,
+  genLog,
+  createArgsNormalizer,
+  final,
+  stringify,
+  buildFormatters
+}
+
+
+/***/ }),
+
+/***/ 73757:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const errSerializer = __nccwpck_require__(79276)
+const reqSerializers = __nccwpck_require__(76343)
+const resSerializers = __nccwpck_require__(71550)
+
+module.exports = {
+  err: errSerializer,
+  mapHttpRequest: reqSerializers.mapHttpRequest,
+  mapHttpResponse: resSerializers.mapHttpResponse,
+  req: reqSerializers.reqSerializer,
+  res: resSerializers.resSerializer,
+
+  wrapErrorSerializer: function wrapErrorSerializer (customSerializer) {
+    if (customSerializer === errSerializer) return customSerializer
+    return function wrapErrSerializer (err) {
+      return customSerializer(errSerializer(err))
+    }
+  },
+
+  wrapRequestSerializer: function wrapRequestSerializer (customSerializer) {
+    if (customSerializer === reqSerializers.reqSerializer) return customSerializer
+    return function wrappedReqSerializer (req) {
+      return customSerializer(reqSerializers.reqSerializer(req))
+    }
+  },
+
+  wrapResponseSerializer: function wrapResponseSerializer (customSerializer) {
+    if (customSerializer === resSerializers.resSerializer) return customSerializer
+    return function wrappedResSerializer (res) {
+      return customSerializer(resSerializers.resSerializer(res))
+    }
+  }
+}
+
+
+/***/ }),
+
+/***/ 79276:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = errSerializer
+
+const { toString } = Object.prototype
+const seen = Symbol('circular-ref-tag')
+const rawSymbol = Symbol('pino-raw-err-ref')
+const pinoErrProto = Object.create({}, {
+  type: {
+    enumerable: true,
+    writable: true,
+    value: undefined
+  },
+  message: {
+    enumerable: true,
+    writable: true,
+    value: undefined
+  },
+  stack: {
+    enumerable: true,
+    writable: true,
+    value: undefined
+  },
+  raw: {
+    enumerable: false,
+    get: function () {
+      return this[rawSymbol]
+    },
+    set: function (val) {
+      this[rawSymbol] = val
+    }
+  }
+})
+Object.defineProperty(pinoErrProto, rawSymbol, {
+  writable: true,
+  value: {}
+})
+
+function errSerializer (err) {
+  if (!(err instanceof Error)) {
+    return err
+  }
+
+  err[seen] = undefined // tag to prevent re-looking at this
+  const _err = Object.create(pinoErrProto)
+  _err.type = toString.call(err.constructor) === '[object Function]'
+    ? err.constructor.name
+    : err.name
+  _err.message = err.message
+  _err.stack = err.stack
+  for (const key in err) {
+    if (_err[key] === undefined) {
+      const val = err[key]
+      if (val instanceof Error) {
+        /* eslint-disable no-prototype-builtins */
+        if (!val.hasOwnProperty(seen)) {
+          _err[key] = errSerializer(val)
+        }
+      } else {
+        _err[key] = val
+      }
+    }
+  }
+
+  delete err[seen] // clean up tag in case err is serialized again later
+  _err.raw = err
+  return _err
+}
+
+
+/***/ }),
+
+/***/ 76343:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = {
+  mapHttpRequest,
+  reqSerializer
+}
+
+const rawSymbol = Symbol('pino-raw-req-ref')
+const pinoReqProto = Object.create({}, {
+  id: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  method: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  url: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  query: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  params: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  headers: {
+    enumerable: true,
+    writable: true,
+    value: {}
+  },
+  remoteAddress: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  remotePort: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  raw: {
+    enumerable: false,
+    get: function () {
+      return this[rawSymbol]
+    },
+    set: function (val) {
+      this[rawSymbol] = val
+    }
+  }
+})
+Object.defineProperty(pinoReqProto, rawSymbol, {
+  writable: true,
+  value: {}
+})
+
+function reqSerializer (req) {
+  // req.info is for hapi compat.
+  const connection = req.info || req.socket
+  const _req = Object.create(pinoReqProto)
+  _req.id = (typeof req.id === 'function' ? req.id() : (req.id || (req.info ? req.info.id : undefined)))
+  _req.method = req.method
+  // req.originalUrl is for expressjs compat.
+  if (req.originalUrl) {
+    _req.url = req.originalUrl
+    _req.query = req.query
+    _req.params = req.params
+  } else {
+    // req.url.path is  for hapi compat.
+    _req.url = req.path || (req.url ? (req.url.path || req.url) : undefined)
+  }
+  _req.headers = req.headers
+  _req.remoteAddress = connection && connection.remoteAddress
+  _req.remotePort = connection && connection.remotePort
+  // req.raw is  for hapi compat/equivalence
+  _req.raw = req.raw || req
+  return _req
+}
+
+function mapHttpRequest (req) {
+  return {
+    req: reqSerializer(req)
+  }
+}
+
+
+/***/ }),
+
+/***/ 71550:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = {
+  mapHttpResponse,
+  resSerializer
+}
+
+const rawSymbol = Symbol('pino-raw-res-ref')
+const pinoResProto = Object.create({}, {
+  statusCode: {
+    enumerable: true,
+    writable: true,
+    value: 0
+  },
+  headers: {
+    enumerable: true,
+    writable: true,
+    value: ''
+  },
+  raw: {
+    enumerable: false,
+    get: function () {
+      return this[rawSymbol]
+    },
+    set: function (val) {
+      this[rawSymbol] = val
+    }
+  }
+})
+Object.defineProperty(pinoResProto, rawSymbol, {
+  writable: true,
+  value: {}
+})
+
+function resSerializer (res) {
+  const _res = Object.create(pinoResProto)
+  _res.statusCode = res.statusCode
+  _res.headers = res.getHeaders ? res.getHeaders() : res._headers
+  _res.raw = res
+  return _res
+}
+
+function mapHttpResponse (res) {
+  return {
+    res: resSerializer(res)
+  }
+}
+
+
+/***/ }),
+
+/***/ 16863:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const fs = __nccwpck_require__(57147)
+const EventEmitter = __nccwpck_require__(82361)
+const flatstr = __nccwpck_require__(35298)
+const inherits = (__nccwpck_require__(73837).inherits)
+
+const BUSY_WRITE_TIMEOUT = 100
+
+const sleep = __nccwpck_require__(86950)
+
+// 16 MB - magic number
+// This constant ensures that SonicBoom only needs
+// 32 MB of free memory to run. In case of having 1GB+
+// of data to write, this prevents an out of memory
+// condition.
+const MAX_WRITE = 16 * 1024 * 1024
+
+function openFile (file, sonic) {
+  sonic._opening = true
+  sonic._writing = true
+  sonic._asyncDrainScheduled = false
+
+  // NOTE: 'error' and 'ready' events emitted below only relevant when sonic.sync===false
+  // for sync mode, there is no way to add a listener that will receive these
+
+  function fileOpened (err, fd) {
+    if (err) {
+      sonic._reopening = false
+      sonic._writing = false
+      sonic._opening = false
+
+      if (sonic.sync) {
+        process.nextTick(() => {
+          if (sonic.listenerCount('error') > 0) {
+            sonic.emit('error', err)
+          }
+        })
+      } else {
+        sonic.emit('error', err)
+      }
+      return
+    }
+
+    sonic.fd = fd
+    sonic.file = file
+    sonic._reopening = false
+    sonic._opening = false
+    sonic._writing = false
+
+    if (sonic.sync) {
+      process.nextTick(() => sonic.emit('ready'))
+    } else {
+      sonic.emit('ready')
+    }
+
+    if (sonic._reopening) {
+      return
+    }
+
+    // start
+    const len = sonic._buf.length
+    if (len > 0 && len > sonic.minLength && !sonic.destroyed) {
+      actualWrite(sonic)
+    }
+  }
+
+  if (sonic.sync) {
+    try {
+      const fd = fs.openSync(file, 'a')
+      fileOpened(null, fd)
+    } catch (err) {
+      fileOpened(err)
+      throw err
+    }
+  } else {
+    fs.open(file, 'a', fileOpened)
+  }
+}
+
+function SonicBoom (opts) {
+  if (!(this instanceof SonicBoom)) {
+    return new SonicBoom(opts)
+  }
+
+  let { fd, dest, minLength, sync } = opts || {}
+
+  fd = fd || dest
+
+  this._buf = ''
+  this.fd = -1
+  this._writing = false
+  this._writingBuf = ''
+  this._ending = false
+  this._reopening = false
+  this._asyncDrainScheduled = false
+  this.file = null
+  this.destroyed = false
+  this.sync = sync || false
+
+  this.minLength = minLength || 0
+
+  if (typeof fd === 'number') {
+    this.fd = fd
+    process.nextTick(() => this.emit('ready'))
+  } else if (typeof fd === 'string') {
+    openFile(fd, this)
+  } else {
+    throw new Error('SonicBoom supports only file descriptors and files')
+  }
+
+  this.release = (err, n) => {
+    if (err) {
+      if (err.code === 'EAGAIN') {
+        if (this.sync) {
+          // This error code should not happen in sync mode, because it is
+          // not using the underlining operating system asynchronous functions.
+          // However it happens, and so we handle it.
+          // Ref: https://github.com/pinojs/pino/issues/783
+          try {
+            sleep(BUSY_WRITE_TIMEOUT)
+            this.release(undefined, 0)
+          } catch (err) {
+            this.release(err)
+          }
+        } else {
+          // Let's give the destination some time to process the chunk.
+          setTimeout(() => {
+            fs.write(this.fd, this._writingBuf, 'utf8', this.release)
+          }, BUSY_WRITE_TIMEOUT)
+        }
+      } else {
+        // The error maybe recoverable later, so just put data back to this._buf
+        this._buf = this._writingBuf + this._buf
+        this._writingBuf = ''
+        this._writing = false
+
+        this.emit('error', err)
+      }
+      return
+    }
+
+    if (this._writingBuf.length !== n) {
+      this._writingBuf = this._writingBuf.slice(n)
+      if (this.sync) {
+        try {
+          do {
+            n = fs.writeSync(this.fd, this._writingBuf, 'utf8')
+            this._writingBuf = this._writingBuf.slice(n)
+          } while (this._writingBuf.length !== 0)
+        } catch (err) {
+          this.release(err)
+          return
+        }
+      } else {
+        fs.write(this.fd, this._writingBuf, 'utf8', this.release)
+        return
+      }
+    }
+
+    this._writingBuf = ''
+
+    if (this.destroyed) {
+      return
+    }
+
+    const len = this._buf.length
+    if (this._reopening) {
+      this._writing = false
+      this._reopening = false
+      this.reopen()
+    } else if (len > 0 && len > this.minLength) {
+      actualWrite(this)
+    } else if (this._ending) {
+      if (len > 0) {
+        actualWrite(this)
+      } else {
+        this._writing = false
+        actualClose(this)
+      }
+    } else {
+      this._writing = false
+      if (this.sync) {
+        if (!this._asyncDrainScheduled) {
+          this._asyncDrainScheduled = true
+          process.nextTick(emitDrain, this)
+        }
+      } else {
+        this.emit('drain')
+      }
+    }
+  }
+
+  this.on('newListener', function (name) {
+    if (name === 'drain') {
+      this._asyncDrainScheduled = false
+    }
+  })
+}
+
+function emitDrain (sonic) {
+  const hasListeners = sonic.listenerCount('drain') > 0
+  if (!hasListeners) return
+  sonic._asyncDrainScheduled = false
+  sonic.emit('drain')
+}
+
+inherits(SonicBoom, EventEmitter)
+
+SonicBoom.prototype.write = function (data) {
+  if (this.destroyed) {
+    throw new Error('SonicBoom destroyed')
+  }
+
+  this._buf += data
+  const len = this._buf.length
+  if (!this._writing && len > this.minLength) {
+    actualWrite(this)
+  }
+  return len < 16384
+}
+
+SonicBoom.prototype.flush = function () {
+  if (this.destroyed) {
+    throw new Error('SonicBoom destroyed')
+  }
+
+  if (this._writing || this.minLength <= 0) {
+    return
+  }
+
+  actualWrite(this)
+}
+
+SonicBoom.prototype.reopen = function (file) {
+  if (this.destroyed) {
+    throw new Error('SonicBoom destroyed')
+  }
+
+  if (this._opening) {
+    this.once('ready', () => {
+      this.reopen(file)
+    })
+    return
+  }
+
+  if (this._ending) {
+    return
+  }
+
+  if (!this.file) {
+    throw new Error('Unable to reopen a file descriptor, you must pass a file to SonicBoom')
+  }
+
+  this._reopening = true
+
+  if (this._writing) {
+    return
+  }
+
+  const fd = this.fd
+  this.once('ready', () => {
+    if (fd !== this.fd) {
+      fs.close(fd, (err) => {
+        if (err) {
+          return this.emit('error', err)
+        }
+      })
+    }
+  })
+
+  openFile(file || this.file, this)
+}
+
+SonicBoom.prototype.end = function () {
+  if (this.destroyed) {
+    throw new Error('SonicBoom destroyed')
+  }
+
+  if (this._opening) {
+    this.once('ready', () => {
+      this.end()
+    })
+    return
+  }
+
+  if (this._ending) {
+    return
+  }
+
+  this._ending = true
+
+  if (!this._writing && this._buf.length > 0 && this.fd >= 0) {
+    actualWrite(this)
+    return
+  }
+
+  if (this._writing) {
+    return
+  }
+
+  actualClose(this)
+}
+
+SonicBoom.prototype.flushSync = function () {
+  if (this.destroyed) {
+    throw new Error('SonicBoom destroyed')
+  }
+
+  if (this.fd < 0) {
+    throw new Error('sonic boom is not ready yet')
+  }
+
+  while (this._buf.length > 0) {
+    try {
+      fs.writeSync(this.fd, this._buf, 'utf8')
+      this._buf = ''
+    } catch (err) {
+      if (err.code !== 'EAGAIN') {
+        throw err
+      }
+
+      sleep(BUSY_WRITE_TIMEOUT)
+    }
+  }
+}
+
+SonicBoom.prototype.destroy = function () {
+  if (this.destroyed) {
+    return
+  }
+  actualClose(this)
+}
+
+function actualWrite (sonic) {
+  sonic._writing = true
+  let buf = sonic._buf
+  const release = sonic.release
+  if (buf.length > MAX_WRITE) {
+    buf = buf.slice(0, MAX_WRITE)
+    sonic._buf = sonic._buf.slice(MAX_WRITE)
+  } else {
+    sonic._buf = ''
+  }
+  flatstr(buf)
+  sonic._writingBuf = buf
+  if (sonic.sync) {
+    try {
+      const written = fs.writeSync(sonic.fd, buf, 'utf8')
+      release(null, written)
+    } catch (err) {
+      release(err)
+    }
+  } else {
+    fs.write(sonic.fd, buf, 'utf8', release)
+  }
+}
+
+function actualClose (sonic) {
+  if (sonic.fd === -1) {
+    sonic.once('ready', actualClose.bind(null, sonic))
+    return
+  }
+  // TODO write a test to check if we are not leaking fds
+  fs.close(sonic.fd, (err) => {
+    if (err) {
+      sonic.emit('error', err)
+      return
+    }
+
+    if (sonic._ending && !sonic._writing) {
+      sonic.emit('finish')
+    }
+    sonic.emit('close')
+  })
+  sonic.destroyed = true
+  sonic._buf = ''
+}
+
+module.exports = SonicBoom
+
+
+/***/ }),
+
+/***/ 79608:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+/* eslint no-prototype-builtins: 0 */
+const os = __nccwpck_require__(22037)
+const stdSerializers = __nccwpck_require__(73757)
+const redaction = __nccwpck_require__(34219)
+const time = __nccwpck_require__(61866)
+const proto = __nccwpck_require__(26899)
+const symbols = __nccwpck_require__(23957)
+const { assertDefaultLevelFound, mappings, genLsCache } = __nccwpck_require__(90591)
+const {
+  createArgsNormalizer,
+  asChindings,
+  final,
+  stringify,
+  buildSafeSonicBoom,
+  buildFormatters,
+  noop
+} = __nccwpck_require__(51521)
+const { version } = __nccwpck_require__(68578)
+const { mixinMergeStrategySym } = __nccwpck_require__(23957)
+const {
+  chindingsSym,
+  redactFmtSym,
+  serializersSym,
+  timeSym,
+  timeSliceIndexSym,
+  streamSym,
+  stringifySym,
+  stringifiersSym,
+  setLevelSym,
+  endSym,
+  formatOptsSym,
+  messageKeySym,
+  nestedKeySym,
+  mixinSym,
+  useOnlyCustomLevelsSym,
+  formattersSym,
+  hooksSym
+} = symbols
+const { epochTime, nullTime } = time
+const { pid } = process
+const hostname = os.hostname()
+const defaultErrorSerializer = stdSerializers.err
+const defaultOptions = {
+  level: 'info',
+  messageKey: 'msg',
+  nestedKey: null,
+  enabled: true,
+  prettyPrint: false,
+  base: { pid, hostname },
+  serializers: Object.assign(Object.create(null), {
+    err: defaultErrorSerializer
+  }),
+  formatters: Object.assign(Object.create(null), {
+    bindings (bindings) {
+      return bindings
+    },
+    level (label, number) {
+      return { level: number }
+    }
+  }),
+  hooks: {
+    logMethod: undefined
+  },
+  timestamp: epochTime,
+  name: undefined,
+  redact: null,
+  customLevels: null,
+  levelKey: undefined,
+  useOnlyCustomLevels: false
+}
+
+const normalize = createArgsNormalizer(defaultOptions)
+
+const serializers = Object.assign(Object.create(null), stdSerializers)
+
+function pino (...args) {
+  const instance = {}
+  const { opts, stream } = normalize(instance, ...args)
+  const {
+    redact,
+    crlf,
+    serializers,
+    timestamp,
+    messageKey,
+    nestedKey,
+    base,
+    name,
+    level,
+    customLevels,
+    useLevelLabels,
+    changeLevelName,
+    levelKey,
+    mixin,
+    mixinMergeStrategy,
+    useOnlyCustomLevels,
+    formatters,
+    hooks
+  } = opts
+
+  const allFormatters = buildFormatters(
+    formatters.level,
+    formatters.bindings,
+    formatters.log
+  )
+
+  if (useLevelLabels && !(changeLevelName || levelKey)) {
+    process.emitWarning('useLevelLabels is deprecated, use the formatters.level option instead', 'Warning', 'PINODEP001')
+    allFormatters.level = labelsFormatter
+  } else if ((changeLevelName || levelKey) && !useLevelLabels) {
+    process.emitWarning('changeLevelName and levelKey are deprecated, use the formatters.level option instead', 'Warning', 'PINODEP002')
+    allFormatters.level = levelNameFormatter(changeLevelName || levelKey)
+  } else if ((changeLevelName || levelKey) && useLevelLabels) {
+    process.emitWarning('useLevelLabels is deprecated, use the formatters.level option instead', 'Warning', 'PINODEP001')
+    process.emitWarning('changeLevelName and levelKey are deprecated, use the formatters.level option instead', 'Warning', 'PINODEP002')
+    allFormatters.level = levelNameLabelFormatter(changeLevelName || levelKey)
+  }
+
+  if (serializers[Symbol.for('pino.*')]) {
+    process.emitWarning('The pino.* serializer is deprecated, use the formatters.log options instead', 'Warning', 'PINODEP003')
+    allFormatters.log = serializers[Symbol.for('pino.*')]
+  }
+
+  if (!allFormatters.bindings) {
+    allFormatters.bindings = defaultOptions.formatters.bindings
+  }
+  if (!allFormatters.level) {
+    allFormatters.level = defaultOptions.formatters.level
+  }
+
+  const stringifiers = redact ? redaction(redact, stringify) : {}
+  const formatOpts = redact
+    ? { stringify: stringifiers[redactFmtSym] }
+    : { stringify }
+  const end = '}' + (crlf ? '\r\n' : '\n')
+  const coreChindings = asChindings.bind(null, {
+    [chindingsSym]: '',
+    [serializersSym]: serializers,
+    [stringifiersSym]: stringifiers,
+    [stringifySym]: stringify,
+    [formattersSym]: allFormatters
+  })
+
+  let chindings = ''
+  if (base !== null) {
+    if (name === undefined) {
+      chindings = coreChindings(base)
+    } else {
+      chindings = coreChindings(Object.assign({}, base, { name }))
+    }
+  }
+
+  const time = (timestamp instanceof Function)
+    ? timestamp
+    : (timestamp ? epochTime : nullTime)
+  const timeSliceIndex = time().indexOf(':') + 1
+
+  if (useOnlyCustomLevels && !customLevels) throw Error('customLevels is required if useOnlyCustomLevels is set true')
+  if (mixin && typeof mixin !== 'function') throw Error(`Unknown mixin type "${typeof mixin}" - expected "function"`)
+
+  assertDefaultLevelFound(level, customLevels, useOnlyCustomLevels)
+  const levels = mappings(customLevels, useOnlyCustomLevels)
+
+  Object.assign(instance, {
+    levels,
+    [useOnlyCustomLevelsSym]: useOnlyCustomLevels,
+    [streamSym]: stream,
+    [timeSym]: time,
+    [timeSliceIndexSym]: timeSliceIndex,
+    [stringifySym]: stringify,
+    [stringifiersSym]: stringifiers,
+    [endSym]: end,
+    [formatOptsSym]: formatOpts,
+    [messageKeySym]: messageKey,
+    [nestedKeySym]: nestedKey,
+    [serializersSym]: serializers,
+    [mixinSym]: mixin,
+    [mixinMergeStrategySym]: mixinMergeStrategy,
+    [chindingsSym]: chindings,
+    [formattersSym]: allFormatters,
+    [hooksSym]: hooks,
+    silent: noop
+  })
+
+  Object.setPrototypeOf(instance, proto())
+
+  genLsCache(instance)
+
+  instance[setLevelSym](level)
+
+  return instance
+}
+
+function labelsFormatter (label, number) {
+  return { level: label }
+}
+
+function levelNameFormatter (name) {
+  return function (label, number) {
+    return { [name]: number }
+  }
+}
+
+function levelNameLabelFormatter (name) {
+  return function (label, number) {
+    return { [name]: label }
+  }
+}
+
+module.exports = pino
+
+module.exports.extreme = (dest = process.stdout.fd) => {
+  process.emitWarning(
+    'The pino.extreme() option is deprecated and will be removed in v7. Use pino.destination({ sync: false }) instead.',
+    { code: 'extreme_deprecation' }
+  )
+  return buildSafeSonicBoom({ dest, minLength: 4096, sync: false })
+}
+
+module.exports.destination = (dest = process.stdout.fd) => {
+  if (typeof dest === 'object') {
+    dest.dest = dest.dest || process.stdout.fd
+    return buildSafeSonicBoom(dest)
+  } else {
+    return buildSafeSonicBoom({ dest, minLength: 0, sync: true })
+  }
+}
+
+module.exports.final = final
+module.exports.levels = mappings()
+module.exports.stdSerializers = serializers
+module.exports.stdTimeFunctions = Object.assign({}, time)
+module.exports.symbols = symbols
+module.exports.version = version
+
+// Enables default and name export with TypeScript and Babel
+module.exports["default"] = pino
+module.exports.pino = pino
+
+
+/***/ }),
+
+/***/ 51235:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const path = __nccwpck_require__(71017);
+const findUp = __nccwpck_require__(26428);
+const loadJsonFile = __nccwpck_require__(75978);
+
+const filepaths = new WeakMap();
+const filepath = conf => filepaths.get(conf);
+const findNextCwd = pkgPath => path.resolve(path.dirname(pkgPath), '..');
+
+const addFilePath = (object, filePath) => {
+	filepaths.set(object, filePath);
+	return object;
+};
+
+const pkgConf = (namespace, options = {}) => {
+	if (!namespace) {
+		return Promise.reject(new TypeError('Expected a namespace'));
+	}
+
+	return findUp('package.json', options.cwd ? {cwd: options.cwd} : {})
+		.then(filePath => {
+			if (!filePath) {
+				return addFilePath(Object.assign({}, options.defaults), filePath);
+			}
+
+			return loadJsonFile(filePath).then(package_ => {
+				if (options.skipOnFalse && package_[namespace] === false) {
+					const newOptions = Object.assign({}, options, {cwd: findNextCwd(filePath)});
+					return pkgConf(namespace, newOptions);
+				}
+
+				return addFilePath(Object.assign({}, options.defaults, package_[namespace]), filePath);
+			});
+		});
+};
+
+const sync = (namespace, options = {}) => {
+	if (!namespace) {
+		throw new TypeError('Expected a namespace');
+	}
+
+	const filePath = findUp.sync('package.json', options.cwd ? {cwd: options.cwd} : {});
+
+	if (!filePath) {
+		return addFilePath(Object.assign({}, options.defaults), filePath);
+	}
+
+	const package_ = loadJsonFile.sync(filePath);
+
+	if (options.skipOnFalse && package_[namespace] === false) {
+		const newOptions = Object.assign({}, options, {cwd: findNextCwd(filePath)});
+		return sync(namespace, newOptions);
+	}
+
+	return addFilePath(Object.assign({}, options.defaults, package_[namespace]), filePath);
+};
+
+module.exports = pkgConf;
+// TODO: Remove this for the next major release
+module.exports["default"] = pkgConf;
+module.exports.filepath = filepath;
+module.exports.sync = sync;
+
+
+/***/ }),
+
+/***/ 26428:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const path = __nccwpck_require__(71017);
+const locatePath = __nccwpck_require__(47619);
+
+module.exports = (filename, opts = {}) => {
+	const startDir = path.resolve(opts.cwd || '');
+	const {root} = path.parse(startDir);
+
+	const filenames = [].concat(filename);
+
+	return new Promise(resolve => {
+		(function find(dir) {
+			locatePath(filenames, {cwd: dir}).then(file => {
+				if (file) {
+					resolve(path.join(dir, file));
+				} else if (dir === root) {
+					resolve(null);
+				} else {
+					find(path.dirname(dir));
+				}
+			});
+		})(startDir);
+	});
+};
+
+module.exports.sync = (filename, opts = {}) => {
+	let dir = path.resolve(opts.cwd || '');
+	const {root} = path.parse(dir);
+
+	const filenames = [].concat(filename);
+
+	// eslint-disable-next-line no-constant-condition
+	while (true) {
+		const file = locatePath.sync(filenames, {cwd: dir});
+
+		if (file) {
+			return path.join(dir, file);
+		}
+
+		if (dir === root) {
+			return null;
+		}
+
+		dir = path.dirname(dir);
+	}
+};
+
+
+/***/ }),
+
+/***/ 47619:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const path = __nccwpck_require__(71017);
+const pathExists = __nccwpck_require__(70652);
+const pLocate = __nccwpck_require__(96566);
+
+module.exports = (iterable, options) => {
+	options = Object.assign({
+		cwd: process.cwd()
+	}, options);
+
+	return pLocate(iterable, el => pathExists(path.resolve(options.cwd, el)), options);
+};
+
+module.exports.sync = (iterable, options) => {
+	options = Object.assign({
+		cwd: process.cwd()
+	}, options);
+
+	for (const el of iterable) {
+		if (pathExists.sync(path.resolve(options.cwd, el))) {
+			return el;
+		}
+	}
+};
+
+
+/***/ }),
+
+/***/ 11305:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const pTry = __nccwpck_require__(80746);
+
+const pLimit = concurrency => {
+	if (!((Number.isInteger(concurrency) || concurrency === Infinity) && concurrency > 0)) {
+		return Promise.reject(new TypeError('Expected `concurrency` to be a number from 1 and up'));
+	}
+
+	const queue = [];
+	let activeCount = 0;
+
+	const next = () => {
+		activeCount--;
+
+		if (queue.length > 0) {
+			queue.shift()();
+		}
+	};
+
+	const run = (fn, resolve, ...args) => {
+		activeCount++;
+
+		const result = pTry(fn, ...args);
+
+		resolve(result);
+
+		result.then(next, next);
+	};
+
+	const enqueue = (fn, resolve, ...args) => {
+		if (activeCount < concurrency) {
+			run(fn, resolve, ...args);
+		} else {
+			queue.push(run.bind(null, fn, resolve, ...args));
+		}
+	};
+
+	const generator = (fn, ...args) => new Promise(resolve => enqueue(fn, resolve, ...args));
+	Object.defineProperties(generator, {
+		activeCount: {
+			get: () => activeCount
+		},
+		pendingCount: {
+			get: () => queue.length
+		},
+		clearQueue: {
+			value: () => {
+				queue.length = 0;
+			}
+		}
+	});
+
+	return generator;
+};
+
+module.exports = pLimit;
+module.exports["default"] = pLimit;
+
+
+/***/ }),
+
+/***/ 96566:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const pLimit = __nccwpck_require__(11305);
+
+class EndError extends Error {
+	constructor(value) {
+		super();
+		this.value = value;
+	}
+}
+
+// The input can also be a promise, so we `Promise.resolve()` it
+const testElement = (el, tester) => Promise.resolve(el).then(tester);
+
+// The input can also be a promise, so we `Promise.all()` them both
+const finder = el => Promise.all(el).then(val => val[1] === true && Promise.reject(new EndError(val[0])));
+
+module.exports = (iterable, tester, opts) => {
+	opts = Object.assign({
+		concurrency: Infinity,
+		preserveOrder: true
+	}, opts);
+
+	const limit = pLimit(opts.concurrency);
+
+	// Start all the promises concurrently with optional limit
+	const items = [...iterable].map(el => [el, limit(testElement, el, tester)]);
+
+	// Check the promises either serially or concurrently
+	const checkLimit = pLimit(opts.preserveOrder ? 1 : Infinity);
+
+	return Promise.all(items.map(el => checkLimit(finder, el)))
+		.then(() => {})
+		.catch(err => err instanceof EndError ? err.value : Promise.reject(err));
+};
+
+
+/***/ }),
+
+/***/ 70652:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const fs = __nccwpck_require__(57147);
+
+module.exports = fp => new Promise(resolve => {
+	fs.access(fp, err => {
+		resolve(!err);
+	});
+});
+
+module.exports.sync = fp => {
+	try {
+		fs.accessSync(fp);
+		return true;
+	} catch (err) {
+		return false;
+	}
+};
+
+
+/***/ }),
+
+/***/ 35362:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.defaultApp = void 0;
+const path_1 = __importDefault(__nccwpck_require__(71017));
+function defaultApp(app, { getRouter }) {
+    if (!getRouter) {
+        throw new Error("getRouter() is required for defaultApp");
+    }
+    const router = getRouter();
+    router.get("/probot", (req, res) => {
+        let pkg;
+        try {
+            pkg = require(path_1.default.join(process.cwd(), "package.json"));
+        }
+        catch (e) {
+            pkg = {};
+        }
+        res.render("probot.handlebars", pkg);
+    });
+    router.get("/", (req, res, next) => res.redirect("/probot"));
+}
+exports.defaultApp = defaultApp;
+//# sourceMappingURL=default.js.map
+
+/***/ }),
+
+/***/ 31078:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.setupAppFactory = void 0;
+const body_parser_1 = __importDefault(__nccwpck_require__(97076));
+const child_process_1 = __nccwpck_require__(32081);
+const update_dotenv_1 = __importDefault(__nccwpck_require__(51023));
+const manifest_creation_1 = __nccwpck_require__(59159);
+const logging_middleware_1 = __nccwpck_require__(27530);
+const is_production_1 = __nccwpck_require__(78079);
+const setupAppFactory = (host, port) => async function setupApp(app, { getRouter }) {
+    const setup = new manifest_creation_1.ManifestCreation();
+    // If not on Glitch or Production, create a smee URL
+    if (!(0, is_production_1.isProduction)() &&
+        !(process.env.PROJECT_DOMAIN ||
+            process.env.WEBHOOK_PROXY_URL ||
+            process.env.NO_SMEE_SETUP === "true")) {
+        await setup.createWebhookChannel();
+    }
+    if (!getRouter) {
+        throw new Error("getRouter is required to use the setup app");
+    }
+    const route = getRouter();
+    route.use((0, logging_middleware_1.getLoggingMiddleware)(app.log));
+    printWelcomeMessage(app, host, port);
+    route.get("/probot", async (req, res) => {
+        const baseUrl = getBaseUrl(req);
+        const pkg = setup.pkg;
+        const manifest = setup.getManifest(pkg, baseUrl);
+        const createAppUrl = setup.createAppUrl;
+        // Pass the manifest to be POST'd
+        res.render("setup.handlebars", { pkg, createAppUrl, manifest });
+    });
+    route.get("/probot/setup", async (req, res) => {
+        const { code } = req.query;
+        const response = await setup.createAppFromCode(code);
+        // If using glitch, restart the app
+        if (process.env.PROJECT_DOMAIN) {
+            (0, child_process_1.exec)("refresh", (error) => {
+                if (error) {
+                    app.log.error(error);
+                }
+            });
+        }
+        else {
+            printRestartMessage(app);
+        }
+        res.redirect(`${response}/installations/new`);
+    });
+    route.get("/probot/import", async (_req, res) => {
+        const { WEBHOOK_PROXY_URL, GHE_HOST } = process.env;
+        const GH_HOST = `https://${GHE_HOST !== null && GHE_HOST !== void 0 ? GHE_HOST : "github.com"}`;
+        res.render("import.handlebars", { WEBHOOK_PROXY_URL, GH_HOST });
+    });
+    route.post("/probot/import", body_parser_1.default.json(), async (req, res) => {
+        const { appId, pem, webhook_secret } = req.body;
+        if (!appId || !pem || !webhook_secret) {
+            res.status(400).send("appId and/or pem and/or webhook_secret missing");
+            return;
+        }
+        (0, update_dotenv_1.default)({
+            APP_ID: appId,
+            PRIVATE_KEY: `"${pem}"`,
+            WEBHOOK_SECRET: webhook_secret,
+        });
+        res.end();
+        printRestartMessage(app);
+    });
+    route.get("/probot/success", async (req, res) => {
+        res.render("success.handlebars");
+    });
+    route.get("/", (req, res, next) => res.redirect("/probot"));
+};
+exports.setupAppFactory = setupAppFactory;
+function printWelcomeMessage(app, host, port) {
+    // use glitch env to get correct domain welcome message
+    // https://glitch.com/help/project/
+    const domain = process.env.PROJECT_DOMAIN ||
+        `http://${host !== null && host !== void 0 ? host : "localhost"}:${port || 3000}`;
+    [
+        ``,
+        `Welcome to Probot!`,
+        `Probot is in setup mode, webhooks cannot be received and`,
+        `custom routes will not work until APP_ID and PRIVATE_KEY`,
+        `are configured in .env.`,
+        `Please follow the instructions at ${domain} to configure .env.`,
+        `Once you are done, restart the server.`,
+        ``,
+    ].forEach((line) => {
+        app.log.info(line);
+    });
+}
+function printRestartMessage(app) {
+    app.log.info("");
+    app.log.info("Probot has been set up, please restart the server!");
+    app.log.info("");
+}
+function getBaseUrl(req) {
+    const protocols = req.headers["x-forwarded-proto"] || req.protocol;
+    const protocol = typeof protocols === "string" ? protocols.split(",")[0] : protocols[0];
+    const host = req.headers["x-forwarded-host"] || req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+    return baseUrl;
+}
+//# sourceMappingURL=setup.js.map
+
+/***/ }),
+
+/***/ 23831:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.auth = void 0;
+const get_authenticated_octokit_1 = __nccwpck_require__(88916);
+/**
+ * Authenticate and get a GitHub client that can be used to make API calls.
+ *
+ * You'll probably want to use `context.octokit` instead.
+ *
+ * **Note**: `app.auth` is asynchronous, so it needs to be prefixed with a
+ * [`await`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await)
+ * to wait for the magic to happen.
+ *
+ * ```js
+ *  module.exports = (app) => {
+ *    app.on('issues.opened', async context => {
+ *      const octokit = await app.auth();
+ *    });
+ *  };
+ * ```
+ *
+ * @param id - ID of the installation, which can be extracted from
+ * `context.payload.installation.id`. If called without this parameter, the
+ * client wil authenticate [as the app](https://docs.github.com/en/developers/apps/authenticating-with-github-apps#authenticating-as-a-github-app)
+ * instead of as a specific installation, which means it can only be used for
+ * [app APIs](https://docs.github.com/apps/).
+ *
+ * @returns An authenticated GitHub API client
+ */
+async function auth(state, installationId, log) {
+    return (0, get_authenticated_octokit_1.getAuthenticatedOctokit)(Object.assign({}, state, log ? { log } : null), installationId);
+}
+exports.auth = auth;
+//# sourceMappingURL=auth.js.map
+
+/***/ }),
+
+/***/ 4015:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.readCliOptions = void 0;
+const commander_1 = __importDefault(__nccwpck_require__(61904));
+const get_private_key_1 = __nccwpck_require__(97743);
+function readCliOptions(argv) {
+    commander_1.default
+        .usage("[options] <apps...>")
+        .option("-p, --port <n>", "Port to start the server on", String(process.env.PORT || 3000))
+        .option("-H --host <host>", "Host to start the server on", process.env.HOST)
+        .option("-W, --webhook-proxy <url>", "URL of the webhook proxy service.`", process.env.WEBHOOK_PROXY_URL)
+        .option("-w, --webhook-path <path>", "URL path which receives webhooks. Ex: `/webhook`", process.env.WEBHOOK_PATH)
+        .option("-a, --app <id>", "ID of the GitHub App", process.env.APP_ID)
+        .option("-s, --secret <secret>", "Webhook secret of the GitHub App", process.env.WEBHOOK_SECRET)
+        .option("-P, --private-key <file>", "Path to private key file (.pem) for the GitHub App", process.env.PRIVATE_KEY_PATH)
+        .option("-L, --log-level <level>", 'One of: "trace" | "debug" | "info" | "warn" | "error" | "fatal"', process.env.LOG_LEVEL || "info")
+        .option("--log-format <format>", 'One of: "pretty", "json"', process.env.LOG_FORMAT)
+        .option("--log-level-in-string", "Set to log levels (trace, debug, info, ...) as words instead of numbers (10, 20, 30, ...)", process.env.LOG_LEVEL_IN_STRING === "true")
+        .option("--sentry-dsn <dsn>", 'Set to your Sentry DSN, e.g. "https://1234abcd@sentry.io/12345"', process.env.SENTRY_DSN)
+        .option("--redis-url <url>", 'Set to a "redis://" url in order to enable cluster support for request throttling. Example: "redis://:secret@redis-123.redislabs.com:12345/0"', process.env.REDIS_URL)
+        .option("--base-url <url>", 'GitHub API base URL. If you use GitHub Enterprise Server, and your hostname is "https://github.acme-inc.com", then the root URL is "https://github.acme-inc.com/api/v3"', process.env.GHE_HOST
+        ? `${process.env.GHE_PROTOCOL || "https"}://${process.env.GHE_HOST}/api/v3`
+        : "https://api.github.com")
+        .parse(argv);
+    const { app: appId, privateKey: privateKeyPath, redisUrl, ...options } = commander_1.default;
+    return {
+        privateKey: (0, get_private_key_1.getPrivateKey)({ filepath: privateKeyPath }) || undefined,
+        appId,
+        redisConfig: redisUrl,
+        ...options,
+    };
+}
+exports.readCliOptions = readCliOptions;
+//# sourceMappingURL=read-cli-options.js.map
+
+/***/ }),
+
+/***/ 92004:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.readEnvOptions = void 0;
+const get_private_key_1 = __nccwpck_require__(97743);
+function readEnvOptions(env = process.env) {
+    const privateKey = (0, get_private_key_1.getPrivateKey)({ env });
+    const logFormat = env.LOG_FORMAT || (env.NODE_ENV === "production" ? "json" : "pretty");
+    return {
+        args: [],
+        privateKey: (privateKey && privateKey.toString()) || undefined,
+        appId: Number(env.APP_ID),
+        port: Number(env.PORT) || 3000,
+        host: env.HOST,
+        secret: env.WEBHOOK_SECRET,
+        webhookPath: env.WEBHOOK_PATH,
+        webhookProxy: env.WEBHOOK_PROXY_URL,
+        logLevel: env.LOG_LEVEL,
+        logFormat: logFormat,
+        logLevelInString: env.LOG_LEVEL_IN_STRING === "true",
+        logMessageKey: env.LOG_MESSAGE_KEY,
+        sentryDsn: env.SENTRY_DSN,
+        redisConfig: env.REDIS_URL,
+        baseUrl: env.GHE_HOST
+            ? `${env.GHE_PROTOCOL || "https"}://${env.GHE_HOST}/api/v3`
+            : "https://api.github.com",
+    };
+}
+exports.readEnvOptions = readEnvOptions;
+//# sourceMappingURL=read-env-options.js.map
+
+/***/ }),
+
+/***/ 94219:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Context = void 0;
+const path_1 = __importDefault(__nccwpck_require__(71017));
+const deepmerge_1 = __importDefault(__nccwpck_require__(56323));
+const alias_log_1 = __nccwpck_require__(95326);
+/**
+ * The context of the event that was triggered, including the payload and
+ * helpers for extracting information can be passed to GitHub API calls.
+ *
+ *  ```js
+ *  module.exports = app => {
+ *    app.on('push', context => {
+ *      context.log.info('Code was pushed to the repo, what should we do with it?');
+ *    });
+ *  };
+ *  ```
+ *
+ * @property {octokit} octokit - An Octokit instance
+ * @property {payload} payload - The webhook event payload
+ * @property {log} log - A pino instance
+ */
+class Context {
+    constructor(event, octokit, log) {
+        this.name = event.name;
+        this.id = event.id;
+        this.payload = event.payload;
+        this.octokit = octokit;
+        this.log = (0, alias_log_1.aliasLog)(log);
+    }
+    /**
+     * Return the `owner` and `repo` params for making API requests against a
+     * repository.
+     *
+     * ```js
+     * const params = context.repo({path: '.github/config.yml'})
+     * // Returns: {owner: 'username', repo: 'reponame', path: '.github/config.yml'}
+     * ```
+     *
+     * @param object - Params to be merged with the repo params.
+     *
+     */
+    repo(object) {
+        // @ts-ignore `repository` is not always present in this.payload
+        const repo = this.payload.repository;
+        if (!repo) {
+            throw new Error("context.repo() is not supported for this webhook event.");
+        }
+        return Object.assign({
+            owner: repo.owner.login,
+            repo: repo.name,
+        }, object);
+    }
+    /**
+     * Return the `owner`, `repo`, and `issue_number` params for making API requests
+     * against an issue. The object passed in will be merged with the repo params.
+     *
+     *
+     * ```js
+     * const params = context.issue({body: 'Hello World!'})
+     * // Returns: {owner: 'username', repo: 'reponame', issue_number: 123, body: 'Hello World!'}
+     * ```
+     *
+     * @param object - Params to be merged with the issue params.
+     */
+    issue(object) {
+        return Object.assign({
+            issue_number: 
+            // @ts-ignore - this.payload may not have `issue` or `pull_request` keys
+            (this.payload.issue || this.payload.pull_request || this.payload)
+                .number,
+        }, this.repo(object));
+    }
+    /**
+     * Return the `owner`, `repo`, and `pull_number` params for making API requests
+     * against a pull request. The object passed in will be merged with the repo params.
+     *
+     *
+     * ```js
+     * const params = context.pullRequest({body: 'Hello World!'})
+     * // Returns: {owner: 'username', repo: 'reponame', pull_number: 123, body: 'Hello World!'}
+     * ```
+     *
+     * @param object - Params to be merged with the pull request params.
+     */
+    pullRequest(object) {
+        const payload = this.payload;
+        return Object.assign({
+            // @ts-ignore - this.payload may not have `issue` or `pull_request` keys
+            pull_number: (payload.issue || payload.pull_request || payload).number,
+        }, this.repo(object));
+    }
+    /**
+     * Returns a boolean if the actor on the event was a bot.
+     * @type {boolean}
+     */
+    get isBot() {
+        // @ts-expect-error - `sender` key is currently not present in all events
+        // see https://github.com/octokit/webhooks/issues/510
+        return this.payload.sender.type === "Bot";
+    }
+    /**
+     * Reads the app configuration from the given YAML file in the `.github`
+     * directory of the repository.
+     *
+     * For example, given a file named `.github/config.yml`:
+     *
+     * ```yml
+     * close: true
+     * comment: Check the specs on the rotary girder.
+     * ```
+     *
+     * Your app can read that file from the target repository:
+     *
+     * ```js
+     * // Load config from .github/config.yml in the repository
+     * const config = await context.config('config.yml')
+     *
+     * if (config.close) {
+     *   context.octokit.issues.comment(context.issue({body: config.comment}))
+     *   context.octokit.issues.edit(context.issue({state: 'closed'}))
+     * }
+     * ```
+     *
+     * You can also use a `defaultConfig` object:
+     *
+     * ```js
+     * // Load config from .github/config.yml in the repository and combine with default config
+     * const config = await context.config('config.yml', {comment: 'Make sure to check all the specs.'})
+     *
+     * if (config.close) {
+     *   context.octokit.issues.comment(context.issue({body: config.comment}));
+     *   context.octokit.issues.edit(context.issue({state: 'closed'}))
+     * }
+     * ```
+     *
+     * Config files can also specify a base that they extend. `deepMergeOptions` can be used
+     * to configure how the target config, extended base, and default configs are merged.
+     *
+     * For security reasons, configuration is only loaded from the repository's default branch,
+     * changes made in pull requests from different branches or forks are ignored.
+     *
+     * If you need more lower-level control over reading and merging configuration files,
+     * you can `context.octokit.config.get(options)`, see https://github.com/probot/octokit-plugin-config.
+     *
+     * @param fileName - Name of the YAML file in the `.github` directory
+     * @param defaultConfig - An object of default config options
+     * @param deepMergeOptions - Controls merging configs (from the [deepmerge](https://github.com/TehShrike/deepmerge) module)
+     * @return Configuration object read from the file
+     */
+    async config(fileName, defaultConfig, deepMergeOptions) {
+        const params = this.repo({
+            path: path_1.default.posix.join(".github", fileName),
+            defaults(configs) {
+                const result = deepmerge_1.default.all([defaultConfig || {}, ...configs], deepMergeOptions);
+                return result;
+            },
+        });
+        // @ts-ignore
+        const { config, files } = await this.octokit.config.get(params);
+        // if no default config is set, and no config files are found, return null
+        if (!defaultConfig && !files.find((file) => file.config !== null)) {
+            return null;
+        }
+        return config;
+    }
+}
+exports.Context = Context;
+//# sourceMappingURL=context.js.map
+
+/***/ }),
+
+/***/ 95960:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createNodeMiddleware = void 0;
+const webhooks_1 = __nccwpck_require__(18513);
+function createNodeMiddleware(appFn, { probot, webhooksPath }) {
+    probot.load(appFn);
+    return (0, webhooks_1.createNodeMiddleware)(probot.webhooks, {
+        path: webhooksPath || "/",
+    });
+}
+exports.createNodeMiddleware = createNodeMiddleware;
+//# sourceMappingURL=create-node-middleware.js.map
+
+/***/ }),
+
+/***/ 82598:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createProbot = void 0;
+const get_private_key_1 = __nccwpck_require__(97743);
+const get_log_1 = __nccwpck_require__(75942);
+const probot_1 = __nccwpck_require__(87085);
+const DEFAULTS = {
+    APP_ID: "",
+    WEBHOOK_SECRET: "",
+    GHE_HOST: "",
+    GHE_PROTOCOL: "",
+    LOG_FORMAT: "",
